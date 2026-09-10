@@ -1,0 +1,11 @@
+# Generated/local files
+.DS_Store
+Thumbs.db
+*.tmp
+*.bak
+~$*.docx
+~$*.xlsx
+
+# Arena reconstructed/local test output
+playtest-output/
+qa-output/
