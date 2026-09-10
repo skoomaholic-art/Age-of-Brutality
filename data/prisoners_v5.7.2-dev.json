@@ -1,0 +1,68 @@
+{
+  "schema_version": "1.0",
+  "game_version": "V5.7.2-DEV",
+  "status": "CANONICAL_MODULE",
+  "mechanic": "prisoners",
+  "source_priority": "This module is authoritative for prisoner/ransom rules in V5.7.2-DEV and supersedes prisoner/ransom fields inherited from the V5.7.1 baseline snapshot.",
+  "post_capture_options": [
+    "Отпустить пленника",
+    "Взять в плен",
+    "Требовать выкуп N",
+    "Казнить"
+  ],
+  "ransom": {
+    "base_fixed_amount": null,
+    "human_vs_human": {
+      "rule": "Captor proposes N; prisoner owner accepts or rejects. The amount is negotiated by the players rather than selected from a fixed table."
+    },
+    "ai": {
+      "offer_is_random": false,
+      "offer_factors": [
+        "captor_current_needs_or_requests",
+        "captor_active_ambition_or_objectives",
+        "specific_prisoner_value",
+        "prisoner_house_position",
+        "overall_strategic_position_of_both_sides"
+      ],
+      "recipient_decision": "AI prisoner owner independently evaluates the offer and accepts or rejects it.",
+      "logging_required": [
+        "available_options",
+        "factor_scores",
+        "offered_N",
+        "decision",
+        "reason"
+      ],
+      "numeric_weights_status": "IMPLEMENTATION_PENDING_BALANCE_TEST"
+    },
+    "on_reject": {
+      "prisoner_remains_captive": true,
+      "destination_priority": [
+        "nearest_captor_fort",
+        "captor_capital_if_no_fort"
+      ],
+      "equal_nearest_forts": "captor_chooses"
+    }
+  },
+  "state_required": [
+    "character_id",
+    "prisoner_house",
+    "heldBy",
+    "detention_location",
+    "alive",
+    "status",
+    "ransom_offer",
+    "ransom_amount",
+    "ransom_response",
+    "history"
+  ],
+  "invariants": [
+    "status=ПЛЕН => alive=true and heldBy!=null",
+    "alive=false => status=Мёртв",
+    "status=Мёртв => heldBy=null"
+  ],
+  "pending": {
+    "released_prisoner_destination": "ТРЕБУЕТ РЕШЕНИЯ",
+    "nearest_fort_distance_algorithm": "ТРЕБУЕТ ТЕХНИЧЕСКОЙ ФИКСАЦИИ ПО КАНОНИЧЕСКОЙ ТОПОЛОГИИ",
+    "event_P06_fixed_ransom_2": "ТРЕБУЕТ РЕШЕНИЯ: special event currently fixes ransom at 2 gold for the round; must be confirmed as an explicit exception or changed."
+  }
+}
