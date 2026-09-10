@@ -1,0 +1,38 @@
+{
+  "game": "Жестокий Век",
+  "version": "V5.7.1-STABLE",
+  "gameMaster": "Rule Auditor v1",
+  "games": 100,
+  "seeds": [57001, 57100],
+  "confirmedPrisonerChoices": ["Отпустить пленника", "Взять в плен", "Требовать выкуп N", "Казнить"],
+  "structural": {"finished": 100, "round6": 100, "actions108": 100, "errorGames": 0, "invalid": 0, "peakInfluence": 13},
+  "coverage": {
+    "captures": 30,
+    "captureGames": 29,
+    "livePrisoners": 29,
+    "prisonerGames": 28,
+    "metrics": {"actions":10800,"invalidActions":0,"rolls":6049,"battles":675,"attackerWins":284,"defenderWins":391,"stalemates":0,"casualties":2928,"intrigues":783,"intrigueSuccesses":431,"investigations":251,"relations":828,"raids":0,"neutralCaptures":1736,"fortsBuilt":98,"recruited":2301,"births":0,"goldTransferred":1664,"navalMoves":2691,"portToPortMoves":178,"centerEntries":3204,"centerHalvesCaptured":2381,"fullIslandsCompleted":246,"islandsDenied":456,"pvpAttacks":2146,"pvpCaptures":1589,"counterattacks":495,"successfulCounterattacks":310,"homeTerritoriesRecaptured":30,"capitalAttacks":21,"capitalCaptures":15,"capitalHolds":13,"regroupActions":1219,"strategicPlansStarted":1218,"strategicPlansCompleted":649,"pactBreaks":0,"leaderAttacks":470,"estimatedSeconds":1734385},
+    "relations": {"Официальный Пакт":486,"Право прохода":342},
+    "fates": {"Смерть":16,"Плен":30,"Ослаблен":51,"Спасён":35},
+    "actions": {"Марш":2614,"Официальный Пакт":486,"Активная Интрига":783,"Отказ":488,"Добор Интриги":682,"Атака":2146,"Советник":726,"Найм воинов":953,"Перегруппировка":1219,"Расследование":251,"Право прохода":342,"Крепость":98,"Возврат из Изгнания":12}
+  },
+  "houseSummary": {
+    "Варкайр":{"wins":23,"winRate":23,"avgScore":4.76,"avgInfluence":7.66,"avgGold":32.55},
+    "Сайрвен":{"wins":9,"winRate":9,"avgScore":4.02,"avgInfluence":7.04,"avgGold":40.2},
+    "Ортайн":{"wins":36,"winRate":36,"avgScore":5.95,"avgInfluence":2.74,"avgGold":12.8},
+    "Эркай":{"wins":31,"winRate":31,"avgScore":4.91,"avgInfluence":7.88,"avgGold":29.41},
+    "Тасвар":{"wins":1,"winRate":1,"avgScore":2.08,"avgInfluence":4.11,"avgGold":23.78},
+    "Айрель":{"wins":0,"winRate":0,"avgScore":2.48,"avgInfluence":6.83,"avgGold":27.62}
+  },
+  "findings": [
+    {"severity":"CRITICAL","id":"GM-PRISON-001","problem":"Arena не реализует полный выбор после пленения"},
+    {"severity":"CRITICAL","id":"GM-PRISON-002","problem":"State пленника не хранит захвативший Дом"},
+    {"severity":"CRITICAL","id":"GM-COVER-001","problem":"Плен возник 30 раз в 29/100 партиях, но ни одной post-capture процедуры нет"},
+    {"severity":"HIGH","id":"GM-PRISON-003","problem":"Embedded rules всё ещё фиксируют выкуп 3 золота, что конфликтует с последним решением «Требовать выкуп N»"},
+    {"severity":"HIGH","id":"GM-STATE-001","problem":"Смерть кодируется mode=ПЛЕН при alive=false"},
+    {"severity":"HIGH","id":"GM-CMD-001","problem":"Боевой бонус командира читается только из h.ruler; другие персонажи-командиры не поддержаны полноценно"},
+    {"severity":"MEDIUM","id":"GM-DEAD-RAIDS","problem":"Набег: нулевое покрытие в 100 партиях"},
+    {"severity":"MEDIUM","id":"GM-DEAD-BIRTHS","problem":"Рождения: нулевое покрытие в 100 партиях"},
+    {"severity":"MEDIUM","id":"GM-DEAD-DYNASTIC","problem":"Династический союз не появился ни разу в 100 партиях"}
+  ]
+}
