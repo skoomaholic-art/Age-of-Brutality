@@ -63,6 +63,16 @@
       "action": "Do not assign a new CARD_ID without authoritative card-source migration or an explicit project decision."
     },
     {
+      "id": "PRISON-HOLD-001",
+      "fact": "The confirmed rules do not explicitly define detention destination for direct «Взять в плен» without a ransom rejection; Arena RC2 delegates choice='hold' to detainPrisoner.",
+      "action": "Keep as implementation-only behavior until explicitly confirmed."
+    },
+    {
+      "id": "EVENT-EXEC-001",
+      "fact": "Arena RC2 applies an additional -1 Influence to execution while «Съезд заложников» is active, but the current canonical event exception only confirms fixed ransom=2 gold.",
+      "action": "Verify against authoritative card source before treating the modifier as a rule or removing it from Arena."
+    },
+    {
       "id": "CARD-SOURCE-001",
       "fact": "Editable V5.7.2 card master source is not stored in GitHub."
     },

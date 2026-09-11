@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.3",
+  "schema_version": "1.4",
   "game_version": "V5.7.2-DEV",
   "status": "CANONICAL_MODULE",
   "mechanic": "prisoners",
@@ -15,6 +15,13 @@
     "clear_heldBy": true,
     "clear_captive_status": true,
     "mode_after_return": "ДВОР"
+  },
+  "hold_without_ransom": {
+    "prisoner_remains_captive": true,
+    "ransom_offer_created": false,
+    "destination_rule": "ТРЕБУЕТ РЕШЕНИЯ",
+    "arena_rc2_current_behavior": "resolvePrisonerDecision(choice='hold') delegates to detainPrisoner(owner, character, captor, capture_location, detentionChoice)",
+    "canonical_status": "IMPLEMENTATION_BEHAVIOR_NOT_YET_CONFIRMED_AS_PHYSICAL_RULE"
   },
   "ransom": {
     "base_fixed_amount": null,
@@ -76,6 +83,16 @@
       "equal_nearest_forts": "captor_chooses"
     }
   },
+  "execution": {
+    "cost_actions": 1,
+    "influence_delta": -3,
+    "alive_after": false,
+    "status_after": "Мёртв",
+    "clear_heldBy": true,
+    "clear_captive_status": true,
+    "relation_consequence": "Victim house may end relations without paying its own break penalty under the current rule.",
+    "source_status": "PRESERVED_FROM_CURRENT_RULES_AND_MGD"
+  },
   "state_required": [
     "character_id",
     "prisoner_house",
@@ -94,6 +111,8 @@
     "status=Мёртв => heldBy=null"
   ],
   "pending": {
-    "hostage_congress_event_id": "ТРЕБУЕТ DATA/CARDS SYNC: current MGD EV-P06 is Холодная война"
+    "hostage_congress_event_id": "ТРЕБУЕТ DATA/CARDS SYNC: current MGD EV-P06 is Холодная война",
+    "hold_without_ransom_destination": "ТРЕБУЕТ РЕШЕНИЯ: Arena RC2 routes choice='hold' through detainPrisoner, but the physical rule does not explicitly define this destination.",
+    "hostage_congress_execution_modifier": "ТРЕБУЕТ RULES/CARDS SYNC: Arena RC2 applies an additional -1 Influence on execution while the event is active; current confirmed canonical exception only fixes ransom at 2 gold."
   }
 }

@@ -38,6 +38,8 @@ function canonicalPrisonerFacts(prisoners) {
   invariant(Array.isArray(prisoners.post_capture_options), "post_capture_options missing");
   invariant(prisoners.post_capture_options.length === 4, "post_capture_options must contain exactly four choices");
   invariant(prisoners.ransom && prisoners.ransom.base_fixed_amount === null, "human ransom must not have a fixed base amount");
+  invariant(prisoners.execution && prisoners.execution.cost_actions === 1, "execution action cost must remain 1");
+  invariant(prisoners.execution.influence_delta === -3, "execution influence delta must remain -3");
 
   const hostage = (prisoners.ransom.special_event_exceptions || [])
     .find((x) => x.event_name === "Съезд заложников");
@@ -60,6 +62,7 @@ function reconcileMgd(mgd, prisoners) {
   out.confirmed_decisions.ransom_acceptance_procedure =
     "Human↔Human: предложение пленителя → принять/отклонить владельцем; AI оценивает предложение отдельно по каноническому prisoner module.";
   out.confirmed_decisions.prisoner_release_destination = prisoners.release.destination;
+  out.confirmed_decisions.prisoner_hold_without_ransom_destination = prisoners.hold_without_ransom?.destination_rule || "ТРЕБУЕТ РЕШЕНИЯ";
   out.confirmed_decisions.hostage_congress_exception = {
     event_name: hostage.event_name,
     event_id: hostage.event_id,
@@ -79,6 +82,13 @@ function reconcileMgd(mgd, prisoners) {
   ransomRow["Цена ресурса"] = "N золота";
   ransomRow["Условие"] =
     "Не входит в лимит подарков. Люди договариваются о N; владелец принимает/отклоняет. При событии «Съезд заложников» в его раунд N=2.";
+
+  const executionRow = diplomacy.find((row) => row.ID === "EXECUTION");
+  invariant(executionRow, "MGD Diplomacy/EXECUTION row missing");
+  executionRow["Цена действий"] = `${prisoners.execution.cost_actions} действие`;
+  executionRow["Цена ресурса"] = `${prisoners.execution.influence_delta} Влияния`;
+  executionRow["Условие"] =
+    "После казни персонаж Мёртв; ПЛЕН/heldBy очищаются. Дом жертвы может прекратить отношения без собственного штрафа по действующему правилу.";
 
   const events = out.sheets && out.sheets.Events;
   invariant(Array.isArray(events), "MGD sheets.Events missing");
