@@ -4,6 +4,7 @@
 *.jpg binary
 *.jpeg binary
 *.zip binary
+*.pdf binary
 *.svg text
 *.json text eol=lf
 *.csv text eol=lf
