@@ -1,0 +1,44 @@
+name: Reconcile V5.7.2 canonical sources
+
+on:
+  push:
+    branches:
+      - rebuild/v5.7.2-consistency-2026-09-11
+    paths:
+      - tools/reconcile_v5_7_2.js
+      - data/**
+      - rules/source/**
+      - .github/workflows/reconcile-v5.7.2.yml
+
+permissions:
+  contents: write
+
+jobs:
+  reconcile:
+    if: ${{ !startsWith(github.event.head_commit.message, 'rebuild-generated:') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Reconcile canonical sources
+        run: node tools/reconcile_v5_7_2.js --write
+
+      - name: Verify idempotence
+        run: node tools/reconcile_v5_7_2.js --check
+
+      - name: Validate diff
+        run: git diff --check
+
+      - name: Commit generated sources
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No generated changes."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/master_game_data_v5.7.2-dev.json rules/source/02_diplomacy_dynasty_characters.md
+          git commit -m "rebuild-generated: sync prisoner canonical sources"
+          git push
