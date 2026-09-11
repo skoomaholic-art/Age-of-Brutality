@@ -1,132 +1,65 @@
 # Жестокий Век
 
-**«Жестокий Век»** — настольная стратегическая игра на 3–6 Домов о войне, дипломатии, династии, интригах и борьбе за Очки Победы. Партия длится **ровно 6 раундов**; победитель определяется после фазы Династии 6-го раунда.
-
-Проект включает физическую настольную игру и цифровую **Arena** для плейтестов, AI-симуляций, логирования и проверки правил.
+**«Жестокий Век»** — настольная стратегическая игра на 3–6 Домов о войне, дипломатии, династии, интригах и борьбе за Очки Победы. Партия длится **ровно 6 раундов**.
 
 ## Текущий статус
 
-- **Project/source line:** `V5.7.2-DEV`
-- **Играбельная цифровая Arena:** `V5.7.2-PLAYABLE-RC2`
+- **Project/source:** `V5.7.2-DEV`
+- **Rules/Data:** reconciled
+- **Card game-data registry:** generated from active MGD
+- **Map topology:** canonical V5.7.2 source present
+- **Current source-matching executable:** нет — требуется миграция полного Arena baseline/HTML и новый build
+- **Last verified executable evidence:** `V5.7.2-PLAYABLE-RC2`, исторический QA 500/500
 - **STABLE:** нет
 - **Print-ready/PnP:** нет
 
-Arena RC2 можно использовать для реального цифрового плейтеста. Prisoner/ransom слой монолитного Master Game Data пересобран из canonical module; статус STABLE всё ещё блокируют отсутствующие физические master sources, raw manual playtest evidence и незакрытые cross-source расхождения.
+GitHub `main` — единственный MASTER проекта. Исторический RC2 нельзя считать executable текущего source: после его QA исправлены event registry, prisoner detention, execution modifier и ransom validation.
 
-## Последний QA Arena RC2
+## Канонические источники V5.7.2
 
-Game Master: seeds **57001–57500**, 500 партий.
+- `rules/source/` — правила;
+- `data/master_game_data_v5.7.2-dev.json` — активный MGD;
+- `data/prisoners_v5.7.2-dev.json` — canonical prisoner/ransom module;
+- `cards/canonical_registry_v5.7.2.json` — машинный card/game-data registry, генерируется из MGD;
+- `map/canonical_topology_v5.7.2.json` — topology: 52 территории / 81 land / 23 sea / 16 ports;
+- `arena/source/patches/` — текущие Arena source fixes;
+- `qa/` — QA tooling и исторические проверенные отчёты;
+- `docs/` — решения, аудит, status и known issues.
 
-- 500/500 завершились;
-- 500/500 завершились на R6;
-- 500/500 = 108 действий;
-- 0 engine errors;
-- 0 invalid actions;
-- 0 prisoner-state invariant errors;
-- 0 незакрытых prisoner queues;
-- Prisoner targeted: 9/9;
-- Human prisoner UI: 6/6;
-- Family commanders: 6/6;
-- nearest-fort land+sea routing: 1/1.
+## Что исправлено в rebuild 2026-09-11
 
-Отчёт: `qa/reports/Game_Master_Report_V5.7.2_RC2_500seeds.md`.
+- `EV-P06 = «Съезд заложников»`;
+- фиксированный выкуп события = 2 золота;
+- лишний `-1 Влияние` за казнь при событии удалён;
+- direct hold и ransom reject используют единый detention rule;
+- ransom `N` — положительное целое; фиксированного диапазона для людей нет;
+- execution = 1 действие / -3 Влияния;
+- MGD и Rules §20.2 синхронизированы детерминированным reconciler;
+- создан canonical card registry из активного MGD;
+- создан canonical topology JSON карты.
 
-Build manifest: `arena/builds/V5.7.2_PLAYABLE_RC2.manifest.json`.
+## Последний проверенный executable
 
-## Source of truth
+`V5.7.2-PLAYABLE-RC2` ранее прошёл 500-seed Game Master: 500/500 партий завершились на R6, 0 engine errors, 0 invalid actions, 0 prisoner-state invariant errors и 0 unresolved prisoner queues.
 
-**GitHub `main` = единственный MASTER проекта.**
+Но exact RC2 HTML отсутствует в GitHub, а сохранённый compressed RC1 source неполон и обрывается до engine. Поэтому этот QA — историческое свидетельство, а не подтверждение текущих post-rebuild source fixes.
 
-Канонический приоритет:
+## Что осталось мигрировать
 
-`последнее подтверждённое решение → canonical module → активные Rules/Data → historical baseline`.
+Это уже не неизвестные игровые правила, а отсутствующие исходники/артефакты:
 
-Рабочий цикл:
-
-`ФИДБЭК → АНАЛИЗ → RULES/DATA/CARDS/ARENA/AI SYNC → COMMIT → QA → BUILD → файл пользователю для плейтеста`
-
-Локальный executable допустим как тестовый build только если его версия, source delta, manifest и QA зафиксированы в GitHub.
-
-## Системная цепочка
-
-Каждое изменение проверяется по цепочке:
-
-`ПРАВИЛА → DATA → CARDS → MAP → ARENA → AI → GAME MASTER → ПЛЕЙТЕСТ → PRINT`
-
-Числовое значение, условие или идентификатор, отличающийся между зависимыми источниками, считается ошибкой до явного решения проекта.
-
-## Подтверждённая механика плена
-
-После захвата персонажа пленитель выбирает:
-
-1. **Отпустить пленника**.
-2. **Взять в плен**.
-3. **Требовать выкуп N**.
-4. **Казнить**.
-
-Для людей фиксированного диапазона `N` нет: пленитель предлагает сумму, владелец принимает или отказывается. AI определяет предложение по ценности пленника, своим целям/потребностям и положению сторон; числовые AI-веса являются implementation-параметрами, а не правилом для людей.
-
-Отпущенный или выкупленный пленник возвращается в **столицу своего Дома**. При отказе от выкупа он отправляется в ближайшую Крепость пленителя; расстояние = минимальное число рёбер канонической карты, где сухопутная граница = 1 шаг и прямой морской маршрут = 1 шаг. Контроль территорий/портов и наличие армий в этом расчёте не учитываются.
-
-Событие **«Съезд заложников»** является специальным исключением: в его раунд выкуп фиксирован на **2 золота**.
-
-**ТРЕБУЕТ РЕШЕНИЯ:** отдельное место содержания при прямом выборе «Взять в плен» без отказа по выкупу. Arena RC2 использует `detainPrisoner(...)`, но это implementation behavior, не автоматически утверждённое физическое правило.
-
-**ТРЕБУЕТ СВЕРКИ CARDS:** Arena RC2 дополнительно снимает -1 Влияние за казнь во время «Съезда заложников»; доступный канон подтверждает для события только фиксированный выкуп 2 золота.
-
-## Что реально хранится в репозитории
-
-- `rules/source/` — рабочие канонические правила V5.7.2;
-- `data/` — пересобранный DEV Master Game Data + canonical prisoner/ransom module + source graph;
-- `tools/reconcile_v5_7_2.js` — детерминированная синхронизация дублируемых V5.7.2 sources;
-- `arena/source/patches/` — RC2 engine/UI source patches;
-- `arena/builds/` — manifests игровых билдов;
-- `arena/VERSION` — текущая версия цифровой Arena;
-- `qa/` — Game Master, regression и targeted QA;
-- `docs/` — решения, аудит, known issues, workflow и status audit;
-- `playtest/` — структура для плейтестовых материалов;
-- `ai/` — статус AI source и правила разделения rule/implementation;
-- `components/` — статус и место для BOM/physical component source;
-- `release/` — статус release package;
-- `cards/` — пока только описание/хэши исторических card sources;
-- `map/` — пока только описание/хэши исторических map sources.
-
-## Что ещё отсутствует или не закрыто
-
-Это не блокирует цифровой плейтест RC2, но блокирует STABLE/PnP:
-
-- полные редактируемые/binary Cards sources;
-- master PNG/SVG/topology карты внутри canonical `map/`;
-- полный Components/BOM source;
-- сертифицированный print-ready package;
-- canonical ID события «Съезд заложников» без конфликта с `EV-P06 = Холодная война`;
-- отдельное подтверждённое правило места содержания при прямом «Взять в плен»;
-- сверка дополнительного Arena-модификатора казни при «Съезде заложников» с авторитетным Cards source;
-- полный актуальный raw manual playtest set `Journal/Diplomacy/Houses`;
-- сам exact RC2 HTML artifact: manifest/hash есть, но полноценный reconstructable artifact пока не хранится в GitHub.
+- complete Arena HTML/baseline для нового executable build;
+- editable card print/layout/art masters;
+- illustrated map PNG/SVG master;
+- последние raw Journal/Diplomacy/Houses JSON ручных плейтестов;
+- полный Components/BOM;
+- полный Visual V2/V2.1 source/generator/assets;
+- воспроизводимый print-ready package.
 
 Точный список: `docs/KNOWN_ISSUES.md`.
 
-## Важные правила текущей линии
+## Workflow
 
-- партия = **6 раундов**;
-- нет лимита Влияния 15;
-- постоянного состояния `WAR` нет: враждебность определяется действиями/историей атак;
-- Право прохода не является официальным отношением;
-- Пакт = официальное соглашение ненападения;
-- семейные персонажи могут быть назначены командирами по правилам ДВОР/АРМИЯ;
-- смерть и `ПЛЕН` — разные взаимоисключающие состояния.
+`ФИДБЭК → RULES/DATA/CARDS/MAP/ARENA/AI SYNC → STATIC CHECK → QA → BUILD → PLAYTEST → COMMIT/RELEASE`
 
-## Historical baseline
-
-`V5.7.1-STABLE` сохранена только как исторический baseline. После Game Master-аудита она больше не считается прошедшей release gates.
-
-`V5.7.0` QA также остаётся историческим baseline и не считается regression для V5.7.2.
-
-## Release policy
-
-Статусы: `DEV → ALPHA → BETA → RC → STABLE`.
-
-`V5.7.2-PLAYABLE-RC2` = **играбельный цифровой RC для плейтестов**, а не финальный физический релиз.
-
-`STABLE` разрешён только после синхронизации Rules, Data, Cards, Map, Arena, AI, QA, Playtests, Components и Print.
+Нельзя объявлять STABLE файл, который не воспроизводится из зафиксированного GitHub source.

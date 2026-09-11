@@ -1,53 +1,27 @@
-# Repository status
+# Repository status — V5.7.2 rebuild
 
-## Active line
+Дата: 2026-09-11.
 
-- Project/source: **V5.7.2-DEV**
-- Digital Arena: **V5.7.2-PLAYABLE-RC2**
-- STABLE: **нет**
-- Print-ready: **нет**
+| Область | Статус | Факт |
+|---|---|---|
+| Rules | VERIFIED SOURCE | §20.2 синхронизирован из canonical prisoner module |
+| Prisoner/ransom | VERIFIED SOURCE | 4 choices, N, detention, execution, event exception согласованы |
+| Master Game Data | RECONCILED | stale prisoner/event fields устранены |
+| Card game-data | GENERATED | `cards/canonical_registry_v5.7.2.json`: 96 объектов / 48 CARD_ID |
+| Card physical masters | MISSING SOURCE | layout/art/XLSX V5.7.2 не мигрированы |
+| Map topology | VERIFIED | 52 territories / 81 land / 23 sea / 16 ports |
+| Map illustrated master | MISSING SOURCE | актуальные PNG/SVG master не мигрированы |
+| Arena source | FIXED | текущий RC2 delta source содержит event/prisoner/ransom fixes |
+| Arena executable | REBUILD BLOCKED | exact RC2 HTML отсутствует; RC1 compressed baseline неполон |
+| AI | PARTIAL CANONICAL | поведение/weights в MGD + Arena patches; отдельного AI config нет |
+| Automated QA | HISTORICAL GREEN | RC2 500/500 green; post-fix executable ещё не собран |
+| Manual playtest raw | MISSING | latest Journal/Diplomacy/Houses JSON не в repo |
+| Visual source | INCOMPLETE | docs/templates есть, но V2/V2.1 executable/generator/generated pack отсутствуют |
+| Components/BOM | MISSING | блокирует PnP/STABLE |
+| Print-ready | NOT READY | блокирует STABLE |
 
-GitHub `main` является единственным source of truth для новых решений, исходников, QA и release status.
+## Release verdict
 
-## Arena readiness
+Текущая механическая source-линия V5.7.2 внутренне согласована по Rules ↔ Data ↔ card registry ↔ map topology. Старый executable RC2 остаётся последним проверенным историческим артефактом, но **не соответствует текущему source после rebuild fixes**.
 
-Arena RC2 признана **играбельной для цифрового плейтеста**.
-
-Game Master 500 seeds 57001–57500:
-
-- 500/500 finished;
-- R6: 500/500;
-- 108 actions: 500/500;
-- engine errors: 0;
-- invalid actions: 0;
-- prisoner state invariant errors: 0;
-- unresolved prisoner queues: 0.
-
-Targeted QA: prisoners 9/9; Human UI 6/6; commanders 6/6; nearest-fort canonical land+sea routing 1/1.
-
-## Rebuild status
-
-- prisoner/ransom canonical module: synchronized;
-- monolithic MGD prisoner/ransom layer: regenerated from canonical module;
-- base rules section 20.2: regenerated from canonical module;
-- source precedence and rebuild/check commands: machine-readable in `data/canonical_manifest_v5.7.2.json`;
-- deterministic consistency tool: `tools/reconcile_v5_7_2.js`.
-
-## Remaining blockers to STABLE/PnP
-
-- canonical event-ID sync for «Съезд заложников» vs current `EV-P06 = Холодная война`;
-- direct «Взять в плен» detention destination requires an explicit rule decision;
-- Arena RC2 extra -1 Influence on execution during «Съезд заложников» requires authoritative Cards verification;
-- migration of full Cards sources into GitHub;
-- migration of canonical map PNG/SVG/topology masters into `map/`;
-- current raw manual `Journal/Diplomacy/Houses` playtest set;
-- complete Components/BOM and print package;
-- exact reconstructable RC2 HTML artifact in the repo.
-
-See `docs/KNOWN_ISSUES.md`.
-
-## Historical baselines
-
-- **V5.7.1-STABLE** — historical executable/data baseline; no longer considered release-gated STABLE after Game Master findings.
-- **V5.7.0 baseline QA** — historical structural evidence only.
-- Experimental 30-VP / `RULE_PENDING` line is excluded from the active six-round branch.
+Новый цифровой RC разрешено объявлять только после миграции complete Arena baseline/HTML, сборки из repo, Game Master regression и browser smoke.

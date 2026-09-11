@@ -1,13 +1,16 @@
 # Release
 
-## Current
+There is currently **no executable release in GitHub that matches the post-reconciliation V5.7.2 source**.
 
-**V5.7.2-PLAYABLE-RC2** — digital Arena playtest release candidate.
+`V5.7.2-PLAYABLE-RC2` remains the last historically verified executable by manifest/hash and 500-seed QA, but its exact HTML is absent and the current source contains newer fixes.
 
-Это играбельный цифровой RC, но **не STABLE** и **не print-ready**.
+A new digital RC requires:
 
-Build manifest: `../arena/builds/V5.7.2_PLAYABLE_RC2.manifest.json`.
+1. migrate a complete Arena baseline/HTML;
+2. build the executable from repository source;
+3. run canonical static checks;
+4. run Game Master regression;
+5. run real-browser smoke;
+6. commit artifact + manifest + hash + QA.
 
-QA: `../qa/reports/Game_Master_Report_V5.7.2_RC2_500seeds.md`.
-
-Полный physical/PnP release package сюда не помещается до закрытия Cards/Map/Components/Print blockers.
+Physical/PnP STABLE additionally requires migrated card layout/art masters, illustrated map master, Components/BOM and a reproducible print package.
