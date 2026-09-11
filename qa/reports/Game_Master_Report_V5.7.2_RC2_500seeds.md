@@ -1,6 +1,6 @@
-# Game Master Report — V5.7.2 PLAYABLE RC2 CANDIDATE
+# Game Master Report — V5.7.2 PLAYABLE RC2
 
-**Build SHA-256:** `b0284f42bf033c0ae46a28f82b4c5bdb43281285f89f2f1406b4ebdca087cad6`  
+**Build SHA-256:** `65028a031ec391a3057a4550e926ffcae4141eb1c7407cae84482b0491b80749`  
 **Seeds:** 57001–57500 (500 games)
 
 ## Structural regression
@@ -30,16 +30,22 @@
 - capital captures: 73
 - dynastic relations observed: 1244
 
-## Targeted prisoner tests
+## Targeted tests
 
-9/9 passed. Verified: release to owner capital; human-human ransom pending response; no duplicate ransom offer; accepted ransom transfers gold and returns to owner capital; rejected ransom detains; execution terminal state and cost; P-06 numeric ID alone does not trigger the hostage-congress exception; event name `Съезд заложников` does trigger fixed ransom 2.
+- Prisoner flow: **9/9**
+- Human prisoner UI logic: **6/6**
+- Family commanders: **6/6**
+- Canonical nearest-fort routing with direct sea edges: **1/1**
 
-## Human UI logic smoke
+Verified: release/ransom return to owner capital; Human ransom response creates no duplicate offer; accepted ransom transfers gold; rejected ransom detains; execution terminal state/cost; «Съезд заложников» exception is bound by event name; nearest fortress uses unweighted canonical land + direct-sea graph; family commanders assign/move/return and respect caps.
 
-6/6 passed in a deterministic DOM harness: blocking captor modal; all four captor controls; release click; Human ransom-response modal; accepted ransom without duplicate offer; top-level Commander/Prisoner buttons installed.
+## Release status
 
-## Release blockers still open
+**PLAYABLE RC for digital Arena testing. Not STABLE and not print-ready.**
 
-1. Canonical algorithm for **nearest captor fortress** is not yet approved. Current candidate engine still uses the temporary land-edge BFS from RC1 and MUST NOT be promoted as final rule.
-2. Event registry conflict: current monolithic MGD uses `EV-P06` for `Холодная война`, while the Arena baseline contains `П-06 Съезд заложников`. Exception logic in RC2 is name-based to avoid applying ransom=2 to the wrong event. Registry still requires sync.
-3. Real Chromium visual smoke is still pending because headless Chromium hangs in the local container. Deterministic Human UI logic smoke is green (6/6).
+Remaining project-level debts do not block Arena playtest but block STABLE/PnP certification:
+
+1. Event registry conflict: monolithic MGD uses `EV-P06` for «Холодная война», while legacy Arena/card layer contains «Съезд заложников». RC2 resolves behavior by event name; registry still needs canonical ID synchronization.
+2. Monolithic MGD still contains inherited prisoner/ransom fields and must be regenerated from canonical modules.
+3. Cards/map binary editable sources and full component/print package are not yet stored in GitHub.
+4. Real Chromium visual smoke was not completed in the local container; deterministic UI logic smoke is green.
