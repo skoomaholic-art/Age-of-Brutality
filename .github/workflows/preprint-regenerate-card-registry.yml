@@ -1,0 +1,31 @@
+name: Preprint regenerate card registry
+
+on:
+  push:
+    branches:
+      - preprint/html-card-v5.7.2-2026-09-11
+
+permissions:
+  contents: write
+
+jobs:
+  regenerate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preprint/html-card-v5.7.2-2026-09-11
+      - name: Generate registry
+        run: node tools/generate_card_registry_v5_7_2.js
+      - name: Commit generated registry if changed
+        shell: bash
+        run: |
+          if git diff --quiet -- cards/canonical_registry_v5.7.2.json; then
+            echo "Registry already current"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add cards/canonical_registry_v5.7.2.json
+          git commit -m "cards: regenerate canonical physical card registry"
+          git push origin HEAD:preprint/html-card-v5.7.2-2026-09-11
