@@ -19,7 +19,8 @@ function main() {
   invariant(mgd && mgd.sheets && typeof mgd.sheets === "object", "MGD sheets missing");
 
   const groups = {};
-  const ids = new Map();
+  const namespacedIds = new Set();
+  const globalCardIds = new Map();
   let total = 0;
 
   for (const [sheet, rows] of Object.entries(mgd.sheets)) {
@@ -37,9 +38,12 @@ function main() {
       const key = ID_KEYS.find((k) => row[k] != null && row[k] !== "");
       if (!key) continue;
       const id = String(row[key]);
-      const prior = ids.get(id);
-      invariant(!prior || prior.sheet === sheet, `Duplicate card/object ID ${id}: ${prior.sheet} and ${sheet}`);
-      ids.set(id, { sheet, key });
+      namespacedIds.add(`${sheet}:${key}:${id}`);
+      if (key === "CARD_ID") {
+        const prior = globalCardIds.get(id);
+        invariant(!prior || prior === sheet, `Duplicate CARD_ID ${id}: ${prior || "unknown"} and ${sheet}`);
+        globalCardIds.set(id, sheet);
+      }
     }
   }
 
@@ -51,7 +55,8 @@ function main() {
     source: "data/master_game_data_v5.7.2-dev.json",
     policy: "Generated verbatim from active MGD. It is a machine-readable game-data registry, not a substitute for missing print layout/art masters.",
     object_count: total,
-    unique_id_count: ids.size,
+    namespaced_id_count: namespacedIds.size,
+    unique_card_id_count: globalCardIds.size,
     sheets: groups
   };
 
@@ -59,12 +64,12 @@ function main() {
   if (process.argv.includes("--check")) {
     const current = fs.existsSync(OUTPUT) ? fs.readFileSync(OUTPUT, "utf8") : "";
     invariant(current === text, "cards/canonical_registry_v5.7.2.json is stale; regenerate it");
-    console.log(`Card registry check OK: ${total} objects / ${ids.size} unique IDs`);
+    console.log(`Card registry check OK: ${total} objects / ${globalCardIds.size} CARD_IDs`);
     return;
   }
 
   fs.writeFileSync(OUTPUT, text, "utf8");
-  console.log(`Generated ${path.relative(ROOT, OUTPUT)}: ${total} objects / ${ids.size} unique IDs`);
+  console.log(`Generated ${path.relative(ROOT, OUTPUT)}: ${total} objects / ${globalCardIds.size} CARD_IDs`);
 }
 
 main();
