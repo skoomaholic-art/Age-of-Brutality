@@ -1,0 +1,52 @@
+name: Build Arena V5.7.2 RC3
+
+on:
+  push:
+    branches:
+      - rebuild/v5.7.2-consistency-2026-09-11
+    paths:
+      - tools/build_arena_v5_7_2_rc3.js
+      - arena/source/rc1/**
+      - arena/source/patches/v5.7.2_rc3_engine_delta.js
+      - arena/source/patches/v5.7.2_rc2_human_ui.js
+      - qa/game-master/game_master_runner.js
+      - .github/workflows/build-v5.7.2-rc3.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-qa:
+    if: ${{ !startsWith(github.event.head_commit.message, 'rc3-generated:') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build RC3 and run 500-seed Game Master
+        run: node tools/build_arena_v5_7_2_rc3.js
+
+      - name: Set Arena version
+        run: printf 'V5.7.2-PLAYABLE-RC3\n' > arena/VERSION
+
+      - name: Validate generated diff
+        run: git diff --check
+
+      - name: Commit reproducible RC3 artifact and QA
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            arena/VERSION \
+            arena/builds/Жестокий_Век_Arena_V5.7.2_PLAYABLE_RC3.html \
+            arena/builds/V5.7.2_PLAYABLE_RC3.manifest.json \
+            qa/reports/Game_Master_Summary_V5.7.2_RC3_500seeds.json \
+            qa/reports/Game_Master_Report_V5.7.2_RC3_500seeds.md
+          if git diff --cached --quiet; then
+            echo "RC3 outputs already current."
+            exit 0
+          fi
+          git commit -m "rc3-generated: reproducible Arena RC3 + 500-seed QA"
+          git push
