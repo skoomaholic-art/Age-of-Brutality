@@ -1,6 +1,6 @@
 # Game Master Report — V5.7.2 PLAYABLE RC2 CANDIDATE
 
-**Build SHA-256:** `15247ce3de064ac91b0d2b6c42537da7938379888c8341a2683bfd5dc02a0420`  
+**Build SHA-256:** `b0284f42bf033c0ae46a28f82b4c5bdb43281285f89f2f1406b4ebdca087cad6`  
 **Seeds:** 57001–57500 (500 games)
 
 ## Structural regression
