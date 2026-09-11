@@ -13,15 +13,19 @@ QA: `qa/reports/Game_Master_Report_V5.7.2_RC2_500seeds.md`.
 
 Manifest: `arena/builds/V5.7.2_PLAYABLE_RC2.manifest.json`.
 
+Важно: exact RC2 HTML зафиксирован по имени/размеру/SHA-256, но сам файл пока не хранится в GitHub. Поэтому текущий repo не является полностью самодостаточным executable build source.
+
 ## Project/source status
 
-Rules/Data source line remains **V5.7.2-DEV** until full Cards/Map/Components/Print migration and Master Game Data regeneration are complete.
+Rules/Data source line остаётся **V5.7.2-DEV**. Prisoner/ransom слой монолитного Master Game Data и section 20.2 правил уже пересобраны из canonical module и проходят deterministic reconciliation.
 
-Arena RC2 is approved for **digital playtesting**, not for STABLE/PnP certification.
+Статус STABLE/PnP по-прежнему заблокирован из-за отсутствующих/не мигрированных Cards/Map/Components/Print master sources, полного raw manual playtest package, exact RC2 HTML/visual artifacts и открытых cross-source discrepancies: canonical ID «Съезда заложников», direct `Взять в плен` detention rule и дополнительный Arena-модификатор казни при этом событии.
+
+Arena RC2 остаётся одобренной для **digital playtesting**, но не для STABLE/PnP certification.
 
 ## Historical V5.7.1 baseline
 
-The following files are historical baseline references by SHA-256. They are no longer the current release:
+Следующие файлы — только historical baseline references по SHA-256. Они больше не являются текущим релизом:
 
 | Артефакт | Bytes | SHA-256 |
 |---|---:|---|
@@ -35,4 +39,4 @@ The following files are historical baseline references by SHA-256. They are no l
 | `11_Жестокий_Век_Карта_Final_Illustrated_V5.7.1.svg` | 78255 | `ade55bf3f7d774fe86de321243370a073640a90966a9c38d3c3fb58c2e34ab8f` |
 | `13_Жестокий_Век_Каноническая_Сухопутная_Топология_V5.7.1_STABLE.json` | 9554 | `dd529568ced59493730f6f6ff24bec4d9980eb07def9fdd4a713269de6c36b42` |
 
-Historical files are not automatically promoted into current V5.7.2 source merely because their hashes are known.
+Historical files не повышаются автоматически в текущий V5.7.2 source только потому, что известны их хэши.
