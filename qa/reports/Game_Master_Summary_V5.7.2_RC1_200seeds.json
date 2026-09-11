@@ -1,0 +1,28 @@
+{
+  "game": "Жестокий Век",
+  "version": "V5.7.2-PLAYABLE-RC1",
+  "artifact_sha256": "35302ce62f4daa60f107cb44da7c7f2c71be723218795a0fc784341bc88749d9",
+  "seeds": {"from": 57001, "to": 57200, "count": 200},
+  "engine": {
+    "completed": 200,
+    "round6": 200,
+    "action108": 200,
+    "errors": 0,
+    "invalid_actions": 0,
+    "state_invariant_violations": 0,
+    "pending_prisoner_at_end": 0
+  },
+  "prisoner_coverage": {
+    "capture": 22,
+    "hold": 12,
+    "ai_decision": 22,
+    "ransom_offer": 12,
+    "ransom_accept": 7,
+    "ransom_reject": 5,
+    "release": 7,
+    "execute": 3,
+    "final_prisoners": 12
+  },
+  "release_gate": "FAIL",
+  "critical_blockers": ["RC1-RULE-001", "RC1-UI-001"]
+}
