@@ -2,7 +2,7 @@
 
 Версия: `V5.7.2-HTML-CARDS-V2.2`.
 
-Это воспроизводимый source для предпечатной работы с карточками из текущего canonical registry.
+Воспроизводимый source для предпечатной работы с карточками из текущего canonical registry.
 
 ## Файлы
 
@@ -13,6 +13,12 @@
 ## Источник данных
 
 `../../cards/canonical_registry_v5.7.2.json`.
+
+Текущий registry содержит **111 дизайнов**: Events 30, Houses 6, Characters 48, Advisors 9, Ambitions 18.
+
+`print_studio.html` учитывает поле MGD `Копий`: 9 типов Advisors печатаются по 2 экземпляра. Поэтому из текущих canonical sources получается **120 физических карт**.
+
+Исторический Visual RC содержал 160 карт. Отсутствующие **40 Intrigues** не входят в current MGD и не восстанавливаются этим editor/source.
 
 Оба HTML принимают canonical registry через file picker. При запуске через локальный HTTP server редактор также умеет загрузить registry по относительному пути.
 
