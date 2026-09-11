@@ -1,0 +1,37 @@
+{
+  "version": "V5.7.2-VISUAL-RC1",
+  "status": "PLAYTEST_VISUAL_RC_NOT_STABLE",
+  "arena_source": "V5.7.2-PLAYABLE-RC2",
+  "cards": 160,
+  "individual_card_pdfs": 160,
+  "all_cards_pages": 20,
+  "map_topology": "unchanged; canonical geometry groups verified",
+  "qa": "PASS",
+  "artifacts": {
+    "visual_zip": {
+      "file": "Жестокий_Век_Visual_Print_and_Play_Pack.zip",
+      "bytes": 50973158,
+      "sha256": "25c5cf652eaf15dd6f35a2cab1aa6e5c5f5de1f4dcf170f73b00e5f69b6d64aa"
+    },
+    "styled_arena": {
+      "file": "Жестокий_Век_Arena_Styled.html",
+      "bytes": 472810,
+      "sha256": "862f6811bb4afd4e703e7a73ae33a9b50474894dd9c797323b2844fceac0953b"
+    },
+    "map_svg": {
+      "file": "Жестокий_Век_Карта_Styled.svg",
+      "bytes": 78986,
+      "sha256": "5223ca43e8020798782408537d23702dcd2872196485aaa2d045f73b73698efc"
+    },
+    "map_pdf": {
+      "file": "Жестокий_Век_Карта_Print.pdf",
+      "bytes": 730198,
+      "sha256": "94917dc3bfb769e86a40fd192aaf76fd10c4013f56c00e42032e0e0bb9430ad9"
+    },
+    "all_cards_pdf": {
+      "file": "Жестокий_Век_Все_Карточки_Full_Pack_Print.pdf",
+      "bytes": 11860717,
+      "sha256": "8da2074429e28c3d0750e867f0a79f358bc96d632102d7cb818eb66e0c074937"
+    }
+  }
+}
