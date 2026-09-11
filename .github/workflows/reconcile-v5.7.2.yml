@@ -41,12 +41,6 @@ jobs:
       - name: Commit generated sources
         shell: bash
         run: |
-          if git diff --quiet; then
-            echo "No generated changes."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/master_game_data_v5.7.2-dev.json \
                   cards/canonical_registry_v5.7.2.json \
                   rules/source/00_core_setup.md \
@@ -54,5 +48,11 @@ jobs:
                   rules/source/03a_advisors_intrigue_events_exile.md \
                   rules/source/03c_quick_reference_end_cases.md \
                   rules/source/04_arena_technical_appendix.md
+          if git diff --cached --quiet; then
+            echo "No generated changes."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "rebuild-generated: sync V5.7.2 canonical sources"
           git push
