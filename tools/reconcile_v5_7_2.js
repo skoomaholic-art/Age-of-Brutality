@@ -133,7 +133,7 @@ function reconcileRules(baseRules, canonicalPrisoners) {
   const replacement = extractCanonicalPrisonerSection(canonicalPrisoners);
   const pattern = /### 20\.2\. Решение стороны, захватившей персонажа[\s\S]*?(?=\n## 21\. Брак, рождение и взросление)/;
   invariant(pattern.test(baseRules), "base rules section 20.2 not found");
-  return baseRules.replace(pattern, replacement.trimEnd());
+  return baseRules.replace(pattern, replacement.trimEnd() + "\n");
 }
 
 function reconcileCore(text) {
