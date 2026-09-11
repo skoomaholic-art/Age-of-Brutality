@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "game_version": "V5.7.2-DEV",
   "status": "CANONICAL_MODULE",
   "mechanic": "prisoners",
@@ -34,6 +34,18 @@
       ],
       "numeric_weights_status": "IMPLEMENTATION_PENDING_BALANCE_TEST"
     },
+    "special_event_exceptions": [
+      {
+        "event_name": "Съезд заложников",
+        "event_id": null,
+        "event_id_status": "REGISTRY_CONFLICT_PENDING_SYNC",
+        "duration": "current_round",
+        "fixed_ransom_gold": 2,
+        "replaces_free_N_negotiation_while_active": true,
+        "confirmed_by_user": "2026-09-11",
+        "note": "Do not map this exception to EV-P06 automatically: current Master Game Data uses EV-P06 for 'Холодная война'."
+      }
+    ],
     "on_reject": {
       "prisoner_remains_captive": true,
       "destination_priority": [
@@ -63,6 +75,6 @@
   "pending": {
     "released_prisoner_destination": "ТРЕБУЕТ РЕШЕНИЯ",
     "nearest_fort_distance_algorithm": "ТРЕБУЕТ ТЕХНИЧЕСКОЙ ФИКСАЦИИ ПО КАНОНИЧЕСКОЙ ТОПОЛОГИИ",
-    "event_P06_fixed_ransom_2": "ТРЕБУЕТ РЕШЕНИЯ: special event currently fixes ransom at 2 gold for the round; must be confirmed as an explicit exception or changed."
+    "hostage_congress_event_id": "ТРЕБУЕТ DATA/CARDS SYNC: current MGD EV-P06 is Холодная война"
   }
 }
