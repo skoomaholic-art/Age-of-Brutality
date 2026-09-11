@@ -14,8 +14,11 @@ const PATHS = {
   events: path.join(ROOT, "rules", "source", "03a_advisors_intrigue_events_exile.md"),
   quickRef: path.join(ROOT, "rules", "source", "03c_quick_reference_end_cases.md"),
   arenaTech: path.join(ROOT, "rules", "source", "04_arena_technical_appendix.md"),
+  enginePatch: path.join(ROOT, "arena", "source", "patches", "v5.7.2_rc2_engine_delta.js"),
 };
 
+const HOSTAGE_EVENT_ID = "EV-P06";
+const HOSTAGE_EVENT_NAME = "Съезд заложников";
 const args = new Set(process.argv.slice(2));
 const write = args.has("--write");
 const check = args.has("--check") || !write;
@@ -27,10 +30,6 @@ function die(message) {
 
 function readJson(file) {
   return JSON.parse(fs.readFileSync(file, "utf8"));
-}
-
-function writeJson(file, value) {
-  fs.writeFileSync(file, JSON.stringify(value, null, 2) + "\n", "utf8");
 }
 
 function invariant(condition, message) {
@@ -50,35 +49,43 @@ function canonicalPrisonerFacts(prisoners) {
   invariant(prisoners.ransom && prisoners.ransom.base_fixed_amount === null, "human ransom must not have a fixed base amount");
   invariant(prisoners.execution && prisoners.execution.cost_actions === 1, "execution action cost must remain 1");
   invariant(prisoners.execution.influence_delta === -3, "execution influence delta must remain -3");
+  invariant(prisoners.execution.hostage_congress_extra_influence === 0, "hostage congress must not add an execution influence penalty");
+
+  const hold = prisoners.hold_without_ransom;
+  invariant(hold && Array.isArray(hold.destination_priority), "hold_without_ransom destination priority missing");
+  invariant(hold.destination_priority[0] === "nearest_captor_fort", "hold must route to nearest captor fort first");
+  invariant(hold.destination_priority[1] === "captor_capital_if_no_fort", "hold must fall back to captor capital");
 
   const hostage = (prisoners.ransom.special_event_exceptions || [])
-    .find((x) => x.event_name === "Съезд заложников");
-  invariant(hostage, "Съезд заложников exception missing");
-  invariant(hostage.fixed_ransom_gold === 2, "Съезд заложников must fix ransom at 2 gold");
-  invariant(hostage.event_id == null, "Съезд заложников event_id must remain unresolved until registry sync");
+    .find((x) => x.event_name === HOSTAGE_EVENT_NAME);
+  invariant(hostage, `${HOSTAGE_EVENT_NAME} exception missing`);
+  invariant(hostage.event_id === HOSTAGE_EVENT_ID, `${HOSTAGE_EVENT_NAME} must use ${HOSTAGE_EVENT_ID}`);
+  invariant(hostage.fixed_ransom_gold === 2, `${HOSTAGE_EVENT_NAME} must fix ransom at 2 gold`);
+  invariant(hostage.execution_extra_influence === 0, `${HOSTAGE_EVENT_NAME} must not modify execution influence`);
 
-  return { hostage };
+  return { hostage, hold };
 }
 
 function reconcileMgd(mgd, prisoners) {
   const out = structuredClone(mgd);
-  const { hostage } = canonicalPrisonerFacts(prisoners);
+  const { hostage, hold } = canonicalPrisonerFacts(prisoners);
 
   out.source_policy = "GitHub main is canonical. Precedence: explicit confirmed decisions → canonical modules → active V5.7.2 Rules/Data → historical baselines. A canonical module supersedes stale monolithic fields until regeneration.";
   out.confirmed_decisions = out.confirmed_decisions || {};
   out.confirmed_decisions.prisoner_post_capture_options = [...prisoners.post_capture_options];
   out.confirmed_decisions.ransom_amount = "N";
   out.confirmed_decisions.ransom_N_rule =
-    "Для людей фиксированного диапазона/базовой суммы нет: пленитель предлагает N, владелец пленника принимает или отклоняет.";
+    "Для людей фиксированного диапазона/базовой суммы нет: пленитель предлагает положительное целое N, владелец пленника принимает или отклоняет.";
   out.confirmed_decisions.ransom_acceptance_procedure =
     "Human↔Human: предложение пленителя → принять/отклонить владельцем; AI оценивает предложение отдельно по каноническому prisoner module.";
   out.confirmed_decisions.prisoner_release_destination = prisoners.release.destination;
-  out.confirmed_decisions.prisoner_hold_without_ransom_destination = prisoners.hold_without_ransom?.destination_rule || "ТРЕБУЕТ РЕШЕНИЯ";
+  out.confirmed_decisions.prisoner_hold_without_ransom_destination = [...hold.destination_priority];
   out.confirmed_decisions.hostage_congress_exception = {
     event_name: hostage.event_name,
     event_id: hostage.event_id,
     fixed_ransom_gold: hostage.fixed_ransom_gold,
     duration: hostage.duration,
+    execution_extra_influence: 0,
     registry_status: hostage.event_id_status,
   };
 
@@ -93,20 +100,28 @@ function reconcileMgd(mgd, prisoners) {
   ransomRow["Цена действий"] = "0 действий";
   ransomRow["Цена ресурса"] = "N золота";
   ransomRow["Условие"] =
-    "Не входит в лимит подарков. Люди договариваются о N; владелец принимает/отклоняет. При событии «Съезд заложников» в его раунд N=2.";
+    "N — положительное целое. Не входит в лимит подарков. Люди договариваются о N; владелец принимает/отклоняет. При событии «Съезд заложников» в его раунд N=2.";
 
   const executionRow = diplomacy.find((row) => row.ID === "EXECUTION");
   invariant(executionRow, "MGD Diplomacy/EXECUTION row missing");
   executionRow["Цена действий"] = `${prisoners.execution.cost_actions} действие`;
   executionRow["Цена ресурса"] = `${prisoners.execution.influence_delta} Влияния`;
   executionRow["Условие"] =
-    "После казни персонаж Мёртв; ПЛЕН/heldBy очищаются. Дом жертвы может прекратить отношения без собственного штрафа по действующему правилу.";
+    "После казни персонаж Мёртв; ПЛЕН/heldBy очищаются. «Съезд заложников» не меняет цену казни. Дом жертвы может прекратить отношения без собственного штрафа по действующему правилу.";
 
   const events = out.sheets && out.sheets.Events;
   invariant(Array.isArray(events), "MGD sheets.Events missing");
-  const p06 = events.find((row) => row.CARD_ID === "EV-P06");
-  invariant(p06 && p06["Название"] === "Холодная война",
-    "EVENT-ID guard: EV-P06 must remain «Холодная война» until an authoritative card registry resolves «Съезд заложников»");
+  const p06 = events.find((row) => row.CARD_ID === HOSTAGE_EVENT_ID);
+  invariant(p06, `${HOSTAGE_EVENT_ID} event row missing`);
+  p06["Название"] = HOSTAGE_EVENT_NAME;
+  p06["Категория"] = "Политика";
+  p06["Длительность"] = "Текущий раунд";
+  p06["Цель"] = "Все Дома";
+  p06["Модификатор"] = "Выкуп пленного = 2 золота";
+  p06["Условие"] = "Пока действует событие";
+  p06["Эффект"] = "В этом раунде каждый выкуп пленного фиксирован на 2 золота; стороны не назначают другую сумму N.";
+  p06["Запрет"] = "Не меняет цену казни и не вводит дополнительный штраф Влияния.";
+  p06["Power Budget"] = 0;
 
   return out;
 }
@@ -171,14 +186,22 @@ function reconcileArenaTech(text) {
 }
 
 function reconcileQuickReference(text) {
-  if (text.includes("| Выкуп пленного")) return text;
+  const ransomLine = "| Выкуп пленного          | 0            | N золота   | 0           | Пленитель предлагает положительное целое N; владелец принимает/отклоняет. Не входит в лимит подарков. При «Съезде заложников» в его раунд N=2. |";
+  const executionLine = "| Казнь пленного          | 1            | 0          | -3          | После оплаты персонаж становится Мёртв; статус ПЛЕН и heldBy очищаются. «Съезд заложников» цену казни не меняет. |";
   const marker = "\n\n# 35. Конец игры";
   invariant(text.includes(marker), "quick reference end marker not found");
-  const rows = [
-    "| Выкуп пленного          | 0            | N золота   | 0           | Пленитель предлагает N; владелец принимает/отклоняет. Не входит в лимит подарков. При «Съезде заложников» в его раунд N=2. |",
-    "| Казнь пленного          | 1            | 0          | -3          | После оплаты персонаж становится Мёртв; статус ПЛЕН и heldBy очищаются. Дополнительный -1 при «Съезде заложников» в Arena RC2 не канонизирован и требует сверки Cards source. |",
-  ].join("\n");
-  return text.replace(marker, `\n${rows}${marker}`);
+
+  const lines = text.split("\n").filter((line) => !line.startsWith("| Выкуп пленного") && !line.startsWith("| Казнь пленного"));
+  text = lines.join("\n");
+  return text.replace(marker, `\n${ransomLine}\n${executionLine}${marker}`);
+}
+
+function validateEnginePatch(text) {
+  invariant(text.includes("HOSTAGE_EVENT_ID='EV-P06'"), "Arena engine patch must bind hostage congress to EV-P06");
+  invariant(text.includes("card?.name==='Съезд заложников'"), "Arena engine patch must retain name fallback for hostage congress");
+  invariant(!text.includes("дополнительная цена казни"), "Arena still applies forbidden extra execution influence during hostage congress");
+  invariant(!text.includes("потеряно 3 Влияния${this.stateFlags.hostageCongress"), "Arena execution log still contains the removed +1 event penalty");
+  invariant(text.includes("Number.isInteger(raw)"), "Arena ransom amount must validate positive integer N");
 }
 
 function stableStringify(value) {
@@ -198,6 +221,7 @@ function main() {
     arenaTech: fs.readFileSync(PATHS.arenaTech, "utf8"),
   };
   const canonicalRules = fs.readFileSync(PATHS.rulesPrisoners, "utf8");
+  validateEnginePatch(fs.readFileSync(PATHS.enginePatch, "utf8"));
 
   const mgdExpected = stableStringify(reconcileMgd(JSON.parse(originals.mgd), prisoners));
   const expected = {
