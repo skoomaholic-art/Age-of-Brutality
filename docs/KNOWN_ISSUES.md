@@ -4,19 +4,20 @@
 
 | ID | Severity | Категория | Проблема | Статус |
 |---|---|---|---|---|
-| PRISON-001 | CRITICAL | ARENA_ERROR | После пленения нет полного выбора: отпустить / взять в плен / требовать выкуп N / казнить | OPEN |
-| PRISON-002 | CRITICAL | STATE_CORRUPTION | Пленник не хранит захвативший Дом | OPEN |
-| DEATH-001 | CRITICAL | STATE_CORRUPTION | Мёртвый персонаж получает `mode=ПЛЕН` | OPEN |
-| RANSOM-001 | HIGH | RULES/DATA | Старый фиксированный выкуп 3 конфликтует с подтверждённым `N` | OPEN — ждёт диапазон N |
-| COMMANDER-001 | HIGH | RULES/DATA/ARENA/AI | Семейные командиры реализованы несогласованно | OPEN |
-| HOUSE-ID-001 | HIGH | DATA | `Айрельь` в MGD не совпадает с `Айрель` в остальных источниках | OPEN |
-| AYREL-001 | HIGH | DATA/RULES/ARENA/CARDS | Способность/слабость Айреля теряются между источниками; слабость отсутствует в Arena, House card неполон | OPEN |
-| DYNASTY-001 | HIGH | AI | AI не добавляет династический союз в `chooseAction` | OPEN |
-| DIVORCE-001 | MEDIUM | RULES | Развод есть в Data/Arena, но не описан полной процедурой в rulebook | OPEN |
+| RC1-RULE-001 | CRITICAL | RULES/ARENA | В RC1 без подтверждения пользователя зашиты: П-06 как исключение `выкуп=2`, возврат освобождённого в Двор и вычисление ближайшей крепости только по сухопутным рёбрам | OPEN — RC1 запрещено повышать до release до решения |
+| PRISON-001 | CRITICAL | ARENA/UI | Движок RC1 содержит 4 post-capture варианта, но Human UI этих процедур ещё должен быть подтверждён отдельным smoke-test | VERIFY |
+| PRISON-002 | CRITICAL | STATE_CORRUPTION | Baseline не хранил захвативший Дом; RC1 добавляет `heldBy`, требуется финальный regression exact-build | FIXED IN RC1 / VERIFY |
+| DEATH-001 | CRITICAL | STATE_CORRUPTION | Baseline позволял мёртвому персонажу остаться `ПЛЕН`; RC1 вводит взаимоисключающие state, требуется финальный regression exact-build | FIXED IN RC1 / VERIFY |
+| RANSOM-001 | HIGH | RULES/DATA | Старый фиксированный выкуп 3 конфликтует с подтверждённым переговорным `N`; диапазон N НЕ требуется. Канонический prisoner-module уже содержит новое решение, монолитный MGD ещё должен быть полностью синхронизирован | OPEN — DATA SYNC |
+| COMMANDER-001 | HIGH | RULES/DATA/ARENA/AI | Семейные командиры реализованы несогласованно в baseline; RC1 содержит новую модель, требуется UI/AI regression exact-build | FIXED IN RC1 / VERIFY |
+| HOUSE-ID-001 | HIGH | DATA | `Айрельь` в baseline MGD не совпадал с `Айрель`; V5.7.2 source нормализован до `Айрель` | FIXED SOURCE / VERIFY |
+| AYREL-001 | HIGH | DATA/RULES/ARENA/CARDS | Способность/слабость Айреля терялись между источниками; требуется финальная проверка Cards и Arena после синхронизации | OPEN |
+| DYNASTY-001 | HIGH | AI | Baseline AI не добавлял династический союз в `chooseAction`; RC1 добавляет действие | FIXED IN RC1 / VERIFY |
+| DIVORCE-001 | MEDIUM | RULES | Развод отсутствовал как полная процедура; V5.7.2 rules source содержит процедуру | FIXED SOURCE / VERIFY |
 | MAP-VERSION-001 | MEDIUM | DATA | topology JSON V5.7.1 содержит внутреннюю версию V5.6.6 | OPEN |
-| BIRTH-COVER-001 | MEDIUM | AI/COVERAGE | 0 рождений в 100 seeds; причина требует точного определения | INVESTIGATE |
-| RAID-COVER-001 | MEDIUM | AI/COVERAGE | 0 набегов в 100 seeds; причина требует точного определения | INVESTIGATE |
-| REPO-SOURCE-001 | CRITICAL | PROCESS/DATA | GitHub пока содержит manifest/QA, но не полный редактируемый набор канонических game sources | OPEN |
+| BIRTH-COVER-001 | MEDIUM | AI/COVERAGE | Baseline: 0 рождений; RC1 regression показывает ненулевое покрытие, нужен финальный exact-build отчёт | FIXED IN RC1 / VERIFY |
+| RAID-COVER-001 | MEDIUM | AI/COVERAGE | Baseline: 0 набегов; RC1 regression показывает ненулевое покрытие, нужен финальный exact-build отчёт | FIXED IN RC1 / VERIFY |
+| REPO-SOURCE-001 | CRITICAL | PROCESS/DATA | GitHub ещё не содержит полностью восстановленный exact-build Arena RC1 и полный канонический набор Cards/Map/print sources | OPEN |
 | PRINT-001 | HIGH | PRINT | Нет сертифицированного print-ready комплекта | OPEN |
 | COMPONENTS-001 | HIGH | COMPONENTS | Нет утверждённого точного BOM физических компонентов | OPEN |
 
