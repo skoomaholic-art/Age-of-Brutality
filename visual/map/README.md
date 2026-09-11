@@ -12,14 +12,14 @@ Verified unchanged canonical groups:
 
 ## Committed PDF preview
 
-A technical PDF preview is now stored in the repository:
+A technical PDF preview is stored in the repository:
 
 - `Жестокий_Век_Карта_Topology_Preview_V5.7.2.pdf`
-- SHA-256: `3d152a6769a232f8e9ebc26c98a3ee82eeaeb76ebaa13369b46c1b221369e39e`
+- SHA-256: `7938e24ea69079e96191439f5b103ff08817103d8b870fc07325b4b4bbc807e5`
 - source: `data/master_game_data_v5.7.2-dev.json`
 - contains: 52 nodes, 81 canonical land edges, 23 canonical direct sea edges, 16 canonical ports.
 
-This PDF is a **technical topology preview**. Node positions are schematic and therefore it does **not** replace the missing `Final Illustrated V5.7.1` geometry master. It exists so the currently committed repository has a directly viewable/printable map artifact whose graph can be checked against Master Game Data.
+This PDF is a **technical topology preview**. Node positions are schematic and therefore it does **not** replace the missing `Final Illustrated V5.7.1` geometry master. It exists so the repository has a directly viewable/printable map artifact whose graph can be checked against Master Game Data.
 
 ## Historical styled artifacts
 
