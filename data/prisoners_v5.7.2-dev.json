@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.1",
+  "schema_version": "1.2",
   "game_version": "V5.7.2-DEV",
   "status": "CANONICAL_MODULE",
   "mechanic": "prisoners",
@@ -10,6 +10,11 @@
     "Требовать выкуп N",
     "Казнить"
   ],
+  "release": {
+    "destination": "prisoner_owner_capital",
+    "clear_heldBy": true,
+    "clear_captive_status": true
+  },
   "ransom": {
     "base_fixed_amount": null,
     "human_vs_human": {
@@ -33,6 +38,12 @@
         "reason"
       ],
       "numeric_weights_status": "IMPLEMENTATION_PENDING_BALANCE_TEST"
+    },
+    "on_accept": {
+      "gold_transferred": "N",
+      "destination": "prisoner_owner_capital",
+      "clear_heldBy": true,
+      "clear_captive_status": true
     },
     "special_event_exceptions": [
       {
@@ -73,7 +84,6 @@
     "status=Мёртв => heldBy=null"
   ],
   "pending": {
-    "released_prisoner_destination": "ТРЕБУЕТ РЕШЕНИЯ",
     "nearest_fort_distance_algorithm": "ТРЕБУЕТ ТЕХНИЧЕСКОЙ ФИКСАЦИИ ПО КАНОНИЧЕСКОЙ ТОПОЛОГИИ",
     "hostage_congress_event_id": "ТРЕБУЕТ DATA/CARDS SYNC: current MGD EV-P06 is Холодная война"
   }
