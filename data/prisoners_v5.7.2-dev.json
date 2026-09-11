@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.2",
+  "schema_version": "1.3",
   "game_version": "V5.7.2-DEV",
   "status": "CANONICAL_MODULE",
   "mechanic": "prisoners",
@@ -13,7 +13,8 @@
   "release": {
     "destination": "prisoner_owner_capital",
     "clear_heldBy": true,
-    "clear_captive_status": true
+    "clear_captive_status": true,
+    "mode_after_return": "ДВОР"
   },
   "ransom": {
     "base_fixed_amount": null,
@@ -37,13 +38,14 @@
         "decision",
         "reason"
       ],
-      "numeric_weights_status": "IMPLEMENTATION_PENDING_BALANCE_TEST"
+      "numeric_weights_status": "IMPLEMENTATION_BALANCE_TEST"
     },
     "on_accept": {
       "gold_transferred": "N",
       "destination": "prisoner_owner_capital",
       "clear_heldBy": true,
-      "clear_captive_status": true
+      "clear_captive_status": true,
+      "mode_after_return": "ДВОР"
     },
     "special_event_exceptions": [
       {
@@ -63,6 +65,14 @@
         "nearest_captor_fort",
         "captor_capital_if_no_fort"
       ],
+      "nearest_fort_distance": {
+        "algorithm": "shortest_path_unweighted_canonical_graph",
+        "land_edge_cost": 1,
+        "direct_sea_edge_cost": 1,
+        "ignore_territory_control": true,
+        "ignore_port_control": true,
+        "ignore_army_presence": true
+      },
       "equal_nearest_forts": "captor_chooses"
     }
   },
@@ -84,7 +94,6 @@
     "status=Мёртв => heldBy=null"
   ],
   "pending": {
-    "nearest_fort_distance_algorithm": "ТРЕБУЕТ ТЕХНИЧЕСКОЙ ФИКСАЦИИ ПО КАНОНИЧЕСКОЙ ТОПОЛОГИИ",
     "hostage_congress_event_id": "ТРЕБУЕТ DATA/CARDS SYNC: current MGD EV-P06 is Холодная война"
   }
 }
