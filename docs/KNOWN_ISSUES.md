@@ -2,42 +2,43 @@
 
 Дата сверки: 2026-09-11.
 
-Этот файл содержит только подтверждённые проблемы текущего состояния репозитория. Исправленные рассинхроны вынесены отдельно и больше не считаются открытыми.
+Этот файл содержит только подтверждённые проблемы текущего состояния репозитория.
 
 ## Открытые проблемы
 
 | ID | Severity | Категория | Проблема | Статус |
 |---|---|---|---|---|
-| ARENA-ARTIFACT-001 | HIGH | ARENA/REPO | Exact HTML V5.7.2-PLAYABLE-RC2 отсутствует в GitHub. Сохранённые `arena/source/rc1/*.b64` обрываются до `class ArenaEngine` и `</body>`, поэтому из них нельзя честно пересобрать исполняемый клиент | OPEN — MIGRATE COMPLETE BASELINE/HTML |
-| CARD-PRINT-001 | HIGH | CARDS/PRINT | Игровой card registry V5.7.2 восстановлен из MGD, но редактируемая физическая верстка/арт-master карточек не хранится в GitHub | OPEN — SOURCE MIGRATION |
+| ARENA-ARTIFACT-001 | HIGH | ARENA/REPO | Exact HTML V5.7.2-PLAYABLE-RC2 отсутствует в GitHub. Сохранённые `arena/source/rc1/*.b64` обрываются до `class ArenaEngine` и `</body>` | OPEN — MIGRATE COMPLETE BASELINE/HTML |
+| CARD-INTRIGUE-001 | HIGH | CARDS/DATA/PRINT | Исторический Visual RC имел 160 физических карт; current canonical MGD восстанавливает 120. В MGD отсутствует `Intrigues` sheet; полные тексты/состав 40 недостающих карт не определены текущими sources | OPEN — SOURCE/DECISION REQUIRED |
+| CARD-ART-001 | HIGH | CARDS/PRINT | HTML layout/editor восстановлен, но утверждённые иллюстрации, backs и финальный art-master полного набора не собраны в reproducible package | OPEN — ART/PREPRESS |
 | MAP-ART-001 | HIGH | MAP/PRINT | Каноническая topology V5.7.2 хранится в GitHub, но illustrated PNG/SVG master карты не мигрирован | OPEN — SOURCE MIGRATION |
 | PLAYTEST-RAW-001 | HIGH | PLAYTEST/LOGGING | `playtest/` не содержит полного актуального набора ручных Journal/Diplomacy/Houses JSON | OPEN — RAW DATA MIGRATION |
 | COMPONENTS-001 | HIGH | COMPONENTS | Нет полного утверждённого BOM и редактируемых source физических компонентов | OPEN — SOURCE MIGRATION |
-| PRINT-001 | HIGH | PRINT | Нет воспроизводимого сертифицированного print-ready package из текущих canonical sources | OPEN |
-| VISUAL-SOURCE-001 | HIGH | VISUAL/REPO | Документы и SHA предыдущего Visual RC существуют, но standalone HTML V2/V2.1, generated visual pack и их полный генератор/ассеты не хранятся в GitHub | OPEN — SOURCE MIGRATION |
-| ARENA-VISUAL-001 | MEDIUM | ARENA/UI | Real-browser smoke должен выполняться уже на новом executable, собранном после текущих source fixes; такого executable в repo пока нет | BLOCKED BY ARENA-ARTIFACT-001 |
-| AI-CONFIG-001 | MEDIUM | AI/REPO | AI-параметры присутствуют в MGD/Arena source, но ещё не выделены в самостоятельный нормализованный canonical AI config | OPEN — NORMALIZATION |
+| PRINT-001 | HIGH | PRINT | Нет воспроизводимого сертифицированного print-ready package из текущих canonical sources и physical proof | OPEN |
+| VISUAL-SOURCE-001 | MEDIUM | VISUAL/REPO | Новая карточная HTML-линия `visual/html_v22/` восстановлена; исторические full Visual V2/V2.1 pack/map/generator остаются немигрированными | PARTIAL — CARD HTML RESTORED |
+| ARENA-VISUAL-001 | MEDIUM | ARENA/UI | Real-browser smoke нужен на новом executable после текущих source fixes; такого executable в repo пока нет | BLOCKED BY ARENA-ARTIFACT-001 |
+| AI-CONFIG-001 | MEDIUM | AI/REPO | AI-параметры присутствуют в MGD/Arena source, но не выделены в самостоятельный нормализованный canonical AI config | OPEN — NORMALIZATION |
 
-## Исправлено в текущем rebuild
+## Исправлено в текущем rebuild / preprint pass
 
-- `EV-P06` закреплён за событием **«Съезд заложников»**.
-- В раунд «Съезда заложников» выкуп фиксирован на **2 золота**.
-- «Съезд заложников» **не меняет цену казни**; неподтверждённый дополнительный `-1 Влияние` удалён из Arena source.
-- Прямой выбор **«Взять в плен»** и отказ от выкупа используют одну процедуру содержания: ближайшая Крепость пленителя → столица пленителя; при ничьей Крепость выбирает пленитель.
-- Human ransom `N` валидируется как положительное целое число; фиксированного верхнего лимита нет.
-- Казнь: **1 действие / -3 Влияния**; смерть и `ПЛЕН` взаимоисключающие состояния.
-- Монолитный MGD регенерирован по canonical prisoner module.
-- Основной §20.2 правил генерируется из `rules/source/02d_prisoners_ransom.md`.
-- Добавлен machine-readable card registry: `cards/canonical_registry_v5.7.2.json` — 96 объектов / 48 `CARD_ID`.
-- Добавлен `map/canonical_topology_v5.7.2.json`: 52 территории / 81 land edges / 23 sea edges / 16 ports.
-- Старый V5.7.1 topology больше не является текущим техническим master.
+- `EV-P06` закреплён за событием **«Съезд заложников»**; выкуп = **2 золота** в текущем раунде; цена казни не меняется.
+- Прямой **«Взять в плен»** и отказ от выкупа используют одну detention procedure.
+- Human ransom `N` — положительное целое; казнь = **1 действие / -3 Влияния**.
+- MGD и основной §20.2 правил синхронизированы с canonical prisoner module.
+- `cards/canonical_registry_v5.7.2.json` исправлен: **111 дизайнов** / **48 CARD_ID**; Houses и Advisors больше не выпадают из генератора.
+- Из current data известно **120 физических экземпляров**: Events 30, Houses 6, Characters 48, Advisors 18, Ambitions 18.
+- Добавлены `visual/html_v22/card_editor.html` и `print_studio.html`; Print Studio разворачивает `Копий` автоматически.
+- Print geometry: 69×94 мм full / 63×88 мм trim / bleed 3 мм / A4 3×3.
+- `map/canonical_topology_v5.7.2.json`: 52 территории / 81 land / 23 sea / 16 ports.
 
 ## Важное ограничение QA
 
-Отчёт RC2 на 500 seeds остаётся валидным свидетельством для **исторического RC2 executable**, который тогда был протестирован. Текущие source fixes новее этого HTML. Пока complete Arena baseline/HTML не мигрирован и не собран заново, нельзя выдавать старый RC2 hash как executable, соответствующий текущему source.
+Исторический RC2 QA 500 seeds относится к историческому executable. Текущие source fixes новее этого HTML.
+
+Card preprint CI подтверждает текущие Rules/Data/Card registry/Map topology/HTML source, но не может заменить физическую пробную печать и не восстанавливает отсутствующие 40 Intrigues.
 
 ## Правило закрытия
 
-`FIX → SYNC RULES/DATA/CARDS/MAP/ARENA/AI → STATIC CHECK → GAME MASTER → BROWSER SMOKE → COMMIT`
+`FIX → SYNC RULES/DATA/CARDS/MAP/ARENA/AI → STATIC CHECK → GAME MASTER → BROWSER/PHYSICAL SMOKE → COMMIT`
 
-Если исходник физически отсутствует в репозитории, проблема закрывается только после его фактической миграции или воспроизводимой регенерации, а не записью README.
+Если исходник физически отсутствует, проблема закрывается только после фактической миграции или воспроизводимой регенерации, а не записью README.
