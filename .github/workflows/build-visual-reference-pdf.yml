@@ -1,0 +1,43 @@
+name: Build visual reference PDF
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/references/visual_style/*.svg'
+      - 'tools/build_visual_reference_pdf.py'
+      - '.github/workflows/build-visual-reference-pdf.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-pdf:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prepare PDF tools
+        run: |
+          python -m pip install --disable-pip-version-check reportlab pillow
+          test -f /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf || (sudo apt-get update && sudo apt-get install -y fonts-dejavu-core)
+
+      - name: Build reference PDF
+        run: python tools/build_visual_reference_pdf.py
+
+      - name: Commit PDF
+        run: |
+          if git diff --quiet -- docs/references/visual_style/Жестокий_Век_Референсы_оформления.pdf; then
+            echo 'PDF already up to date.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/references/visual_style/Жестокий_Век_Референсы_оформления.pdf
+          git commit -m 'assets: build visual reference PDF'
+          git push
