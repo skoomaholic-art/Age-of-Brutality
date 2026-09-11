@@ -29,5 +29,8 @@ jobs:
       - name: Verify HTML card preprint source
         run: node tools/check_card_html_v5_7_2.js
 
+      - name: Report physical card quantity audit
+        run: node tools/audit_card_quantities_v5_7_2.js || true
+
       - name: Validate tracked diff
         run: git diff --check
