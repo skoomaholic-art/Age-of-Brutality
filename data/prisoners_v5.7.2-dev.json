@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.4",
+  "schema_version": "1.5",
   "game_version": "V5.7.2-DEV",
   "status": "CANONICAL_MODULE",
   "mechanic": "prisoners",
@@ -19,9 +19,20 @@
   "hold_without_ransom": {
     "prisoner_remains_captive": true,
     "ransom_offer_created": false,
-    "destination_rule": "ТРЕБУЕТ РЕШЕНИЯ",
-    "arena_rc2_current_behavior": "resolvePrisonerDecision(choice='hold') delegates to detainPrisoner(owner, character, captor, capture_location, detentionChoice)",
-    "canonical_status": "IMPLEMENTATION_BEHAVIOR_NOT_YET_CONFIRMED_AS_PHYSICAL_RULE"
+    "destination_priority": [
+      "nearest_captor_fort",
+      "captor_capital_if_no_fort"
+    ],
+    "nearest_fort_distance": {
+      "algorithm": "shortest_path_unweighted_canonical_graph",
+      "land_edge_cost": 1,
+      "direct_sea_edge_cost": 1,
+      "ignore_territory_control": true,
+      "ignore_port_control": true,
+      "ignore_army_presence": true
+    },
+    "equal_nearest_forts": "captor_chooses",
+    "canonical_status": "CONFIRMED_FOR_V5.7.2_REBUILD"
   },
   "ransom": {
     "base_fixed_amount": null,
@@ -57,13 +68,14 @@
     "special_event_exceptions": [
       {
         "event_name": "Съезд заложников",
-        "event_id": null,
-        "event_id_status": "REGISTRY_CONFLICT_PENDING_SYNC",
+        "event_id": "EV-P06",
+        "event_id_status": "CANONICAL_V5.7.2",
         "duration": "current_round",
         "fixed_ransom_gold": 2,
         "replaces_free_N_negotiation_while_active": true,
+        "execution_extra_influence": 0,
         "confirmed_by_user": "2026-09-11",
-        "note": "Do not map this exception to EV-P06 automatically: current Master Game Data uses EV-P06 for 'Холодная война'."
+        "note": "V5.7.2 rebuild resolves the stale V5.7.1 MGD conflict: EV-P06 is Съезд заложников. The inherited Холодная война row is superseded."
       }
     ],
     "on_reject": {
@@ -91,7 +103,8 @@
     "clear_heldBy": true,
     "clear_captive_status": true,
     "relation_consequence": "Victim house may end relations without paying its own break penalty under the current rule.",
-    "source_status": "PRESERVED_FROM_CURRENT_RULES_AND_MGD"
+    "hostage_congress_extra_influence": 0,
+    "source_status": "CANONICAL_V5.7.2"
   },
   "state_required": [
     "character_id",
@@ -110,9 +123,5 @@
     "alive=false => status=Мёртв",
     "status=Мёртв => heldBy=null"
   ],
-  "pending": {
-    "hostage_congress_event_id": "ТРЕБУЕТ DATA/CARDS SYNC: current MGD EV-P06 is Холодная война",
-    "hold_without_ransom_destination": "ТРЕБУЕТ РЕШЕНИЯ: Arena RC2 routes choice='hold' through detainPrisoner, but the physical rule does not explicitly define this destination.",
-    "hostage_congress_execution_modifier": "ТРЕБУЕТ RULES/CARDS SYNC: Arena RC2 applies an additional -1 Influence on execution while the event is active; current confirmed canonical exception only fixes ransom at 2 gold."
-  }
+  "pending": {}
 }
