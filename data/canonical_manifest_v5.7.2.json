@@ -1,0 +1,82 @@
+{
+  "game": "Жестокий Век",
+  "version": "V5.7.2-DEV",
+  "status": "CANONICAL_SOURCE_GRAPH",
+  "generated_on": "2026-09-11",
+  "source_policy": {
+    "repository": "skoomaholic-art/zhestokiy-vek",
+    "branch": "main",
+    "precedence": [
+      "explicit confirmed decisions in docs/decisions",
+      "canonical modules",
+      "active DEV rules/data",
+      "historical baselines"
+    ],
+    "conflict_rule": "A more specific canonical module supersedes stale inherited fields until the monolith is regenerated."
+  },
+  "rules": {
+    "assembly_order": [
+      "rules/source/00_core_setup.md",
+      "rules/source/01_map_movement_combat.md",
+      "rules/source/02_diplomacy_dynasty_characters.md",
+      "rules/source/02d_prisoners_ransom.md",
+      "rules/source/03a_advisors_intrigue_events_exile.md",
+      "rules/source/03b_victory_ambitions_houses_balance.md",
+      "rules/source/03c_quick_reference_end_cases.md",
+      "rules/source/04_arena_technical_appendix.md"
+    ],
+    "overlays": {
+      "rules/source/02d_prisoners_ransom.md": {
+        "replaces": "section 20.2 in rules/source/02_diplomacy_dynasty_characters.md",
+        "status": "CANONICAL_MODULE"
+      }
+    }
+  },
+  "data": {
+    "base_snapshot": "data/master_game_data_v5.7.2-dev.json",
+    "canonical_modules": [
+      {
+        "path": "data/prisoners_v5.7.2-dev.json",
+        "mechanic": "prisoners",
+        "status": "CANONICAL_MODULE",
+        "supersedes": [
+          "confirmed_decisions.ransom_N_rule",
+          "confirmed_decisions.ransom_acceptance_procedure",
+          "confirmed_decisions.prisoner_release_destination",
+          "prisoner_state_schema",
+          "sheets.Diplomacy[ID=RANSOM]"
+        ]
+      }
+    ],
+    "rebuild_command": "node tools/reconcile_v5_7_2.js --write",
+    "consistency_check": "node tools/reconcile_v5_7_2.js --check"
+  },
+  "arena": {
+    "playable_build": "V5.7.2-PLAYABLE-RC2",
+    "manifest": "arena/builds/V5.7.2_PLAYABLE_RC2.manifest.json",
+    "qa": "qa/reports/Game_Master_Report_V5.7.2_RC2_500seeds.md"
+  },
+  "unresolved": [
+    {
+      "id": "EVENT-ID-001",
+      "fact": "EV-P06 is «Холодная война» in the current MGD while «Съезд заложников» has no synchronized canonical CARD_ID.",
+      "action": "Do not assign a new CARD_ID without authoritative card-source migration or an explicit project decision."
+    },
+    {
+      "id": "CARD-SOURCE-001",
+      "fact": "Editable V5.7.2 card master source is not stored in GitHub."
+    },
+    {
+      "id": "MAP-SOURCE-001",
+      "fact": "Canonical map master PNG/SVG/topology files are not stored in map/."
+    },
+    {
+      "id": "PLAYTEST-RAW-001",
+      "fact": "playtest/ does not contain the latest manual Journal/Diplomacy/Houses raw JSON set."
+    },
+    {
+      "id": "REPO-BUILD-001",
+      "fact": "The exact RC2 HTML build artifact is referenced by manifest/hash but is not stored as a complete reconstructable repo artifact."
+    }
+  ]
+}
