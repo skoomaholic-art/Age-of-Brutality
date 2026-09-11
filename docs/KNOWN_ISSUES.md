@@ -4,11 +4,12 @@
 
 | ID | Severity | Категория | Проблема | Статус |
 |---|---|---|---|---|
-| RC1-RULE-001 | CRITICAL | RULES/ARENA | В RC1 без подтверждения пользователя зашиты: П-06 как исключение `выкуп=2`, возврат освобождённого в Двор и вычисление ближайшей крепости только по сухопутным рёбрам | OPEN — RC1 запрещено повышать до release до решения |
-| PRISON-001 | CRITICAL | ARENA/UI | Движок RC1 содержит 4 post-capture варианта, но Human UI этих процедур ещё должен быть подтверждён отдельным smoke-test | VERIFY |
-| PRISON-002 | CRITICAL | STATE_CORRUPTION | Baseline не хранил захвативший Дом; RC1 добавляет `heldBy`, требуется финальный regression exact-build | FIXED IN RC1 / VERIFY |
-| DEATH-001 | CRITICAL | STATE_CORRUPTION | Baseline позволял мёртвому персонажу остаться `ПЛЕН`; RC1 вводит взаимоисключающие state, требуется финальный regression exact-build | FIXED IN RC1 / VERIFY |
-| RANSOM-001 | HIGH | RULES/DATA | Старый фиксированный выкуп 3 конфликтует с подтверждённым переговорным `N`; диапазон N НЕ требуется. Канонический prisoner-module уже содержит новое решение, монолитный MGD ещё должен быть полностью синхронизирован | OPEN — DATA SYNC |
+| RC1-RULE-001 | CRITICAL | RULES/ARENA | В RC1 были без подтверждения зашиты три решения. Исключение события «Съезд заложников» с выкупом 2 теперь подтверждено по названию; возврат освобождённого в Двор и алгоритм ближайшей крепости только по суше всё ещё не утверждены | OPEN — 2 RULE BLOCKERS |
+| EVENT-ID-001 | HIGH | DATA/RULES/CARDS | Prisoner rules называют `П-06` событием «Съезд заложников», но текущий MGD использует `EV-P06` для «Холодной войны» | OPEN — REGISTRY SYNC |
+| PRISON-001 | CRITICAL | ARENA/UI | Движок RC1 содержит post-capture процедуры, но Human UI их не вызывает; игрок не может полноценно управлять пленом руками | OPEN |
+| PRISON-002 | CRITICAL | STATE_CORRUPTION | Baseline не хранил захвативший Дом; RC1 добавляет `heldBy`, требуется финальный regression exact-build после UI/rules sync | FIXED IN RC1 / VERIFY |
+| DEATH-001 | CRITICAL | STATE_CORRUPTION | Baseline позволял мёртвому персонажу остаться `ПЛЕН`; RC1 вводит взаимоисключающие state, требуется финальный regression exact-build после UI/rules sync | FIXED IN RC1 / VERIFY |
+| RANSOM-001 | HIGH | RULES/DATA | Старый фиксированный выкуп 3 конфликтует с подтверждённым переговорным `N`; диапазон N НЕ требуется. Канонический prisoner-module содержит новое решение, монолитный MGD ещё должен быть полностью синхронизирован | OPEN — DATA SYNC |
 | COMMANDER-001 | HIGH | RULES/DATA/ARENA/AI | Семейные командиры реализованы несогласованно в baseline; RC1 содержит новую модель, требуется UI/AI regression exact-build | FIXED IN RC1 / VERIFY |
 | HOUSE-ID-001 | HIGH | DATA | `Айрельь` в baseline MGD не совпадал с `Айрель`; V5.7.2 source нормализован до `Айрель` | FIXED SOURCE / VERIFY |
 | AYREL-001 | HIGH | DATA/RULES/ARENA/CARDS | Способность/слабость Айреля терялись между источниками; требуется финальная проверка Cards и Arena после синхронизации | OPEN |
