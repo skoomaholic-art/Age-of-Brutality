@@ -1,0 +1,31 @@
+{
+  "version": "V5.7.2-PLAYABLE-RC2",
+  "status": "PLAYABLE_RC_NOT_STABLE",
+  "artifact": "Жестокий_Век_Arena_V5.7.2_PLAYABLE_RC2.html",
+  "bytes": 470775,
+  "sha256": "65028a031ec391a3057a4550e926ffcae4141eb1c7407cae84482b0491b80749",
+  "source": "V5.7.2 RC1 baseline + v5.7.2_rc2_engine_delta.js + v5.7.2_rc2_human_ui.js + approved canonical nearest-fort routing",
+  "qa": {
+    "games": 500,
+    "seeds": [57001, 57500],
+    "structural": {
+      "finished": 500,
+      "round6": 500,
+      "action108": 500,
+      "errorGames": 0,
+      "invalid": 0,
+      "invariantErrors": 0,
+      "pendingGames": 0
+    },
+    "prisoner_targeted": "9/9",
+    "human_ui_logic_smoke": "6/6",
+    "commander_targeted": "6/6",
+    "nearest_fort_sea_graph": "1/1"
+  },
+  "known_non_blocking_for_arena_test": [
+    "event_registry_conflict_hostage_congress_vs_EV-P06_in_monolithic_MGD",
+    "monolithic_MGD_requires_regeneration_from_canonical_modules",
+    "physical_cards_map_components_print_sources_not_fully_migrated_to_repo",
+    "real_chromium_visual_smoke_pending"
+  ]
+}
