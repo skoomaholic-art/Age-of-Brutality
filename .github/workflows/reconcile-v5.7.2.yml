@@ -6,8 +6,11 @@ on:
       - rebuild/v5.7.2-consistency-2026-09-11
     paths:
       - tools/reconcile_v5_7_2.js
+      - tools/generate_card_registry_v5_7_2.js
       - data/**
       - rules/source/**
+      - cards/**
+      - arena/source/patches/**
       - .github/workflows/reconcile-v5.7.2.yml
 
 permissions:
@@ -24,8 +27,13 @@ jobs:
       - name: Reconcile canonical sources
         run: node tools/reconcile_v5_7_2.js --write
 
+      - name: Generate card registry from active MGD
+        run: node tools/generate_card_registry_v5_7_2.js
+
       - name: Verify idempotence
-        run: node tools/reconcile_v5_7_2.js --check
+        run: |
+          node tools/reconcile_v5_7_2.js --check
+          node tools/generate_card_registry_v5_7_2.js --check
 
       - name: Validate diff
         run: git diff --check
@@ -40,6 +48,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/master_game_data_v5.7.2-dev.json \
+                  cards/canonical_registry_v5.7.2.json \
                   rules/source/00_core_setup.md \
                   rules/source/02_diplomacy_dynasty_characters.md \
                   rules/source/03a_advisors_intrigue_events_exile.md \
