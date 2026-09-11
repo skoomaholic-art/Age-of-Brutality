@@ -6,12 +6,12 @@
 
 ## Текущий статус
 
-- **Project source line:** `V5.7.2-DEV`
+- **Project/source line:** `V5.7.2-DEV`
 - **Играбельная цифровая Arena:** `V5.7.2-PLAYABLE-RC2`
 - **STABLE:** нет
 - **Print-ready/PnP:** нет
 
-Arena RC2 можно использовать для реального плейтеста. Она не объявлена STABLE, потому что физические Cards/Map/Components/Print sources и часть монолитного Master Game Data ещё не полностью синхронизированы в GitHub.
+Arena RC2 можно использовать для реального цифрового плейтеста. Она не объявлена STABLE, потому что физические Cards/Map/Components/Print sources и часть монолитного Master Game Data ещё не полностью синхронизированы в GitHub.
 
 ## Последний QA Arena RC2
 
@@ -41,7 +41,7 @@ Build manifest: `arena/builds/V5.7.2_PLAYABLE_RC2.manifest.json`.
 
 `ФИДБЭК → АНАЛИЗ → RULES/DATA/CARDS/ARENA/AI SYNC → COMMIT → QA → BUILD → файл пользователю для плейтеста`
 
-Локальный файл, не отражённый в репозитории как source/manifest/QA, не считается новой канонической версией.
+Локальный executable допустим как тестовый build только если его версия, source delta, manifest и QA зафиксированы в GitHub.
 
 ## Системная цепочка
 
@@ -60,7 +60,7 @@ Build manifest: `arena/builds/V5.7.2_PLAYABLE_RC2.manifest.json`.
 3. **Требовать выкуп N**.
 4. **Казнить**.
 
-Для людей фиксированного диапазона `N` нет: пленитель предлагает сумму, владелец принимает или отказывается. AI определяет предложение по ценности пленника, своим целям/потребностям и положению сторон; его числовые веса являются implementation-параметрами, а не правилом для людей.
+Для людей фиксированного диапазона `N` нет: пленитель предлагает сумму, владелец принимает или отказывается. AI определяет предложение по ценности пленника, своим целям/потребностям и положению сторон; числовые AI-веса являются implementation-параметрами, а не правилом для людей.
 
 Отпущенный или выкупленный пленник возвращается в **столицу своего Дома**. При отказе от выкупа он отправляется в ближайшую Крепость пленителя; расстояние = минимальное число рёбер канонической карты, где сухопутная граница = 1 шаг и прямой морской маршрут = 1 шаг. Контроль территорий/портов и наличие армий в этом расчёте не учитываются.
 
@@ -72,9 +72,13 @@ Build manifest: `arena/builds/V5.7.2_PLAYABLE_RC2.manifest.json`.
 - `data/` — DEV Master Game Data + канонический модуль prisoners/ransom;
 - `arena/source/patches/` — RC2 engine/UI source patches;
 - `arena/builds/` — manifests игровых билдов;
+- `arena/VERSION` — текущая версия цифровой Arena;
 - `qa/` — Game Master, regression и targeted QA;
-- `docs/` — решения, аудит, known issues, workflow и статус;
+- `docs/` — решения, аудит, known issues, workflow и status audit;
 - `playtest/` — структура для плейтестовых материалов;
+- `ai/` — статус AI source и правила разделения rule/implementation;
+- `components/` — статус и место для BOM/physical component source;
+- `release/` — статус release package;
 - `cards/` — пока только описание/хэши исторических card sources;
 - `map/` — пока только описание/хэши исторических map sources.
 
@@ -84,11 +88,12 @@ Build manifest: `arena/builds/V5.7.2_PLAYABLE_RC2.manifest.json`.
 
 - полные редактируемые/binary Cards sources;
 - master PNG/SVG/topology карты внутри GitHub;
-- отдельный полный Components/BOM source;
+- полный Components/BOM source;
 - print-ready package;
 - регенерированный монолитный MGD без старых prisoner/ransom pending-полей;
 - синхронизированный canonical ID события «Съезд заложников»;
-- реальный browser visual smoke Arena на Chromium/пользовательском браузере.
+- реальный browser visual smoke Arena на Chromium/пользовательском браузере;
+- сам exact HTML пока выдаётся как тестовый build по зафиксированным source delta + manifest + QA, а не хранится как отдельный binary artifact в GitHub.
 
 Точный список: `docs/KNOWN_ISSUES.md`.
 
