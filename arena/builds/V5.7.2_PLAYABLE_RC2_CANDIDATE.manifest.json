@@ -1,0 +1,26 @@
+{
+  "version": "V5.7.2-PLAYABLE-RC2-CANDIDATE",
+  "sha256": "15247ce3de064ac91b0d2b6c42537da7938379888c8341a2683bfd5dc02a0420",
+  "status": "RC_CANDIDATE_NOT_RELEASED",
+  "source": "V5.7.2-PLAYABLE-RC1 exact build + RC2 engine/UI patches",
+  "qa": {
+    "games": 500,
+    "seeds": [57001, 57500],
+    "structural": {
+      "finished": 500,
+      "round6": 500,
+      "action108": 500,
+      "errorGames": 0,
+      "invalid": 0,
+      "invariantErrors": 0,
+      "pendingGames": 0
+    },
+    "targeted_prisoner_tests": "9/9",
+    "human_ui_logic_smoke": "6/6"
+  },
+  "blockers": [
+    "nearest_fort_distance_algorithm_pending",
+    "event_registry_conflict_hostage_congress_vs_EV-P06",
+    "real_browser_visual_smoke_pending"
+  ]
+}
