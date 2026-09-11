@@ -1,0 +1,74 @@
+{
+  "game": "Жестокий Век",
+  "version": "V5.7.2-DEV",
+  "status": "CANONICAL_SOURCE_GRAPH",
+  "generated_on": "2026-09-11",
+  "source_policy": {
+    "repository": "skoomaholic-art/zhestokiy-vek",
+    "branch": "main",
+    "precedence": [
+      "explicit confirmed decisions in docs/decisions",
+      "canonical modules",
+      "active V5.7.2 rules/data/generated registries",
+      "historical baselines"
+    ],
+    "conflict_rule": "A newer confirmed decision or canonical module supersedes stale inherited baseline data."
+  },
+  "rules": {
+    "assembly_order": [
+      "rules/source/00_core_setup.md",
+      "rules/source/01_map_movement_combat.md",
+      "rules/source/02_diplomacy_dynasty_characters.md",
+      "rules/source/02d_prisoners_ransom.md",
+      "rules/source/03a_advisors_intrigue_events_exile.md",
+      "rules/source/03b_victory_ambitions_houses_balance.md",
+      "rules/source/03c_quick_reference_end_cases.md",
+      "rules/source/04_arena_technical_appendix.md"
+    ],
+    "prisoner_section_source": "rules/source/02d_prisoners_ransom.md"
+  },
+  "data": {
+    "master": "data/master_game_data_v5.7.2-dev.json",
+    "canonical_modules": ["data/prisoners_v5.7.2-dev.json"],
+    "rebuild_command": "node tools/reconcile_v5_7_2.js --write",
+    "consistency_check": "node tools/reconcile_v5_7_2.js --check"
+  },
+  "cards": {
+    "game_data_registry": "cards/canonical_registry_v5.7.2.json",
+    "generator": "tools/generate_card_registry_v5_7_2.js",
+    "object_count": 96,
+    "unique_card_id_count": 48,
+    "physical_layout_art_master": "MISSING_SOURCE"
+  },
+  "map": {
+    "topology": "map/canonical_topology_v5.7.2.json",
+    "counts": {"territories":52,"land_edges":81,"sea_edges":23,"ports":16},
+    "illustrated_master": "MISSING_SOURCE"
+  },
+  "arena": {
+    "active_source_patch": "arena/source/patches/v5.7.2_rc2_engine_delta.js",
+    "human_ui_patch": "arena/source/patches/v5.7.2_rc2_human_ui.js",
+    "last_verified_executable": "V5.7.2-PLAYABLE-RC2",
+    "last_verified_manifest": "arena/builds/V5.7.2_PLAYABLE_RC2.manifest.json",
+    "last_verified_qa": "qa/reports/Game_Master_Report_V5.7.2_RC2_500seeds.md",
+    "source_matching_executable": null,
+    "rebuild_blocker": "Complete Arena baseline/HTML is not in GitHub; arena/source/rc1 compressed stream ends before the engine."
+  },
+  "resolved": [
+    "EVENT-ID-001: EV-P06 = Съезд заложников",
+    "PRISON-HOLD-001: direct hold uses canonical detention pipeline",
+    "EVENT-EXEC-001: no extra execution Influence penalty during Съезд заложников",
+    "MGD-SYNC-001: MGD reconciled",
+    "RULES-SYNC-001: section 20.2 generated from canonical module",
+    "MAP-VERSION-001: canonical V5.7.2 topology source added"
+  ],
+  "unresolved": [
+    {"id":"ARENA-ARTIFACT-001","fact":"Complete source-matching Arena executable/baseline is not stored in GitHub."},
+    {"id":"CARD-PRINT-001","fact":"Physical card layout/art master is not stored in GitHub."},
+    {"id":"MAP-ART-001","fact":"Illustrated map master is not stored in GitHub."},
+    {"id":"PLAYTEST-RAW-001","fact":"Latest manual Journal/Diplomacy/Houses raw JSON is not stored in GitHub."},
+    {"id":"COMPONENTS-001","fact":"Complete physical BOM/source is not stored in GitHub."},
+    {"id":"VISUAL-SOURCE-001","fact":"Full Visual V2/V2.1 executable/generator/generated pack is not stored in GitHub."},
+    {"id":"PRINT-001","fact":"No reproducible certified print-ready package from current canonical sources."}
+  ]
+}

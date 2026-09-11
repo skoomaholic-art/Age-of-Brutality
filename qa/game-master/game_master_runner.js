@@ -11,11 +11,14 @@ const html=fs.readFileSync(arena,'utf8');
 const scripts=[...html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
 const data=scripts.find(s=>s.includes('window.ARENA_DATA='));
 const engineSrc=scripts.find(s=>s.includes('class ArenaEngine'));
+const enginePatches=scripts.filter(s=>s.includes('window.ARENA_V572')&&(s.includes('rc2Delta:true')||s.includes('rc3Delta:true')));
 const marker='window.arenaEngine=new ArenaEngine(DATA);';
 if(!data||!engineSrc||!engineSrc.includes(marker))throw new Error('Arena data/engine not found');
 globalThis.window=globalThis;
 vm.runInThisContext(data,{filename:'arena-data.js'});
 vm.runInThisContext(engineSrc.slice(0,engineSrc.indexOf(marker)+marker.length)+'\n})();',{filename:'arena-engine.js'});
+for(let i=0;i<enginePatches.length;i++)vm.runInThisContext(enginePatches[i],{filename:`arena-engine-patch-${i+1}.js`});
+const engineAuditSrc=engineSrc+'\n'+enginePatches.join('\n');
 
 const H=window.ARENA_DATA.houses.map(h=>h.name);
 const wins=Object.fromEntries(H.map(h=>[h,0]));
@@ -42,13 +45,20 @@ for(let i=0;i<games;i++){
 const expected=['Отпустить пленника','Взять в плен','Требовать выкуп N','Казнить'];
 const has=s=>html.toLowerCase().includes(s.toLowerCase());
 if(expected.some(x=>!has(x.replace(' N',''))))findings.push({severity:'CRITICAL',id:'GM-PRISON-001',problem:'Arena не реализует полный выбор после пленения',expected});
-if(!/(capturedBy|prisonerHolder|heldBy|captorHouse)/i.test(engineSrc))findings.push({severity:'CRITICAL',id:'GM-PRISON-002',problem:'State пленника не хранит захвативший Дом'});
+if(!/(capturedBy|prisonerHolder|heldBy|captorHouse)/i.test(engineAuditSrc))findings.push({severity:'CRITICAL',id:'GM-PRISON-002',problem:'State пленника не хранит захвативший Дом'});
 if(captures>0&&!Object.keys(actions).some(a=>/выкуп|казн|освобод|отпуст|в плен/i.test(a)))findings.push({severity:'CRITICAL',id:'GM-COVER-001',problem:`Плен возник ${captures} раз в ${captureGames}/${games} партиях, но ни одной post-capture процедуры нет`});
 if(/Выкуп 3 золота/.test(html))findings.push({severity:'HIGH',id:'GM-PRISON-003',problem:'Embedded rules всё ещё фиксируют выкуп 3 золота, что конфликтует с последним решением «Требовать выкуп N»'});
-if(/alive=false;h\.ruler\.mode="ПЛЕН"/.test(engineSrc)||/alive=false;c\.mode="ПЛЕН"/.test(engineSrc))findings.push({severity:'HIGH',id:'GM-STATE-001',problem:'Смерть кодируется mode="ПЛЕН" при alive=false'});
-if(/commanderAttack\(n,loc\).*?h\.ruler/s.test(engineSrc))findings.push({severity:'HIGH',id:'GM-CMD-001',problem:'Боевой бонус командира читается только из h.ruler; другие персонажи-командиры не поддержаны полноценно'});
+if(/alive=false;h\.ruler\.mode="ПЛЕН"/.test(engineAuditSrc)||/alive=false;c\.mode="ПЛЕН"/.test(engineAuditSrc))findings.push({severity:'HIGH',id:'GM-STATE-001',problem:'Смерть кодируется mode="ПЛЕН" при alive=false'});
+if(/commanderAttack\(n,loc\).*?h\.ruler/s.test(engineAuditSrc))findings.push({severity:'HIGH',id:'GM-CMD-001',problem:'Боевой бонус командира читается только из h.ruler; другие персонажи-командиры не поддержаны полноценно'});
+if(window.ARENA_DATA.version==='V5.7.2-PLAYABLE-RC3'){
+  const p06=window.ARENA_DATA.events?.find(c=>c.id==='EV-P06');
+  if(p06?.name!=='Съезд заложников')findings.push({severity:'CRITICAL',id:'GM-EVENT-001',problem:'RC3: EV-P06 не нормализован в «Съезд заложников»'});
+  if(!engineAuditSrc.includes('Number.isInteger(raw)'))findings.push({severity:'HIGH',id:'GM-RANSOM-N-001',problem:'RC3: отсутствует строгая проверка положительного целого N'});
+  if(engineAuditSrc.includes('дополнительная цена казни'))findings.push({severity:'HIGH',id:'GM-EVENT-EXEC-001',problem:'RC3: остался дополнительный штраф казни при «Съезде заложников»'});
+  if(!engineAuditSrc.includes("if(choice==='hold')return this.detainPrisoner"))findings.push({severity:'HIGH',id:'GM-HOLD-001',problem:'RC3: прямой hold не использует канонический detention pipeline'});
+}
 for(const [k,label] of [['raids','Набег'],['births','Рождения'],['capitalCaptures','Захват столиц']])if((metrics[k]||0)===0)findings.push({severity:'MEDIUM',id:'GM-DEAD-'+k.toUpperCase(),problem:`${label}: нулевое покрытие в ${games} партиях`});
 if((relations['Династический союз']||0)===0)findings.push({severity:'MEDIUM',id:'GM-DEAD-DYNASTIC',problem:`Династический союз не появился ни разу в ${games} партиях`});
 const houseSummary=Object.fromEntries(H.map(h=>[h,{wins:wins[h],winRate:+(wins[h]*100/games).toFixed(1),avgScore:+(sum[h].score/games).toFixed(2),avgInfluence:+(sum[h].influence/games).toFixed(2),avgGold:+(sum[h].gold/games).toFixed(2)}]));
-const out={game:'Жестокий Век',version:window.ARENA_DATA.version,gameMaster:'Rule Auditor v1',games,seeds:[startSeed,startSeed+games-1],confirmedPrisonerChoices:expected,structural:{finished,round6,actions108,errorGames,invalid,peakInfluence},coverage:{captures,captureGames,livePrisoners,prisonerGames,metrics,relations,fates,actions},houseSummary,findings,rows};
+const out={game:'Жестокий Век',version:window.ARENA_DATA.version,gameMaster:'Rule Auditor v2',enginePatchesExecuted:enginePatches.length,games,seeds:[startSeed,startSeed+games-1],confirmedPrisonerChoices:expected,structural:{finished,round6,actions108,errorGames,invalid,peakInfluence},coverage:{captures,captureGames,livePrisoners,prisonerGames,metrics,relations,fates,actions},houseSummary,findings,rows};
 console.log(JSON.stringify(out,null,2));

@@ -1,16 +1,24 @@
 # Cards
 
-## Current status
+## Canonical gameplay data
 
-`cards/` **ещё не содержит полный редактируемый card source V5.7.2**. Сейчас в GitHub сохранены только описание и SHA-256 исторических V5.7.1 файлов.
+`cards/canonical_registry_v5.7.2.json` is generated verbatim from the active Master Game Data and is the machine-readable V5.7.2 card/object registry currently stored in GitHub.
 
-Historical references:
+Current generated inventory:
 
-- `03_Жестокий_Век_Карточки_V5.7.1_STABLE.xlsx` — SHA-256 `5e26cb5c651814f5203be2eea798eac5bc051a80f6577f5171e309d6d43a58ba`
-- `04_Жестокий_Век_Шаблоны_Карточек_V5.7.1_STABLE.xlsx` — SHA-256 `da5c00c367193fe02b0fe97dfbc11e0463c095b5ec7d79efdc3c4eb7b106f535`
+- **96** card-like/game objects;
+- **48** globally unique `CARD_ID` values;
+- generic IDs are namespaced by their MGD sheet.
 
-Карточки должны использовать только фиксированные разрешённые параметры из Rules/Master Game Data и не создавать игровые числа самостоятельно.
+Generate/check:
 
-## Blocker
+```bash
+node tools/generate_card_registry_v5_7_2.js
+node tools/generate_card_registry_v5_7_2.js --check
+```
 
-До миграции/регенерации актуального card source нельзя считать физический комплект V5.7.2 print-ready. Цифровая Arena RC2 при этом содержит встроенный реестр карт и пригодна для цифрового плейтеста.
+The registry contains gameplay data, IDs and text present in MGD. It does **not** replace physical print layout, illustration/art masters or historical XLSX formatting.
+
+## Remaining blocker
+
+The editable physical V5.7.2 card layout/art master is not migrated to GitHub. This blocks PnP/STABLE, but no longer means that card gameplay data exists only in a missing spreadsheet.
