@@ -5,6 +5,7 @@
   "bytes": 470775,
   "sha256": "65028a031ec391a3057a4550e926ffcae4141eb1c7407cae84482b0491b80749",
   "source": "V5.7.2 RC1 baseline + v5.7.2_rc2_engine_delta.js + v5.7.2_rc2_human_ui.js + approved canonical nearest-fort routing",
+  "artifact_in_repository": false,
   "qa": {
     "games": 500,
     "seeds": [57001, 57500],
@@ -22,10 +23,17 @@
     "commander_targeted": "6/6",
     "nearest_fort_sea_graph": "1/1"
   },
-  "known_non_blocking_for_arena_test": [
-    "event_registry_conflict_hostage_congress_vs_EV-P06_in_monolithic_MGD",
-    "monolithic_MGD_requires_regeneration_from_canonical_modules",
+  "known_non_blocking_for_digital_playtest_but_blocking_full_source_alignment": [
+    "event_registry_conflict_hostage_congress_vs_EV-P06",
+    "direct_hold_detention_destination_not_confirmed_as_physical_rule",
+    "hostage_congress_execution_extra_minus_1_influence_not_confirmed_by_available_canonical_sources",
     "physical_cards_map_components_print_sources_not_fully_migrated_to_repo",
+    "raw_manual_playtest_Journal_Diplomacy_Houses_not_migrated",
+    "exact_RC2_HTML_artifact_not_stored_in_repository",
     "real_chromium_visual_smoke_pending"
-  ]
+  ],
+  "source_reconciliation": {
+    "monolithic_MGD_prisoner_ransom_layer": "RECONCILED_2026-09-11",
+    "rules_section_20_2": "REGENERATED_FROM_CANONICAL_MODULE_2026-09-11"
+  }
 }
