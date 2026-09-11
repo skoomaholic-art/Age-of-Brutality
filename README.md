@@ -11,7 +11,7 @@
 - **STABLE:** нет
 - **Print-ready/PnP:** нет
 
-Arena RC2 можно использовать для реального цифрового плейтеста. Она не объявлена STABLE, потому что физические Cards/Map/Components/Print sources и часть монолитного Master Game Data ещё не полностью синхронизированы в GitHub.
+Arena RC2 можно использовать для реального цифрового плейтеста. Prisoner/ransom слой монолитного Master Game Data пересобран из canonical module; статус STABLE всё ещё блокируют отсутствующие физические master sources, raw manual playtest evidence и незакрытые cross-source расхождения.
 
 ## Последний QA Arena RC2
 
@@ -36,6 +36,10 @@ Build manifest: `arena/builds/V5.7.2_PLAYABLE_RC2.manifest.json`.
 ## Source of truth
 
 **GitHub `main` = единственный MASTER проекта.**
+
+Канонический приоритет:
+
+`последнее подтверждённое решение → canonical module → активные Rules/Data → historical baseline`.
 
 Рабочий цикл:
 
@@ -66,10 +70,15 @@ Build manifest: `arena/builds/V5.7.2_PLAYABLE_RC2.manifest.json`.
 
 Событие **«Съезд заложников»** является специальным исключением: в его раунд выкуп фиксирован на **2 золота**.
 
+**ТРЕБУЕТ РЕШЕНИЯ:** отдельное место содержания при прямом выборе «Взять в плен» без отказа по выкупу. Arena RC2 использует `detainPrisoner(...)`, но это implementation behavior, не автоматически утверждённое физическое правило.
+
+**ТРЕБУЕТ СВЕРКИ CARDS:** Arena RC2 дополнительно снимает -1 Влияние за казнь во время «Съезда заложников»; доступный канон подтверждает для события только фиксированный выкуп 2 золота.
+
 ## Что реально хранится в репозитории
 
 - `rules/source/` — рабочие канонические правила V5.7.2;
-- `data/` — DEV Master Game Data + канонический модуль prisoners/ransom;
+- `data/` — пересобранный DEV Master Game Data + canonical prisoner/ransom module + source graph;
+- `tools/reconcile_v5_7_2.js` — детерминированная синхронизация дублируемых V5.7.2 sources;
 - `arena/source/patches/` — RC2 engine/UI source patches;
 - `arena/builds/` — manifests игровых билдов;
 - `arena/VERSION` — текущая версия цифровой Arena;
@@ -82,18 +91,19 @@ Build manifest: `arena/builds/V5.7.2_PLAYABLE_RC2.manifest.json`.
 - `cards/` — пока только описание/хэши исторических card sources;
 - `map/` — пока только описание/хэши исторических map sources.
 
-## Что ещё отсутствует в полном canonical repo
+## Что ещё отсутствует или не закрыто
 
 Это не блокирует цифровой плейтест RC2, но блокирует STABLE/PnP:
 
 - полные редактируемые/binary Cards sources;
-- master PNG/SVG/topology карты внутри GitHub;
+- master PNG/SVG/topology карты внутри canonical `map/`;
 - полный Components/BOM source;
-- print-ready package;
-- регенерированный монолитный MGD без старых prisoner/ransom pending-полей;
-- синхронизированный canonical ID события «Съезд заложников»;
-- реальный browser visual smoke Arena на Chromium/пользовательском браузере;
-- сам exact HTML пока выдаётся как тестовый build по зафиксированным source delta + manifest + QA, а не хранится как отдельный binary artifact в GitHub.
+- сертифицированный print-ready package;
+- canonical ID события «Съезд заложников» без конфликта с `EV-P06 = Холодная война`;
+- отдельное подтверждённое правило места содержания при прямом «Взять в плен»;
+- сверка дополнительного Arena-модификатора казни при «Съезде заложников» с авторитетным Cards source;
+- полный актуальный raw manual playtest set `Journal/Diplomacy/Houses`;
+- сам exact RC2 HTML artifact: manifest/hash есть, но полноценный reconstructable artifact пока не хранится в GitHub.
 
 Точный список: `docs/KNOWN_ISSUES.md`.
 

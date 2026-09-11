@@ -39,6 +39,11 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/master_game_data_v5.7.2-dev.json rules/source/02_diplomacy_dynasty_characters.md
-          git commit -m "rebuild-generated: sync prisoner canonical sources"
+          git add data/master_game_data_v5.7.2-dev.json \
+                  rules/source/00_core_setup.md \
+                  rules/source/02_diplomacy_dynasty_characters.md \
+                  rules/source/03a_advisors_intrigue_events_exile.md \
+                  rules/source/03c_quick_reference_end_cases.md \
+                  rules/source/04_arena_technical_appendix.md
+          git commit -m "rebuild-generated: sync V5.7.2 canonical sources"
           git push
