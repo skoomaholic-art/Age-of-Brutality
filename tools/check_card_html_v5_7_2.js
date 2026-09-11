@@ -11,10 +11,13 @@ for(const [name,text] of [["editor",editor],["print",print]]){
   req(text,"canonical_registry_v5.7.2.json",name);
   req(text,"63×88",name);
   req(text,"3 мм bleed",name);
+  req(text,'"Тип","Дом"',`${name} generic titles`);
 }
 req(editor,"Разрешить правку игровых полей","editor");
 req(editor,"Project JSON","editor");
 req(editor,"ART SLOT","editor");
+req(print,'["Копий"]',"physical copy expansion");
+req(print,"физических карт","physical copy status");
 req(print,"69mm","print geometry");
 req(print,"94mm","print geometry");
 req(print,"210mm","A4 width");
