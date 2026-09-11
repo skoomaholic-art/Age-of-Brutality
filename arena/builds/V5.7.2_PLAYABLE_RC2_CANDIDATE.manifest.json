@@ -1,8 +1,8 @@
 {
   "version": "V5.7.2-PLAYABLE-RC2-CANDIDATE",
-  "sha256": "15247ce3de064ac91b0d2b6c42537da7938379888c8341a2683bfd5dc02a0420",
+  "sha256": "b0284f42bf033c0ae46a28f82b4c5bdb43281285f89f2f1406b4ebdca087cad6",
   "status": "RC_CANDIDATE_NOT_RELEASED",
-  "source": "V5.7.2-PLAYABLE-RC1 exact build + RC2 engine/UI patches",
+  "source": "V5.7.2-PLAYABLE-RC1 exact build + arena/source/patches/v5.7.2_rc2_engine_delta.js + arena/source/patches/v5.7.2_rc2_human_ui.js",
   "qa": {
     "games": 500,
     "seeds": [57001, 57500],
