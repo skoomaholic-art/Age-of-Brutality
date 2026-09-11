@@ -33,6 +33,15 @@ function readChunk(name) {
   return fs.readFileSync(path.join(SOURCE_DIR, name), "utf8").replace(/\s+/g, "");
 }
 
+function tolerantGunzip(gz) {
+  try {
+    return { html: zlib.gunzipSync(gz).toString("utf8"), tolerant: false };
+  } catch (strictError) {
+    const html = zlib.gunzipSync(gz, { finishFlush: zlib.constants.Z_SYNC_FLUSH }).toString("utf8");
+    return { html, tolerant: true, strictError: strictError.message };
+  }
+}
+
 function reconstructBaseline() {
   const names = fs.readdirSync(SOURCE_DIR).filter((x) => x.endsWith(".b64"));
   invariant(names.length >= 2, "RC1 source chunks missing");
@@ -55,11 +64,12 @@ function reconstructBaseline() {
     try {
       const b64 = order.map(readChunk).join("");
       const gz = Buffer.from(b64, "base64");
-      const html = zlib.gunzipSync(gz).toString("utf8");
+      const decoded = tolerantGunzip(gz);
+      const html = decoded.html;
       if (!html.includes("window.ARENA_DATA=") || !html.includes("class ArenaEngine") || !html.includes("</body>")) {
-        throw new Error("decoded payload is not a Unified Arena HTML");
+        throw new Error(`decoded payload incomplete: bytes=${Buffer.byteLength(html)} data=${html.includes("window.ARENA_DATA=")} engine=${html.includes("class ArenaEngine")} bodyClose=${html.includes("</body>")}`);
       }
-      return { html, order, compressedBytes: gz.length };
+      return { html, order, compressedBytes: gz.length, tolerantInflate: decoded.tolerant, strictInflateError: decoded.strictError || null };
     } catch (error) {
       failures.push(`${order.join(",")}: ${error.message}`);
     }
@@ -139,6 +149,8 @@ function writeManifest(build, qaResult) {
       baseline: "arena/source/rc1/*.b64 reconstructed gzip/base64 baseline",
       baseline_chunk_order: build.baseline.order,
       baseline_compressed_bytes: build.baseline.compressedBytes,
+      baseline_tolerant_inflate: build.baseline.tolerantInflate,
+      baseline_strict_inflate_error: build.baseline.strictInflateError,
       engine_patch: path.relative(ROOT, ENGINE_PATCH),
       human_ui_patch: path.relative(ROOT, HUMAN_UI_PATCH),
       build_script: "tools/build_arena_v5_7_2_rc3.js",
