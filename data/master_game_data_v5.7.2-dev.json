@@ -3,7 +3,7 @@
   "version": "V5.7.2-DEV",
   "status": "DEV",
   "source_baseline": "V5.7.1-STABLE",
-  "source_policy": "GitHub main is canonical. DEV source may contain explicit ТРЕБУЕТ РЕШЕНИЯ entries.",
+  "source_policy": "GitHub main is canonical. Precedence: explicit confirmed decisions → canonical modules → active V5.7.2 Rules/Data → historical baselines. A canonical module supersedes stale monolithic fields until regeneration.",
   "confirmed_decisions": {
     "canonical_house_id": "Айрель",
     "prisoner_post_capture_options": [
