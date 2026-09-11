@@ -1,14 +1,22 @@
-# Жестокий Век — Visual Print & Play Pack
+# Жестокий Век — Visual Print & Play
 
-Версия **V5.7.2-VISUAL-RC1**, визуально синхронизирована с Arena **V5.7.2-PLAYABLE-RC2**.
+Текущая рабочая линия визуала: **V5.7.2-VISUAL-RC1 + HTML Visual System V2**. Она синхронизируется с Arena **V5.7.2-PLAYABLE-RC2**.
 
 Это в первую очередь **физическая настольная игра**. Arena остаётся вспомогательным инструментом для плейтестов и QA.
 
-Состав visual source:
-- `docs/` — style guide, print guide, physical-playability audit и QA;
-- `templates/` — editable SVG-шаблоны карточек с `ART_SLOT`;
-- `arena/` — tabletop skin для Arena;
-- `map/` — styled SVG карты без изменения канонической topology;
-- `build/` — генератор печатного visual pack.
+## Visual source
 
-Release artifact `V5.7.2-VISUAL-RC1` содержит 160 карточек, отдельную печать каждой карты, full-pack PDF, рубашки, карту, жетоны и styled Arena. Это visual/print RC, не STABLE.
+- `docs/` — style guide, print guide, physical-playability audit и QA;
+- `templates/` — editable SVG-шаблоны карточек;
+- `arena/` — tabletop skin для Arena;
+- `map/` — styled map source без изменения канонической topology;
+- `build/` — генератор печатного visual pack;
+- `html_v2/` — утверждённая слоистая архитектура: фон без игрового текста + отдельные SVG-иконки + HTML-текст/значения.
+
+## HTML Visual System V2
+
+Для карты, карточек и жетонов игровой текст больше не должен запекаться в фоновые изображения. Названия, ID, числа, характеристики и правила выводятся HTML-слоем. Изображения персонажей/событий загружаются отдельно. Иконки являются отдельными SVG-ассетами.
+
+Карта должна поддерживать печать целиком и сегментами **4×3 = 12 листов A4**. Карточки должны поддерживать печать всего пака и одной выбранной карты. Динамические состояния персонажей отслеживаются внешними жетонами.
+
+Visual/print линия остаётся RC и не является STABLE до полной синхронизации Rules ↔ Data ↔ Cards ↔ Map ↔ Arena ↔ Print.
