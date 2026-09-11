@@ -1,58 +1,30 @@
-name: Reconcile V5.7.2 canonical sources
+name: Canonical consistency V5.7.2
 
 on:
   push:
     branches:
-      - rebuild/v5.7.2-consistency-2026-09-11
-    paths:
-      - tools/reconcile_v5_7_2.js
-      - tools/generate_card_registry_v5_7_2.js
-      - data/**
-      - rules/source/**
-      - cards/**
-      - arena/source/patches/**
-      - .github/workflows/reconcile-v5.7.2.yml
+      - main
+  pull_request:
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  reconcile:
-    if: ${{ !startsWith(github.event.head_commit.message, 'rebuild-generated:') }}
+  canonical-check:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Reconcile canonical sources
-        run: node tools/reconcile_v5_7_2.js --write
+      - name: Verify Rules/Data consistency
+        run: node tools/reconcile_v5_7_2.js --check
 
-      - name: Generate card registry from active MGD
-        run: node tools/generate_card_registry_v5_7_2.js
+      - name: Verify generated card registry
+        run: node tools/generate_card_registry_v5_7_2.js --check
 
-      - name: Verify idempotence
-        run: |
-          node tools/reconcile_v5_7_2.js --check
-          node tools/generate_card_registry_v5_7_2.js --check
+      - name: Verify canonical map topology
+        run: node tools/check_map_topology_v5_7_2.js
 
-      - name: Validate diff
+      - name: Validate tracked diff
         run: git diff --check
-
-      - name: Commit generated sources
-        shell: bash
-        run: |
-          git add data/master_game_data_v5.7.2-dev.json \
-                  cards/canonical_registry_v5.7.2.json \
-                  rules/source/00_core_setup.md \
-                  rules/source/02_diplomacy_dynasty_characters.md \
-                  rules/source/03a_advisors_intrigue_events_exile.md \
-                  rules/source/03c_quick_reference_end_cases.md \
-                  rules/source/04_arena_technical_appendix.md
-          if git diff --cached --quiet; then
-            echo "No generated changes."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "rebuild-generated: sync V5.7.2 canonical sources"
-          git push
