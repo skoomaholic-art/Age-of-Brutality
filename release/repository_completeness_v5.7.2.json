@@ -1,0 +1,103 @@
+{
+  "schema_version": "1.0",
+  "game_version": "V5.7.2-DEV",
+  "audited_at": "2026-09-12",
+  "repository_complete": false,
+  "policy": "A release or project state must not be described as repository-complete while any critical missing artifact/source below remains unresolved. Hashes, manifests and QA records do not substitute for storing the actual reproducible artifact or source.",
+  "historical_generated_artifacts_missing_from_repository": [
+    {
+      "id": "ARENA-RC2-HTML",
+      "file": "Жестокий_Век_Arena_V5.7.2_PLAYABLE_RC2.html",
+      "expected_repository_path": "arena/builds/Жестокий_Век_Arena_V5.7.2_PLAYABLE_RC2.html",
+      "bytes": 470775,
+      "sha256": "65028a031ec391a3057a4550e926ffcae4141eb1c7407cae84482b0491b80749",
+      "source_manifest": "arena/builds/V5.7.2_PLAYABLE_RC2.manifest.json",
+      "severity": "CRITICAL"
+    },
+    {
+      "id": "VISUAL-RC1-ZIP",
+      "file": "Жестокий_Век_Visual_Print_and_Play_Pack.zip",
+      "expected_repository_path": "visual/releases/V5.7.2-VISUAL-RC1/Жестокий_Век_Visual_Print_and_Play_Pack.zip",
+      "bytes": 50973158,
+      "sha256": "25c5cf652eaf15dd6f35a2cab1aa6e5c5f5de1f4dcf170f73b00e5f69b6d64aa",
+      "source_manifest": "visual/docs/Repo_Release_Manifest.json",
+      "severity": "HIGH"
+    },
+    {
+      "id": "VISUAL-RC1-STYLED-ARENA",
+      "file": "Жестокий_Век_Arena_Styled.html",
+      "expected_repository_path": "visual/releases/V5.7.2-VISUAL-RC1/Жестокий_Век_Arena_Styled.html",
+      "bytes": 472810,
+      "sha256": "862f6811bb4afd4e703e7a73ae33a9b50474894dd9c797323b2844fceac0953b",
+      "source_manifest": "visual/docs/Repo_Release_Manifest.json",
+      "severity": "HIGH"
+    },
+    {
+      "id": "VISUAL-RC1-MAP-SVG",
+      "file": "Жестокий_Век_Карта_Styled.svg",
+      "expected_repository_path": "visual/releases/V5.7.2-VISUAL-RC1/Жестокий_Век_Карта_Styled.svg",
+      "bytes": 78986,
+      "sha256": "5223ca43e8020798782408537d23702dcd2872196485aaa2d045f73b73698efc",
+      "source_manifest": "visual/docs/Repo_Release_Manifest.json",
+      "severity": "HIGH"
+    },
+    {
+      "id": "VISUAL-RC1-MAP-PDF",
+      "file": "Жестокий_Век_Карта_Print.pdf",
+      "expected_repository_path": "visual/releases/V5.7.2-VISUAL-RC1/Жестокий_Век_Карта_Print.pdf",
+      "bytes": 730198,
+      "sha256": "94917dc3bfb769e86a40fd192aaf76fd10c4013f56c00e42032e0e0bb9430ad9",
+      "source_manifest": "visual/docs/Repo_Release_Manifest.json",
+      "severity": "HIGH"
+    },
+    {
+      "id": "VISUAL-RC1-CARDS-PDF",
+      "file": "Жестокий_Век_Все_Карточки_Full_Pack_Print.pdf",
+      "expected_repository_path": "visual/releases/V5.7.2-VISUAL-RC1/Жестокий_Век_Все_Карточки_Full_Pack_Print.pdf",
+      "bytes": 11860717,
+      "sha256": "8da2074429e28c3d0750e867f0a79f358bc96d632102d7cb818eb66e0c074937",
+      "source_manifest": "visual/docs/Repo_Release_Manifest.json",
+      "severity": "HIGH"
+    }
+  ],
+  "missing_or_incomplete_sources": [
+    {
+      "id": "ARENA-COMPLETE-BASELINE",
+      "severity": "CRITICAL",
+      "status": "MISSING",
+      "note": "arena/source/rc1 contains only part-00, part-00-tail, part-01, part-02 and part-03; reconstructed stream ends before class ArenaEngine and before closing HTML."
+    },
+    {
+      "id": "CARD-INTRIGUE-40",
+      "severity": "HIGH",
+      "status": "MISSING",
+      "note": "Historical 160-card visual pack exceeds the 120 known physical cards reconstructed from current MGD by 40; canonical Intrigues sheet/text set is absent."
+    },
+    {
+      "id": "MAP-ILLUSTRATED-MASTER",
+      "severity": "HIGH",
+      "status": "MISSING",
+      "note": "Canonical topology exists, but the illustrated editable map master is not stored."
+    },
+    {
+      "id": "PLAYTEST-RAW-LATEST",
+      "severity": "HIGH",
+      "status": "MISSING",
+      "note": "Latest complete raw Journal/Diplomacy/Houses manual playtest set is not stored under playtest/."
+    },
+    {
+      "id": "COMPONENT-BOM",
+      "severity": "HIGH",
+      "status": "MISSING",
+      "note": "Complete approved bill of materials and editable physical component sources are not stored."
+    }
+  ],
+  "current_reproducible_sources": {
+    "rules_data_consistency": true,
+    "canonical_card_designs": 111,
+    "known_physical_card_copies": 120,
+    "canonical_map_topology": true,
+    "html_card_editor_and_print_studio": true,
+    "normalized_ai_config_and_agents": true
+  }
+}
