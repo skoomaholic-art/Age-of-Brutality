@@ -1,32 +1,17 @@
-# Styled Map — V5.7.2-VISUAL-RC1
+# Map Visual Source — V5.7.2
 
-Visual RC1 uses the canonical Final Illustrated map as geometry source and changes **visual treatment only**.
+## Primary technical layout
 
-## Canonical lock
+`Жестокий_Век_Карта_Technical_Main_V5.7.2.png` is the **PRIMARY APPROVED TECHNICAL LAYOUT** for V5.7.2.
 
-Verified unchanged canonical groups:
-- land/territory adjacency;
-- `Canonical Ports`;
-- `Canonical Sea Edges`;
-- central-island A/B pairing.
+It fixes the visual arrangement of the board: W1/W2/W3 on the west, E1/E2/E3 on the east as the approved opposite-side layout, S01–S05 in the central sea, and eastern mainland ports at `E1-1`, `E2-1`, `E3-1`.
 
-## Committed PDF preview
+The image is the authoritative source for **visual placement/orientation**. The machine-readable authority for adjacency, ports and sea routes remains `map/canonical_topology_v5.7.2.json`. If a drawn line and the JSON ever conflict, that is a project inconsistency to fix, not permission to invent a route.
 
-A technical PDF preview is stored in the repository:
+## Technical topology PDF
 
-- `Жестокий_Век_Карта_Topology_Preview_V5.7.2.pdf`
-- SHA-256: `7938e24ea69079e96191439f5b103ff08817103d8b870fc07325b4b4bbc807e5`
-- source: `data/master_game_data_v5.7.2-dev.json`
-- contains: 52 nodes, 81 canonical land edges, 23 canonical direct sea edges, 16 canonical ports.
+`Жестокий_Век_Карта_Topology_Preview_V5.7.2.pdf` remains a legacy/checking preview and is no longer the primary visual layout.
 
-This PDF is a **technical topology preview**. Node positions are schematic and therefore it does **not** replace the missing `Final Illustrated V5.7.1` geometry master. It exists so the repository has a directly viewable/printable map artifact whose graph can be checked against Master Game Data.
+## Final art
 
-## Historical styled artifacts
-
-The earlier styled artifacts are still recorded by hash, but their source files are not yet physically migrated into the repository:
-
-- Styled SVG: `Жестокий_Век_Карта_Styled.svg`
-- historical SVG SHA-256: `5223ca43e8020798782408537d23702dcd2872196485aaa2d045f73b73698efc`
-- historical Print PDF SHA-256: `94917dc3bfb769e86a40fd192aaf76fd10c4013f56c00e42032e0e0bb9430ad9`
-
-Новые территории, порты и маршруты в topology preview не добавлялись.
+The final illustrated/print map is not yet certified. The approved technical layout must not be geometrically reinterpreted when final art is produced.
