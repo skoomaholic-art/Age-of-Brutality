@@ -2,9 +2,9 @@
   "game": "Жестокий Век",
   "version": "V5.7.2-DEV",
   "status": "CANONICAL_SOURCE_GRAPH",
-  "generated_on": "2026-09-11",
+  "generated_on": "2026-09-12",
   "source_policy": {
-    "repository": "skoomaholic-art/zhestokiy-vek",
+    "repository": "skoomaholic-art/Age-of-Brutality",
     "branch": "main",
     "precedence": [
       "explicit confirmed decisions in docs/decisions",
@@ -21,24 +21,32 @@
       "rules/source/02_diplomacy_dynasty_characters.md",
       "rules/source/02d_prisoners_ransom.md",
       "rules/source/03a_advisors_intrigue_events_exile.md",
+      "rules/source/03aa_intrigues_v5.7.2_new_design.md",
       "rules/source/03b_victory_ambitions_houses_balance.md",
       "rules/source/03c_quick_reference_end_cases.md",
       "rules/source/04_arena_technical_appendix.md"
     ],
-    "prisoner_section_source": "rules/source/02d_prisoners_ransom.md"
+    "prisoner_section_source": "rules/source/02d_prisoners_ransom.md",
+    "intrigue_procedure_source": "rules/source/03aa_intrigues_v5.7.2_new_design.md"
   },
   "data": {
     "master": "data/master_game_data_v5.7.2-dev.json",
-    "canonical_modules": ["data/prisoners_v5.7.2-dev.json"],
+    "canonical_modules": [
+      "data/prisoners_v5.7.2-dev.json",
+      "data/intrigues_v5.7.2.json"
+    ],
     "rebuild_command": "node tools/reconcile_v5_7_2.js --write",
-    "consistency_check": "node tools/reconcile_v5_7_2.js --check"
+    "consistency_check": "node tools/reconcile_v5_7_2.js --check && node tools/generate_card_registry_v5_7_2.js --check"
   },
   "cards": {
-    "game_data_registry": "cards/canonical_registry_v5.7.2.json",
+    "base_game_data_registry": "cards/canonical_registry_v5.7.2.json",
+    "complete_card_set": "cards/canonical_card_set_v5.7.2.json",
+    "intrigue_module": "data/intrigues_v5.7.2.json",
     "generator": "tools/generate_card_registry_v5_7_2.js",
-    "object_count": 96,
-    "unique_card_id_count": 48,
-    "physical_layout_art_master": "MISSING_SOURCE"
+    "intrigue_print_generator": "tools/build_intrigue_cards_v5_7_2.js",
+    "design_count": 151,
+    "physical_copy_count": 160,
+    "physical_layout_art_master": "PARTIAL_TEXT_PRINT_SOURCE"
   },
   "map": {
     "topology": "map/canonical_topology_v5.7.2.json",
@@ -46,13 +54,12 @@
     "illustrated_master": "MISSING_SOURCE"
   },
   "arena": {
-    "active_source_patch": "arena/source/patches/v5.7.2_rc2_engine_delta.js",
-    "human_ui_patch": "arena/source/patches/v5.7.2_rc2_human_ui.js",
-    "last_verified_executable": "V5.7.2-PLAYABLE-RC2",
-    "last_verified_manifest": "arena/builds/V5.7.2_PLAYABLE_RC2.manifest.json",
-    "last_verified_qa": "qa/reports/Game_Master_Report_V5.7.2_RC2_500seeds.md",
-    "source_matching_executable": null,
-    "rebuild_blocker": "Complete Arena baseline/HTML is not in GitHub; arena/source/rc1 compressed stream ends before the engine."
+    "builder": "tools/build_arena_v5_7_2.js",
+    "source_runtime": "arena/source/current/",
+    "intrigue_runtime": "arena/source/current/intrigue_runtime_patch.js",
+    "physical_components_runtime": "arena/source/current/physical_components_patch.js",
+    "source_matching_executable": "arena/builds/V5.7.2_PLAYABLE_CURRENT_DEV.html",
+    "verification": "CI_REQUIRED_AFTER_SOURCE_CHANGE"
   },
   "resolved": [
     "EVENT-ID-001: EV-P06 = Съезд заложников",
@@ -60,15 +67,16 @@
     "EVENT-EXEC-001: no extra execution Influence penalty during Съезд заложников",
     "MGD-SYNC-001: MGD reconciled",
     "RULES-SYNC-001: section 20.2 generated from canonical module",
-    "MAP-VERSION-001: canonical V5.7.2 topology source added"
+    "MAP-VERSION-001: canonical V5.7.2 topology source added",
+    "ARENA-ARTIFACT-001: tracked source-matching current Arena builder/runtime exists",
+    "INTRIGUE-SOURCE-001: missing historical 40-card source replaced by explicit new canonical 40-card design",
+    "COMPONENT-ADVISER-001: 18 physical Adviser cards use a shuffled deck and 4-card market",
+    "COMPONENT-AMBITION-001: all 18 Ambitions are physically dealt without duplicate cards"
   ],
   "unresolved": [
-    {"id":"ARENA-ARTIFACT-001","fact":"Complete source-matching Arena executable/baseline is not stored in GitHub."},
-    {"id":"CARD-PRINT-001","fact":"Physical card layout/art master is not stored in GitHub."},
+    {"id":"CARD-ART-001","fact":"Final illustrated art master for all 160 cards is not yet certified; Intrigues have reproducible text-print source."},
     {"id":"MAP-ART-001","fact":"Illustrated map master is not stored in GitHub."},
-    {"id":"PLAYTEST-RAW-001","fact":"Latest manual Journal/Diplomacy/Houses raw JSON is not stored in GitHub."},
-    {"id":"COMPONENTS-001","fact":"Complete physical BOM/source is not stored in GitHub."},
-    {"id":"VISUAL-SOURCE-001","fact":"Full Visual V2/V2.1 executable/generator/generated pack is not stored in GitHub."},
-    {"id":"PRINT-001","fact":"No reproducible certified print-ready package from current canonical sources."}
+    {"id":"PLAYTEST-MANUAL-001","fact":"Fresh manual human playtest raw exports are still separate from automated regression."},
+    {"id":"PRINT-001","fact":"No final production-certified PnP package with illustrated map/card art and manufacturing proof."}
   ]
 }
