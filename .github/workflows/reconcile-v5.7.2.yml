@@ -35,6 +35,9 @@ jobs:
       - name: Verify repository completeness inventory
         run: node tools/check_repository_completeness_v5_7_2.js
 
+      - name: Verify recovery builder syntax
+        run: python -m py_compile tools/build_recovery_artifacts_v5_7_2.py tools/check_recovery_artifacts_v5_7_2.py
+
       - name: Verify HTML card preprint source
         run: node tools/check_card_html_v5_7_2.js
 

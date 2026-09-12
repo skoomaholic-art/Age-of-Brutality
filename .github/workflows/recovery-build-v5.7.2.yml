@@ -1,0 +1,99 @@
+name: Recovery artifact build V5.7.2
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/recovery-build-v5.7.2.yml'
+      - 'tools/build_recovery_artifacts_v5_7_2.py'
+      - 'tools/check_recovery_artifacts_v5_7_2.py'
+      - 'cards/**'
+      - 'visual/**'
+      - 'map/**'
+      - 'arena/**'
+      - 'ai/**'
+      - 'data/**'
+      - 'rules/**'
+      - 'qa/**'
+      - 'docs/references/**'
+      - 'release/repository_completeness_v5.7.2.json'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: recovery-artifacts-v5-7-2
+  cancel-in-progress: false
+
+jobs:
+  build-and-store:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install PDF dependencies
+        run: |
+          python -m pip install --disable-pip-version-check reportlab pypdf pillow
+          sudo apt-get update -y
+          sudo apt-get install -y poppler-utils fonts-dejavu-core
+
+      - name: Build current recovery artifacts
+        run: python tools/build_recovery_artifacts_v5_7_2.py
+
+      - name: Verify generated recovery artifacts
+        run: python tools/check_recovery_artifacts_v5_7_2.py
+
+      - name: Render PDF smoke pages
+        run: |
+          set -euo pipefail
+          PDF='release/generated/V5.7.2-DEV/Жестокий_Век_Карточки_Current_120.pdf'
+          mkdir -p /tmp/zv-pdf-smoke
+          pdftoppm -png -f 1 -singlefile "$PDF" /tmp/zv-pdf-smoke/page-01 >/dev/null 2>&1
+          pdftoppm -png -f 14 -singlefile "$PDF" /tmp/zv-pdf-smoke/page-14 >/dev/null 2>&1
+          python - <<'PY'
+          from PIL import Image
+          from pathlib import Path
+          for p in [Path('/tmp/zv-pdf-smoke/page-01.png'), Path('/tmp/zv-pdf-smoke/page-14.png')]:
+              im = Image.open(p).convert('L')
+              lo, hi = im.getextrema()
+              nonwhite = sum(1 for px in im.getdata() if px < 245)
+              if im.width < 1000 or im.height < 1400:
+                  raise SystemExit(f'render too small: {p} {im.size}')
+              if lo >= 240 or nonwhite < 10000:
+                  raise SystemExit(f'render appears blank: {p} extrema={(lo,hi)} nonwhite={nonwhite}')
+              print(f'{p.name}: {im.width}x{im.height}, extrema={(lo,hi)}, nonwhite={nonwhite}')
+          PY
+
+      - name: Validate text diff
+        run: git diff --check -- . ':(exclude)release/generated/**'
+
+      - name: Commit generated artifacts to repository
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add release/generated/V5.7.2-DEV
+          if git diff --cached --quiet; then
+            echo 'Generated artifacts already match repository.'
+            exit 0
+          fi
+          git commit -m 'build: store V5.7.2 current recovery artifacts'
+          git push origin HEAD:main
+
+      - name: Upload recovery pack as CI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zv-v5.7.2-current-recovery
+          path: release/generated/V5.7.2-DEV
+          if-no-files-found: error
+          retention-days: 30
