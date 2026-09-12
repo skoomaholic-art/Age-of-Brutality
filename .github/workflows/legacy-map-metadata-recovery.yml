@@ -1,0 +1,85 @@
+name: Legacy Map Metadata Recovery
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/legacy-map-metadata-recovery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Recover partial RC1 HTML
+        shell: bash
+        run: |
+          set -u
+          mkdir -p /tmp/rc1recover
+          cat arena/source/rc1/part-00.b64 arena/source/rc1/part-00-tail.b64 arena/source/rc1/part-01.b64 arena/source/rc1/part-02.b64 arena/source/rc1/part-03.b64 | tr -d '\r\n ' | base64 -d > /tmp/rc1recover/arena.gz || true
+          gzip -dc /tmp/rc1recover/arena.gz > /tmp/rc1recover/arena.html 2>/tmp/rc1recover/gzip.err || true
+          wc -c /tmp/rc1recover/arena.html
+          cat /tmp/rc1recover/gzip.err || true
+
+      - name: Extract legacy territory metadata and compare current topology
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+
+          html=Path('/tmp/rc1recover/arena.html').read_text(encoding='utf-8',errors='replace')
+          marker='window.ARENA_DATA='
+          start=html.find(marker)
+          if start < 0: raise SystemExit('window.ARENA_DATA not found')
+          i=start+len(marker)
+          while i<len(html) and html[i].isspace(): i+=1
+          if i>=len(html) or html[i]!='{': raise SystemExit('ARENA_DATA object start not found')
+          begin=i; depth=0; quote=None; esc=False; end=None
+          for j in range(i,len(html)):
+              ch=html[j]
+              if quote:
+                  if esc: esc=False
+                  elif ch=='\\': esc=True
+                  elif ch==quote: quote=None
+                  continue
+              if ch in ('"',"'"): quote=ch; continue
+              if ch=='{': depth+=1
+              elif ch=='}':
+                  depth-=1
+                  if depth==0: end=j+1; break
+          if end is None: raise SystemExit('ARENA_DATA object incomplete')
+          data=json.loads(html[begin:end])
+          topo=json.loads(Path('map/canonical_topology_v5.7.2.json').read_text(encoding='utf-8'))
+          rows=data.get('map',{}).get('territoryMeta') or []
+          ids=[r.get('id') for r in rows]
+          current=set(topo['territories']); legacy=set(ids)
+          if current!=legacy:
+              raise SystemExit(f'territory id mismatch: current_only={sorted(current-legacy)} legacy_only={sorted(legacy-current)} rows={len(rows)}')
+          out={
+              'game':'Жестокий Век',
+              'status':'HISTORICAL_MIGRATION_CANDIDATE',
+              'source':'forensic recovery from arena/source/rc1 compressed baseline',
+              'warning':'Not canonical by itself. Use only after cross-check against active Rules/Data; retained to avoid inventing missing territory type metadata.',
+              'current_topology_version':topo.get('version'),
+              'territory_count':len(rows),
+              'territoryMeta':rows,
+          }
+          Path('map/legacy_territory_metadata_rc1.json').write_text(json.dumps(out,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          print('legacy metadata recovered:',len(rows))
+          print('types:',sorted({str(r.get('type')) for r in rows}))
+          print('resistances:',sorted({str(r.get('resistance')) for r in rows}))
+          PY
+
+      - name: Commit migration candidate
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add map/legacy_territory_metadata_rc1.json
+          if git diff --cached --quiet; then echo 'No metadata change'; else git commit -m 'map: recover legacy territory metadata candidate' && git push; fi
