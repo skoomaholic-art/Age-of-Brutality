@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "game_version": "V5.7.2-DEV",
   "build_type": "RECOVERY_FROM_CURRENT_CANONICAL_SOURCES",
-  "source_commit": "31474d07ee5777921d1221f2e3f9923065510bb4",
+  "source_commit": "8186c1e538e9ab2d595ce148c7ae0c76a2ef55c9",
   "canonical_card_designs": 111,
   "known_physical_card_copies": 120,
   "card_pages_a4_3x3": 14,
@@ -40,8 +40,8 @@
       "path": "release/generated/V5.7.2-DEV/Жестокий_Век_Visual_Current_Pack.zip",
       "kind": "visual_preprint_pack",
       "status": "CURRENT_REPRODUCIBLE_PARTIAL",
-      "bytes": 5635857,
-      "sha256": "1608b4603b9c74c0ab00ef7bd8b3ba6fc5e983faeec8d000e26a824a96740076",
+      "bytes": 5650797,
+      "sha256": "391e0e2cca57bdbd6a29c54ace24fef2f99d088082a6039838961dca572daf00",
       "note": "Does not contain missing historical illustrated map master or 40 missing Intrigue cards"
     },
     {
@@ -49,8 +49,8 @@
       "path": "release/generated/V5.7.2-DEV/Жестокий_Век_Arena_Recovery_Source_Pack.zip",
       "kind": "arena_recovery_source_pack",
       "status": "CURRENT_REPRODUCIBLE_SOURCE_ONLY",
-      "bytes": 246194,
-      "sha256": "14cbc1d803e2c02b5d33da19c8a999b2a2f91b5e1b1bd7a523b4cd1e184cad5b",
+      "bytes": 243147,
+      "sha256": "d8584a4f2cae75436ade6a437e666ec3b5e01313e8108f9415773e4a97a4988b",
       "note": "No executable: complete Arena baseline is still missing"
     },
     {
@@ -58,8 +58,8 @@
       "path": "release/generated/V5.7.2-DEV/Жестокий_Век_Current_Project_Source_Pack.zip",
       "kind": "project_source_snapshot",
       "status": "CURRENT_REPRODUCIBLE",
-      "bytes": 512551,
-      "sha256": "f1cc71efa99b2478b0ec9559aa5b487f525b8a0b0c7886513fc36660faff74c1",
+      "bytes": 524691,
+      "sha256": "c54d0dd578464e797c1300674357598508d56511b763ead46697b970a4e103c6",
       "note": "Excludes .git and release/generated"
     },
     {
