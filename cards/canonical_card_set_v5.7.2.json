@@ -1,0 +1,21 @@
+{
+  "game": "Жестокий Век",
+  "version": "V5.7.2-DEV",
+  "status": "COMPOSITE_CANONICAL_CARD_SET",
+  "design_count": 151,
+  "physical_copy_count": 160,
+  "modules": [
+    {
+      "source": "cards/canonical_registry_v5.7.2.json",
+      "designs": 111,
+      "physical_copies": 120
+    },
+    {
+      "source": "data/intrigues_v5.7.2.json",
+      "designs": 40,
+      "physical_copies": 40,
+      "status": "CANONICAL_MODULE_NEW_DESIGN_2026-09-12"
+    }
+  ],
+  "policy": "The complete physical card set is the union of the generated MGD base registry and explicit canonical card modules."
+}
