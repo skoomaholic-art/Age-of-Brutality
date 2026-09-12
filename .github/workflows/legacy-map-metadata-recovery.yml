@@ -26,7 +26,7 @@ jobs:
           wc -c /tmp/rc1recover/arena.html
           cat /tmp/rc1recover/gzip.err || true
 
-      - name: Extract legacy territory metadata and compare current topology
+      - name: Extract legacy territoryMeta array only
         shell: bash
         run: |
           python3 - <<'PY'
@@ -34,12 +34,11 @@ jobs:
           import json
 
           html=Path('/tmp/rc1recover/arena.html').read_text(encoding='utf-8',errors='replace')
-          marker='window.ARENA_DATA='
-          start=html.find(marker)
-          if start < 0: raise SystemExit('window.ARENA_DATA not found')
-          i=start+len(marker)
-          while i<len(html) and html[i].isspace(): i+=1
-          if i>=len(html) or html[i]!='{': raise SystemExit('ARENA_DATA object start not found')
+          marker='"territoryMeta"'
+          m=html.find(marker)
+          if m < 0: raise SystemExit('territoryMeta marker not found in recovered RC1 prefix')
+          i=html.find('[',m)
+          if i < 0: raise SystemExit('territoryMeta array start not found')
           begin=i; depth=0; quote=None; esc=False; end=None
           for j in range(i,len(html)):
               ch=html[j]
@@ -49,14 +48,13 @@ jobs:
                   elif ch==quote: quote=None
                   continue
               if ch in ('"',"'"): quote=ch; continue
-              if ch=='{': depth+=1
-              elif ch=='}':
+              if ch=='[': depth+=1
+              elif ch==']':
                   depth-=1
                   if depth==0: end=j+1; break
-          if end is None: raise SystemExit('ARENA_DATA object incomplete')
-          data=json.loads(html[begin:end])
+          if end is None: raise SystemExit('territoryMeta array incomplete in recovered RC1 prefix')
+          rows=json.loads(html[begin:end])
           topo=json.loads(Path('map/canonical_topology_v5.7.2.json').read_text(encoding='utf-8'))
-          rows=data.get('map',{}).get('territoryMeta') or []
           ids=[r.get('id') for r in rows]
           current=set(topo['territories']); legacy=set(ids)
           if current!=legacy:
@@ -65,7 +63,7 @@ jobs:
               'game':'Жестокий Век',
               'status':'HISTORICAL_MIGRATION_CANDIDATE',
               'source':'forensic recovery from arena/source/rc1 compressed baseline',
-              'warning':'Not canonical by itself. Use only after cross-check against active Rules/Data; retained to avoid inventing missing territory type metadata.',
+              'warning':'Not canonical by itself. Cross-check against active Rules/Data before promotion; retained to avoid inventing missing territory type metadata.',
               'current_topology_version':topo.get('version'),
               'territory_count':len(rows),
               'territoryMeta':rows,
