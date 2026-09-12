@@ -16,52 +16,82 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Reconstruct saved engine fragments
+      - name: Inspect and reconstruct saved engine fragments
         shell: bash
         run: |
           set -u
           mkdir -p /tmp/rc3diag qa/reports
-          : > /tmp/rc3diag/per_part.js
-          for f in arena/source/current/engine_runtime.part-*.b64; do
-            echo "decoding $f"
-            base64 -d "$f" >> /tmp/rc3diag/per_part.js
-          done
-          cat arena/source/current/engine_runtime.part-*.b64 > /tmp/rc3diag/concat.b64
-          base64 -d /tmp/rc3diag/concat.b64 > /tmp/rc3diag/concat_decode.js || true
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64, re, hashlib
 
-      - name: Produce diagnostic report
+          root = Path('arena/source/current')
+          files = sorted(root.glob('engine_runtime.part-*.b64'))
+          out = bytearray()
+          lines = ['# RC3 fragment diagnostic', '', '## Fragment integrity']
+          allowed = re.compile(rb'[A-Za-z0-9+/=\r\n]')
+          for f in files:
+              raw = f.read_bytes()
+              bad = [(i, b) for i, b in enumerate(raw) if not allowed.fullmatch(bytes([b]))]
+              compact = b''.join(raw.split())
+              status = 'PASS'
+              decoded = b''
+              error = ''
+              try:
+                  decoded = base64.b64decode(compact, validate=True)
+              except Exception as exc:
+                  status = 'FAIL'
+                  error = str(exc)
+                  cut = bad[0][0] if bad else len(raw)
+                  prefix = b''.join(raw[:cut].split())
+                  prefix = prefix[:len(prefix) - (len(prefix) % 4)]
+                  try:
+                      decoded = base64.b64decode(prefix, validate=True)
+                  except Exception:
+                      decoded = b''
+              out.extend(decoded)
+              lines += [
+                  f'- `{f.name}`: base64_bytes={len(raw)}, decoded_bytes={len(decoded)}, decode={status}',
+                  f'  - invalid_byte_positions={bad[:8] if bad else []}',
+                  f'  - error={error or "none"}',
+              ]
+          target = Path('/tmp/rc3diag/per_part.js')
+          target.write_bytes(out)
+          lines += ['', '## Reconstructed prefix',
+                    f'- bytes={len(out)}',
+                    f'- sha256={hashlib.sha256(out).hexdigest()}']
+          Path('qa/reports/RC3_FRAGMENT_DIAGNOSTIC.md').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          PY
+
+      - name: Check reconstructed JavaScript structure
         shell: bash
         run: |
           report=qa/reports/RC3_FRAGMENT_DIAGNOSTIC.md
           {
-            echo '# RC3 fragment diagnostic'
             echo
-            echo "Commit: $GITHUB_SHA"
+            echo '## JavaScript check'
+            if node --check /tmp/rc3diag/per_part.js >/tmp/rc3diag/node.out 2>/tmp/rc3diag/node.err; then
+              echo '- node_check=PASS'
+            else
+              echo '- node_check=FAIL'
+            fi
+            echo '```text'
+            cat /tmp/rc3diag/node.err || true
+            echo '```'
             echo
-            echo '## Files'
-            wc -c arena/source/current/engine_runtime.part-*.b64
+            echo '## Structural markers'
+            printf -- '- ArenaEngine occurrences: '; (grep -ao 'class ArenaEngine' /tmp/rc3diag/per_part.js || true) | wc -l
+            printf -- '- exportData occurrences: '; (grep -ao 'exportData' /tmp/rc3diag/per_part.js || true) | wc -l
+            printf -- '- window.ArenaEngine occurrences: '; (grep -ao 'window.ArenaEngine' /tmp/rc3diag/per_part.js || true) | wc -l
+            printf -- '- IIFE endings: '; (grep -ao '})();' /tmp/rc3diag/per_part.js || true) | wc -l
             echo
-            echo '## Reconstruction A — decode every part then append'
-            wc -c /tmp/rc3diag/per_part.js
-            sha256sum /tmp/rc3diag/per_part.js
-            if node --check /tmp/rc3diag/per_part.js >/tmp/rc3diag/a.out 2>/tmp/rc3diag/a.err; then echo 'NODE_CHECK_A=PASS'; else echo 'NODE_CHECK_A=FAIL'; fi
-            cat /tmp/rc3diag/a.err || true
+            echo '## Tail of recovered prefix'
+            echo '```text'
+            tail -c 1200 /tmp/rc3diag/per_part.js | tr -cd '\11\12\15\40-\176' || true
             echo
-            echo '## Reconstruction B — concatenate base64 then decode'
-            wc -c /tmp/rc3diag/concat_decode.js
-            sha256sum /tmp/rc3diag/concat_decode.js
-            if node --check /tmp/rc3diag/concat_decode.js >/tmp/rc3diag/b.out 2>/tmp/rc3diag/b.err; then echo 'NODE_CHECK_B=PASS'; else echo 'NODE_CHECK_B=FAIL'; fi
-            cat /tmp/rc3diag/b.err || true
-            echo
-            echo '## Structural markers (A)'
-            printf 'ArenaEngine occurrences: '; grep -ao 'class ArenaEngine' /tmp/rc3diag/per_part.js | wc -l
-            printf 'exportData occurrences: '; grep -ao 'exportData' /tmp/rc3diag/per_part.js | wc -l
-            printf 'window.ArenaEngine occurrences: '; grep -ao 'window.ArenaEngine' /tmp/rc3diag/per_part.js | wc -l
-            printf 'IIFE endings: '; grep -ao '})();' /tmp/rc3diag/per_part.js | wc -l
-            echo
-            echo '### Tail (last 800 bytes, printable)'
-            tail -c 800 /tmp/rc3diag/per_part.js | sed 's/`/\`/g'
-          } > "$report"
+            echo '```'
+          } >> "$report"
+          cat "$report"
 
       - name: Store diagnostic report
         shell: bash
