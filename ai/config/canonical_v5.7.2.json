@@ -1,0 +1,130 @@
+{
+  "schema_version": "1.0",
+  "game": "Жестокий Век",
+  "game_version": "V5.7.2-DEV",
+  "status": "CANONICAL_AI_IMPLEMENTATION_CONFIG",
+  "source": {
+    "master_game_data": "data/master_game_data_v5.7.2-dev.json",
+    "prisoners": "data/prisoners_v5.7.2-dev.json",
+    "policy": "canonical_* values are normalized from current project sources. decision_policy is implementation behavior, not a human-player rule."
+  },
+  "houses": [
+    "Варкайр",
+    "Сайрвен",
+    "Ортайн",
+    "Эркай",
+    "Тасвар",
+    "Айрель"
+  ],
+  "canonical_target_scoring": {
+    "neutral_base": 6,
+    "enemy_base": 5,
+    "recapture_home_bonus": 6,
+    "recapture_capital_bonus": 12,
+    "complete_island_bonus": 9,
+    "first_center_half_bonus": 4,
+    "mainland_port_bonus": 3,
+    "enemy_capital_bonus": 10,
+    "defended_penalty_per_defender": -1,
+    "neutral_expression": "+base 6; +доход; -сопротивление",
+    "enemy_expression": "+base 5 + round escalation; +доход; +столица; +порт"
+  },
+  "canonical_round_escalation": {
+    "1": { "pvp_bonus": 0, "late_neutral_penalty": 0 },
+    "2": { "pvp_bonus": 1, "late_neutral_penalty": 0 },
+    "3": { "pvp_bonus": 2, "late_neutral_penalty": 0 },
+    "4": { "pvp_bonus": 4, "late_neutral_penalty": 1 },
+    "5": { "pvp_bonus": 6, "late_neutral_penalty": 2 },
+    "6": { "pvp_bonus": 8, "late_neutral_penalty": 3 }
+  },
+  "canonical_strategic_plans": [
+    {
+      "id": "RECAPTURE",
+      "max_steps": 3,
+      "trigger": "Потеряна собственная столица/домашняя территория",
+      "goal": "Собственная потерянная территория"
+    },
+    {
+      "id": "CENTER_CAPTURE",
+      "max_steps": 3,
+      "trigger": "Есть достижимая половина центра",
+      "goal": "Первая центральная половина"
+    },
+    {
+      "id": "ISLAND_COMPLETION",
+      "max_steps": 3,
+      "trigger": "Контролируется одна половина острова",
+      "goal": "Парная половина"
+    },
+    {
+      "id": "PORT_PREPARATION",
+      "max_steps": 2,
+      "trigger": "Контролируется порт с морской целью, армия не в порту",
+      "goal": "Собственный порт"
+    },
+    {
+      "id": "NAVAL_INVASION",
+      "max_steps": 3,
+      "trigger": "OWNED PORT WITH ARMY + DIRECT SEA EDGE",
+      "goal": "Центр/чужой порт"
+    },
+    {
+      "id": "CAPITAL_ATTACK",
+      "max_steps": 3,
+      "trigger": "Есть достижимая чужая столица и достаточная сила",
+      "goal": "Чужая столица"
+    }
+  ],
+  "canonical_naval_center": {
+    "direct_sea_edge_only": true,
+    "source_rule": "OWNED PORT WITH ARMY",
+    "center_complete_weight": 9,
+    "center_first_weight": 4,
+    "port_preparation_weight": 5,
+    "plan_chain_max": 3
+  },
+  "canonical_diplomacy": {
+    "official_relation_soft_cap_default": 2,
+    "official_relation_soft_cap_by_house": {
+      "Ортайн": 3
+    },
+    "break_hostility_threshold": 2,
+    "transfer_gold_max": 3
+  },
+  "canonical_prisoner_ai": {
+    "offer_is_random": false,
+    "offer_factors": [
+      "captor_current_needs_or_requests",
+      "captor_active_ambition_or_objectives",
+      "specific_prisoner_value",
+      "prisoner_house_position",
+      "overall_strategic_position_of_both_sides"
+    ],
+    "recipient_decision": "AI prisoner owner independently evaluates the offer and accepts or rejects it.",
+    "logging_required": [
+      "available_options",
+      "factor_scores",
+      "offered_N",
+      "decision",
+      "reason"
+    ],
+    "numeric_weights_status": "IMPLEMENTATION_BALANCE_TEST",
+    "hostage_congress": {
+      "event_id": "EV-P06",
+      "fixed_ransom_gold": 2
+    }
+  },
+  "decision_policy": {
+    "status": "IMPLEMENTATION_NOT_HUMAN_RULE",
+    "legal_actions_only": true,
+    "deterministic": true,
+    "tie_break_order": [
+      "active_plan_match",
+      "diplomacy_soft_cap_ok",
+      "score",
+      "action_id_lexicographic"
+    ],
+    "external_score_components": "Arena/adapters may provide additive numeric scoreComponents derived from legal game state; they are logged separately.",
+    "house_personality_weights": "NOT_DEFINED. Agents currently differ through House state, House rules, active Ambition/objectives, board position and canonical House exceptions only."
+  }
+}
