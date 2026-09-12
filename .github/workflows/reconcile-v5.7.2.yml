@@ -32,6 +32,9 @@ jobs:
       - name: Run House agent tests
         run: node ai/tests/house_agents.test.js
 
+      - name: Verify repository completeness inventory
+        run: node tools/check_repository_completeness_v5_7_2.js
+
       - name: Verify HTML card preprint source
         run: node tools/check_card_html_v5_7_2.js
 
