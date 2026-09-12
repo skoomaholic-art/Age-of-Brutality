@@ -93,15 +93,17 @@ jobs:
           } >> "$report"
           cat "$report"
 
-      - name: Store diagnostic report
+      - name: Store forensic prefix and diagnostic report
         shell: bash
         run: |
+          mkdir -p arena/source/current/recovery
+          cp /tmp/rc3diag/per_part.js arena/source/current/recovery/engine_runtime_recovered_prefix.js
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add qa/reports/RC3_FRAGMENT_DIAGNOSTIC.md
+          git add qa/reports/RC3_FRAGMENT_DIAGNOSTIC.md arena/source/current/recovery/engine_runtime_recovered_prefix.js
           if git diff --cached --quiet; then
             echo 'Diagnostic unchanged'
           else
-            git commit -m 'qa: diagnose RC3 saved engine fragments'
+            git commit -m 'qa: store recovered RC3 engine prefix'
             git push
           fi
