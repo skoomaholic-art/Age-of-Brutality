@@ -1,0 +1,15 @@
+#!/usr/bin/env node
+'use strict';
+const fs=require('fs'),vm=require('vm'),path=require('path');
+const arena=path.resolve(__dirname,'../../arena/builds/V5.7.2_PLAYABLE_CURRENT_DEV.html');
+const html=fs.readFileSync(arena,'utf8'),scripts=[...html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
+const data=scripts.find(s=>s.includes('window.ARENA_DATA=')),engine=scripts.find(s=>s.includes('class ArenaEngine')),patches=scripts.filter(s=>s.includes('ARENA_V572_CURRENT_PATCH'));
+if(!data||!engine)throw new Error('Arena scripts missing');globalThis.window=globalThis;vm.runInThisContext(data);const marker='window.arenaEngine=new ArenaEngine(DATA);';vm.runInThisContext(engine.slice(0,engine.indexOf(marker)+marker.length)+'\n})();');for(const p of patches)vm.runInThisContext(p);
+const e=window.arenaEngine,assert=(c,m)=>{if(!c)throw new Error(m)};e.reset(62001,6);
+assert(window.ARENA_DATA.intrigues.length===40,'Intrigue card count must be 40');assert(e.intrigueDeck.length===40,'Physical intrigue deck must start at 40');assert(e.advisorMarket.length===4,'Advisor market must show 4 physical cards');assert(e.advisorDeck.length===14,'Advisor deck must retain 14 cards after market setup');
+const offers=Object.values(e.houses).flatMap(h=>h.ambitionOffer||[]).map(a=>a.CARD_ID);assert(offers.length===18,'18 Ambitions must be physically dealt');assert(new Set(offers).size===18,'Ambition deal must not duplicate physical cards');
+const h=e.currentHouse(),before=e.houses[h].gold;e.doIntrigueDraw(h);assert(e.houses[h].intrigueHand.length===1,'Draw 2 keep 1 must leave one card in hand');assert(e.intrigueDiscard.length===1,'Draw 2 keep 1 must discard one card');assert(e.houses[h].gold===before-1,'Intrigue draw must cost 1 gold');
+const target=window.ARENA_DATA.houses.map(x=>x.name).find(x=>x!==h);const card=window.ARENA_DATA.intrigues.find(c=>c.effect.op==='gold_transfer');e.houses[h].intrigueHand=[card.CARD_ID];e.houses[target].gold=10;const exec=e.intrigueExecutor(h);exec.intrigue=20;const play=e.doActiveIntrigue(h,{cardId:card.CARD_ID,targetHouse:target});assert(play.valid&&play.success,'Forced high-skill Intrigue should resolve');assert(e.intrigueTraces.some(t=>t.id===play.traceId&&t.active),'Criminal Intrigue must create active trace');
+const trace=e.intrigueTraces.find(t=>t.id===play.traceId);const victimExec=e.intrigueExecutor(target);victimExec.intrigue=20;e.houses[h].influence=5;const inv=e.doInvestigation(target,{traceId:trace.id});assert(inv.valid&&inv.success,'Forced high-skill investigation should prove trace');assert(!trace.active&&trace.proven,'Proven trace must close');assert(e.houses[h].influence<5,'Proven trace must apply fixed Influence penalty');
+const cap=e.capabilityReport();for(const id of['ACT-DRAW','ACT-INTRIGUE','ACT-INVEST'])assert(cap.implementedNormalActions.includes(id),`${id} must be implemented`);assert((cap.sourceBlockedActions||[]).length===0,'No Intrigue action may remain source-blocked');
+console.log('Tabletop components tests OK',{intrigues:40,advisorMarket:4,ambitions:new Set(offers).size,patches:patches.length});
