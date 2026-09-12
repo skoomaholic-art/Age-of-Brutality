@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "game_version": "V5.7.2-DEV",
   "build_type": "RECOVERY_FROM_CURRENT_CANONICAL_SOURCES",
-  "source_commit": "535e923224d1678d31fcf413a062c8af40eab895",
+  "source_commit": "ac32ba7f7b6e777c2b5eeec72c5ff8e272f439da",
   "canonical_card_designs": 111,
   "known_physical_card_copies": 120,
   "card_pages_a4_3x3": 14,
@@ -49,8 +49,8 @@
       "path": "release/generated/V5.7.2-DEV/Жестокий_Век_Arena_Recovery_Source_Pack.zip",
       "kind": "arena_recovery_source_pack",
       "status": "CURRENT_REPRODUCIBLE_SOURCE_ONLY",
-      "bytes": 174025,
-      "sha256": "ee79533b0415e67e04101184c36e40064298e537f8a69f0fbc08430794c6d770",
+      "bytes": 178018,
+      "sha256": "cd0f05a983002c253ba2e6fb34d15ab2b0efc5e5662d5c6737b7b36bf781948e",
       "note": "No executable: complete Arena baseline is still missing"
     },
     {
@@ -58,8 +58,8 @@
       "path": "release/generated/V5.7.2-DEV/Жестокий_Век_Current_Project_Source_Pack.zip",
       "kind": "project_source_snapshot",
       "status": "CURRENT_REPRODUCIBLE",
-      "bytes": 408572,
-      "sha256": "d18664af55143e1b00b01d62dba60163de357e5313dfdc374f3b7ba0a34564b6",
+      "bytes": 412565,
+      "sha256": "85866d5ccd904b08f621772cd7e726a6791ef69f0b236514d0f4eb0f759642ee",
       "note": "Excludes .git and release/generated"
     },
     {
