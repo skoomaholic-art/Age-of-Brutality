@@ -43,14 +43,24 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import json
+          import json,re
 
           html=Path('/tmp/rc1recover/arena.html').read_text(encoding='utf-8',errors='replace')
-          marker='"territoryMeta"'
-          m=html.find(marker)
-          if m < 0: raise SystemExit('territoryMeta marker not found in recovered RC1 payload')
-          i=html.find('[',m)
-          if i < 0: raise SystemExit('territoryMeta array start not found')
+          patterns=[r'"territoryMeta"\s*:', r"'territoryMeta'\s*:", r'\bterritoryMeta\s*:', r'\bterritoryMeta\s*=']
+          matches=[]
+          for pat in patterns:
+              mm=list(re.finditer(pat,html))
+              matches.extend((m.start(),pat,m.end()) for m in mm)
+          if not matches:
+              around=[]
+              for token in ('territoryMeta','ARENA_DATA','territory','resistance'):
+                  i=html.find(token)
+                  around.append(f'{token}={i}')
+              raise SystemExit('territoryMeta key not found; '+', '.join(around))
+          matches.sort()
+          key_start,pat,key_end=matches[0]
+          i=html.find('[',key_end)
+          if i < 0: raise SystemExit(f'territoryMeta array start not found after {pat} at {key_start}')
           begin=i; depth=0; quote=None; esc=False; end=None
           for j in range(i,len(html)):
               ch=html[j]
@@ -66,8 +76,13 @@ jobs:
                   if depth==0:
                       end=j+1
                       break
-          if end is None: raise SystemExit('territoryMeta array incomplete in recovered RC1 payload')
-          rows=json.loads(html[begin:end])
+          if end is None: raise SystemExit(f'territoryMeta array incomplete; key at {key_start}, array at {begin}, html bytes={len(html)}')
+          raw=html[begin:end]
+          try:
+              rows=json.loads(raw)
+          except Exception as exc:
+              Path('/tmp/rc1recover/territoryMeta.raw.txt').write_text(raw,encoding='utf-8')
+              raise SystemExit(f'territoryMeta found but is not JSON: {exc}')
           topo=json.loads(Path('map/canonical_topology_v5.7.2.json').read_text(encoding='utf-8'))
           ids=[r.get('id') for r in rows]
           if len(ids) != len(set(ids)):
@@ -86,7 +101,7 @@ jobs:
               'territoryMeta':rows,
           }
           Path('map/legacy_territory_metadata_rc1.json').write_text(json.dumps(out,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
-          print('legacy metadata recovered:',len(rows))
+          print('legacy metadata recovered:',len(rows),'key_pattern=',pat,'key_offset=',key_start)
           print('types:',sorted({str(r.get('type')) for r in rows}))
           print('resistances:',sorted({str(r.get('resistance')) for r in rows}))
           PY
