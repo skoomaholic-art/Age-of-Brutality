@@ -38,8 +38,7 @@ jobs:
           echo "recovered_bytes=$(wc -c < /tmp/rc1recover/arena.html)"
           cat /tmp/rc1recover/gzip.err || true
 
-      - name: Inspect recovered payload and extract metadata if present
-        id: inspect
+      - name: Inspect ARENA_DATA and recover territory metadata when possible
         shell: bash
         run: |
           set +e
@@ -48,58 +47,80 @@ jobs:
           import json,re,sys
 
           html=Path('/tmp/rc1recover/arena.html').read_text(encoding='utf-8',errors='replace')
-          probes=['territoryMeta','ARENA_DATA','W1-1','E3-1','resistance','village','city','wild','Capital','Сопротивление']
-          diag={'recovered_chars':len(html),'positions':{p:html.find(p) for p in probes}}
-          diag['head']=html[:2500]
-          diag['tail']=html[-5000:]
-          Path('/tmp/rc1recover/diagnostic.json').write_text(json.dumps(diag,ensure_ascii=False,indent=2),encoding='utf-8')
-          print(json.dumps({'recovered_chars':diag['recovered_chars'],'positions':diag['positions']},ensure_ascii=False))
+          diag={'recovered_chars':len(html)}
+          probes=['territoryMeta','ARENA_DATA','W1-1','E3-1','resistance','village','city','wild','capital','type']
+          diag['positions']={p:html.find(p) for p in probes}
 
-          patterns=[r'"territoryMeta"\s*:', r"'territoryMeta'\s*:", r'\bterritoryMeta\s*:', r'\bterritoryMeta\s*=']
-          matches=[]
-          for pat in patterns:
-              matches += [(m.start(),pat,m.end()) for m in re.finditer(pat,html)]
-          if not matches:
-              print('NO_TERRITORY_META_IN_RECOVERED_RANGE')
-              sys.exit(0)
-          matches.sort(); key_start,pat,key_end=matches[0]
-          i=html.find('[',key_end)
-          if i < 0:
-              print('TERRITORY_META_WITHOUT_ARRAY_START'); sys.exit(0)
-          begin=i; depth=0; quote=None; esc=False; end=None
-          for j in range(i,len(html)):
-              ch=html[j]
-              if quote:
-                  if esc: esc=False
-                  elif ch=='\\': esc=True
-                  elif ch==quote: quote=None
-                  continue
-              if ch in ('"',"'"): quote=ch; continue
-              if ch=='[': depth+=1
-              elif ch==']':
-                  depth-=1
-                  if depth==0: end=j+1; break
-          if end is None:
-              print('TERRITORY_META_ARRAY_INCOMPLETE'); sys.exit(0)
-          raw=html[begin:end]
-          try: rows=json.loads(raw)
-          except Exception as exc:
-              Path('/tmp/rc1recover/territoryMeta.raw.txt').write_text(raw,encoding='utf-8')
-              print('TERRITORY_META_NOT_JSON',exc); sys.exit(0)
-          topo=json.loads(Path('map/canonical_topology_v5.7.2.json').read_text(encoding='utf-8'))
-          ids=[r.get('id') for r in rows]
-          current=set(topo['territories']); legacy=set(ids)
-          if len(ids)!=len(set(ids)) or current!=legacy:
-              print('TERRITORY_ID_MISMATCH',len(rows),sorted(current-legacy),sorted(legacy-current)); sys.exit(0)
+          marker='window.ARENA_DATA='
+          m=html.find(marker)
+          data=None
+          if m>=0:
+              i=html.find('{',m+len(marker))
+              depth=0; quote=None; esc=False; end=None
+              for j in range(i,len(html)):
+                  ch=html[j]
+                  if quote:
+                      if esc: esc=False
+                      elif ch=='\\': esc=True
+                      elif ch==quote: quote=None
+                      continue
+                  if ch in ('"',"'"): quote=ch; continue
+                  if ch=='{': depth+=1
+                  elif ch=='}':
+                      depth-=1
+                      if depth==0: end=j+1; break
+              diag['arena_data_object_start']=i
+              diag['arena_data_object_end']=end
+              if end:
+                  raw=html[i:end]
+                  try:
+                      data=json.loads(raw)
+                      diag['arena_data_complete']=True
+                      diag['arena_data_keys']=list(data.keys())
+                      mp=data.get('map')
+                      diag['map_type']=type(mp).__name__
+                      if isinstance(mp,dict):
+                          diag['map_keys']=list(mp.keys())
+                          diag['map_summary']={k:(len(v) if isinstance(v,(list,dict)) else str(v)[:200]) for k,v in mp.items()}
+                          diag['map_samples']={k:(v[:3] if isinstance(v,list) else list(v.items())[:3] if isinstance(v,dict) else v) for k,v in mp.items()}
+                  except Exception as exc:
+                      diag['arena_data_complete']=False; diag['arena_data_error']=str(exc)
+              else:
+                  diag['arena_data_complete']=False
+          Path('/tmp/rc1recover/diagnostic.json').write_text(json.dumps(diag,ensure_ascii=False,indent=2),encoding='utf-8')
+          print(json.dumps({k:v for k,v in diag.items() if k not in ('map_samples',)},ensure_ascii=False,indent=2))
+
+          if not data or not isinstance(data.get('map'),dict):
+              print('NO_COMPLETE_MAP_OBJECT'); sys.exit(0)
+          mp=data['map']; topo=json.loads(Path('map/canonical_topology_v5.7.2.json').read_text(encoding='utf-8'))
+
+          candidates=[]
+          for key,val in mp.items():
+              if isinstance(val,list) and val and all(isinstance(x,dict) for x in val):
+                  ids=[x.get('id') for x in val]
+                  if set(ids)==set(topo['territories']): candidates.append((key,val))
+              elif isinstance(val,dict) and set(val.keys())==set(topo['territories']):
+                  rows=[]
+                  for tid,meta in val.items():
+                      row={'id':tid}
+                      if isinstance(meta,dict): row.update(meta)
+                      else: row['value']=meta
+                      rows.append(row)
+                  candidates.append((key,rows))
+          if not candidates:
+              print('NO_52_ID_METADATA_CANDIDATE',list(mp.keys())); sys.exit(0)
+
+          key,rows=candidates[0]
           out={
               'game':'Жестокий Век','status':'HISTORICAL_MIGRATION_CANDIDATE',
               'source_commit':'4db4d910a9668abf8a75152395407936be083618',
+              'source_field':f'ARENA_DATA.map.{key}',
               'source':'forensic recovery from historical arena/source/rc1 compressed baseline',
               'warning':'Historical source recovered without invention. Must be cross-checked against active Rules/Data before promotion to canonical Arena input.',
               'current_topology_version':topo.get('version'),'territory_count':len(rows),'territoryMeta':rows,
           }
           Path('map/legacy_territory_metadata_rc1.json').write_text(json.dumps(out,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
-          print('RECOVERED_TERRITORY_META',len(rows),sorted({str(r.get('type')) for r in rows}),sorted({str(r.get('resistance')) for r in rows}))
+          print('RECOVERED_52_ID_CANDIDATE',key,'row_keys=',sorted({k for r in rows for k in r.keys()}))
           PY
           exit 0
 
@@ -107,7 +128,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: legacy-map-recovery-diagnostic
-          path: /tmp/rc1recover/diagnostic.json
+          path: |
+            /tmp/rc1recover/diagnostic.json
+            /tmp/rc1recover/arena.html
           if-no-files-found: error
           retention-days: 7
 
@@ -115,7 +138,7 @@ jobs:
         shell: bash
         run: |
           if [ ! -f map/legacy_territory_metadata_rc1.json ]; then
-            echo 'No complete territory metadata in recovered RC1 range; diagnostic uploaded.'
+            echo 'No complete 52-ID territory metadata candidate found; diagnostic uploaded.'
             exit 0
           fi
           git config user.name "github-actions[bot]"
