@@ -13,10 +13,10 @@ Verified counts:
 - direct sea edges: **23**;
 - ports: **16**.
 
-The JSON is derived from the approved V5.7.2 Rules topology and does not add, remove or relocate any territory, port or sea route.
+The JSON is derived from the approved V5.7.2 Rules topology. By explicit project decision, the eastern mainland ports are E1-1, E2-1 and E3-1. Territory count, land-edge count and sea-edge count are unchanged.
 
 Historical V5.7.1 topology metadata is no longer the current technical master.
 
 ## Remaining blocker
 
-The current illustrated/print PNG/SVG master is not stored in the canonical `map/` directory. That is an art/source-migration issue, not an unresolved geography rule.
+The approved primary technical layout is `visual/map/Жестокий_Век_Карта_Technical_Main_V5.7.2.png`. It fixes the visual placement/orientation of W/E sectors. The final illustrated/print art master remains a separate unresolved art deliverable.

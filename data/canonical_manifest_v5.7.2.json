@@ -33,7 +33,8 @@
     "master": "data/master_game_data_v5.7.2-dev.json",
     "canonical_modules": [
       "data/prisoners_v5.7.2-dev.json",
-      "data/intrigues_v5.7.2.json"
+      "data/intrigues_v5.7.2.json",
+      "map/canonical_topology_v5.7.2.json"
     ],
     "rebuild_command": "node tools/reconcile_v5_7_2.js --write",
     "consistency_check": "node tools/reconcile_v5_7_2.js --check && node tools/generate_card_registry_v5_7_2.js --check"
@@ -50,8 +51,19 @@
   },
   "map": {
     "topology": "map/canonical_topology_v5.7.2.json",
-    "counts": {"territories":52,"land_edges":81,"sea_edges":23,"ports":16},
-    "illustrated_master": "MISSING_SOURCE"
+    "counts": {
+      "territories": 52,
+      "land_edges": 81,
+      "sea_edges": 23,
+      "ports": 16
+    },
+    "illustrated_master": "MISSING_SOURCE",
+    "technical_layout_master": "visual/map/Жестокий_Век_Карта_Technical_Main_V5.7.2.png",
+    "technical_layout_status": "PRIMARY_APPROVED_LAYOUT",
+    "port_correction": {
+      "east_mainland_ports": ["E1-1", "E2-1", "E3-1"],
+      "approved_on": "2026-09-13"
+    }
   },
   "arena": {
     "builder": "tools/build_arena_v5_7_2.js",
@@ -71,11 +83,12 @@
     "ARENA-ARTIFACT-001: tracked source-matching current Arena builder/runtime exists",
     "INTRIGUE-SOURCE-001: missing historical 40-card source replaced by explicit new canonical 40-card design",
     "COMPONENT-ADVISER-001: 18 physical Adviser cards use a shuffled deck and 4-card market",
-    "COMPONENT-AMBITION-001: all 18 Ambitions are physically dealt without duplicate cards"
+    "COMPONENT-AMBITION-001: all 18 Ambitions are physically dealt without duplicate cards",
+    "MAP-LAYOUT-001: approved primary technical layout stored in visual/map with mirrored W/E orientation"
   ],
   "unresolved": [
     {"id":"CARD-ART-001","fact":"Final illustrated art master for all 160 cards is not yet certified; Intrigues have reproducible text-print source."},
-    {"id":"MAP-ART-001","fact":"Illustrated map master is not stored in GitHub."},
+    {"id":"MAP-ART-001","fact":"Primary technical layout is stored in GitHub; final illustrated/print art master is still not certified."},
     {"id":"PLAYTEST-MANUAL-001","fact":"Fresh manual human playtest raw exports are still separate from automated regression."},
     {"id":"PRINT-001","fact":"No final production-certified PnP package with illustrated map/card art and manufacturing proof."}
   ]
