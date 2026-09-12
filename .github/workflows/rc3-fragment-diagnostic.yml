@@ -1,0 +1,77 @@
+name: RC3 Fragment Diagnostic
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/rc3-fragment-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct saved engine fragments
+        shell: bash
+        run: |
+          set -u
+          mkdir -p /tmp/rc3diag qa/reports
+          : > /tmp/rc3diag/per_part.js
+          for f in arena/source/current/engine_runtime.part-*.b64; do
+            echo "decoding $f"
+            base64 -d "$f" >> /tmp/rc3diag/per_part.js
+          done
+          cat arena/source/current/engine_runtime.part-*.b64 > /tmp/rc3diag/concat.b64
+          base64 -d /tmp/rc3diag/concat.b64 > /tmp/rc3diag/concat_decode.js || true
+
+      - name: Produce diagnostic report
+        shell: bash
+        run: |
+          report=qa/reports/RC3_FRAGMENT_DIAGNOSTIC.md
+          {
+            echo '# RC3 fragment diagnostic'
+            echo
+            echo "Commit: $GITHUB_SHA"
+            echo
+            echo '## Files'
+            wc -c arena/source/current/engine_runtime.part-*.b64
+            echo
+            echo '## Reconstruction A — decode every part then append'
+            wc -c /tmp/rc3diag/per_part.js
+            sha256sum /tmp/rc3diag/per_part.js
+            if node --check /tmp/rc3diag/per_part.js >/tmp/rc3diag/a.out 2>/tmp/rc3diag/a.err; then echo 'NODE_CHECK_A=PASS'; else echo 'NODE_CHECK_A=FAIL'; fi
+            cat /tmp/rc3diag/a.err || true
+            echo
+            echo '## Reconstruction B — concatenate base64 then decode'
+            wc -c /tmp/rc3diag/concat_decode.js
+            sha256sum /tmp/rc3diag/concat_decode.js
+            if node --check /tmp/rc3diag/concat_decode.js >/tmp/rc3diag/b.out 2>/tmp/rc3diag/b.err; then echo 'NODE_CHECK_B=PASS'; else echo 'NODE_CHECK_B=FAIL'; fi
+            cat /tmp/rc3diag/b.err || true
+            echo
+            echo '## Structural markers (A)'
+            printf 'ArenaEngine occurrences: '; grep -ao 'class ArenaEngine' /tmp/rc3diag/per_part.js | wc -l
+            printf 'exportData occurrences: '; grep -ao 'exportData' /tmp/rc3diag/per_part.js | wc -l
+            printf 'window.ArenaEngine occurrences: '; grep -ao 'window.ArenaEngine' /tmp/rc3diag/per_part.js | wc -l
+            printf 'IIFE endings: '; grep -ao '})();' /tmp/rc3diag/per_part.js | wc -l
+            echo
+            echo '### Tail (last 800 bytes, printable)'
+            tail -c 800 /tmp/rc3diag/per_part.js | sed 's/`/\`/g'
+          } > "$report"
+
+      - name: Store diagnostic report
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add qa/reports/RC3_FRAGMENT_DIAGNOSTIC.md
+          if git diff --cached --quiet; then
+            echo 'Diagnostic unchanged'
+          else
+            git commit -m 'qa: diagnose RC3 saved engine fragments'
+            git push
+          fi
