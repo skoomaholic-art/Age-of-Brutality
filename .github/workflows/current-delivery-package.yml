@@ -1,9 +1,9 @@
 name: Current full board game delivery
 
-# Packages the current main branch for direct user delivery.
 on:
   push:
-    branches: [main]
+    branches:
+      - main
     paths:
       - '.github/workflows/current-delivery-package.yml'
       - 'VERSION'
@@ -45,97 +45,15 @@ jobs:
         run: |
           python -m pip install --disable-pip-version-check reportlab pypdf pillow
           sudo apt-get update -y >/dev/null
-          sudo apt-get install -y poppler-utils fonts-dejavu-core zip >/dev/null
+          sudo apt-get install -y poppler-utils fonts-dejavu-core >/dev/null
 
       - name: Regenerate current reproducible materials
         run: |
           python tools/build_recovery_artifacts_v5_7_2.py
           python tools/check_recovery_artifacts_v5_7_2.py
 
-      - name: Assemble user delivery
-        shell: bash
-        run: |
-          set -euo pipefail
-          ROOT='delivery/Жестокий_Век_V5.7.2_CURRENT'
-          mkdir -p "$ROOT/01_ПЕЧАТЬ_КАРТОЧКИ" "$ROOT/02_КАРТА" "$ROOT/03_ПРАВИЛА" "$ROOT/04_ДАННЫЕ_ПЕРСОНАЖИ_ДОМА" "$ROOT/05_ВИЗУАЛ_ЖЕТОНЫ_КОМПОНЕНТЫ" "$ROOT/06_ARENA_AI_GAME_MASTER" "$ROOT/07_ПОЛНЫЙ_SOURCE"
-
-          cp release/generated/V5.7.2-DEV/Жестокий_Век_Карточки_Current_120.pdf "$ROOT/01_ПЕЧАТЬ_КАРТОЧКИ/"
-          cp release/generated/V5.7.2-DEV/Жестокий_Век_Карточки_Current_120.html "$ROOT/01_ПЕЧАТЬ_КАРТОЧКИ/"
-          cp release/generated/V5.7.2-DEV/Жестокий_Век_Карточки_Individual_Current_120.zip "$ROOT/01_ПЕЧАТЬ_КАРТОЧКИ/"
-          cp cards/canonical_registry_v5.7.2.json cards/README.md "$ROOT/01_ПЕЧАТЬ_КАРТОЧКИ/"
-
-          cp -r map/. "$ROOT/02_КАРТА/"
-          cp visual/map/Жестокий_Век_Карта_Topology_Preview_V5.7.2.pdf "$ROOT/02_КАРТА/"
-          cp visual/map/README.md "$ROOT/02_КАРТА/VISUAL_MAP_README.md"
-
-          cp -r rules/. "$ROOT/03_ПРАВИЛА/"
-
-          cp -r data/. "$ROOT/04_ДАННЫЕ_ПЕРСОНАЖИ_ДОМА/data/"
-          cp cards/canonical_registry_v5.7.2.json "$ROOT/04_ДАННЫЕ_ПЕРСОНАЖИ_ДОМА/"
-          cp VERSION CHANGELOG.md RELEASE_MANIFEST.md "$ROOT/04_ДАННЫЕ_ПЕРСОНАЖИ_ДОМА/"
-
-          cp -r visual/. "$ROOT/05_ВИЗУАЛ_ЖЕТОНЫ_КОМПОНЕНТЫ/visual/"
-          cp -r components/. "$ROOT/05_ВИЗУАЛ_ЖЕТОНЫ_КОМПОНЕНТЫ/components/"
-
-          cp -r arena/. "$ROOT/06_ARENA_AI_GAME_MASTER/arena/"
-          cp -r ai/. "$ROOT/06_ARENA_AI_GAME_MASTER/ai/"
-          mkdir -p "$ROOT/06_ARENA_AI_GAME_MASTER/qa"
-          cp -r qa/game-master "$ROOT/06_ARENA_AI_GAME_MASTER/qa/"
-          cp -r qa/reports "$ROOT/06_ARENA_AI_GAME_MASTER/qa/"
-
-          cp docs/CURRENT_PROJECT_STATE.md "$ROOT/00_CURRENT_PROJECT_STATE.md"
-          cp docs/decisions/2026-09-12_project_chat_reconciliation.md "$ROOT/00_PROJECT_DECISIONS.md"
-          cp docs/KNOWN_ISSUES.md "$ROOT/00_KNOWN_ISSUES.md"
-
-          python - <<'PY'
-          from pathlib import Path
-          import subprocess
-          root=Path('delivery/Жестокий_Век_V5.7.2_CURRENT')
-          sha=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
-          text=f'''# ЖЕСТОКИЙ ВЕК — АКТУАЛЬНЫЙ ПАКЕТ V5.7.2-DEV
-
-Источник упаковки: GitHub `main` commit `{sha}`.
-
-## Что находится в пакете
-
-- текущие правила V5.7.2-DEV;
-- Master Game Data и канонические data-модули;
-- реестр Домов, персонажей, Советников, Амбиций, Событий и других текущих данных;
-- 120 подтверждённых физических карточек: общий PDF, HTML и ZIP индивидуальных PDF;
-- каноническая топология карты: 52 территории / 81 сухопутное ребро / 23 морских маршрута / 16 портов;
-- текущий topology-preview карты;
-- визуальные шаблоны карточек, visual guides и component usage guide;
-- текущие материалы по физическим жетонам/маркерам, насколько они определены в проекте;
-- Arena source/recovery materials;
-- AI House Agents, Prisoner Agent и конфигурация AI;
-- Game Master runner и QA/playtest reports;
-- единый current-state и ledger подтверждённых решений;
-- полный source snapshot текущего repository main.
-
-## ВАЖНО: текущие незакрытые блокеры
-
-1. **Arena:** полный воспроизводимый executable V5.7.2 сейчас не восстановлен. Текущий RC3 source bundle повреждён/обрезан; в пакете лежат реальные recovery/source материалы, а не ложный «готовый HTML».
-2. **LEGAL_ACTIONS:** recovered engine не доказан как покрывающий все 18 actions/procedures из Master Game Data.
-3. **Интриги:** отсутствует подтверждённый master-source 40 физических карт Интриг. Они намеренно не придуманы заново. Поэтому printable set сейчас содержит 120 подтверждённых карт, а не исторические 160.
-4. **Карта:** каноническая техническая топология актуальна, но финальный иллюстрированный/print master карты в canonical source не мигрирован. В пакете лежит topology preview.
-5. **Жетоны/компоненты:** полный утверждённый Component BOM и отдельные финальные print-masters жетонов ещё не зафиксированы.
-6. Последний полностью успешный 500-seed отчёт относится к historical RC2; это не доказательство работоспособности нынешнего неполного RC3 executable.
-
-Подробности: `00_CURRENT_PROJECT_STATE.md`, `00_PROJECT_DECISIONS.md`, `00_KNOWN_ISSUES.md`.
-
-То, чего нет в источниках, в эту поставку не дорисовывалось и не выдумывалось.
-'''
-          (root/'00_СТАТУС_АКТУАЛЬНОЙ_ВЕРСИИ.md').write_text(text,encoding='utf-8')
-          PY
-
-          git archive --format=zip --output="$ROOT/07_ПОЛНЫЙ_SOURCE/Age-of-Brutality-main-source.zip" HEAD
-          cp release/generated/V5.7.2-DEV/RECOVERY_MANIFEST.json "$ROOT/"
-          cp release/generated/V5.7.2-DEV/README.md "$ROOT/00_RECOVERY_README.md"
-
-          (cd delivery && zip -qr 'Жестокий_Век_V5.7.2_CURRENT_FULL_PACKAGE.zip' 'Жестокий_Век_V5.7.2_CURRENT')
-          sha256sum delivery/Жестокий_Век_V5.7.2_CURRENT_FULL_PACKAGE.zip > delivery/SHA256.txt
-          du -h delivery/Жестокий_Век_V5.7.2_CURRENT_FULL_PACKAGE.zip
-          cat delivery/SHA256.txt
+      - name: Assemble current delivery
+        run: python tools/package_current_delivery.py
 
       - name: Upload full current package
         uses: actions/upload-artifact@v4
