@@ -1,5 +1,6 @@
 name: Current full board game delivery
 
+# Packages the current main branch for direct user delivery.
 on:
   push:
     branches: [main]
