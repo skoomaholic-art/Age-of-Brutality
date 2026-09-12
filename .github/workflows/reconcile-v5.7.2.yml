@@ -26,6 +26,12 @@ jobs:
       - name: Verify canonical map topology
         run: node tools/check_map_topology_v5_7_2.js
 
+      - name: Verify canonical AI config
+        run: node tools/check_ai_config_v5_7_2.js
+
+      - name: Run House agent tests
+        run: node ai/tests/house_agents.test.js
+
       - name: Verify HTML card preprint source
         run: node tools/check_card_html_v5_7_2.js
 
