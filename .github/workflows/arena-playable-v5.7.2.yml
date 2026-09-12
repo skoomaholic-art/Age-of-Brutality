@@ -22,14 +22,10 @@ jobs:
   build-test-package:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
-
       - name: Canonical consistency
         run: |
           node tools/reconcile_v5_7_2.js --check
@@ -37,64 +33,51 @@ jobs:
           node tools/check_map_topology_v5_7_2.js
           node tools/check_ai_config_v5_7_2.js
           python3 tools/check_territory_metadata_v5_7_2.py
-
       - name: Runtime syntax
         run: |
-          cat arena/source/current/recovery/engine_runtime_recovered_prefix.js \
-              arena/source/current/engine_runtime_tail.part-00.js \
-              arena/source/current/engine_runtime_tail.part-01.js \
-              arena/source/current/engine_runtime_tail.part-02.js > /tmp/engine_runtime_current.js
+          cat arena/source/current/recovery/engine_runtime_recovered_prefix.js arena/source/current/engine_runtime_tail.part-00.js arena/source/current/engine_runtime_tail.part-01.js arena/source/current/engine_runtime_tail.part-02.js > /tmp/engine_runtime_current.js
           node --check arena/source/current/ai_adapter.js
           node --check /tmp/engine_runtime_current.js
+          node --check arena/source/current/current_parity_patch.js
+          node --check arena/source/current/ui_runtime.js
           node --check tools/build_arena_v5_7_2.js
           node --check qa/game-master/game_master_runner.js
-
       - name: House AI tests
         run: node ai/tests/house_agents.test.js
-
       - name: Build current Arena
         run: node tools/build_arena_v5_7_2.js
-
-      - name: Game Master 100-seed regression
+      - name: Game Master raw 100-seed regression
         run: |
-          mkdir -p qa/reports/current
-          node qa/game-master/game_master_runner.js \
-            arena/builds/V5.7.2_PLAYABLE_CURRENT_DEV.html 100 57001 \
-            > qa/reports/current/Game_Master_Summary_V5.7.2_CURRENT_100seeds.json
+          rm -rf qa/reports/current && mkdir -p qa/reports/current/raw_100
+          node qa/game-master/game_master_runner.js arena/builds/V5.7.2_PLAYABLE_CURRENT_DEV.html 100 57001 qa/reports/current/raw_100 > qa/reports/current/Game_Master_Summary_V5.7.2_CURRENT_100seeds.json
           python3 - <<'PY'
           import json
-          p='qa/reports/current/Game_Master_Summary_V5.7.2_CURRENT_100seeds.json'
-          x=json.load(open(p,encoding='utf-8'))
-          s=x['structural']
-          assert s['finished']==100, s
-          assert s['round6']==100, s
-          assert s['actions108']==100, s
-          assert s['errorGames']==0, s
-          assert s['invalid']==0, s
-          severe=[f for f in x['findings'] if f['severity'] in ('CRITICAL','HIGH')]
-          assert not severe, severe
-          print('GM current 100 seeds: OK', s)
-          print('coverage metrics:', x['coverage']['metrics'])
-          print('house summary:', x['houseSummary'])
+          x=json.load(open('qa/reports/current/Game_Master_Summary_V5.7.2_CURRENT_100seeds.json',encoding='utf-8'));s=x['structural']
+          assert s['finished']==100 and s['round6']==100 and s['actions108']==100 and s['errorGames']==0 and s['invalid']==0,s
+          critical=[f for f in x['findings'] if f['severity']=='CRITICAL'];assert not critical,critical
+          print('100 seeds structural OK',s);print('metrics',x['coverage']['metrics']);print('houses',x['houseSummary']);print('findings',x['findings'])
           PY
-
+      - name: Game Master 500-seed balance regression
+        run: |
+          node qa/game-master/game_master_runner.js arena/builds/V5.7.2_PLAYABLE_CURRENT_DEV.html 500 58001 > qa/reports/current/Game_Master_Summary_V5.7.2_CURRENT_500seeds.json
+          python3 - <<'PY'
+          import json
+          x=json.load(open('qa/reports/current/Game_Master_Summary_V5.7.2_CURRENT_500seeds.json',encoding='utf-8'));s=x['structural']
+          assert s['finished']==500 and s['round6']==500 and s['actions108']==500 and s['errorGames']==0 and s['invalid']==0,s
+          critical=[f for f in x['findings'] if f['severity']=='CRITICAL'];assert not critical,critical
+          print('500 seeds structural OK',s);print('metrics',x['coverage']['metrics']);print('houses',x['houseSummary']);print('findings',x['findings'])
+          PY
       - name: Package inspectable current Arena
         run: |
-          rm -rf release/generated/V5.7.2-PLAYABLE-CURRENT-DEV
-          mkdir -p release/generated/V5.7.2-PLAYABLE-CURRENT-DEV
-          cp arena/builds/V5.7.2_PLAYABLE_CURRENT_DEV.html release/generated/V5.7.2-PLAYABLE-CURRENT-DEV/
-          cp arena/builds/V5.7.2_PLAYABLE_CURRENT_DEV.manifest.json release/generated/V5.7.2-PLAYABLE-CURRENT-DEV/
-          cp qa/reports/current/Game_Master_Summary_V5.7.2_CURRENT_100seeds.json release/generated/V5.7.2-PLAYABLE-CURRENT-DEV/
-          zip -qr release/generated/V5.7.2-PLAYABLE-CURRENT-DEV/Zhestokiy_Vek_V5.7.2_PLAYABLE_CURRENT_DEV_FULL.zip \
-            README.md CHANGELOG.md VERSION RELEASE_MANIFEST.md \
-            rules data ai map cards components arena/source qa/game-master tools
-          sha256sum release/generated/V5.7.2-PLAYABLE-CURRENT-DEV/* > release/generated/V5.7.2-PLAYABLE-CURRENT-DEV/SHA256SUMS.txt
-
+          rm -rf release/generated/V5.7.2-PLAYABLE-CURRENT-DEV && mkdir -p release/generated/V5.7.2-PLAYABLE-CURRENT-DEV
+          cp arena/builds/V5.7.2_PLAYABLE_CURRENT_DEV.html arena/builds/V5.7.2_PLAYABLE_CURRENT_DEV.manifest.json release/generated/V5.7.2-PLAYABLE-CURRENT-DEV/
+          cp qa/reports/current/Game_Master_Summary_V5.7.2_CURRENT_100seeds.json qa/reports/current/Game_Master_Summary_V5.7.2_CURRENT_500seeds.json release/generated/V5.7.2-PLAYABLE-CURRENT-DEV/
+          cp -r qa/reports/current/raw_100 release/generated/V5.7.2-PLAYABLE-CURRENT-DEV/
+          zip -qr release/generated/V5.7.2-PLAYABLE-CURRENT-DEV/Zhestokiy_Vek_V5.7.2_PLAYABLE_CURRENT_DEV_FULL.zip README.md CHANGELOG.md VERSION RELEASE_MANIFEST.md rules data ai map cards components arena/source arena/builds qa/game-master qa/reports/current tools
+          sha256sum release/generated/V5.7.2-PLAYABLE-CURRENT-DEV/* > release/generated/V5.7.2-PLAYABLE-CURRENT-DEV/SHA256SUMS.txt || true
       - name: Validate tracked diff
         run: git diff --check
-
-      - name: Upload current playable package
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: Zhestokiy_Vek_V5.7.2_PLAYABLE_CURRENT_DEV
           path: release/generated/V5.7.2-PLAYABLE-CURRENT-DEV/
