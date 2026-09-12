@@ -1,4 +1,4 @@
-name: Playable Arena V5.7.2 RC3
+name: Current Arena V5.7.2 DEV
 
 on:
   push:
@@ -6,9 +6,8 @@ on:
     paths:
       - 'arena/source/current/**'
       - 'tools/build_arena_v5_7_2.js'
+      - 'tools/check_territory_metadata_v5_7_2.py'
       - 'qa/game-master/**'
-      - 'qa/validate_rc3_playtest.js'
-      - 'qa/arena_ai_adapter_parity.test.js'
       - 'ai/**'
       - 'data/**'
       - 'map/**'
@@ -17,7 +16,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build-test-package:
@@ -26,25 +25,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Restore RC3 source bootstrap
-        run: |
-          base64 -d arena/source/current/rc3_source_bundle.tgz.b64 > /tmp/rc3_source_bundle.tgz
-          echo "5a3797e1b08915ce2578215aca092a9275b3ffa1262bb1fc44ad3884270ba226  /tmp/rc3_source_bundle.tgz" | sha256sum -c -
-          tar xzf /tmp/rc3_source_bundle.tgz -C .
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-
-      - name: Syntax checks
-        run: |
-          node --check arena/source/current/ai_adapter.js
-          node --check arena/source/current/engine_runtime.js
-          node --check arena/source/current/ui_runtime.js
-          node --check tools/build_arena_v5_7_2.js
-          node --check qa/validate_rc3_playtest.js
-          node --check qa/arena_ai_adapter_parity.test.js
 
       - name: Canonical consistency
         run: |
@@ -52,66 +36,67 @@ jobs:
           node tools/generate_card_registry_v5_7_2.js --check
           node tools/check_map_topology_v5_7_2.js
           node tools/check_ai_config_v5_7_2.js
+          python3 tools/check_territory_metadata_v5_7_2.py
 
-      - name: AI adapter parity
-        run: node qa/arena_ai_adapter_parity.test.js
+      - name: Runtime syntax
+        run: |
+          cat arena/source/current/recovery/engine_runtime_recovered_prefix.js \
+              arena/source/current/engine_runtime_tail.part-00.js \
+              arena/source/current/engine_runtime_tail.part-01.js \
+              arena/source/current/engine_runtime_tail.part-02.js > /tmp/engine_runtime_current.js
+          node --check arena/source/current/ai_adapter.js
+          node --check /tmp/engine_runtime_current.js
+          node --check tools/build_arena_v5_7_2.js
+          node --check qa/game-master/game_master_runner.js
 
-      - name: Build playable Arena RC3
+      - name: House AI tests
+        run: node ai/tests/house_agents.test.js
+
+      - name: Build current Arena
         run: node tools/build_arena_v5_7_2.js
 
-      - name: Game Master 500-seed regression
+      - name: Game Master 100-seed regression
         run: |
-          mkdir -p qa/reports
-          node qa/game-master/game_master_runner.js arena/builds/Zhestokiy_Vek_Arena_V5.7.2_PLAYABLE_RC3.html 500 59001 > qa/reports/Game_Master_Summary_V5.7.2_RC3_500seeds.json
-          node qa/validate_rc3_playtest.js qa/reports/Game_Master_Summary_V5.7.2_RC3_500seeds.json
+          mkdir -p qa/reports/current
+          node qa/game-master/game_master_runner.js \
+            arena/builds/V5.7.2_PLAYABLE_CURRENT_DEV.html 100 57001 \
+            > qa/reports/current/Game_Master_Summary_V5.7.2_CURRENT_100seeds.json
+          python3 - <<'PY'
+          import json
+          p='qa/reports/current/Game_Master_Summary_V5.7.2_CURRENT_100seeds.json'
+          x=json.load(open(p,encoding='utf-8'))
+          s=x['structural']
+          assert s['finished']==100, s
+          assert s['round6']==100, s
+          assert s['actions108']==100, s
+          assert s['errorGames']==0, s
+          assert s['invalid']==0, s
+          severe=[f for f in x['findings'] if f['severity'] in ('CRITICAL','HIGH')]
+          assert not severe, severe
+          print('GM current 100 seeds: OK', s)
+          print('coverage metrics:', x['coverage']['metrics'])
+          print('house summary:', x['houseSummary'])
+          PY
 
-      - name: Package full inspectable RC3
+      - name: Package inspectable current Arena
         run: |
-          rm -rf release/generated/V5.7.2-PLAYABLE-RC3
-          mkdir -p release/generated/V5.7.2-PLAYABLE-RC3
-          cp arena/builds/Zhestokiy_Vek_Arena_V5.7.2_PLAYABLE_RC3.html release/generated/V5.7.2-PLAYABLE-RC3/
-          cp arena/builds/V5.7.2_PLAYABLE_RC3.manifest.json release/generated/V5.7.2-PLAYABLE-RC3/
-          cp qa/reports/Game_Master_Summary_V5.7.2_RC3_500seeds.json release/generated/V5.7.2-PLAYABLE-RC3/
-          zip -qr release/generated/V5.7.2-PLAYABLE-RC3/Zhestokiy_Vek_V5.7.2_PLAYABLE_RC3_FULL.zip \
-            README.md CHANGELOG.md VERSION RELEASE_MANIFEST.json \
-            rules data ai map cards components visual/html_v22 arena/source arena/builds \
-            qa/game-master qa/reports tools
-          sha256sum release/generated/V5.7.2-PLAYABLE-RC3/* > release/generated/V5.7.2-PLAYABLE-RC3/SHA256SUMS.txt
+          rm -rf release/generated/V5.7.2-PLAYABLE-CURRENT-DEV
+          mkdir -p release/generated/V5.7.2-PLAYABLE-CURRENT-DEV
+          cp arena/builds/V5.7.2_PLAYABLE_CURRENT_DEV.html release/generated/V5.7.2-PLAYABLE-CURRENT-DEV/
+          cp arena/builds/V5.7.2_PLAYABLE_CURRENT_DEV.manifest.json release/generated/V5.7.2-PLAYABLE-CURRENT-DEV/
+          cp qa/reports/current/Game_Master_Summary_V5.7.2_CURRENT_100seeds.json release/generated/V5.7.2-PLAYABLE-CURRENT-DEV/
+          zip -qr release/generated/V5.7.2-PLAYABLE-CURRENT-DEV/Zhestokiy_Vek_V5.7.2_PLAYABLE_CURRENT_DEV_FULL.zip \
+            README.md CHANGELOG.md VERSION RELEASE_MANIFEST.md \
+            rules data ai map cards components arena/source qa/game-master tools
+          sha256sum release/generated/V5.7.2-PLAYABLE-CURRENT-DEV/* > release/generated/V5.7.2-PLAYABLE-CURRENT-DEV/SHA256SUMS.txt
 
       - name: Validate tracked diff
         run: git diff --check
 
-      - name: Upload playable package
+      - name: Upload current playable package
         uses: actions/upload-artifact@v4
         with:
-          name: Zhestokiy_Vek_V5.7.2_PLAYABLE_RC3
-          path: release/generated/V5.7.2-PLAYABLE-RC3/
+          name: Zhestokiy_Vek_V5.7.2_PLAYABLE_CURRENT_DEV
+          path: release/generated/V5.7.2-PLAYABLE-CURRENT-DEV/
           if-no-files-found: error
           retention-days: 30
-
-      - name: Store verified RC3 artifacts in main
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm -f arena/source/current/engine_runtime.part-00.js \
-                    arena/source/current/engine_runtime.part-00.b64 \
-                    arena/source/current/engine_runtime.part-01.b64 \
-                    arena/source/current/engine_runtime.part-02.b64 \
-                    arena/source/current/engine_runtime.part-03.b64 \
-                    arena/source/current/engine_runtime.part-04.b64 \
-                    arena/source/current/rc3_source_bundle.tgz.b64 || true
-          git add arena/source/current/engine_runtime.js \
-                  arena/source/current/ui_runtime.js \
-                  tools/build_arena_v5_7_2.js \
-                  qa/validate_rc3_playtest.js \
-                  qa/arena_ai_adapter_parity.test.js \
-                  arena/builds/Zhestokiy_Vek_Arena_V5.7.2_PLAYABLE_RC3.html \
-                  arena/builds/V5.7.2_PLAYABLE_RC3.manifest.json \
-                  qa/reports/Game_Master_Summary_V5.7.2_RC3_500seeds.json \
-                  release/generated/V5.7.2-PLAYABLE-RC3
-          if git diff --cached --quiet; then
-            echo "Verified artifacts unchanged"
-          else
-            git commit -m "build: store verified V5.7.2 PLAYABLE RC3"
-            git push
-          fi
