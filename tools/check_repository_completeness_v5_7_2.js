@@ -72,15 +72,16 @@ if (/\b96 objects\b/.test(releaseManifest)) {
   fail.push('RELEASE_MANIFEST.md still contains stale 96-object card count');
 }
 
-const forbiddenCompletenessClaims = [
-  'REPOSITORY COMPLETE',
-  'REPOSITORY-COMPLETE',
-  'FULLY REPRODUCIBLE',
-  'PRINT-READY / STABLE'
-];
-for (const claim of forbiddenCompletenessClaims) {
-  if (releaseManifest.toUpperCase().includes(claim) && completeness.repository_complete === false) {
-    fail.push(`Release manifest makes forbidden completeness claim while repository is incomplete: ${claim}`);
+const statusLine = releaseManifest.split(/\r?\n/).find(line => line.startsWith('**Status:**')) || '';
+if (completeness.repository_complete === false) {
+  if (!statusLine.includes('REPOSITORY INCOMPLETE')) {
+    fail.push('RELEASE_MANIFEST.md status must explicitly say REPOSITORY INCOMPLETE');
+  }
+  if (!statusLine.includes('NOT STABLE')) {
+    fail.push('RELEASE_MANIFEST.md status must explicitly say NOT STABLE while repository is incomplete');
+  }
+  if (!statusLine.includes('NOT PRINT-READY')) {
+    fail.push('RELEASE_MANIFEST.md status must explicitly say NOT PRINT-READY while repository is incomplete');
   }
 }
 
