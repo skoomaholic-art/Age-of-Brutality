@@ -6,6 +6,22 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/current-delivery-package.yml'
+      - 'VERSION'
+      - 'README.md'
+      - 'CHANGELOG.md'
+      - 'RELEASE_MANIFEST.md'
+      - 'rules/**'
+      - 'data/**'
+      - 'cards/**'
+      - 'map/**'
+      - 'arena/**'
+      - 'ai/**'
+      - 'qa/**'
+      - 'visual/**'
+      - 'components/**'
+      - 'docs/**'
+      - 'release/**'
+      - 'tools/**'
   workflow_dispatch:
 
 permissions:
@@ -67,6 +83,10 @@ jobs:
           cp -r qa/game-master "$ROOT/06_ARENA_AI_GAME_MASTER/qa/"
           cp -r qa/reports "$ROOT/06_ARENA_AI_GAME_MASTER/qa/"
 
+          cp docs/CURRENT_PROJECT_STATE.md "$ROOT/00_CURRENT_PROJECT_STATE.md"
+          cp docs/decisions/2026-09-12_project_chat_reconciliation.md "$ROOT/00_PROJECT_DECISIONS.md"
+          cp docs/KNOWN_ISSUES.md "$ROOT/00_KNOWN_ISSUES.md"
+
           python - <<'PY'
           from pathlib import Path
           import subprocess
@@ -89,15 +109,19 @@ jobs:
 - Arena source/recovery materials;
 - AI House Agents, Prisoner Agent и конфигурация AI;
 - Game Master runner и QA/playtest reports;
+- единый current-state и ledger подтверждённых решений;
 - полный source snapshot текущего repository main.
 
 ## ВАЖНО: текущие незакрытые блокеры
 
 1. **Arena:** полный воспроизводимый executable V5.7.2 сейчас не восстановлен. Текущий RC3 source bundle повреждён/обрезан; в пакете лежат реальные recovery/source материалы, а не ложный «готовый HTML».
-2. **Интриги:** отсутствует подтверждённый master-source 40 физических карт Интриг. Они намеренно не придуманы заново. Поэтому printable set сейчас содержит 120 подтверждённых карт, а не исторические 160.
-3. **Карта:** каноническая техническая топология актуальна, но финальный иллюстрированный/print master карты в canonical source не мигрирован. В пакете лежит topology preview.
-4. **Жетоны/компоненты:** полный утверждённый Component BOM и отдельные финальные print-masters жетонов ещё не зафиксированы. В пакете лежат все текущие visual/component guides и шаблоны.
-5. Последний полностью успешный 500-seed отчёт относится к historical RC2; это не доказательство работоспособности нынешнего неполного RC3 executable.
+2. **LEGAL_ACTIONS:** recovered engine не доказан как покрывающий все 18 actions/procedures из Master Game Data.
+3. **Интриги:** отсутствует подтверждённый master-source 40 физических карт Интриг. Они намеренно не придуманы заново. Поэтому printable set сейчас содержит 120 подтверждённых карт, а не исторические 160.
+4. **Карта:** каноническая техническая топология актуальна, но финальный иллюстрированный/print master карты в canonical source не мигрирован. В пакете лежит topology preview.
+5. **Жетоны/компоненты:** полный утверждённый Component BOM и отдельные финальные print-masters жетонов ещё не зафиксированы.
+6. Последний полностью успешный 500-seed отчёт относится к historical RC2; это не доказательство работоспособности нынешнего неполного RC3 executable.
+
+Подробности: `00_CURRENT_PROJECT_STATE.md`, `00_PROJECT_DECISIONS.md`, `00_KNOWN_ISSUES.md`.
 
 То, чего нет в источниках, в эту поставку не дорисовывалось и не выдумывалось.
 '''
