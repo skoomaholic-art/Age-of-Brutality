@@ -15,15 +15,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Recover partial RC1 HTML
+      - name: Recover RC1 HTML from historical commit
         shell: bash
         run: |
-          set -u
+          set -euo pipefail
           mkdir -p /tmp/rc1recover
-          cat arena/source/rc1/part-00.b64 arena/source/rc1/part-00-tail.b64 arena/source/rc1/part-01.b64 arena/source/rc1/part-02.b64 arena/source/rc1/part-03.b64 | tr -d '\r\n ' | base64 -d > /tmp/rc1recover/arena.gz || true
+          LEGACY=4db4d910a9668abf8a75152395407936be083618
+          : > /tmp/rc1recover/arena.b64
+          for p in \
+            arena/source/rc1/part-00.b64 \
+            arena/source/rc1/part-00-tail.b64 \
+            arena/source/rc1/part-01.b64 \
+            arena/source/rc1/part-02.b64 \
+            arena/source/rc1/part-03.b64; do
+            git show "$LEGACY:$p" >> /tmp/rc1recover/arena.b64
+          done
+          tr -d '\r\n ' < /tmp/rc1recover/arena.b64 | base64 -d > /tmp/rc1recover/arena.gz
           gzip -dc /tmp/rc1recover/arena.gz > /tmp/rc1recover/arena.html 2>/tmp/rc1recover/gzip.err || true
-          wc -c /tmp/rc1recover/arena.html
+          echo "recovered_bytes=$(wc -c < /tmp/rc1recover/arena.html)"
           cat /tmp/rc1recover/gzip.err || true
 
       - name: Extract legacy territoryMeta array only
@@ -36,7 +48,7 @@ jobs:
           html=Path('/tmp/rc1recover/arena.html').read_text(encoding='utf-8',errors='replace')
           marker='"territoryMeta"'
           m=html.find(marker)
-          if m < 0: raise SystemExit('territoryMeta marker not found in recovered RC1 prefix')
+          if m < 0: raise SystemExit('territoryMeta marker not found in recovered RC1 payload')
           i=html.find('[',m)
           if i < 0: raise SystemExit('territoryMeta array start not found')
           begin=i; depth=0; quote=None; esc=False; end=None
@@ -51,19 +63,24 @@ jobs:
               if ch=='[': depth+=1
               elif ch==']':
                   depth-=1
-                  if depth==0: end=j+1; break
-          if end is None: raise SystemExit('territoryMeta array incomplete in recovered RC1 prefix')
+                  if depth==0:
+                      end=j+1
+                      break
+          if end is None: raise SystemExit('territoryMeta array incomplete in recovered RC1 payload')
           rows=json.loads(html[begin:end])
           topo=json.loads(Path('map/canonical_topology_v5.7.2.json').read_text(encoding='utf-8'))
           ids=[r.get('id') for r in rows]
+          if len(ids) != len(set(ids)):
+              raise SystemExit('duplicate territory ids in recovered metadata')
           current=set(topo['territories']); legacy=set(ids)
           if current!=legacy:
               raise SystemExit(f'territory id mismatch: current_only={sorted(current-legacy)} legacy_only={sorted(legacy-current)} rows={len(rows)}')
           out={
               'game':'Жестокий Век',
               'status':'HISTORICAL_MIGRATION_CANDIDATE',
-              'source':'forensic recovery from arena/source/rc1 compressed baseline',
-              'warning':'Not canonical by itself. Cross-check against active Rules/Data before promotion; retained to avoid inventing missing territory type metadata.',
+              'source_commit':'4db4d910a9668abf8a75152395407936be083618',
+              'source':'forensic recovery from historical arena/source/rc1 compressed baseline',
+              'warning':'Historical source recovered without invention. Must be cross-checked against active Rules/Data before promotion to canonical Arena input.',
               'current_topology_version':topo.get('version'),
               'territory_count':len(rows),
               'territoryMeta':rows,
@@ -80,4 +97,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add map/legacy_territory_metadata_rc1.json
-          if git diff --cached --quiet; then echo 'No metadata change'; else git commit -m 'map: recover legacy territory metadata candidate' && git push; fi
+          if git diff --cached --quiet; then
+            echo 'No metadata change'
+          else
+            git commit -m 'map: recover legacy territory metadata candidate'
+            git push
+          fi
