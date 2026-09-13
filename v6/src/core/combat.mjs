@@ -1,7 +1,7 @@
 import { buildAdjacency } from './map.mjs';
 import { validateMarch, classifyDestination } from './movement.mjs';
 import { warriorsAt } from './state.mjs';
-import { grantOnce } from './scoring.mjs';
+import { grantOnce, registerForeignCapitalCapture } from './scoring.mjs';
 
 function d6(x, label) {
   if (!Number.isInteger(x) || x < 1 || x > 6) throw new Error(`${label} must be d6 1..6`);
@@ -114,7 +114,7 @@ export function resolveBattle(state, map, constants, action, options = {}) {
       }
     }
     if (grantOnce(next, action.house, 'VP-W2', constants.victory['VP-W2'])) battleVpHouse = action.house;
-    if (map.capitals[defenderHouse] === action.to && grantOnce(next, action.house, 'VP-W3A', constants.victory['VP-W3A'])) capitalVp = 1;
+    capitalVp = registerForeignCapitalCapture(next,map,constants,action.house,action.to,defenderHouse).immediateVp;
   } else {
     if (attackerSurvivors > 0) origin.warriors[action.house] = (origin.warriors[action.house] || 0) + attackerSurvivors;
     if (defenderSurvivors > 0) target.warriors[defenderHouse] = defenderSurvivors;
