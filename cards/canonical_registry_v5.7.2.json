@@ -3,7 +3,7 @@
   "version": "V5.7.2-DEV",
   "status": "GENERATED_CANONICAL_CARD_REGISTRY",
   "source": "data/master_game_data_v5.7.2-dev.json",
-  "policy": "Generated verbatim from active MGD physical card-design sheets. Internal ROW identities are registry-only and are not gameplay IDs. This registry does not substitute for missing card sources such as an absent Intrigues sheet or for print art masters.",
+  "policy": "Generated verbatim from active MGD physical card-design sheets. Internal ROW identities are registry-only and are not gameplay IDs. This is the 111-design base registry; cards/canonical_card_set_v5.7.2.json adds explicit canonical modules such as the 40-card Intrigue set. Print art masters remain a separate release concern.",
   "object_count": 111,
   "namespaced_id_count": 111,
   "unique_card_id_count": 48,

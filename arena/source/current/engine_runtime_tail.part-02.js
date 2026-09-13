@@ -42,7 +42,7 @@ ArenaEngine.prototype.applyFreeProcedure=function(h,p){const rel=p.type==='break
 ArenaEngine.prototype.runAIFreeProcedures=function(h){const hs=this.houses[h];if(!hs||hs._freeProcRoundAction===`${this.round}:${hs.turnsTaken}`)return;hs._freeProcRoundAction=`${this.round}:${hs.turnsTaken}`;if(this.round>=4){for(const p of this.freeProcedures(h).filter(p=>p.type==='break')){const r=this.relationships.find(x=>x.id===p.relationId&&x.active),other=r?(r.a===h?r.b:r.a):null;if(other&&this.canReachHouseNow(h,other)){this.applyFreeProcedure(h,p);return}}}for(const p of this.freeProcedures(h).filter(p=>p.type==='goldTransfer')){if(hs.gold>=14&&this.houses[p.other].gold<=3){this.applyFreeProcedure(h,{...p,amount:Math.min(2,p.amount)});return}}};
 
 window.ArenaEngine=ArenaEngine;
-window.ARENA_V572_CURRENT={sourceRuntime:true,sourceBlockedActions:['ACT-DRAW','ACT-INTRIGUE','ACT-INVEST']};
+window.ARENA_V572_CURRENT={sourceRuntime:true,modularRuntime:true,baseRuntimeSourceBlockedActions:['ACT-DRAW','ACT-INTRIGUE','ACT-INVEST'],resolvedBy:['intrigue_runtime_patch.js']};
 window.arenaEngine=new ArenaEngine(DATA);
 
 })();

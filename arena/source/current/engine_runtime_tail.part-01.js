@@ -41,7 +41,7 @@
   const houses={};for(const h of HOUSES){const x=this.houses[h];houses[h]={...deep({...x,dynastyActions:[...x.dynastyActions],defeatedHouses:[...x.defeatedHouses],survivedRelationPartners:[...x.survivedRelationPartners]})}}
   const standings=this.standings(),lead=standings[0]||null;return{meta:{version:this.data.version,status:this.status,seed:this.seed,rounds:this.rounds,actionTotal:this.actionTotal},errors:[...this.errors],statistics:{game:{round:this.round,metrics:deep(this.metrics),leader:lead?.house||null,standings}},relationships:deep(this.relationships),logs:deep(this.logs),prisonerHistory:deep(this.prisonerHistory),houses,territories:deep(this.territories),capabilities:this.capabilityReport()}
  }
- capabilityReport(){return{implementedNormalActions:['ACT-MARCH','ACT-RECRUIT','ACT-FORT','ACT-ADVISER','ACT-MARR-NEUT','ACT-MARR-DYN','ACT-BIRTH','ACT-LEGIT','ACT-DIVORCE','ACT-RETURN','ACT-ACCESS','ACT-RAID'],implementedFreeProcedures:['PROC-BREAK','PROC-GOLD'],sourceBlockedActions:this.sourceBlockedActions(),note:'Интриги/Следы не реконструируются без отсутствующего canonical Intrigue card master.'}}
+ capabilityReport(){return{implementedNormalActions:['ACT-MARCH','ACT-RECRUIT','ACT-FORT','ACT-ADVISER','ACT-MARR-NEUT','ACT-MARR-DYN','ACT-BIRTH','ACT-LEGIT','ACT-DIVORCE','ACT-RETURN','ACT-ACCESS','ACT-RAID'],implementedFreeProcedures:['PROC-BREAK','PROC-GOLD'],sourceBlockedActions:this.sourceBlockedActions(),note:'Базовый runtime дополняется tracked intrigue_runtime_patch.js при сборке current Arena.'}}
  sourceBlockedActions(){return['ACT-DRAW','ACT-INTRIGUE','ACT-INVEST']}
 }
 

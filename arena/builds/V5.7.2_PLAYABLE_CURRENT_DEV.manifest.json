@@ -1,0 +1,31 @@
+{
+  "game": "Жестокий Век",
+  "version": "V5.7.2-PLAYABLE-CURRENT-DEV",
+  "sourceVersion": "V5.7.2-DEV",
+  "artifact": "V5.7.2_PLAYABLE_CURRENT_DEV.html",
+  "artifactInRepository": true,
+  "reproducibleBuildCommand": "node tools/build_arena_v5_7_2.js",
+  "sha256": "55770cb56b2043eba79128bb66b74aacec81ff31ae9a551d18a381b761abfbc0",
+  "bytes": 233356,
+  "sourceBlockedActions": [],
+  "territories": 52,
+  "actionsInMGD": 18,
+  "intrigueCards": 40,
+  "physicalCardCopies": 160,
+  "advisorPhysicalCopies": 18,
+  "advisorMarketSize": 4,
+  "ambitionPhysicalDeal": true,
+  "tasvarRelationEmergencyAI": true,
+  "technicalMapLayout": "visual/map/Жестокий_Век_Карта_Technical_Main_V5.7.2.png",
+  "uiPanels": [
+    "MAP",
+    "HOUSES",
+    "DIPLOMACY",
+    "JOURNAL",
+    "GAME_MASTER"
+  ],
+  "humanActionSelection": true,
+  "humanCommanderManagement": true,
+  "humanPrisonerChoice": true,
+  "builtAtPolicy": "deterministic tracked-source build"
+}

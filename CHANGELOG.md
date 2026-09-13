@@ -2,6 +2,28 @@
 
 Все изменения проекта фиксируются в GitHub до выдачи пользовательского билда.
 
+## [V5.7.2-PLAYABLE-CURRENT-DEV] — Current Arena cleanup 2026-09-13
+
+### Fixed
+
+- Восстановленные current engine fragments собраны в воспроизводимый standalone Arena artifact.
+- Восточные материковые порты исправлены на `E1-1`, `E2-1`, `E3-1` в Rules и topology.
+- Capability report больше не показывает Интриги как заблокированные: загружен explicit 40-card canonical new-design module.
+- Статусы README/docs/release inventory синхронизированы с фактическим current source.
+- Legacy recovery/diagnostic workflows переведены в manual-only режим, чтобы исключить автоматические bot-коммиты.
+
+### Added
+
+- Current Arena manifest with deterministic build command, byte count and SHA-256.
+- 151-design / 160-copy composite card inventory.
+- Explicit invariant tests for 16 normal actions, 2 free procedures, port movement, family commanders, prisoner decisions and succession.
+- Current 100/500-seed Game Master gates.
+- Embedded favicon, metadata, responsive typography and accessible focus states for web deployment.
+
+### Status
+
+Digital DEV deployment is allowed. `STABLE` and `PRINT-READY` remain blocked by browser proof and the physical art/BOM/prepress track.
+
 ## [V5.7.2-DEV] — Rebuild reconciliation 2026-09-11
 
 ### Fixed
@@ -18,7 +40,7 @@
 ### Added
 
 - `tools/reconcile_v5_7_2.js` + canonical consistency checks.
-- `cards/canonical_registry_v5.7.2.json`, generated from active MGD: 96 objects / 48 CARD_ID.
+- `cards/canonical_registry_v5.7.2.json`, generated from active MGD: 111 base designs / 48 CARD_ID.
 - `tools/generate_card_registry_v5_7_2.js` + idempotence check.
 - `map/canonical_topology_v5.7.2.json`: 52 territories / 81 land / 23 sea / 16 ports.
 - repo-level source graph and rebuild audit.

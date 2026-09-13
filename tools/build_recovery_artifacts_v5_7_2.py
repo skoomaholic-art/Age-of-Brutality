@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "release" / "generated" / "V5.7.2-DEV"
 CARDS_DIR = OUT / "individual_cards"
 REGISTRY_PATH = ROOT / "cards" / "canonical_registry_v5.7.2.json"
+CARD_SET_PATH = ROOT / "cards" / "canonical_card_set_v5.7.2.json"
 FIXED_ZIP_TIME = (2026, 9, 12, 0, 0, 0)
 CARD_SHEET_ORDER = ["Events", "Houses", "Characters", "Advisors", "Ambitions", "Intrigues"]
 
@@ -385,20 +386,20 @@ def write_recovery_readme(output: Path, card_count: int):
 This directory contains artifacts reproducibly generated from the current repository sources.
 
 Generated now:
-- `Жестокий_Век_Карточки_Current_{card_count}.pdf` - current canonical physical card set ({card_count} instances), not the historical 160-card Visual RC.
-- `Жестокий_Век_Карточки_Current_{card_count}.html` - editable/printable static HTML of the same current set.
-- `Жестокий_Век_Карточки_Individual_Current_{card_count}.zip` - individual one-card PDFs for the current set.
+- `Жестокий_Век_Карточки_Current_{card_count}.pdf` - base-MGD preprint ({card_count} instances); the explicit 40-card Intrigue module is packaged separately by the current delivery workflow.
+- `Жестокий_Век_Карточки_Current_{card_count}.html` - editable/printable static HTML of the same base set.
+- `Жестокий_Век_Карточки_Individual_Current_{card_count}.zip` - individual one-card PDFs for the base set.
 - `Жестокий_Век_Visual_Current_Pack.zip` - current reproducible visual/preprint sources and generated card artifacts.
 - `Жестокий_Век_Arena_Recovery_Source_Pack.zip` - every currently available Arena/AI/rules/data/QA source needed for reconstruction work.
 - `Жестокий_Век_Current_Project_Source_Pack.zip` - source snapshot of the current repository, excluding generated recovery artifacts and `.git`.
 
 These files DO NOT claim binary identity with lost historical artifacts.
 
-Still not reproducible from current sources:
-- historical `Жестокий_Век_Arena_V5.7.2_PLAYABLE_RC2.html` (complete Arena baseline absent),
+Historical binaries intentionally not recreated:
+- historical `Жестокий_Век_Arena_V5.7.2_PLAYABLE_RC2.html`, superseded as a working dependency by the reproducible current DEV Arena,
 - historical styled Arena derived from that executable,
 - historical illustrated map SVG/PDF (editable illustrated master absent),
-- historical 160-card PDF/pack (40 Intrigue cards absent from canonical data),
+- historical 160-card PDF/pack (current data are complete, but binary/art identity is not claimed),
 - latest missing raw manual playtest logs and complete component BOM.
 
 The current card PDF is a technical preprint generated verbatim from canonical card registry data. It is not a final illustrated art master.
@@ -421,6 +422,7 @@ def artifact_record(path: Path, kind: str, status: str, note: str = "") -> dict:
 def main():
     clean_output()
     registry = read_json(REGISTRY_PATH)
+    card_set = read_json(CARD_SET_PATH)
     cards = physical_cards(registry)
     design_count = int(registry.get("object_count", 0))
     if design_count != 111:
@@ -480,8 +482,8 @@ def main():
         artifact_record(cards_pdf, "cards_pdf", "CURRENT_REPRODUCIBLE", f"{len(cards)} physical cards / {math.ceil(len(cards)/9)} A4 pages"),
         artifact_record(cards_html, "cards_html", "CURRENT_REPRODUCIBLE", "Static printable HTML generated from canonical registry"),
         artifact_record(individual_zip, "individual_card_pdfs_zip", "CURRENT_REPRODUCIBLE", f"{len(individual_manifest)} one-card PDFs"),
-        artifact_record(visual_zip, "visual_preprint_pack", "CURRENT_REPRODUCIBLE_PARTIAL", "Does not contain missing historical illustrated map master or 40 missing Intrigue cards"),
-        artifact_record(arena_zip, "arena_recovery_source_pack", "CURRENT_REPRODUCIBLE_SOURCE_ONLY", "No executable: complete Arena baseline is still missing"),
+        artifact_record(visual_zip, "visual_preprint_pack", "CURRENT_REPRODUCIBLE_PARTIAL", "Base-card preprint only; the current Intrigue preprint is distributed separately"),
+        artifact_record(arena_zip, "arena_source_pack", "CURRENT_REPRODUCIBLE", "Includes the current standalone Arena plus historical recovery provenance"),
         artifact_record(source_zip, "project_source_snapshot", "CURRENT_REPRODUCIBLE", "Excludes .git and release/generated"),
         artifact_record(readme, "recovery_notes", "CURRENT_REPRODUCIBLE"),
     ]
@@ -491,14 +493,18 @@ def main():
         "game_version": "V5.7.2-DEV",
         "build_type": "RECOVERY_FROM_CURRENT_CANONICAL_SOURCES",
         "source_commit": git_head(),
-        "canonical_card_designs": design_count,
-        "known_physical_card_copies": len(cards),
+        "base_card_designs": design_count,
+        "base_physical_card_copies": len(cards),
+        "canonical_card_designs": int(card_set["design_count"]),
+        "known_physical_card_copies": int(card_set["physical_copy_count"]),
         "card_pages_a4_3x3": math.ceil(len(cards) / 9),
         "historical_binary_identity_claimed": False,
         "artifacts": artifacts,
-        "unresolved_historical_blockers": [
-            "ARENA-COMPLETE-BASELINE",
-            "CARD-INTRIGUE-40",
+        "historical_artifacts_not_recreated": [
+            "ARENA-RC2-HTML",
+            "VISUAL-RC1-BINARIES",
+        ],
+        "current_release_blockers": [
             "MAP-ILLUSTRATED-MASTER",
             "PLAYTEST-RAW-LATEST",
             "COMPONENT-BOM",

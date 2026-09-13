@@ -1,10 +1,6 @@
-name: Legacy Map Metadata Recovery
+name: Legacy Map Metadata Recovery (manual)
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/legacy-map-metadata-recovery.yml'
   workflow_dispatch:
 
 permissions:

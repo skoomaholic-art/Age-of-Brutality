@@ -1,10 +1,6 @@
-name: RC3 Fragment Diagnostic
+name: RC3 Fragment Diagnostic (manual)
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/rc3-fragment-diagnostic.yml'
   workflow_dispatch:
 
 permissions:

@@ -1,24 +1,15 @@
 # Cards
 
-## Canonical gameplay / physical-design data
+## Canonical inventory
 
-`cards/canonical_registry_v5.7.2.json` is generated verbatim from the active Master Game Data physical card-design sheets.
+The complete card set is the union of two tracked sources:
 
-Current generated inventory:
+- `canonical_registry_v5.7.2.json` — 111 base designs / 120 physical copies generated from active MGD;
+- `../data/intrigues_v5.7.2.json` — 40 designs / 40 physical copies from the explicit canonical new-design module.
 
-- **111** editable card designs;
-- **48** globally unique `CARD_ID` values;
-- groups: Events 30, Houses 6, Characters 48, Advisors 9, Ambitions 18;
-- rows without gameplay IDs receive only an internal namespaced registry row identity; no new gameplay ID is written into MGD/card data.
+`canonical_card_set_v5.7.2.json` records the composite total: **151 designs / 160 physical cards**.
 
-Known physical copy count from current canonical data:
-
-- Events 30;
-- Houses 6;
-- Characters 48;
-- Advisors **18** (`9 types × Копий: 2`);
-- Ambitions 18;
-- **known total: 120 physical cards**.
+Base groups: Events 30, Houses 6, Characters 48, Advisors 9 designs / 18 copies, Ambitions 18. Intrigues add 40 unique `INT-01` … `INT-40` cards.
 
 Generate/check:
 
@@ -26,21 +17,13 @@ Generate/check:
 node tools/generate_card_registry_v5_7_2.js
 node tools/generate_card_registry_v5_7_2.js --check
 node tools/audit_card_quantities_v5_7_2.js
+node tools/build_intrigue_cards_v5_7_2.js
 ```
 
-## HTML preprint source
+## Preprint source
 
-Editable source is stored in `visual/html_v22/`:
+- `visual/html_v22/card_editor.html` — editable base-card presentation;
+- `visual/html_v22/print_studio.html` — A4 3×3 base-card layout with copy expansion;
+- `generated/Zhestokiy_Vek_Intrigues_V5.7.2_40.html` — reproducible Intrigue preprint.
 
-- `card_editor.html` — edit text/data presentation and per-card art;
-- `print_studio.html` — A4 3×3 print layout; expands the MGD `Копий` field automatically.
-
-Gameplay fields are locked by default in the editor. Editing them does not become canonical until MGD/Rules are synchronized and the registry is regenerated.
-
-## Remaining blocker
-
-The historical Visual RC contained **160** physical cards. Current canonical source reconstructs **120**. The missing **40** correspond to the absent `Intrigues` card source: current MGD has no `Intrigues` sheet, and current rules do not provide a full canonical intrigue deck/card text list.
-
-This is a source/data blocker. Missing intrigue cards must not be reconstructed by assumption.
-
-Illustration/art masters, card backs and certified print-ready output also remain separate preprint tasks.
+The data inventory is complete. Final illustration masters, backs, consolidated 160-card prepress output and physical print proof remain separate release tasks; therefore the project is not yet print-ready.

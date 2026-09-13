@@ -69,6 +69,8 @@ AI не создаёт собственные действия и не обхо�
 - diplomacy soft-cap понижает приоритет нового отношения, но не делает легальное действие нелегальным;
 - возврат собственной столицы сейчас использует специфический бонус `+12`, а не складывает `+6 +12`. Это защитное решение до восстановления полного старого Arena executable и проверки исторической реализации.
 
-## Следующий этап
+## Интеграция с current Arena
 
-Подключение нового AI-слоя к реальному Arena executable должно идти через адаптер после восстановления полного source-matching Arena baseline. До этого engine можно тестировать отдельно и использовать в Game Master/симуляционных harness.
+AI-слой подключён к `arena/builds/V5.7.2_PLAYABLE_CURRENT_DEV.html` через `arena/source/current/ai_adapter.js` и strategy patch. Current Arena формирует `LEGAL_ACTIONS`, агент выбирает только из них, а решение и score/reason попадают в Journal.
+
+Интеграция проверяется House-agent tests, tabletop/invariant tests и 100/500-seed Game Master regression. Отдельный real-browser smoke остаётся release gate перед продвижением DEV-линии в STABLE.

@@ -3,51 +3,42 @@
 ## Current source line
 
 **Project/source:** `V5.7.2-DEV`  
-**Status:** SOURCE RECONCILED / REPOSITORY INCOMPLETE / NO SOURCE-MATCHING EXECUTABLE / NOT STABLE / NOT PRINT-READY
+**Status:** PLAYABLE CURRENT DEV / REPOSITORY INCOMPLETE / NOT STABLE / NOT PRINT-READY
 
-Canonical gameplay sources include reconciled Rules/Data, generated card registry, normalized AI layer and V5.7.2 map topology.
+Current gameplay sources include reconciled Rules/Data, the composite card set, map topology/metadata, normalized AI and a reproducible standalone Arena.
 
-Repository completeness is tracked mechanically in `release/repository_completeness_v5.7.2.json` and checked by CI. Hashes, manifests and QA records do not count as storage of the underlying artifact.
+## Current Arena artifact
 
-## Last verified executable evidence
+| Artifact | Bytes | SHA-256 | Build |
+|---|---:|---|---|
+| `arena/builds/V5.7.2_PLAYABLE_CURRENT_DEV.html` | 233356 | `55770cb56b2043eba79128bb66b74aacec81ff31ae9a551d18a381b761abfbc0` | `node tools/build_arena_v5_7_2.js` |
 
-`V5.7.2-PLAYABLE-RC2` remains the last executable with recorded regression QA.
+Machine manifest: `arena/builds/V5.7.2_PLAYABLE_CURRENT_DEV.manifest.json`.
 
-| Artifact | Bytes | SHA-256 |
-|---|---:|---|
-| `Жестокий_Век_Arena_V5.7.2_PLAYABLE_RC2.html` | 470775 | `65028a031ec391a3057a4550e926ffcae4141eb1c7407cae84482b0491b80749` |
-
-QA record: `qa/reports/Game_Master_Report_V5.7.2_RC2_500seeds.md`.
-
-**Critical:** the exact HTML is not stored in GitHub. The compressed RC1 source chunks stored in `arena/source/rc1/` are incomplete and end before the Arena engine. Source fixes made after RC2 QA therefore require a complete migrated baseline before a new RC can be certified.
-
-The historical Visual RC manifest also records generated artifacts that are not physically stored in the current repository: Visual Print-and-Play ZIP, styled Arena HTML, styled map SVG, print map PDF and full card-pack PDF. Exact filenames, sizes and SHA-256 values are recorded in `release/repository_completeness_v5.7.2.json`.
+The artifact embeds current canonical data, 40 Intrigues, the technical map, engine, AI adapter and UI. It reports 16 implemented normal actions, 2 implemented free procedures and no source-blocked actions.
 
 ## Canonical generated data
 
-- `cards/canonical_registry_v5.7.2.json` — **111 designs / 120 known physical copies / 48 unique CARD_ID**.
-- `map/canonical_topology_v5.7.2.json` — **52 territories / 81 land / 23 sea / 16 ports**.
-- `ai/config/canonical_v5.7.2.json` — normalized current AI configuration with six House agents and deterministic checks.
+- `cards/canonical_registry_v5.7.2.json` — 111 base designs / 120 base physical copies.
+- `data/intrigues_v5.7.2.json` — 40 designs / 40 physical copies; explicit new canonical design, not a recovered historical sheet.
+- `cards/canonical_card_set_v5.7.2.json` — **151 designs / 160 known physical copies**.
+- `map/canonical_topology_v5.7.2.json` — 52 territories / 81 land / 23 sea / 16 ports.
+- `ai/config/canonical_v5.7.2.json` — normalized current AI configuration.
 
-The historical visual pack reported 160 physical cards. The current canonical source reconstructs only 120 known physical copies because the canonical 40-card Intrigue source is absent; those 40 cards must not be recreated from memory without an explicit new-design decision.
+## QA evidence
 
-## Repository completeness rule
+Current gates include deterministic reconciliation, generated-registry parity, map/metadata/AI checks, JavaScript syntax, House-agent tests, tabletop component tests, explicit current-engine invariants and 100/500-seed Game Master regression.
 
-A project state may be called complete only when `release/repository_completeness_v5.7.2.json` has no unresolved critical/high missing artifact or source entries and all stored release artifacts match their recorded byte counts and SHA-256 values.
+The current regression gate requires every game to finish on round 6 with 108 action slots, zero engine errors, zero invalid actions, zero source-blocked actions and non-zero Intrigue/Trace/Investigation coverage.
 
-CI must fail if:
-- a manifest declares an artifact absent but the absence is not tracked;
-- a restored artifact does not match its recorded bytes/SHA;
-- a restored artifact is still incorrectly marked missing;
-- this manifest drifts from the generated card counts;
-- the repository is described as complete while the completeness inventory says otherwise.
+## Repository completeness
 
-## Historical V5.7.1 baseline
+`release/repository_completeness_v5.7.2.json` tracks repository-wide completeness. The current digital Arena is reproducible; the repository remains incomplete because approved editable map art, consolidated print masters, complete component BOM and current physical/manual proof are missing.
 
-V5.7.1 hashes remain historical references only and are not promoted into current V5.7.2 source by their existence.
+Historical RC2 and Visual RC1 binaries remain absent. Their recorded hashes are provenance references, not dependencies of the current build.
 
 ## Promotion rule
 
-A new executable can be promoted only after:
+`REPRODUCIBLE SOURCE → STATIC CHECKS → ARENA BUILD → INVARIANTS → 500+ SEEDS → REAL-BROWSER SMOKE → RELEASE ARTIFACT/MANIFEST`
 
-`COMPLETE SOURCE → REPRODUCIBLE BUILD → STATIC CHECKS → GAME MASTER REGRESSION → REAL-BROWSER SMOKE → COMMIT ARTIFACT → MANIFEST/HASH → RELEASE`
+Print-ready promotion additionally requires approved art, BOM, prepress outputs and physical proof.
