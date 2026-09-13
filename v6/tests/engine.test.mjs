@@ -43,7 +43,7 @@ test('start of a House own action clears only that House retreat streaks',()=>{
   const s=createInitialState(map,c);
   s.territories.W09.retreat_streak['Варкайр']=2;
   s.territories.W09.retreat_streak['Сайрвен']=1;
-  const prepared=prepareCurrentAction(s,c);
+  const prepared=prepareCurrentAction(s,map,c);
   assert.equal(prepared.territories.W09.retreat_streak['Варкайр'],undefined);
   assert.equal(prepared.territories.W09.retreat_streak['Сайрвен'],1);
   assert.equal(s.territories.W09.retreat_streak['Варкайр'],2,'caller state remains immutable');
@@ -54,4 +54,18 @@ test('LEGAL_ACTIONS is generated for current House only',()=>{
   const legal=listLegalMarchActions(s,map,c);
   assert.ok(legal.length>0);
   assert.ok(legal.every(a=>a.house==='Варкайр'));
+});
+
+test('engine routes an empty enemy territory to occupation rather than battle',()=>{
+  const s=createInitialState(map,c);
+  s.territories.W02.owner='Варкайр';
+  s.territories.W02.warriors={'Варкайр':2};
+  s.territories.W05.owner='Сайрвен';
+  s.territories.W05.warriors={};
+  const action={type:'MARCH',mode:'LAND',house:'Варкайр',from:'W02',to:'W05',warriors:2};
+  const {state:n,result}=executeMarchAction(s,map,c,action);
+  assert.equal(result.kind,'EMPTY_ENEMY_OCCUPATION');
+  assert.equal(result.battle_occurred,false);
+  assert.equal(n.territories.W05.owner,'Варкайр');
+  assert.equal(n.houses['Варкайр'].actions_used,1);
 });
