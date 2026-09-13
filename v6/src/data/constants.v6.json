@@ -45,5 +45,41 @@
     "VP-W2": 1,
     "VP-W3A": 1,
     "VP-W3B": 1
+  },
+  "economy": {
+    "fort_cost": 3,
+    "own_fort_cap": 2,
+    "income": {
+      "Столица": {
+        "home_gold": 4,
+        "foreign_gold": 3,
+        "home_influence": 1,
+        "foreign_influence": 0
+      },
+      "Город": {
+        "home_gold": 2,
+        "foreign_gold": 1,
+        "home_influence": 0,
+        "foreign_influence": 0
+      },
+      "Деревня": {
+        "home_gold": 1,
+        "foreign_gold": 0,
+        "home_influence": 0,
+        "foreign_influence": 0
+      },
+      "Дикая земля": {
+        "home_gold": 0,
+        "foreign_gold": 0,
+        "home_influence": 0,
+        "foreign_influence": 0
+      },
+      "Половина острова": {
+        "home_gold": 0,
+        "foreign_gold": 0,
+        "home_influence": 0,
+        "foreign_influence": 0
+      }
+    }
   }
 }
