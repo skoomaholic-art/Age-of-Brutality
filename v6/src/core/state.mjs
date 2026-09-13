@@ -9,14 +9,17 @@ export function createInitialState(map, constants) {
       victory_points: 0,
       actions_used: 0,
       intrigue_hand: [],
-      forts: []
+      forts: [],
+      achievements: {}
     };
   }
 
   for (const t of map.territories) {
     territories[t.id] = {
       owner: null,
-      warriors: {}
+      warriors: {},
+      fort: false,
+      retreat_streak: {}
     };
   }
 
