@@ -1,7 +1,7 @@
 import { buildAdjacency } from './map.mjs';
 import { validateMarch, classifyDestination } from './movement.mjs';
 import { warriorsAt } from './state.mjs';
-import { grantOnce } from './scoring.mjs';
+import { registerForeignCapitalCapture } from './scoring.mjs';
 
 export function clearRetreatStreakForHouse(state, house) {
   const next = structuredClone(state);
@@ -65,8 +65,7 @@ export function resolveVoluntaryRetreat(state, map, constants, action, retreatTo
   destination.warriors[defenderHouse] = (destination.warriors[defenderHouse] || 0) + survivors;
   destination.retreat_streak[defenderHouse] = Math.max(Number(destination.retreat_streak[defenderHouse] || 0), streak + 1);
 
-  let capitalVp = 0;
-  if (map.capitals[defenderHouse] === action.to && grantOnce(next,action.house,'VP-W3A',constants.victory['VP-W3A'])) capitalVp = 1;
+  const capitalVp = registerForeignCapitalCapture(next,map,constants,action.house,action.to,defenderHouse).immediateVp;
 
   const result = {
     attacker:action.house, defender:defenderHouse, from:action.from, to:action.to,
