@@ -10,7 +10,8 @@ export function createInitialState(map, constants) {
       actions_used: 0,
       intrigue_hand: [],
       forts: [],
-      achievements: {}
+      achievements: {},
+      pending_capital_hold: null
     };
   }
 
