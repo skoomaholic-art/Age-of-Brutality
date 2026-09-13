@@ -52,6 +52,7 @@ jobs:
           node --check qa/game-master/game_master_runner.js
           node --check qa/rules/tabletop_components.test.js
           node --check qa/rules/current_engine_invariants.test.js
+          node --check qa/rules/current_ui_smoke.test.js
       - name: House AI tests
         run: node ai/tests/house_agents.test.js
       - name: Build current Arena and physical Intrigues
@@ -62,6 +63,7 @@ jobs:
         run: |
           node qa/rules/tabletop_components.test.js
           node qa/rules/current_engine_invariants.test.js
+          node qa/rules/current_ui_smoke.test.js
       - name: Game Master raw 100-seed regression
         run: |
           rm -rf qa/reports/current && mkdir -p qa/reports/current/raw_100

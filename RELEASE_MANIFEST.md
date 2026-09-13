@@ -15,7 +15,7 @@ Current gameplay sources include reconciled Rules/Data, the composite card set, 
 
 Machine manifest: `arena/builds/V5.7.2_PLAYABLE_CURRENT_DEV.manifest.json`.
 
-The artifact embeds current canonical data, 40 Intrigues, the technical map, engine, AI adapter and UI. It reports 16 implemented normal actions, 2 implemented free procedures and no source-blocked actions.
+The artifact embeds current canonical data, 40 Intrigues, a live SVG map generated from topology, engine, AI adapter and UI. It reports 16 implemented normal actions, 2 implemented free procedures and no source-blocked actions.
 
 ## Canonical generated data
 

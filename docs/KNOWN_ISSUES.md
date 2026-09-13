@@ -10,7 +10,7 @@
 |---|---|---|---|---|
 | ARENA-BROWSER-001 | MEDIUM | Arena/UI | Current standalone build не прошёл зафиксированный real-browser smoke основных human flows | Browser matrix + smoke record |
 | CARD-PREPRESS-001 | HIGH | Cards/Print | 151/160 card data полны, но нет сертифицированного единого 160-card PDF с финальными backs/art | Prepress build + physical proof |
-| MAP-ART-001 | HIGH | Map/Print | Технический PNG и topology есть; утверждённого editable illustrated master нет | Approved SVG/source + print proof |
+| MAP-ART-001 | HIGH | Map/Print | Digital topology SVG работает; прежний PNG повреждён, утверждённого editable illustrated master нет | Approved art source + print proof |
 | COMPONENTS-001 | HIGH | Components | Нет полного утверждённого BOM и всех editable production masters | BOM + source files + quantities |
 | PLAYTEST-RAW-001 | MEDIUM | Playtest | Нет свежего полного ручного Journal/Diplomacy/Houses набора | Recorded manual session |
 | PRINT-001 | HIGH | Release | Нет воспроизводимого сертифицированного print-ready package | Все physical blockers + proof |
@@ -25,6 +25,8 @@
 - Семейные командиры покрыты назначением, возвратом, лимитами и движением с армией.
 - Покрыты release, hold, ransom validation/accept/reject, execute и succession.
 - Current Game Master regression проходит 100/500 seeds без engine/legality ошибок.
+- Digital Arena больше не встраивает повреждённый PNG: карта строится как stateful SVG из canonical topology.
+- `Новая партия` имеет явный feedback и запускает следующий seed, если поле seed не изменено вручную.
 - Legacy recovery/diagnostic workflows больше не запускаются на каждый push.
 
 ## Исторические записи
