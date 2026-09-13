@@ -49,9 +49,10 @@ function testPortMovement() {
 
   const legalSea = e.marchCandidates(house)
     .filter(action => action.source === port && action.route.length === 2 && seaDestinations.includes(action.dest))
-    .map(action => action.dest)
+    .map(action => `${action.dest}:${action.amount}`)
     .sort();
-  assert(JSON.stringify(legalSea) === JSON.stringify(seaDestinations), 'Owned port must expose only its printed sea links');
+  const expectedSea = seaDestinations.flatMap(dest => [1, 2].map(amount => `${dest}:${amount}`)).sort();
+  assert(JSON.stringify(legalSea) === JSON.stringify(expectedSea), 'Owned port must expose only its printed sea links and all legal army sizes');
 
   e.territories[port].owner = null;
   const unownedLaunch = e.marchCandidates(house)
@@ -64,6 +65,47 @@ function testPortMovement() {
   const inlandTeleport = e.marchCandidates(house)
     .some(action => action.source === inland && action.dest.startsWith('S'));
   assert(!inlandTeleport, 'Inland armies may not teleport through a nearby port in one March');
+
+  e.reset(63005, 6);
+  const capital = e.data.map.capitals[house];
+  const neutral = e.land[capital].find(id => !e.territories[id].owner);
+  const sizes = e.marchCandidates(house)
+    .filter(action => action.source === capital && action.dest === neutral && action.route.length === 2)
+    .map(action => action.amount)
+    .sort((a, b) => a - b);
+  assert(JSON.stringify(sizes) === JSON.stringify([1, 2, 3, 4]), 'March must expose every army size up to the source count');
+
+  const owned = e.land[capital].find(id => id !== neutral);
+  e.territories[owned].owner = house;
+  e.territories[owned].units[house] = 7;
+  const capped = e.marchCandidates(house).filter(action => action.source === capital && action.dest === owned);
+  assert(capped.length === 1 && capped[0].amount === 1, 'March into an owned territory must respect the warrior cap of 8');
+  let capRejected = false;
+  try { e.doMarch(house, { source: capital, dest: owned, amount: 2 }, false); } catch (_) { capRejected = true; }
+  assert(capRejected, 'Direct March must reject a move that would exceed the territory warrior cap');
+}
+
+function testHumanDiplomacyConsent() {
+  e.reset(63006, 6);
+  const proposer = 'Варкайр';
+  const receiver = 'Сайрвен';
+  e.setController(proposer, 'HUMAN');
+  e.setController(receiver, 'HUMAN');
+  const pact = e.legalActions(proposer).find(action => action.type === 'pact' && action.other === receiver);
+  assert(pact, 'A legal Pact proposal must be available in the initial state');
+  const beforeInfluence = e.houses[proposer].influence;
+  const pending = e.step(pact.id);
+  assert(pending.pendingDiplomacy?.other === receiver, 'Human diplomacy must create a blocking proposal');
+  assert(e.actionTotal === 0 && e.relationships.length === 0, 'An unaccepted proposal must not spend an action or mutate relations');
+  let out = e.submitDiplomacyChoice('reject');
+  assert(out.valid && out.accepted === false && !e.currentDiplomacyPrompt(), 'Reject must clear the proposal without spending the proposer action');
+  const pactAgain = e.legalActions(proposer).find(action => action.type === 'pact' && action.other === receiver);
+  assert(pactAgain, 'The proposer must be able to choose another action after a rejection');
+  e.step(pactAgain.id);
+  out = e.submitDiplomacyChoice('accept');
+  assert(out.meta.status === 'playing' && e.relationships.some(r => r.kind === 'Официальный Пакт' && r.a === proposer && r.b === receiver), 'Accept must create the Pact');
+  const proposerCost = Math.max(0, 1 - Number(e.stateFlags.pactDiscount || 0));
+  assert(e.actionTotal === 1 && e.houses[proposer].influence === beforeInfluence - proposerCost && e.houses[receiver].influence === 3 && e.houses[receiver].reserved === 1, 'Accept must apply the tabletop Pact costs and reserve the partner action');
 }
 
 function testFamilyCommanders() {
@@ -154,6 +196,7 @@ function testPrisonerLifecycle() {
 
 testCapabilities();
 testPortMovement();
+testHumanDiplomacyConsent();
 testFamilyCommanders();
 testPrisonerLifecycle();
 
@@ -162,6 +205,7 @@ console.log('Current engine invariant tests OK', {
   freeProcedures: 2,
   portMovement: 'OK',
   familyCommanders: 'OK',
+  humanDiplomacyConsent: 'OK',
   prisonerBranches: 6,
   succession: 'OK'
 });

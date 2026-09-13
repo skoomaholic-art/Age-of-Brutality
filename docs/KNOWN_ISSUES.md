@@ -9,6 +9,7 @@
 | ID | Severity | Область | Проблема | Что закрывает |
 |---|---|---|---|---|
 | ARENA-BROWSER-001 | MEDIUM | Arena/UI | Current standalone build не прошёл зафиксированный real-browser smoke основных human flows | Browser matrix + smoke record |
+| PLAYERCOUNT-001 | HIGH | Rules/Arena | Rules разрешают 3–6 Домов, а current Arena/Game Master запускают фиксированные 6 Домов; процедура вывода неучаствующих Домов не утверждена | Отдельное подтверждённое правило setup для 3/4/5 Домов + player-count smoke |
 | CARD-PREPRESS-001 | HIGH | Cards/Print | 151/160 card data полны, но нет сертифицированного единого 160-card PDF с финальными backs/art | Prepress build + physical proof |
 | MAP-ART-001 | HIGH | Map/Print | Digital topology SVG работает; прежний PNG повреждён, утверждённого editable illustrated master нет | Approved art source + print proof |
 | COMPONENTS-001 | HIGH | Components | Нет полного утверждённого BOM и всех editable production masters | BOM + source files + quantities |
@@ -25,6 +26,8 @@
 - Семейные командиры покрыты назначением, возвратом, лимитами и движением с армией.
 - Покрыты release, hold, ransom validation/accept/reject, execute и succession.
 - Current Game Master regression проходит 100/500 seeds без engine/legality ошибок.
+- Марш показывает все законные размеры армии и отклоняет перегруз территории сверх лимита 8.
+- Дипломатическое предложение человеческому Дому теперь блокирует партию до явного «Принять/Отклонить»; до принятия действие и ресурсы не списываются.
 - Digital Arena больше не встраивает повреждённый PNG: карта строится как stateful SVG из canonical topology.
 - `Новая партия` имеет явный feedback и запускает следующий seed, если поле seed не изменено вручную.
 - Legacy recovery/diagnostic workflows больше не запускаются на каждый push.
@@ -36,3 +39,11 @@ Exact RC2 HTML и Visual RC1 binaries по-прежнему физически �
 ## Правило закрытия
 
 `FIX → SOURCE SYNC → STATIC CHECK → BUILD → INVARIANTS → REGRESSION → BROWSER/PHYSICAL PROOF → COMMIT`
+
+## Нужное решение по 3–5 Домам
+
+Это не следует закрывать догадкой. Для физического режима на 3/4/5 Домов
+нужно явно выбрать процедуру: какие Дома участвуют, что происходит с их
+столицами/картами/доходом и как меняются цели победы. До такого решения
+current digital DEV и его Game Master честно считаются six-House reference
+run; остальные варианты остаются открытым rule-design gate.

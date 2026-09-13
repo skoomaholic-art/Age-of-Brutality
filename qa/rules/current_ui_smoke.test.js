@@ -94,10 +94,23 @@ const afterSeed = Number(window.arenaEngine.exportData().meta.seed);
 if (afterSeed !== beforeSeed + 1) throw new Error('New Game must visibly start the next seed when the field is unchanged');
 if (!root.innerHTML.includes(`Новая партия начата · seed ${afterSeed}`)) throw new Error('New Game must expose visible success feedback');
 
+const run = root.querySelector('#run');
+if (!run || typeof run.onclick !== 'function') throw new Error('Full-party simulation button is not clickable');
+run.onclick();
+if (window.arenaEngine.status !== 'finished') throw new Error('Full-party simulation must finish an all-AI party');
+if (!root.innerHTML.includes('Партия завершена')) throw new Error('Full-party simulation must expose completion feedback');
+
+const gmTab = root.querySelectorAll('[data-tab]').find(control => control.dataset.tab === 'GAME_MASTER');
+if (!gmTab || typeof gmTab.onclick !== 'function') throw new Error('Game Master tab is not clickable');
+gmTab.onclick();
+if (!root.innerHTML.includes('Game Master / Auditor')) throw new Error('Game Master panel is missing');
+
 console.log('Current UI smoke tests OK', {
   territoriesRendered: 52,
   mapRenderer: 'INLINE_CANONICAL_TOPOLOGY_SVG',
   newGameClickable: true,
+  fullPartySimulation: 'finished',
+  gameMasterPanel: true,
   beforeSeed,
   afterSeed
 });

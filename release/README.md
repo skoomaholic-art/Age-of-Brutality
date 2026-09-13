@@ -1,16 +1,19 @@
 # Release
 
-There is currently **no executable release in GitHub that matches the post-reconciliation V5.7.2 source**.
+The repository now contains a reproducible current executable: `arena/builds/V5.7.2_PLAYABLE_CURRENT_DEV.html`.
 
-`V5.7.2-PLAYABLE-RC2` remains the last historically verified executable by manifest/hash and 500-seed QA, but its exact HTML is absent and the current source contains newer fixes.
+Its status is **PLAYABLE CURRENT DEV**, not STABLE: the build is source-matching,
+but real-browser smoke and the physical print package are still release gates.
 
-A new digital RC requires:
+Rebuild and verify it with:
 
-1. migrate a complete Arena baseline/HTML;
-2. build the executable from repository source;
-3. run canonical static checks;
-4. run Game Master regression;
-5. run real-browser smoke;
-6. commit artifact + manifest + hash + QA.
+1. `node tools/reconcile_v5_7_2.js --check`;
+2. `node tools/build_arena_v5_7_2.js`;
+3. `node qa/rules/current_ui_smoke.test.js`;
+4. `node qa/game-master/game_master_runner.js arena/builds/V5.7.2_PLAYABLE_CURRENT_DEV.html 500 58001`;
+5. commit artifact + manifest + hash + QA.
+
+`V5.7.2-PLAYABLE-RC2` remains historical provenance only; it is not a
+dependency of the current DEV build.
 
 Physical/PnP STABLE additionally requires migrated card layout/art masters, illustrated map master, Components/BOM and a reproducible print package.

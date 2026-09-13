@@ -105,7 +105,7 @@ Arena не имеет права создавать супруга «из воз
 
 ## A. Единый игровой клиент
 
-- Актуальная цифровая линия проекта — **V5.7.2-PLAYABLE-RC2**; manifest: `arena/builds/V5.7.2_PLAYABLE_RC2.manifest.json`. Exact HTML указан в manifest по имени/размеру/SHA-256, но пока не хранится в GitHub как полноценный reconstructable artifact. Отдельные historical AI/Human/Observer Arena не считаются текущим release.
+- Актуальная цифровая линия проекта — **V5.7.2-PLAYABLE-CURRENT-DEV**; manifest: `arena/builds/V5.7.2_PLAYABLE_CURRENT_DEV.manifest.json`. HTML собирается из tracked source командой `node tools/build_arena_v5_7_2.js`; отдельные historical AI/Human/Observer Arena не считаются текущим release.
 - Режимы запуска: Игрок против ИИ, Все ИИ, Наблюдение и Пошаговый тест.
 - Управление любым Домом может быть передано от игрока к ИИ или обратно между завершёнными решениями. Переключение запрещено во время незавершённого боя, выбора карты, дипломатического предложения или другого блокирующего решения.
 
@@ -142,4 +142,3 @@ Arena не имеет права создавать супруга «из воз
 ## F. Причины отказа
 
 Недоступные действия блокируются заранее. Если состояние изменилось между выбором и подтверждением, Arena возвращает конкретный reason code, например `NO_LEGAL_PATH`, `PORT_RULE_FAILED`, `PACT_BLOCKS_ATTACK`, `INSUFFICIENT_INFLUENCE`, `ACTION_LIMIT_REACHED` или `ACTION_NOT_LEGAL`; общий текст «Ошибка действия» не используется как единственное объяснение.
-

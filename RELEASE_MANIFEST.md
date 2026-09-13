@@ -11,11 +11,11 @@ Current gameplay sources include reconciled Rules/Data, the composite card set, 
 
 | Artifact | Bytes | SHA-256 | Build |
 |---|---:|---|---|
-| `arena/builds/V5.7.2_PLAYABLE_CURRENT_DEV.html` | 233356 | `55770cb56b2043eba79128bb66b74aacec81ff31ae9a551d18a381b761abfbc0` | `node tools/build_arena_v5_7_2.js` |
+| `arena/builds/V5.7.2_PLAYABLE_CURRENT_DEV.html` | 224087 | `db4e464b14a77967c3ea77f1cc351f2dd1996e6bc4882f5f87a874ea121424f9` | `node tools/build_arena_v5_7_2.js` |
 
 Machine manifest: `arena/builds/V5.7.2_PLAYABLE_CURRENT_DEV.manifest.json`.
 
-The artifact embeds current canonical data, 40 Intrigues, a live SVG map generated from topology, engine, AI adapter and UI. It reports 16 implemented normal actions, 2 implemented free procedures and no source-blocked actions.
+The artifact embeds current canonical data, 40 Intrigues, a live SVG map generated from topology, engine, AI adapter and UI. It reports 16 implemented normal actions, 2 implemented free procedures and no source-blocked actions. A source-to-runtime integrity checker verifies the same counts and artifact hash before packaging.
 
 ## Canonical generated data
 

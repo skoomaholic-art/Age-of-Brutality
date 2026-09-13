@@ -2,7 +2,7 @@
 
 Дата прогона: 2026-09-13  
 Arena: `arena/builds/V5.7.2_PLAYABLE_CURRENT_DEV.html`  
-SHA-256: `55770cb56b2043eba79128bb66b74aacec81ff31ae9a551d18a381b761abfbc0`
+SHA-256: `db4e464b14a77967c3ea77f1cc351f2dd1996e6bc4882f5f87a874ea121424f9`
 
 ## Verdict
 
@@ -43,7 +43,7 @@ node qa/game-master/game_master_runner.js arena/builds/V5.7.2_PLAYABLE_CURRENT_D
 | Access rights | 1,595 |
 | Prisoner captures | 519 |
 | Ransoms / executions / releases | 514 / 5 / 514 |
-| Intrigue draws / plays / successes | 3,676 / 1,203 / 661 |
+| Intrigue draws / plays / successes / discards | 3,676 / 1,203 / 661 / 3,685 |
 | Traces / investigations / proven | 1,203 / 370 / 214 |
 
 Fate outcomes: 949 weakened, 519 captured, 327 deaths, 456 saved.
@@ -54,6 +54,8 @@ Fate outcomes: 949 weakened, 519 captured, 327 deaths, 456 saved.
 - 2 implemented free procedures;
 - `sourceBlockedActions = []`;
 - human action control and prisoner choice enabled;
+- human diplomacy consent enabled for Pact, dynastic and access proposals;
+- legal March quantities include 4-warrior choices; AI force scoring saturates at 3 without changing the tabletop rule;
 - 40-card Intrigue deck enabled;
 - UI panels: Map, Houses, Diplomacy, Journal, Game Master.
 
