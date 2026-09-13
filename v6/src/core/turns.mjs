@@ -4,6 +4,7 @@ export function currentHouse(state, constants) {
 }
 
 export function spendActionAndAdvance(state, constants, actionLog = null) {
+  if (state.phase !== 'ACTIONS') throw new Error(`cannot spend action during phase ${state.phase}`);
   const next = structuredClone(state);
   const house = currentHouse(next, constants);
   if (next.houses[house].actions_used >= constants.actions_per_round) {
