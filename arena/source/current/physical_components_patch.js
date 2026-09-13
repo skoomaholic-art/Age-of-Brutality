@@ -20,3 +20,4 @@ const _export=P.exportData;P.exportData=function(){const x=_export.call(this);x.
 if(window.arenaEngine&&!window.arenaEngine.advisorMarket)window.arenaEngine.initPhysicalComponents();
 window.ARENA_V572_CURRENT_PATCH_PHYSICAL={advisorDeck:true,advisorMarket:true,uniqueAmbitionDeal:true};
 })();
+

@@ -35,3 +35,4 @@ class ArenaHouseAgent{
 window.ArenaHouseAgent=ArenaHouseAgent;
 window.ARENA_AI_ADAPTER={scoreAction,roundPolicy,relationCap};
 })();
+
