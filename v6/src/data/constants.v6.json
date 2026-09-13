@@ -1,0 +1,24 @@
+{
+  "version": "V6.0.0-REBUILD",
+  "houses": ["Варкайр", "Сайрвен", "Ортайн", "Эркай", "Тасвар", "Айрель"],
+  "rounds": 6,
+  "actions_per_round": 3,
+  "start_gold": 8,
+  "start_influence": 3,
+  "start_warriors": 4,
+  "intrigue_start_hand": 0,
+  "house_warrior_cap": 12,
+  "territory_warrior_cap": 8,
+  "march": {
+    "max_land_segments": 2,
+    "sea_segments": 1,
+    "mixed_land_sea_same_action": false
+  },
+  "neutral_resistance": {
+    "Столица": null,
+    "Город": 2,
+    "Деревня": 1,
+    "Дикая земля": 0,
+    "Половина острова": 1
+  }
+}
