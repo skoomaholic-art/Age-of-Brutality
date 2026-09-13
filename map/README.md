@@ -17,6 +17,8 @@ The JSON is derived from the approved V5.7.2 Rules topology. By explicit project
 
 Historical V5.7.1 topology metadata is no longer the current technical master.
 
-## Remaining blocker
+## Digital layout and remaining blocker
 
-The approved primary technical layout is `visual/map/Жестокий_Век_Карта_Technical_Main_V5.7.2.png`. It fixes the visual placement/orientation of W/E sectors. The final illustrated/print art master remains a separate unresolved art deliverable.
+Arena renders a stateful inline SVG directly from this canonical topology. The previously referenced technical PNG has an invalid IDAT stream and is retained only as rejected historical evidence; current builds do not consume it.
+
+The final illustrated/print art master remains a separate unresolved art deliverable.

@@ -6,6 +6,8 @@
 
 ### Fixed
 
+- Hotfix: `Новая партия` now starts a visibly new seed and reports success in the UI.
+- Hotfix: the corrupt technical PNG is no longer embedded; Arena renders a live 52-territory SVG map from canonical topology instead.
 - Восстановленные current engine fragments собраны в воспроизводимый standalone Arena artifact.
 - Восточные материковые порты исправлены на `E1-1`, `E2-1`, `E3-1` в Rules и topology.
 - Capability report больше не показывает Интриги как заблокированные: загружен explicit 40-card canonical new-design module.

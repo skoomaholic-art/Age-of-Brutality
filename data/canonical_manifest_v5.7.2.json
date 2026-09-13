@@ -58,8 +58,9 @@
       "ports": 16
     },
     "illustrated_master": "MISSING_SOURCE",
-    "technical_layout_master": "visual/map/Жестокий_Век_Карта_Technical_Main_V5.7.2.png",
-    "technical_layout_status": "PRIMARY_APPROVED_LAYOUT",
+    "technical_layout_master": "arena/source/current/ui_runtime.js#topologyMap",
+    "technical_layout_status": "ACTIVE_INLINE_CANONICAL_TOPOLOGY_SVG",
+    "rejected_corrupt_layout": "visual/map/Жестокий_Век_Карта_Technical_Main_V5.7.2.png",
     "port_correction": {
       "east_mainland_ports": ["E1-1", "E2-1", "E3-1"],
       "approved_on": "2026-09-13"
@@ -84,11 +85,11 @@
     "INTRIGUE-SOURCE-001: missing historical 40-card source replaced by explicit new canonical 40-card design",
     "COMPONENT-ADVISER-001: 18 physical Adviser cards use a shuffled deck and 4-card market",
     "COMPONENT-AMBITION-001: all 18 Ambitions are physically dealt without duplicate cards",
-    "MAP-LAYOUT-001: approved primary technical layout stored in visual/map with mirrored W/E orientation"
+    "MAP-LAYOUT-001: Arena renders the mirrored W/E layout as live SVG directly from canonical topology"
   ],
   "unresolved": [
     {"id":"CARD-ART-001","fact":"Final illustrated art master for all 160 cards is not yet certified; Intrigues have reproducible text-print source."},
-    {"id":"MAP-ART-001","fact":"Primary technical layout is stored in GitHub; final illustrated/print art master is still not certified."},
+    {"id":"MAP-ART-001","fact":"The digital topology SVG is operational; the rejected PNG is corrupt and the final illustrated/print art master is still not certified."},
     {"id":"PLAYTEST-MANUAL-001","fact":"Fresh manual human playtest raw exports are still separate from automated regression."},
     {"id":"PRINT-001","fact":"No final production-certified PnP package with illustrated map/card art and manufacturing proof."}
   ]

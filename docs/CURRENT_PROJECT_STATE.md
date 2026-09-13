@@ -40,7 +40,7 @@ node tools/build_arena_v5_7_2.js
 - `arena/builds/V5.7.2_PLAYABLE_CURRENT_DEV.html`;
 - `arena/builds/V5.7.2_PLAYABLE_CURRENT_DEV.manifest.json`.
 
-В HTML встроены canonical data, техническая карта, engine, AI adapter и UI. Доступны ручной выбор Дома/действия, AI step/run, четыре решения по пленнику, вкладки Map/Houses/Diplomacy/Journal/Game Master и выгрузка state JSON.
+В HTML встроены canonical data, stateful SVG-карта из topology, engine, AI adapter и UI. Доступны рабочая `Новая партия` с видимым feedback, ручной выбор Дома/действия, AI step/run, четыре решения по пленнику, вкладки Map/Houses/Diplomacy/Journal/Game Master и выгрузка state JSON.
 
 ## QA
 
