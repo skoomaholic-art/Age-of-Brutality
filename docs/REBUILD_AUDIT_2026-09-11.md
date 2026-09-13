@@ -1,5 +1,9 @@
 # Rebuild Audit — 2026-09-11
 
+> **Historical snapshot.** Не использовать как текущий release verdict: после
+> этого аудита появились source-matching current DEV Arena, human diplomacy
+> consent и полный размер армии в Марше.
+
 Рабочая линия: **V5.7.2-DEV**.
 
 ## Итог

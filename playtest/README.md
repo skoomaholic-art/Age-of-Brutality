@@ -1,6 +1,6 @@
 # Playtests — V5.7.2
 
-Актуальная цифровая линия плейтеста: **Arena V5.7.2-PLAYABLE-RC2**.
+Актуальная цифровая линия плейтеста: **Arena V5.7.2-PLAYABLE-CURRENT-DEV**.
 
 Исторические V5.7.0/V5.7.1 отчёты сохраняются только как baseline и не подменяют regression текущего билда.
 
@@ -35,6 +35,19 @@
 
 ## Текущий repo-status
 
-Последний автоматизированный regression: `qa/reports/Game_Master_Report_V5.7.2_RC2_500seeds.md` — 500/500 партий завершены, 0 engine errors, 0 invalid actions, 0 prisoner-state invariant errors.
+Последний автоматизированный regression: `qa/reports/Game_Master_Report_V5.7.2_CURRENT_500seeds.md` — 500/500 партий завершены, 0 engine errors, 0 invalid actions, 0 prisoner-state invariant errors.
 
 При этом `playtest/` пока **не содержит полный актуальный комплект ручных Journal/Diplomacy/Houses JSON**. Это source-migration debt и не должно трактоваться как отсутствие проблем в реальной Human-партии.
+
+## Симуляция полной партии
+
+Кнопка «Симуляция до конца» в current Arena прогоняет одну партию целиком:
+6 раундов × 6 Домов × 3 слота = 108 действий. Для пакетной проверки Game
+Master запускайте 100 или 500 детерминированных партий:
+
+```bash
+node qa/game-master/game_master_runner.js arena/builds/V5.7.2_PLAYABLE_CURRENT_DEV.html 500 58001
+```
+
+Game Master только наблюдает и журналирует соблюдение правил; он не принимает
+решения вместо людей и не меняет правила на ходу.

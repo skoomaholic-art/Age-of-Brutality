@@ -1,5 +1,8 @@
 # Project Status — V5.7.2 source / historical Arena RC2
 
+> **Historical RC2 status.** Current source и executable описаны в
+> `docs/CURRENT_PROJECT_STATE.md`; этот файл сохранён только для provenance.
+
 Дата: 2026-09-11.
 
 ## Что означает RC2 сейчас

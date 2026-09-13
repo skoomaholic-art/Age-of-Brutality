@@ -1,5 +1,9 @@
 # PROJECT AUDIT — «Жестокий Век»
 
+> **Historical snapshot.** Состояние до current cleanup 2026-09-13. Актуальные
+> результаты и открытые gates находятся в `docs/CURRENT_PROJECT_STATE.md` и
+> `docs/KNOWN_ISSUES.md`.
+
 **Рабочая линия:** V5.7.2-DEV  
 **Дата аудита:** 2026-09-11  
 **Source of truth:** `skoomaholic-art/zhestokiy-vek`

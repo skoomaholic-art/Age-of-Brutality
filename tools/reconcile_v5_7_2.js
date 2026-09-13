@@ -161,7 +161,7 @@ function reconcileCore(text) {
   text = replaceRequired(
     text,
     "> СТАТУС СБОРКИ: стабильная плейтестовая ветка. Механическая база",
-    "> СТАТУС СБОРКИ: V5.7.2-DEV; цифровая Arena — V5.7.2-PLAYABLE-RC2; статус STABLE не присвоен. Механическая база",
+    "> СТАТУС СБОРКИ: V5.7.2-DEV; цифровая Arena — V5.7.2-PLAYABLE-CURRENT-DEV; статус STABLE не присвоен. Механическая база",
     "core build status"
   );
   return text;
@@ -180,7 +180,7 @@ function reconcileArenaTech(text) {
   return replaceRequired(
     text,
     "- Актуальный цифровой клиент проекта — только `10_Жестокий_Век_Unified_Arena_V5.7.2-DEV.html`. Отдельные AI Arena, Human Arena и Observer Arena не являются частью актуального билда.",
-    "- Актуальная цифровая линия проекта — **V5.7.2-PLAYABLE-RC2**; manifest: `arena/builds/V5.7.2_PLAYABLE_RC2.manifest.json`. Exact HTML указан в manifest по имени/размеру/SHA-256, но пока не хранится в GitHub как полноценный reconstructable artifact. Отдельные historical AI/Human/Observer Arena не считаются текущим release.",
+    "- Актуальная цифровая линия проекта — **V5.7.2-PLAYABLE-CURRENT-DEV**; manifest: `arena/builds/V5.7.2_PLAYABLE_CURRENT_DEV.manifest.json`. HTML собирается из tracked source командой `node tools/build_arena_v5_7_2.js`; отдельные historical AI/Human/Observer Arena не считаются текущим release.",
     "Arena current-client reference"
   );
 }

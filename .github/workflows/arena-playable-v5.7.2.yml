@@ -38,6 +38,7 @@ jobs:
           node tools/check_map_topology_v5_7_2.js
           node tools/check_ai_config_v5_7_2.js
           python3 tools/check_territory_metadata_v5_7_2.py
+          node tools/check_tabletop_integrity_v5_7_2.js
       - name: Runtime syntax
         run: |
           cat arena/source/current/recovery/engine_runtime_recovered_prefix.js arena/source/current/engine_runtime_tail.part-00.js arena/source/current/engine_runtime_tail.part-01.js arena/source/current/engine_runtime_tail.part-02.js > /tmp/engine_runtime_current.js
@@ -46,9 +47,11 @@ jobs:
           node --check arena/source/current/current_parity_patch.js
           node --check arena/source/current/physical_components_patch.js
           node --check arena/source/current/intrigue_runtime_patch.js
+          node --check arena/source/current/diplomacy_runtime_patch.js
           node --check arena/source/current/ui_runtime.js
           node --check tools/build_arena_v5_7_2.js
           node --check tools/build_intrigue_cards_v5_7_2.js
+          node --check tools/check_tabletop_integrity_v5_7_2.js
           node --check qa/game-master/game_master_runner.js
           node --check qa/rules/tabletop_components.test.js
           node --check qa/rules/current_engine_invariants.test.js
@@ -74,7 +77,7 @@ jobs:
           assert s['finished']==100 and s['round6']==100 and s['actions108']==100 and s['errorGames']==0 and s['invalid']==0,s
           assert not x['capabilities'].get('sourceBlockedActions'),x['capabilities']
           assert m.get('intrigueDraws',0)>0 and m.get('intriguePlays',0)>0 and m.get('tracesCreated',0)>0 and m.get('investigations',0)>0,m
-          critical=[f for f in x['findings'] if f['severity']=='CRITICAL'];assert not critical,critical
+          blocking=[f for f in x['findings'] if f['severity'] in ('HIGH','CRITICAL')];assert not blocking,blocking
           print('100 seeds structural OK',s);print('metrics',m);print('houses',x['houseSummary']);print('findings',x['findings'])
           PY
       - name: Game Master 500-seed balance regression
@@ -86,7 +89,7 @@ jobs:
           assert s['finished']==500 and s['round6']==500 and s['actions108']==500 and s['errorGames']==0 and s['invalid']==0,s
           assert not x['capabilities'].get('sourceBlockedActions'),x['capabilities']
           assert m.get('intrigueDraws',0)>0 and m.get('intriguePlays',0)>0 and m.get('investigations',0)>0,m
-          critical=[f for f in x['findings'] if f['severity']=='CRITICAL'];assert not critical,critical
+          blocking=[f for f in x['findings'] if f['severity'] in ('HIGH','CRITICAL')];assert not blocking,blocking
           print('500 seeds structural OK',s);print('metrics',m);print('houses',x['houseSummary']);print('findings',x['findings'])
           PY
       - name: Package inspectable current Arena

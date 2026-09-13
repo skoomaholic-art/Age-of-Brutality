@@ -96,8 +96,12 @@ class ArenaEngine{
  }
  marchCandidates(h){
   const acts=[];for(const source of this.ownedUnitLocations(h)){const count=num(this.territories[source].units[h]);if(count<=0)continue;const paths=this.landPaths(h,source);if(PORTS.has(source)&&this.territories[source].owner===h)for(const dest of this.sea[source]||[])paths.push([source,dest]);
-   for(const route of paths){const dest=route[route.length-1],t=this.territories[dest],owner=t.owner;if(owner&&owner!==h&&this.hostileBlocked(h,owner))continue;const max=Math.min(count,num(PARAM.TERRITORY_WARRIOR_CAP,8));for(const amount of [Math.min(3,max)].filter(n=>n>0)){const ownership=!owner?'neutral':owner===h?'self':'enemy';const target={ownership,income:this.targetIncomeValue(dest,h),resistance:num(t.resistance,0),defenders:owner&&owner!==h?num(t.units[owner]):0,recaptureHome:this.homeHouseFor(dest)===h&&owner!==h,recaptureCapital:CAPS[h]===dest&&owner!==h,completesIsland:this.completesIsland(h,dest),firstCenterHalf:dest.startsWith('S')&&!this.controlsAnyIslandHalf(h),isMainlandPort:PORTS.has(dest)&&!dest.startsWith('S'),isEnemyCapital:Boolean(capOwner[dest]&&capOwner[dest]!==h)};
-     acts.push({id:`MARCH:${source}:${dest}:${amount}`,type:'march',label:`Марш ${source} → ${dest} (${amount})`,route,source,dest,amount,target,scoreComponents:{force:amount/2},legal:true})}}
+   for(const route of paths){const dest=route[route.length-1],t=this.territories[dest],owner=t.owner;if(owner&&owner!==h&&this.hostileBlocked(h,owner))continue;const destinationUnits=owner===h?num(t.units[h]):0;const max=Math.min(count,Math.max(0,num(PARAM.TERRITORY_WARRIOR_CAP,8)-destinationUnits));for(let amount=1;amount<=max;amount++){const ownership=!owner?'neutral':owner===h?'self':'enemy';const target={ownership,income:this.targetIncomeValue(dest,h),resistance:num(t.resistance,0),defenders:owner&&owner!==h?num(t.units[owner]):0,recaptureHome:this.homeHouseFor(dest)===h&&owner!==h,recaptureCapital:CAPS[h]===dest&&owner!==h,completesIsland:this.completesIsland(h,dest),firstCenterHalf:dest.startsWith('S')&&!this.controlsAnyIslandHalf(h),isMainlandPort:PORTS.has(dest)&&!dest.startsWith('S'),isEnemyCapital:Boolean(capOwner[dest]&&capOwner[dest]!==h)};
+     // The fourth warrior remains legal, but the AI must not treat it as a
+     // linear scoring bonus. This keeps the extra legal choice from becoming
+     // an unintended house-balance lever; physical players still choose any
+     // amount up to the validated cap.
+     acts.push({id:`MARCH:${source}:${dest}:${amount}`,type:'march',label:`Марш ${source} → ${dest} (${amount})`,route,source,dest,amount,target,scoreComponents:{force:Math.min(amount,3)/2},legal:true})}}
   }return acts
  }
  targetIncomeValue(id,h){const row=this.economyRow(this.territories[id].type);const txt=row?.['Доход владельца'];return this.parseIncome(txt).gold+this.parseIncome(txt).influence}
@@ -122,19 +126,20 @@ class ArenaEngine{
  freeDynasticCharacter(h){return this.allCharacters(h).find(c=>c.alive&&c.health!=='Мёртв'&&c.type==='Законный ребёнок'&&!c.spouseOf&&c.mode!=='ПЛЕН')}
  hasDynasticMarriage(a,b){return Boolean(this.relationBetween(a,b,['Династический союз']))}
  step(actionId=null){
-  if(this.status!=='playing')return this.exportData();const h=this.currentHouse();if(!h){this.errors.push('No current house while playing');this.status='error';return this.exportData()}
+  if(this.status!=='playing')return this.exportData();if(this.pendingDiplomacy&&!this._committingDiplomacy)return this.exportData();const h=this.currentHouse();if(!h){this.errors.push('No current house while playing');this.status='error';return this.exportData()}
   const hs=this.houses[h],before=this.snapshot();this.beginOwnAction(h);
   try{
    if(hs.reserved>0){hs.reserved--;this.logAction(h,'Зарезервированное действие',before,{detail:'Действие зарезервировано двусторонней дипломатией'})}
    else{const legal=this.legalActions(h);let action=null,decision=null;if(actionId){action=legal.find(a=>a.id===actionId);if(!action){this.metrics.total.invalidActions++;throw new Error(`Illegal manual action ${actionId} for ${h}`)}}else{const agent=new window.ArenaHouseAgent(h,this.data.aiConfig);decision=agent.decide({round:this.round,legalActions:legal,activeOfficialRelations:this.activeOfficialRelations(h)});action=decision.decision}
     if(!action)this.logAction(h,'Пропуск',before,{detail:'Нет законных действий'});
+    else if(!this._committingDiplomacy&&this.requiresDiplomacyConsent?.(action)){this.pendingDiplomacy={house:h,other:action.other,type:action.type,action:deep(action),createdRound:this.round,createdActionTotal:this.actionTotal};this.log('diplomacy_offer',`${h} предлагает ${action.label||action.type} Дому ${action.other}; ожидается согласие`,{house:h,other:action.other,actionId:action.id,type:action.type,choices:['accept','reject']});return this.exportData()}
     else{this.applyAction(h,action);this.logAction(h,action.label||action.type,before,{actionId:action.id,ai:decision?{decisionId:decision.decisionId,score:decision.score,reason:decision.reason}:null})}}
   }catch(err){this.errors.push(String(err.stack||err));this.metrics.total.invalidActions++;this.log('error',String(err.message||err),{house:h})}
   hs.turnsTaken++;this.actionTotal++;this.turnIndex++;
   if(this.turnIndex>=this.roundTurns.length){this.dynastyPhase();if(this.round>=this.rounds)this.finalizeGame();else this.startRound()}
   return this.exportData()
  }
- runGame(){let guard=0;while(this.status==='playing'&&guard++<200)this.step();if(guard>=200&&this.status==='playing'){this.errors.push('Runaway game guard');this.status='error'}return this.exportData()}
+ runGame(){let guard=0;while(this.status==='playing'&&guard++<200){this.step();if(this.pendingPrisoner||this.pendingDiplomacy)break}if(guard>=200&&this.status==='playing'&&!this.pendingPrisoner&&!this.pendingDiplomacy){this.errors.push('Runaway game guard');this.status='error'}return this.exportData()}
  applyAction(h,a){if(a.type==='recruit')return this.doRecruit(h,a);if(a.type==='fort')return this.doFort(h,a);if(a.type==='adviser')return this.doAdviser(h,a);if(a.type==='neutralMarriage')return this.doNeutralMarriage(h,a);if(a.type==='birth')return this.doBirth(h,a);if(a.type==='pact')return this.doRelation(h,a,'Официальный Пакт');if(a.type==='dynastic')return this.doDynastic(h,a);if(a.type==='access')return this.doAccess(h,a);if(a.type==='raid')return this.doMarch(h,a,true);if(a.type==='march')return this.doMarch(h,a,false);throw new Error(`Unknown action type ${a.type}`)}
  doRecruit(h,a){const extra=num(this.stateFlags.recruitExtraCost),cost=a.amount+extra;if(!this.spendGold(h,cost,'Найм'))throw new Error('Recruit cost became illegal');this.territories[CAPS[h]].units[h]=num(this.territories[CAPS[h]].units[h])+a.amount}
  doFort(h,a){const t=this.territories[a.territory];if(!t||t.owner!==h||capOwner[t.id]||t.fort||this.houses[h].fortsBuilt>=2||!this.spendGold(h,3,'Крепость'))throw new Error('Fort became illegal');t.fort=true;t.fortOwner=h;this.houses[h].fortsBuilt++;this.metrics.total.fortsBuilt++}
@@ -145,7 +150,7 @@ class ArenaEngine{
  doDynastic(h,a){const other=a.other,c1=this.freeDynasticCharacter(h),c2=this.freeDynasticCharacter(other);if(!c1||!c2)throw new Error('Dynastic characters unavailable');const cost=Math.max(0,1-num(this.stateFlags.dynasticDiscount));if(cost&&!this.spendInfluence(h,cost,'Династический брак'))throw new Error('Dynastic cost illegal');if(!this.spendInfluence(other,1,'Династический брак'))throw new Error('Partner dynastic cost illegal');this.houses[other].reserved++;c1.spouseOf=c2.uid;c2.spouseOf=c1.uid;this.houses[h].dynastyActions.add('династический брак');this.houses[other].dynastyActions.add('династический брак');this.relationships.push({id:`DYN:${h}:${other}:${this.round}:${this.actionTotal}`,kind:'Династический союз',a:h,b:other,active:true,createdRound:this.round,fullRounds:0,rewarded:{[h]:false,[other]:false},characters:[c1.uid,c2.uid]});this.metrics.total.dynasticAlliances++}
  doAccess(h,a){this.relationships.push({id:`ACCESS:${h}:${a.other}:${this.round}:${this.actionTotal}`,kind:'Право прохода',a:h,b:a.other,active:true,createdRound:this.round,fullRounds:0,rewarded:{}});this.metrics.total.accessRights++;if(this.stateFlags.event==='EV-P03'&&!this.houses[a.other].roundFlags.accessReward){this.houses[a.other].influence++;this.houses[a.other].roundFlags.accessReward=true}}
  doMarch(h,a,raid=false){
-  const source=this.territories[a.source],dest=this.territories[a.dest],amount=Math.min(a.amount,num(source.units[h]));if(amount<=0)throw new Error('No marching units');const owner=dest.owner;
+  const source=this.territories[a.source],dest=this.territories[a.dest],amount=Math.min(a.amount,num(source.units[h]));if(amount<=0)throw new Error('No marching units');const owner=dest.owner;if(owner===h&&num(dest.units[h])+amount>num(PARAM.TERRITORY_WARRIOR_CAP,8))throw new Error('March would exceed territory warrior cap');
   if(!owner){source.units[h]-=amount;const success=this.d2d6()+amount>7+num(dest.resistance,0);if(success){dest.owner=h;dest.units[h]=num(dest.units[h])+amount;this.metrics.total.neutralCaptures++;if(!this.houses[h].achievements.neutral){this.houses[h].score++;this.houses[h].achievements.neutral=true;this.log('vp',`${h}: +1 ОП за первый нейтральный захват`,{house:h})}this.moveCommanderWithArmy(h,a.source,a.dest)}else{const loss=Math.min(1,amount);source.units[h]+=amount-loss;this.log('battle',`${h} не захватывает ${a.dest}; потеря ${loss}`,{house:h})}return}
   if(owner===h){source.units[h]-=amount;dest.units[h]=num(dest.units[h])+amount;this.moveCommanderWithArmy(h,a.source,a.dest);return}
   if(this.hostileBlocked(h,owner))throw new Error('Attack forbidden by official relation');
@@ -180,4 +185,3 @@ class ArenaEngine{
   if(choice==='hold')return this.detainPrisoner(rec.owner,c,rec.captor,rec.location,detentionChoice);
   if(choice==='execute')return this.executePrisoner(rec.owner,c,rec.captor);
   if(choice!=='ransom')return{valid:false,detail:'Неизвестное решение по пленнику'};
-

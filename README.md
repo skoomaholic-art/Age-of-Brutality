@@ -22,6 +22,7 @@ GitHub `main` — единственный MASTER проекта. Историч
 ```bash
 node tools/reconcile_v5_7_2.js --check
 node tools/generate_card_registry_v5_7_2.js --check
+node tools/check_tabletop_integrity_v5_7_2.js
 node tools/build_arena_v5_7_2.js
 node qa/rules/tabletop_components.test.js
 node qa/rules/current_engine_invariants.test.js
