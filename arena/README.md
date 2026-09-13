@@ -19,10 +19,16 @@ The generated manifest stores its byte count, SHA-256, source version, capabilit
 - `source/current/recovery/engine_runtime_recovered_prefix.js` — retained engine prefix promoted into the tracked current source line;
 - `source/current/engine_runtime_tail.part-00.js` … `part-02.js` — completed runtime;
 - `source/current/current_parity_patch.js` — House rules, commanders and human prisoner choices;
+- `source/current/diplomacy_runtime_patch.js` — blocking human consent for Pact, dynastic and access proposals;
 - `source/current/physical_components_patch.js` — physical decks/markets;
 - `source/current/intrigue_runtime_patch.js` — 40-card Intrigue/Trace/Investigation runtime;
 - `source/current/ai_strategy_patch.js` and `ai_adapter.js` — current AI integration;
 - `source/current/ui_runtime.js` — standalone browser UI.
+
+The UI exposes a complete one-party run with `Симуляция до конца` (6 rounds ×
+6 Houses × 3 action slots = 108 slots), while a selected human House pauses at
+prisoner or diplomacy decisions. The `GAME_MASTER` panel reports capabilities;
+the batch auditor remains a read-only rules/legality observer.
 
 Historical `source/rc1/`, `.b64` fragments and old diagnostic patches are retained only for provenance. They are not required by the current builder.
 
@@ -31,6 +37,8 @@ Historical `source/rc1/`, `.b64` fragments and old diagnostic patches are retain
 ```bash
 node qa/rules/tabletop_components.test.js
 node qa/rules/current_engine_invariants.test.js
+node qa/rules/current_ui_smoke.test.js
+node tools/check_tabletop_integrity_v5_7_2.js
 node qa/game-master/game_master_runner.js arena/builds/V5.7.2_PLAYABLE_CURRENT_DEV.html 500 58001
 ```
 
