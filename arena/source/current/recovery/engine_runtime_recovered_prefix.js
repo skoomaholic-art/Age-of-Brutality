@@ -180,3 +180,4 @@ class ArenaEngine{
   if(choice==='hold')return this.detainPrisoner(rec.owner,c,rec.captor,rec.location,detentionChoice);
   if(choice==='execute')return this.executePrisoner(rec.owner,c,rec.captor);
   if(choice!=='ransom')return{valid:false,detail:'Неизвестное решение по пленнику'};
+

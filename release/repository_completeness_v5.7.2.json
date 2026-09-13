@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "game_version": "V5.7.2-DEV",
-  "audited_at": "2026-09-12",
+  "audited_at": "2026-09-13",
   "repository_complete": false,
   "policy": "A release or project state must not be described as repository-complete while any critical missing artifact/source below remains unresolved. Hashes, manifests and QA records do not substitute for storing the actual reproducible artifact or source.",
   "historical_generated_artifacts_missing_from_repository": [
@@ -12,7 +12,9 @@
       "bytes": 470775,
       "sha256": "65028a031ec391a3057a4550e926ffcae4141eb1c7407cae84482b0491b80749",
       "source_manifest": "arena/builds/V5.7.2_PLAYABLE_RC2.manifest.json",
-      "severity": "CRITICAL"
+      "severity": "REFERENCE",
+      "status": "HISTORICAL_ONLY",
+      "note": "The exact historical RC2 binary remains absent, but it is not a dependency of the reproducible current DEV Arena."
     },
     {
       "id": "VISUAL-RC1-ZIP",
@@ -62,18 +64,6 @@
   ],
   "missing_or_incomplete_sources": [
     {
-      "id": "ARENA-COMPLETE-BASELINE",
-      "severity": "CRITICAL",
-      "status": "MISSING",
-      "note": "arena/source/rc1 contains only part-00, part-00-tail, part-01, part-02 and part-03; reconstructed stream ends before class ArenaEngine and before closing HTML."
-    },
-    {
-      "id": "CARD-INTRIGUE-40",
-      "severity": "HIGH",
-      "status": "MISSING",
-      "note": "Historical 160-card visual pack exceeds the 120 known physical cards reconstructed from current MGD by 40; canonical Intrigues sheet/text set is absent."
-    },
-    {
       "id": "MAP-ILLUSTRATED-MASTER",
       "severity": "HIGH",
       "status": "MISSING",
@@ -94,10 +84,16 @@
   ],
   "current_reproducible_sources": {
     "rules_data_consistency": true,
-    "canonical_card_designs": 111,
-    "known_physical_card_copies": 120,
+    "canonical_card_designs": 151,
+    "known_physical_card_copies": 160,
+    "canonical_intrigue_designs": 40,
     "canonical_map_topology": true,
     "html_card_editor_and_print_studio": true,
-    "normalized_ai_config_and_agents": true
+    "normalized_ai_config_and_agents": true,
+    "current_arena_source": true,
+    "current_arena_reproducible_build": true,
+    "current_arena_manifest": "arena/builds/V5.7.2_PLAYABLE_CURRENT_DEV.manifest.json",
+    "current_arena_source_blocked_actions": 0,
+    "current_game_master_500_seed_gate": true
   }
 }

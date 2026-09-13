@@ -1,23 +1,6 @@
-name: Recovery artifact build V5.7.2
+name: Legacy recovery artifact build V5.7.2 (manual)
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - '.github/workflows/recovery-build-v5.7.2.yml'
-      - 'tools/build_recovery_artifacts_v5_7_2.py'
-      - 'tools/check_recovery_artifacts_v5_7_2.py'
-      - 'cards/**'
-      - 'visual/**'
-      - 'map/**'
-      - 'arena/**'
-      - 'ai/**'
-      - 'data/**'
-      - 'rules/**'
-      - 'qa/**'
-      - 'docs/references/**'
-      - 'release/repository_completeness_v5.7.2.json'
   workflow_dispatch:
 
 permissions:

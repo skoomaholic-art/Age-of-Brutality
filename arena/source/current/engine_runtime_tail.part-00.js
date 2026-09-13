@@ -46,3 +46,4 @@
   hs.ruler=next;hs.regency=Boolean(next.young||next.mode==='ПЛЕН');if(next.type==='Законный ребёнок'&&!hs.achievements.heirRuler){hs.score+=2;hs.achievements.heirRuler=true;hs.newRulerPending={uid:next.uid,round:this.round};this.log('vp',`${h}: +2 ОП — законный наследник стал правителем`,{house:h})}
   this.log('dynasty',`${h}: новый правитель ${next.name}${hs.regency?' (Регентство)':''}`,{house:h,character:next.uid})
  }
+

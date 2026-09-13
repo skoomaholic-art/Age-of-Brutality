@@ -53,30 +53,35 @@ def write_status(sha: str) -> None:
 
 - текущие правила V5.7.2-DEV;
 - Master Game Data и канонические data-модули;
-- реестр Домов, персонажей, Советников, Амбиций, Событий и других текущих данных;
-- 120 подтверждённых физических карточек: общий PDF, HTML и ZIP индивидуальных PDF;
+- полный composite registry: 151 дизайн / 160 физических карт;
+- 120 базовых карточек: общий PDF, HTML и ZIP индивидуальных PDF;
+- 40 Интриг нового canonical design module: отдельный воспроизводимый HTML-preprint;
 - каноническая топология карты: 52 территории / 81 сухопутное ребро / 23 морских маршрута / 16 портов;
 - текущий topology-preview карты;
 - визуальные шаблоны карточек, visual guides и component usage guide;
 - текущие материалы по физическим жетонам/маркерам, насколько они определены в проекте;
-- Arena source/recovery materials;
+- current standalone Arena, manifest и source/recovery materials;
 - AI House Agents, Prisoner Agent и конфигурация AI;
 - Game Master runner и QA/playtest reports;
 - единый current-state и ledger подтверждённых решений;
 - полный source snapshot текущего repository main.
 
+## Текущий цифровой статус
+
+- Current Arena воспроизводится из tracked source.
+- Все 16 обычных действий и 2 свободные процедуры доступны; source-blocked actions нет.
+- Current Game Master gates: 100/100 и 500/500 партий, R6/108 slots, 0 engine errors, 0 invalid actions.
+
 ## ВАЖНО: текущие незакрытые блокеры
 
-1. **Arena:** полный воспроизводимый executable V5.7.2 сейчас не восстановлен. Текущий RC3 source bundle повреждён/обрезан; в пакете лежат реальные recovery/source материалы, а не ложный «готовый HTML».
-2. **LEGAL_ACTIONS:** recovered engine не доказан как покрывающий все 18 actions/procedures из Master Game Data.
-3. **Интриги:** отсутствует подтверждённый master-source 40 физических карт Интриг. Они намеренно не придуманы заново. Поэтому printable set сейчас содержит 120 подтверждённых карт, а не исторические 160.
-4. **Карта:** каноническая техническая топология актуальна, но финальный иллюстрированный/print master карты в canonical source не мигрирован. В пакете лежит topology preview.
-5. **Жетоны/компоненты:** полный утверждённый Component BOM и отдельные финальные print-masters жетонов ещё не зафиксированы.
-6. Последний полностью успешный 500-seed отчёт относится к historical RC2; это не доказательство работоспособности нынешнего неполного RC3 executable.
+1. **Карточки:** data полного набора 151/160 зафиксированы, но единый сертифицированный 160-card PDF с финальными backs/art и физическая проба ещё не готовы.
+2. **Карта:** каноническая topology и технический PNG актуальны, но финальный editable illustrated/print master не утверждён.
+3. **Жетоны/компоненты:** полный утверждённый Component BOM и все production masters не зафиксированы.
+4. **Arena release:** перед продвижением DEV в STABLE требуется зафиксированный real-browser smoke.
 
 Подробности: `00_CURRENT_PROJECT_STATE.md`, `00_PROJECT_DECISIONS.md`, `00_KNOWN_ISSUES.md`.
 
-То, чего нет в источниках, в эту поставку не дорисовывалось и не выдумывалось.
+Модуль 40 Интриг явно помечен как новый канонический дизайн, а не как восстановленный historical source.
 """
     (ROOT / "00_СТАТУС_АКТУАЛЬНОЙ_ВЕРСИИ.md").write_text(text, encoding="utf-8")
 
@@ -103,6 +108,8 @@ def build() -> tuple[Path, str]:
     copy_file(GENERATED / "Жестокий_Век_Карточки_Current_120.html", "01_ПЕЧАТЬ_КАРТОЧКИ/Жестокий_Век_Карточки_Current_120.html")
     copy_file(GENERATED / "Жестокий_Век_Карточки_Individual_Current_120.zip", "01_ПЕЧАТЬ_КАРТОЧКИ/Жестокий_Век_Карточки_Individual_Current_120.zip")
     copy_file("cards/canonical_registry_v5.7.2.json", "01_ПЕЧАТЬ_КАРТОЧКИ/canonical_registry_v5.7.2.json")
+    copy_file("cards/canonical_card_set_v5.7.2.json", "01_ПЕЧАТЬ_КАРТОЧКИ/canonical_card_set_v5.7.2.json")
+    copy_file("cards/generated/Zhestokiy_Vek_Intrigues_V5.7.2_40.html", "01_ПЕЧАТЬ_КАРТОЧКИ/Zhestokiy_Vek_Intrigues_V5.7.2_40.html")
     copy_file("cards/README.md", "01_ПЕЧАТЬ_КАРТОЧКИ/CARDS_README.md")
 
     copy_tree("map", "02_КАРТА/map")
@@ -123,6 +130,7 @@ def build() -> tuple[Path, str]:
     copy_tree("arena", "06_ARENA_AI_GAME_MASTER/arena")
     copy_tree("ai", "06_ARENA_AI_GAME_MASTER/ai")
     copy_tree("qa/game-master", "06_ARENA_AI_GAME_MASTER/qa/game-master")
+    copy_tree("qa/rules", "06_ARENA_AI_GAME_MASTER/qa/rules")
     copy_tree("qa/reports", "06_ARENA_AI_GAME_MASTER/qa/reports")
 
     copy_file("docs/CURRENT_PROJECT_STATE.md", "00_CURRENT_PROJECT_STATE.md")

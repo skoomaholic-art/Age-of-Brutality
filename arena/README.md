@@ -1,39 +1,41 @@
-# Arena
+# Arena V5.7.2
 
-## Active source status
+## Current build
 
-The active V5.7.2 source fixes live in:
+The active source-matching build is:
 
-- `arena/source/patches/v5.7.2_rc2_engine_delta.js`
-- `arena/source/patches/v5.7.2_rc2_human_ui.js`
+`arena/builds/V5.7.2_PLAYABLE_CURRENT_DEV.html`
 
-The engine delta is synchronized with the current canonical prisoner/event rules:
+Build it deterministically from repository source:
 
-- `EV-P06 = «Съезд заложников»`;
-- event ransom = 2 gold;
-- no extra event Influence penalty on execution;
-- direct hold and rejected ransom share the same detention pipeline;
-- human ransom `N` requires a positive integer.
+```bash
+node tools/build_arena_v5_7_2.js
+```
 
-## Last verified executable
+The generated manifest stores its byte count, SHA-256, source version, capabilities, map/card counts and build command.
 
-`V5.7.2-PLAYABLE-RC2` is the last executable with preserved 500-seed green QA evidence.
+## Source layout
 
-Manifest: `arena/builds/V5.7.2_PLAYABLE_RC2.manifest.json`.
+- `source/current/recovery/engine_runtime_recovered_prefix.js` — retained engine prefix promoted into the tracked current source line;
+- `source/current/engine_runtime_tail.part-00.js` … `part-02.js` — completed runtime;
+- `source/current/current_parity_patch.js` — House rules, commanders and human prisoner choices;
+- `source/current/physical_components_patch.js` — physical decks/markets;
+- `source/current/intrigue_runtime_patch.js` — 40-card Intrigue/Trace/Investigation runtime;
+- `source/current/ai_strategy_patch.js` and `ai_adapter.js` — current AI integration;
+- `source/current/ui_runtime.js` — standalone browser UI.
 
-QA: `qa/reports/Game_Master_Report_V5.7.2_RC2_500seeds.md`.
+Historical `source/rc1/`, `.b64` fragments and old diagnostic patches are retained only for provenance. They are not required by the current builder.
 
-That HTML is **not stored in the repository**, and current source fixes are newer than it. Do not describe RC2 as the executable of the current source line.
+## Verification
 
-## Baseline reconstruction status
+```bash
+node qa/rules/tabletop_components.test.js
+node qa/rules/current_engine_invariants.test.js
+node qa/game-master/game_master_runner.js arena/builds/V5.7.2_PLAYABLE_CURRENT_DEV.html 500 58001
+```
 
-`arena/source/rc1/*.b64` is an incomplete historical compressed source. Tolerant gzip recovery yields a partial HTML containing `window.ARENA_DATA`, but the stored stream ends before `class ArenaEngine` and before `</body>`.
+The invariant suite covers all 18 MGD action/procedure capabilities, port-only sea launch, no inland teleport, family commander constraints, every prisoner decision branch and succession after execution.
 
-Therefore:
+## Status
 
-- the repository cannot reconstruct RC1/RC2 exact HTML from these chunks;
-- a new RC must not be fabricated from the partial stream;
-- the complete baseline HTML or missing compressed chunks must be migrated first;
-- after migration, build + Game Master + browser smoke must be rerun.
-
-See `arena/source/rc1/README.md` and `docs/KNOWN_ISSUES.md`.
+`V5.7.2-PLAYABLE-CURRENT-DEV` is deployable for private digital testing. It is not marked STABLE or print-ready until the remaining browser and physical release gates are complete.

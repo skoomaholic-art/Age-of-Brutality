@@ -32,6 +32,11 @@ jobs:
       - name: Run House agent tests
         run: node ai/tests/house_agents.test.js
 
+      - name: Verify current Arena reproducibility
+        run: |
+          node tools/build_arena_v5_7_2.js
+          git diff --exit-code -- arena/builds/V5.7.2_PLAYABLE_CURRENT_DEV.html arena/builds/V5.7.2_PLAYABLE_CURRENT_DEV.manifest.json
+
       - name: Verify repository completeness inventory
         run: node tools/check_repository_completeness_v5_7_2.js
 

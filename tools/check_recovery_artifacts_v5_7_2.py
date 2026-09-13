@@ -35,8 +35,10 @@ if not MANIFEST.exists():
 
 m = json.loads(MANIFEST.read_text(encoding="utf-8"))
 require(m.get("historical_binary_identity_claimed") is False, "Historical binary identity must not be claimed")
-require(m.get("canonical_card_designs") == 111, "Expected 111 canonical card designs")
-require(m.get("known_physical_card_copies") == 120, "Expected 120 known physical card copies")
+require(m.get("base_card_designs") == 111, "Expected 111 base card designs")
+require(m.get("base_physical_card_copies") == 120, "Expected 120 base physical card copies")
+require(m.get("canonical_card_designs") == 151, "Expected 151 composite canonical card designs")
+require(m.get("known_physical_card_copies") == 160, "Expected 160 composite physical card copies")
 require(m.get("card_pages_a4_3x3") == 14, "Expected 14 A4 pages at 3x3")
 
 records = {r["file"]: r for r in m.get("artifacts", [])}
@@ -110,7 +112,8 @@ if fail:
     sys.exit(1)
 
 print("Recovery artifact check OK")
-print("- 111 designs / 120 physical cards")
+print("- 111 base designs / 120 base physical cards")
+print("- 151 composite designs / 160 composite physical cards")
 print("- 14 A4 card pages")
 print("- 120 individual card PDFs")
 print("- current visual/source recovery packs present")

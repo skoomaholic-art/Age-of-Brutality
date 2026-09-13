@@ -1,20 +1,21 @@
 # Current Source Pointer — V5.7.2-DEV
 
-Дата: 2026-09-12
+Дата: 2026-09-13.
 
 Текущий MASTER проекта — ветка `main`.
 
-Перед сборкой/плейтестом читать в таком порядке:
+Читать и проверять в таком порядке:
 
-1. `docs/CURRENT_PROJECT_STATE.md` — фактическое текущее состояние и критический путь.
-2. `docs/decisions/2026-09-12_project_chat_reconciliation.md` — последние подтверждённые решения проекта.
-3. `docs/KNOWN_ISSUES.md` — подтверждённые открытые проблемы.
-4. `rules/source/` — правила.
-5. `data/master_game_data_v5.7.2-dev.json` и canonical data modules.
-6. `cards/canonical_registry_v5.7.2.json`.
-7. `map/canonical_topology_v5.7.2.json`.
-8. `ai/`.
-9. `arena/` — только с учётом P0: текущий source-matching executable ещё не восстановлен.
-10. `qa/` — исторические отчёты не считать текущим regression без нового executable.
+1. `docs/CURRENT_PROJECT_STATE.md` — фактическое состояние и release gates.
+2. `docs/KNOWN_ISSUES.md` — только подтверждённые открытые проблемы.
+3. `docs/decisions/2026-09-12_project_chat_reconciliation.md` — ledger решений и provenance.
+4. `rules/source/` и `data/canonical_manifest_v5.7.2.json` — canonical rule/data graph.
+5. `cards/canonical_card_set_v5.7.2.json` — 151/160 card inventory.
+6. `map/canonical_topology_v5.7.2.json` и `map/territory_metadata_v5.7.2.json`.
+7. `ai/`.
+8. `arena/source/current/` и `tools/build_arena_v5_7_2.js`.
+9. `qa/`.
 
-Версию нельзя маркировать STABLE до выполнения Definition of STABLE из `docs/CURRENT_PROJECT_STATE.md`.
+Current executable: `arena/builds/V5.7.2_PLAYABLE_CURRENT_DEV.html`.
+
+Historical RC1/RC2/recovery files are provenance only and do not override current canonical modules or the current deterministic build.

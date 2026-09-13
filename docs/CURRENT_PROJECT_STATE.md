@@ -1,273 +1,101 @@
-# Жестокий Век — CURRENT PROJECT STATE
+# Current project state — V5.7.2-DEV
 
-Дата сверки: 2026-09-12
-Версия: `V5.7.2-DEV`
-Статус релиза: **DEVELOPMENT / NOT STABLE**
-MASTER: GitHub `main`
+Дата сверки: 2026-09-13.
 
-Этот документ — текущая точка входа для статуса проекта. Он собран после сверки доступной истории проекта, актуальных Rules/Data/Cards/Map/AI, Arena recovery, QA и открытых GitHub Issues. Старые RC-отчёты считаются историческими свидетельствами, а не доказательством текущего source.
+## Вердикт
 
-## 1. Что уже собрано и согласовано
+Текущая цифровая линия снова воспроизводима из tracked source. `node tools/build_arena_v5_7_2.js` создаёт автономный `arena/builds/V5.7.2_PLAYABLE_CURRENT_DEV.html`, соответствующий текущим Rules/Data/Card/Map/AI источникам.
 
-### RULES
+Это **рабочий DEV candidate**, а не STABLE и не print-ready релиз. Исторический RC2 остаётся справочным QA-артефактом, но больше не является единственным исполняемым доказательством проекта.
 
-- Основной корпус V5.7.2-DEV присутствует в `rules/source/`.
-- Партия: ровно 6 раундов, 3 действия Дома за раунд.
-- Победа и tie-break определены.
-- Влияние не имеет утверждённого верхнего лимита 15.
-- Дипломатия разделяет Официальный Пакт, Право прохода и Династический союз.
-- Определены война, бой, рейд, крепости, экономика, персонажи, наследование, регентство, плен и казнь.
-- Текущие правила плена синхронизированы с `data/prisoners_v5.7.2-dev.json`.
+## Матрица состояния
 
-### MASTER GAME DATA
+| Область | Статус | Проверяемый факт |
+|---|---|---|
+| Rules ↔ Data | GREEN | `reconcile_v5_7_2.js --check` |
+| Карточные данные | GREEN | 151 дизайн / 160 физических карт |
+| Интриги | GREEN, NEW DESIGN | 40 карт, Следы и Расследования из explicit canonical module |
+| Карта | GREEN | 52 territories / 81 land / 23 sea / 16 ports |
+| Восточные порты | GREEN | `E1-1`, `E2-1`, `E3-1` |
+| AI | GREEN | six House agents, deterministic config/tests, LEGAL_ACTIONS only |
+| Current Arena source | GREEN | tracked prefix + tails + parity/physical/intrigue/strategy/UI patches |
+| Current Arena build | GREEN | deterministic standalone HTML + manifest/hash |
+| Действия | GREEN | 16 normal actions + 2 free procedures, blocked actions = 0 |
+| Командиры | GREEN | adult/healthy, capital assignment/return, 1 per army, 2 per House, movement with army |
+| Плен | GREEN | release / hold / ransom accept/reject / execute + succession |
+| Game Master | GREEN | 100/100 и 500/500, R6/108 actions, 0 engine errors, 0 invalid |
+| Browser UX smoke | OPEN | выполнить перед продвижением из DEV |
+| Print/art/BOM | OPEN | не блокирует цифровой DEV deploy, блокирует print-ready/STABLE |
 
-`data/master_game_data_v5.7.2-dev.json` является активным MGD.
+## Current Arena
 
-Подтверждено:
+Сборка:
 
-- 18 action rows;
-- 6 Домов;
-- 48 персонажей;
-- 9 дизайнов Советников / 18 физических экземпляров;
-- 18 Амбиций;
-- 30 Событий;
-- AI target weights / plans / escalation / diplomacy / naval-center blocks;
-- canonical land/sea/port data.
+```bash
+node tools/build_arena_v5_7_2.js
+```
 
-### CARDS
+Выход:
 
-`cards/canonical_registry_v5.7.2.json` восстановлен из текущих подтверждённых данных.
+- `arena/builds/V5.7.2_PLAYABLE_CURRENT_DEV.html`;
+- `arena/builds/V5.7.2_PLAYABLE_CURRENT_DEV.manifest.json`.
 
-Текущий подтверждённый физический набор: **120 карт**:
+В HTML встроены canonical data, техническая карта, engine, AI adapter и UI. Доступны ручной выбор Дома/действия, AI step/run, четыре решения по пленнику, вкладки Map/Houses/Diplomacy/Journal/Game Master и выгрузка state JSON.
 
-- Events — 30;
-- Houses — 6;
-- Characters — 48;
-- Advisors — 18 физических экземпляров;
-- Ambitions — 18.
+## QA
 
-Print Studio/card editor и генерация recovery PDF существуют.
+Обязательные проверки:
 
-### MAP
+```bash
+node tools/reconcile_v5_7_2.js --check
+node tools/generate_card_registry_v5_7_2.js --check
+node tools/check_map_topology_v5_7_2.js
+node tools/check_ai_config_v5_7_2.js
+python3 tools/check_territory_metadata_v5_7_2.py
+node ai/tests/house_agents.test.js
+node tools/build_arena_v5_7_2.js
+node qa/rules/tabletop_components.test.js
+node qa/rules/current_engine_invariants.test.js
+```
 
-`map/canonical_topology_v5.7.2.json` — текущий технический master topology:
+Game Master gates:
 
-- 52 территории;
-- 81 сухопутная связь;
-- 23 морских маршрута;
-- 16 портов.
+- 100 seeds: все партии завершены на R6 с 108 action slots;
+- 500 seeds: все партии завершены на R6 с 108 action slots;
+- `engine errors = 0`, `invalid actions = 0`, `sourceBlockedActions = []`;
+- draw/play/trace/investigation имеют ненулевое покрытие.
 
-### AI
+## Что больше не является блокером
 
-Собраны:
+- отсутствие exact historical RC2 HTML;
+- неполные RC1/RC3 forensic fragments;
+- отсутствие исторического Intrigues sheet;
+- прежние 120-card status notes.
 
-- 6 House Agents;
-- Prisoner Agent;
-- MultiAgentCoordinator;
-- `ai/config/canonical_v5.7.2.json`;
-- deterministic unit/config checks.
+Текущая линия не выдаёт новый модуль Интриг за найденный исторический источник: это явно зарегистрированный новый дизайн от 2026-09-12.
 
-AI-политика: агент выбирает только из переданных движком `LEGAL_ACTIONS`; решение должно иметь score/reason log.
+## Открытый физический контур
 
-### QA / GAME MASTER
+Репозиторий всё ещё нельзя считать полностью готовым физическим изданием:
 
-- Game Master runner присутствует.
-- Исторический `V5.7.2-PLAYABLE-RC2` прошёл 500/500 seeds до R6 без engine errors / invalid actions / prisoner invariant failures.
-- Это **historical evidence**, потому что current source после RC2 изменялся.
+1. нет утверждённого editable illustrated map master;
+2. нет полного approved component BOM и всех production masters;
+3. нет сертифицированного consolidated 160-card PDF/print package;
+4. нет свежего полного набора ручного playtest raw state;
+5. не выполнена физическая пробная печать/сборка.
 
-## 2. Главный текущий блокер — P0 Arena
+Эти пункты перечислены в `docs/KNOWN_ISSUES.md` и `release/repository_completeness_v5.7.2.json`.
 
-Issue: `#9 P0 Arena: восстановить повреждённый RC3 source bootstrap и запускаемый executable`.
+## Definition of STABLE
 
-Факты диагностики:
+`V5.7.2` можно продвигать из DEV только если одновременно:
 
-- `arena/source/current/rc3_source_bundle.tgz.b64` повреждён буквальной вставкой `[...] ELLIPSIZATION ...`;
-- recovered engine prefix собран из частей и имеет размер 33,592 bytes;
-- `node --check` recovered prefix падает с `Unexpected end of input`;
-- runtime обрывается внутри `resolvePrisonerDecision`;
-- отсутствует закрытие полного engine/IIFE и current source-matching executable;
-- поэтому текущая Arena **не может считаться воспроизводимым executable V5.7.2**.
+- current build воспроизводится без diff;
+- canonical и Arena CI зелёные;
+- 500+ seed regression зелёный;
+- реальный browser smoke подтверждает основной human flow;
+- все заявленные release artifacts сохранены и совпадают с manifest/hash;
+- для заявления print-ready закрыты art/BOM/prepress/physical proof;
+- `docs/KNOWN_ISSUES.md` не содержит блокера выбранного типа релиза.
 
-### Что требуется для закрытия P0
-
-1. Сформировать полный tracked Arena source из подтверждённых частей и канонических правил, не выдавая реконструкцию за старый RC3.
-2. Довести engine runtime до синтаксически и функционально полного состояния.
-3. Восстановить/создать воспроизводимый build standalone Arena из source.
-4. Добавить decode/checksum/syntax/smoke проверки в CI.
-5. Получить зелёный `Playable Arena` workflow.
-
-## 3. P1 — LEGAL_ACTIONS не покрывают Master Game Data
-
-Issue: `#10 P1 Engine: синхронизировать LEGAL_ACTIONS с Master Game Data V5.7.2`.
-
-MGD содержит 18 действий/процедур. Проверенный recovered engine prefix фактически генерирует/resolves только 10 основных типов:
-
-- March;
-- Recruit;
-- Fort;
-- Adviser;
-- Neutral Marriage;
-- Birth;
-- Pact;
-- Dynastic Marriage;
-- Access;
-- Raid.
-
-В полной цепочке текущего recovered runtime не доказаны:
-
-- Draw Intrigue;
-- Active Intrigue;
-- Legitimization;
-- Divorce;
-- Investigation;
-- Return from Exile;
-- Break Pact;
-- Gold Transfer.
-
-`Break Pact` и `Gold Transfer` по правилам являются свободными процедурами и не должны ошибочно съедать один из трёх action slots.
-
-### Критерий закрытия
-
-Для каждой строки MGD должна существовать проверяемая цепочка:
-
-`MGD → LEGAL_ACTION generator → validator → resolver → state mutation → Journal → UI → AI availability`.
-
-Если действие заблокировано отсутствующим source, это должно быть явно записано, а не молча исчезать из игры.
-
-## 4. BLOCKER DATA — 40 карт Интриг
-
-Issue: `#11 BLOCKER Data: найти канонический источник 40 карт Интриг V5.7.2`.
-
-Факты:
-
-- исторический Visual pack содержал 160 физических карт;
-- текущий canonical source подтверждает 120;
-- MGD не содержит полного `Intrigues` sheet;
-- правила ссылаются на исторический источник `03_Жестокий_Век_Карточки_V5.7.2-DEV.xlsx`, которого в текущем репозитории нет;
-- точные тексты, цели, стоимости, ограничения и copy count 40 Интриг не могут быть восстановлены без источника.
-
-**Запрещено:** придумывать эти 40 карт и выдавать за прежний канон.
-
-Статус: `ТРЕБУЕТ РЕШЕНИЯ / SOURCE MIGRATION`.
-
-## 5. Семейные командиры и плен — правила есть, implementation proof нет
-
-Issues: `#2` и `#3`.
-
-Текущие правила уже определяют:
-
-- взрослых здоровых персонажей в армии;
-- максимум 1 командира на армию и 2 персонажей Дома в армиях;
-- судьбу командира;
-- 4 post-capture решения: release / hold / ransom N / execute;
-- detention location;
-- возврат после release/ransom;
-- смерть и плен как разные состояния;
-- наследование/регентство.
-
-Но эти цепочки должны быть доказаны на новом source-matching Arena executable:
-
-`назначение → марш → бой → судьба → плен/смерть → решение пленителя → освобождение/казнь → наследование/регентство → Journal`.
-
-## 6. Свежий regression пока невозможен
-
-Issue: `#1 QA: провести reproducible regression для V5.7.2 после восстановления RC3`.
-
-Пока P0 Arena открыт, нельзя честно объявлять текущую игру прошедшей 100/500-seed regression.
-
-После восстановления executable требуется:
-
-1. smoke;
-2. минимум 100 reproducible seeds;
-3. затем 500+ seeds;
-4. естественное завершение после R6;
-5. 108 action slots для полной 6-House партии, если правила не создали законных пропусков/резервов, с отдельной проверкой причин;
-6. 0 engine errors;
-7. 0 invalid actions;
-8. 0 invariant failures;
-9. динамика VP / Influence / territories / wars / gold;
-10. Diplomacy / Access / Pact / Dynastic / prisoners / commanders / succession coverage;
-11. win-rate Домов и анализ AI decision-making;
-12. raw Journal / Houses / Diplomacy / Game Master outputs в репозитории.
-
-## 7. Физический комплект — ещё не production-ready
-
-### Карточки
-
-- 120 подтверждённых карт генерируются.
-- 40 Интриг отсутствуют как canonical source.
-- Финальные иллюстрации/backs/full art-master не собраны как воспроизводимый утверждённый пакет.
-
-### Карта
-
-- Техническая topology актуальна.
-- Финальный иллюстрированный PNG/SVG print master не мигрирован.
-- Визуальная стилизация не имеет права менять topology/порты/маршруты/границы.
-
-### Жетоны и компоненты
-
-- Есть частичные guides/templates.
-- Нет окончательного утверждённого BOM: полный список компонентов, количества, размеры, стороны, source и print master каждого типа.
-
-### Print/PnP
-
-- Полного сертифицированного current-source PnP package и physical proof нет.
-
-## 8. Playtest raw-data gap
-
-`playtest/` не содержит полного актуального набора последних ручных:
-
-- Journal JSON;
-- Diplomacy JSON;
-- Houses JSON;
-- всех связанных raw exports.
-
-Исторические отчёты полезны для root-cause анализа, но не заменяют свежий regression нового candidate.
-
-## 9. Исправленная система доставки
-
-Текущий release package должен пересобираться при изменениях canonical проектных областей, а не только при редактировании самого workflow.
-
-Workflow `.github/workflows/current-delivery-package.yml` является механизмом упаковки текущего `main` в единый artifact. Его trigger должен отслеживать Rules/Data/Cards/Map/Arena/AI/QA/Visual/Components/Docs/Release/tools и release metadata.
-
-## 10. Критический путь до STABLE
-
-Порядок работ:
-
-1. **P0 ARENA** — полный tracked engine + reproducible executable.
-2. **P1 ACTION PARITY** — все 18 MGD action/procedure chains.
-3. **COMMANDERS / PRISONERS / SUCCESSION / DIPLOMACY** — end-to-end tests.
-4. **INTRIGUE SOURCE** — найти исходные 40 карт или вынести новый дизайн на отдельное решение пользователя.
-5. **100-seed current regression**.
-6. Исправить выявленные RULES / DATA / ARENA / AI / LOGGING проблемы.
-7. **500+ seed balance regression**.
-8. Анализ баланса: VP pace, Influence, economy, wars, relations, ambitions, House win-rate.
-9. Финальные card/map/token/component masters + BOM.
-10. Physical print smoke/PnP proof.
-11. Финальная consistency проверка всей цепочки.
-12. Только после этого тег/версия `STABLE`.
-
-## 11. Definition of STABLE
-
-Версию нельзя считать STABLE, пока одновременно не выполнено:
-
-- Rules согласованы;
-- MGD согласован;
-- Cards полностью определены;
-- Map технически и физически определена;
-- Arena строится из tracked source;
-- все 18 действий исполняемы/валидируются либо имеют официальное решение о блокировке;
-- AI использует только legal engine actions;
-- Game Master regression свежий и воспроизводимый;
-- партия стабильно завершается по правилам;
-- отсутствуют P0/P1 consistency issues;
-- physical component BOM утверждён;
-- PnP package воспроизводим из repository source.
-
-## 12. Текущий итог
-
-**Игровые правила и canonical data уже существенно восстановлены. Главный затык проекта сейчас — не дизайн правил, а потерянный/повреждённый Arena baseline и отсутствие доказанной реализации всего утверждённого корпуса в одном воспроизводимом executable.**
-
-Второй независимый блокер — **40 канонических карт Интриг**, которые нельзя законно восстановить без исходника или нового решения пользователя.
-
-После закрытия этих двух направлений можно наконец проводить свежий полноценный балансировочный плейтест, а не анализировать исторические executable.
+До этого корректная маркировка: `V5.7.2-PLAYABLE-CURRENT-DEV / NOT STABLE / NOT PRINT-READY`.
