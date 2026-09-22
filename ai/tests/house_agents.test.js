@@ -10,6 +10,7 @@ const {
 } = require("../engine/house_agent");
 const { PrisonerAgent } = require("../engine/prisoner_agent");
 const { MultiAgentCoordinator } = require("../engine/multi_agent_coordinator");
+const { OpenRouterClient, extractText } = require("../engine/openrouter_client");
 
 const config = loadConfig(path.join(__dirname, "..", "config", "canonical_v5.7.2.json"));
 
@@ -111,6 +112,16 @@ assert.strictEqual(Object.keys(createAllHouseAgents({ config })).length, 6);
   const out = coordinator.decideHouseAction("Сайрвен", { legalActions: [] });
   assert.strictEqual(out.reason, "NO_LEGAL_ACTIONS");
   assert.strictEqual(coordinator.describe().houses.length, 6);
+  assert.strictEqual(coordinator.describe().openRouterEnabled, false);
+}
+
+{
+  const client = new OpenRouterClient({ apiKey: "" });
+  assert.strictEqual(client.enabled, false);
+  assert.strictEqual(
+    extractText({ choices: [{ message: { content: " explained " } }] }),
+    "explained"
+  );
 }
 
 console.log("AI agent tests OK");

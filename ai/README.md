@@ -78,3 +78,20 @@ AI не создаёт собственные действия и не обхо�
 AI-слой подключён к `arena/builds/V5.7.2_PLAYABLE_CURRENT_DEV.html` через `arena/source/current/ai_adapter.js` и strategy patch. Current Arena формирует `LEGAL_ACTIONS`, агент выбирает только из них, а решение и score/reason попадают в Journal.
 
 Интеграция проверяется House-agent tests, tabletop/invariant tests и 100/500-seed Game Master regression. Отдельный real-browser smoke остаётся release gate перед продвижением DEV-линии в STABLE.
+
+
+## OpenRouter
+
+OpenRouter is an optional explanation layer. It does **not** replace `LEGAL_ACTIONS`, canonical scoring, deterministic tie-breaks, prisoner rules, or the selected game action.
+
+Runtime secrets/config:
+
+```bash
+OPENROUTER_API_KEY=...
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_MODEL=~openai/gpt-latest
+OPENROUTER_SITE_URL=
+OPENROUTER_APP_TITLE="Age of Brutality"
+```
+
+Keep the real key outside the repository. `MultiAgentCoordinator.explainHouseDecision()` first makes the normal deterministic decision and only then asks OpenRouter to explain the supplied result. If the key is absent, the deterministic AI continues to work unchanged.
