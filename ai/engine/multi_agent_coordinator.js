@@ -1,7 +1,8 @@
 "use strict";
 
 const { createAllHouseAgents, loadConfig } = require("./house_agent");
-const { PrisonerAgent } = require("./prisoner_agent");\nconst { OpenRouterClient } = require("./openrouter_client");
+const { PrisonerAgent } = require("./prisoner_agent");
+const { OpenRouterClient } = require("./openrouter_client");
 
 class MultiAgentCoordinator {
   constructor(options = {}) {
