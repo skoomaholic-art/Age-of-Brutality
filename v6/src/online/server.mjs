@@ -133,6 +133,14 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+setInterval(() => {
+  try {
+    tick();
+  } catch (error) {
+    console.error('background tick failed', error);
+  }
+}, 1_000).unref();
+
 const port = Number(process.env.PORT || 8787);
 server.listen(port, '0.0.0.0', () => {
   console.log(`Age of Brutality persistent prototype: http://localhost:${port}`);
