@@ -13,6 +13,14 @@ export function journalEntryToAudit(entry, map, game) {
     type: entry.kind || 'EVENT'
   };
 
+  if (entry.kind === 'SESSION_START') {
+    return {
+      ...base,
+      message: `Началась игровая сессия ${game.session_id}.`,
+      details: { session_id: game.session_id }
+    };
+  }
+
   if (entry.kind === 'MARCH_QUEUED') {
     const from = territoryName(map, entry.from);
     const to = territoryName(map, entry.to);
