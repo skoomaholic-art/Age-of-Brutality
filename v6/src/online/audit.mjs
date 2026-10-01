@@ -63,6 +63,17 @@ export function journalEntryToAudit(entry, map, game) {
     type: entry.kind || 'EVENT'
   };
 
+  if (entry.kind === 'SNAPSHOT_RESTORED') {
+    return {
+      ...base,
+      message: 'Состояние партии восстановлено из сохранения.',
+      details: {
+        snapshot_saved_at: entry.snapshot_saved_at || null,
+        restored_at: entry.at || null
+      }
+    };
+  }
+
   if (entry.kind === 'SESSION_START') {
     return {
       ...base,
