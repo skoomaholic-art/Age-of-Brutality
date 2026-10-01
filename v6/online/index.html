@@ -459,11 +459,11 @@ function renderSelection() {
   $('from-name').textContent = o.name;
   $('to-name').textContent = t.name;
 
-  const seconds = preferred.mode === 'SEA'
-    ? snapshot.timing.seaSegmentMs / 1000
-    : snapshot.timing.landSegmentMs / 1000;
   const modeName = preferred.mode === 'SEA' ? 'море' : 'суша';
-  $('route-meta').textContent = `Отряд: до ${max} воинов · путь: ${modeName} · время: около ${seconds} сек.`;
+  const secondsText = preferred.mode === 'SEA'
+    ? `${snapshot.timing.seaSegmentMs / 1000} сек`
+    : `${snapshot.timing.landSegmentMs / 1000}-${snapshot.timing.landMaxMs / 1000} сек`;
+  $('route-meta').textContent = `Отряд: до ${max} воинов · путь: ${modeName} · тестовое время: ${secondsText}.`;
   $('guide-title').textContent = '3. Выбери, СКОЛЬКО воинов отправить';
   $('guide-sub').textContent = 'Марш полностью выбран. Проверь маршрут внизу карты и отдай приказ.';
   card.classList.add('show');
