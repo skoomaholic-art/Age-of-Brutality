@@ -6,8 +6,9 @@ import { resolveEmptyEnemyOccupation } from '../core/occupation.mjs';
 import { validateState, warriorsAt } from '../core/state.mjs';
 
 export const ONLINE_TIMING = Object.freeze({
-  landSegmentMs: 30_000,
-  seaSegmentMs: 45_000
+  landSegmentMs: 3_000,
+  landMaxMs: 5_000,
+  seaSegmentMs: 5_000
 });
 
 function actionKey(action) {
@@ -68,7 +69,10 @@ export function travelDurationMs(state, map, constants, action, timing = ONLINE_
   );
   if (!paths.length) throw new Error('no legal land path for timed order');
   const segments = Math.min(...paths.map(path => path.length - 1));
-  return timing.landSegmentMs * segments;
+  return Math.min(
+    Number(timing.landMaxMs || Number.MAX_SAFE_INTEGER),
+    timing.landSegmentMs * segments
+  );
 }
 
 export function queueTimedOrder(
@@ -105,7 +109,9 @@ export function queueTimedOrder(
     to: action.to,
     warriors: action.warriors,
     mode: action.mode,
-    due_at: order.due_at
+    started_at: order.created_at,
+    due_at: order.due_at,
+    planned_duration_ms: durationMs
   });
   next.updated_at = new Date(nowMs).toISOString();
   return { game: next, order };
@@ -155,6 +161,7 @@ export function processDueOrders(game, map, constants, nowMs = Date.now()) {
   for (const dueOrder of due) {
     const liveOrder = next.orders.find(order => order.id === dueOrder.id);
     try {
+      const journalStart = next.state.journal.length;
       const resolved = resolveOrder(next.state, map, constants, next.id, liveOrder);
       const errors = validateState(resolved.state, map, constants);
       if (errors.length) throw new Error(`post-order state invalid: ${errors.join('; ')}`);
@@ -164,6 +171,16 @@ export function processDueOrders(game, map, constants, nowMs = Date.now()) {
       liveOrder.resolved_at = new Date(nowMs).toISOString();
       liveOrder.result = resolved.result;
       liveOrder.failure_reason = null;
+
+      for (let i = journalStart; i < next.state.journal.length; i += 1) {
+        Object.assign(next.state.journal[i], {
+          order_id: liveOrder.id,
+          started_at: liveOrder.created_at,
+          completed_at: liveOrder.resolved_at,
+          planned_duration_ms: liveOrder.duration_ms,
+          actual_duration_ms: Math.max(0, nowMs - Date.parse(liveOrder.created_at))
+        });
+      }
     } catch (error) {
       liveOrder.status = 'FAILED';
       liveOrder.resolved_at = new Date(nowMs).toISOString();
@@ -176,7 +193,11 @@ export function processDueOrders(game, map, constants, nowMs = Date.now()) {
         to: liveOrder.action.to,
         warriors: liveOrder.action.warriors,
         mode: liveOrder.action.mode,
-        reason: liveOrder.failure_reason
+        reason: liveOrder.failure_reason,
+        started_at: liveOrder.created_at,
+        completed_at: liveOrder.resolved_at,
+        planned_duration_ms: liveOrder.duration_ms,
+        actual_duration_ms: Math.max(0, nowMs - Date.parse(liveOrder.created_at))
       });
     }
   }
