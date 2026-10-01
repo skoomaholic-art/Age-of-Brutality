@@ -28,6 +28,8 @@ jobs:
       WIF_PROVIDER: ${{ vars.AOB_GCP_WIF_PROVIDER }}
       DEPLOY_SA: ${{ vars.AOB_GCP_DEPLOY_SA }}
       RUNTIME_SA: ${{ vars.AOB_GCP_RUNTIME_SA }}
+      FIRESTORE_DATABASE: "(default)"
+      FIRESTORE_LOCATION: europe-west1
 
     steps:
       - uses: actions/checkout@v4
@@ -47,6 +49,38 @@ jobs:
           service_account: ${{ env.DEPLOY_SA }}
 
       - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Ensure Firestore backend
+        run: |
+          set -euo pipefail
+
+          if ! gcloud services list \
+            --project="${PROJECT_ID}" \
+            --enabled \
+            --filter='config.name:firestore.googleapis.com' \
+            --format='value(config.name)' | grep -qx 'firestore.googleapis.com'; then
+            gcloud services enable firestore.googleapis.com --project="${PROJECT_ID}"
+          fi
+
+          if ! gcloud firestore databases describe \
+            --project="${PROJECT_ID}" \
+            --database="${FIRESTORE_DATABASE}" >/dev/null 2>&1; then
+            gcloud firestore databases create \
+              --project="${PROJECT_ID}" \
+              --database="${FIRESTORE_DATABASE}" \
+              --location="${FIRESTORE_LOCATION}" \
+              --edition=standard \
+              --type=firestore-native \
+              --delete-protection
+          fi
+
+          gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+            --member="serviceAccount:${RUNTIME_SA}" \
+            --role="roles/datastore.user" \
+            --condition=None \
+            --quiet
+
+          echo "Firestore backend is ready."
 
       - name: Snapshot live game before deploy
         run: |
@@ -95,6 +129,7 @@ jobs:
             --memory=256Mi \
             --concurrency=40 \
             --cpu-throttling \
+            --set-env-vars="AOB_FIRESTORE_DATABASE=${FIRESTORE_DATABASE},AOB_GAME_ID=prototype-1" \
             --quiet
 
           URL="$(gcloud run services describe "${SERVICE}" --project="${PROJECT_ID}" --region="${REGION}" --format='value(status.url)')"
@@ -107,19 +142,32 @@ jobs:
           echo "URL: ${URL}" >> "${GITHUB_STEP_SUMMARY}"
           echo "Commit: ${GITHUB_SHA}" >> "${GITHUB_STEP_SUMMARY}"
 
-      - name: Restore pre-deploy snapshot
+      - name: Migrate pre-Firestore game once
         if: ${{ env.HAVE_SNAPSHOT == '1' }}
         run: |
           set -euo pipefail
           test -s "${SNAPSHOT_FILE}"
-          curl --retry 8 --retry-all-errors --retry-delay 2 \
-            -fsS --max-time 30 \
-            -X POST \
-            -H 'content-type: application/json' \
-            --data-binary "@${SNAPSHOT_FILE}" \
-            "${URL}/api/snapshot/restore"
-          echo
-          echo "Pre-deploy game snapshot restored."
+
+          STORAGE_STATUS="$(curl --retry 8 --retry-all-errors --retry-delay 2 \
+            -fsS --max-time 30 "${URL}/api/storage")"
+
+          BACKEND="$(printf '%s' "${STORAGE_STATUS}" | jq -r '.backend')"
+          LOADED_EXISTING="$(printf '%s' "${STORAGE_STATUS}" | jq -r '.loaded_existing_at_startup')"
+
+          test "${BACKEND}" = "firestore"
+
+          if [[ "${LOADED_EXISTING}" == "false" ]]; then
+            curl --retry 8 --retry-all-errors --retry-delay 2 \
+              -fsS --max-time 30 \
+              -X POST \
+              -H 'content-type: application/json' \
+              --data-binary "@${SNAPSHOT_FILE}" \
+              "${URL}/api/snapshot/restore"
+            echo
+            echo "Legacy live game migrated into Firestore."
+          else
+            echo "Firestore already contained the live game. Migration restore skipped."
+          fi
 
       - name: Smoke check
         run: |
@@ -127,5 +175,6 @@ jobs:
           curl --retry 5 --retry-all-errors --retry-delay 2 \
             -fsS --max-time 20 "${URL}/api/state" >/dev/null
           curl -fsS --max-time 20 "${URL}/api/snapshot" >/dev/null
+          curl -fsS --max-time 20 "${URL}/api/storage" | jq -e '.backend == "firestore"' >/dev/null
           curl -fsS --max-time 20 "${URL}/" >/dev/null
-          echo "Cloud Run prototype is reachable and snapshot API is available."
+          echo "Cloud Run prototype is reachable and Firestore is the active backend."
