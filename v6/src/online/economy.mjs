@@ -3,8 +3,8 @@ import { totalHouseWarriors, validateState } from '../core/state.mjs';
 
 export const ONLINE_ECONOMY_TIMING = Object.freeze({
   incomeIntervalMs: 120_000,
-  recruitPerWarriorMs: 30_000,
-  fortBuildMs: 60_000
+  recruitBuildMs: 4_000,
+  fortBuildMs: 5_000
 });
 
 export function normalizeOnlineEconomy(game, nowMs = Date.now(), timing = ONLINE_ECONOMY_TIMING) {
@@ -64,7 +64,7 @@ export function queueRecruitJob(game, constants, {
   }
 
   const id = jobId(next);
-  const duration = timing.recruitPerWarriorMs * count;
+  const duration = timing.recruitBuildMs;
   const job = {
     id,
     type: 'RECRUIT',
@@ -82,7 +82,17 @@ export function queueRecruitJob(game, constants, {
   next.state.houses[house].gold -= count;
   next.jobs.push(job);
   next.updated_at = new Date(nowMs).toISOString();
-  next.state.journal.push({ kind: 'RECRUIT_QUEUED', house, territory, warriors: count, gold_spent: count });
+  next.state.journal.push({
+    kind: 'RECRUIT_QUEUED',
+    job_id: id,
+    house,
+    territory,
+    warriors: count,
+    gold_spent: count,
+    started_at: job.created_at,
+    due_at: job.due_at,
+    planned_duration_ms: duration
+  });
   return { game: next, job };
 }
 
@@ -125,25 +135,39 @@ export function queueFortJob(game, map, constants, {
   next.state.houses[house].gold -= constants.economy.fort_cost;
   next.jobs.push(job);
   next.updated_at = new Date(nowMs).toISOString();
-  next.state.journal.push({ kind: 'FORT_QUEUED', house, territory, gold_spent: constants.economy.fort_cost });
+  next.state.journal.push({
+    kind: 'FORT_QUEUED',
+    job_id: id,
+    house,
+    territory,
+    gold_spent: constants.economy.fort_cost,
+    started_at: job.created_at,
+    due_at: job.due_at,
+    planned_duration_ms: timing.fortBuildMs
+  });
   return { game: next, job };
 }
 
-function failAndRefund(next, job, reason) {
+function failAndRefund(next, job, reason, nowMs) {
   job.status = 'FAILED';
   job.failure_reason = reason;
-  job.resolved_at = new Date().toISOString();
+  job.resolved_at = new Date(nowMs).toISOString();
   next.state.houses[job.house].gold += Number(job.gold_paid || 0);
   next.state.journal.push({
     kind: `${job.type}_FAILED`,
     house: job.house,
     territory: job.territory,
     reason,
-    gold_refunded: Number(job.gold_paid || 0)
+    gold_refunded: Number(job.gold_paid || 0),
+    job_id: job.id,
+    started_at: job.created_at,
+    completed_at: job.resolved_at,
+    planned_duration_ms: Math.max(0, Date.parse(job.due_at) - Date.parse(job.created_at)),
+    actual_duration_ms: Math.max(0, nowMs - Date.parse(job.created_at))
   });
 }
 
-function resolveRecruit(next, constants, job) {
+function resolveRecruit(next, constants, job, nowMs) {
   const territory = next.state.territories[job.territory];
   if (territory.owner !== job.house) throw new Error('territory changed owner before recruitment completed');
   if (totalHouseWarriors(next.state, job.house) + job.warriors > constants.house_warrior_cap) {
@@ -156,13 +180,19 @@ function resolveRecruit(next, constants, job) {
   territory.warriors[job.house] = (territory.warriors[job.house] || 0) + job.warriors;
   next.state.journal.push({
     kind: 'RECRUIT_COMPLETE',
+    job_id: job.id,
     house: job.house,
     territory: job.territory,
-    warriors: job.warriors
+    warriors: job.warriors,
+    gold_spent: job.gold_paid,
+    started_at: job.created_at,
+    completed_at: new Date(nowMs).toISOString(),
+    planned_duration_ms: Math.max(0, Date.parse(job.due_at) - Date.parse(job.created_at)),
+    actual_duration_ms: Math.max(0, nowMs - Date.parse(job.created_at))
   });
 }
 
-function resolveFort(next, map, constants, job) {
+function resolveFort(next, map, constants, job, nowMs) {
   const territory = next.state.territories[job.territory];
   const meta = map.territories.find(item => item.id === job.territory);
   if (territory.owner !== job.house) throw new Error('territory changed owner before fort completed');
@@ -173,7 +203,17 @@ function resolveFort(next, map, constants, job) {
   territory.fort = true;
   if (!Array.isArray(next.state.houses[job.house].forts)) next.state.houses[job.house].forts = [];
   next.state.houses[job.house].forts.push(job.territory);
-  next.state.journal.push({ kind: 'FORT_COMPLETE', house: job.house, territory: job.territory });
+  next.state.journal.push({
+    kind: 'FORT_COMPLETE',
+    job_id: job.id,
+    house: job.house,
+    territory: job.territory,
+    gold_spent: job.gold_paid,
+    started_at: job.created_at,
+    completed_at: new Date(nowMs).toISOString(),
+    planned_duration_ms: Math.max(0, Date.parse(job.due_at) - Date.parse(job.created_at)),
+    actual_duration_ms: Math.max(0, nowMs - Date.parse(job.created_at))
+  });
 }
 
 export function processEconomy(game, map, constants, nowMs = Date.now(), timing = ONLINE_ECONOMY_TIMING) {
@@ -199,8 +239,8 @@ export function processEconomy(game, map, constants, nowMs = Date.now(), timing 
   for (const dueJob of due) {
     const job = next.jobs.find(item => item.id === dueJob.id);
     try {
-      if (job.type === 'RECRUIT') resolveRecruit(next, constants, job);
-      else if (job.type === 'FORT') resolveFort(next, map, constants, job);
+      if (job.type === 'RECRUIT') resolveRecruit(next, constants, job, nowMs);
+      else if (job.type === 'FORT') resolveFort(next, map, constants, job, nowMs);
       else throw new Error(`unknown job type ${job.type}`);
 
       const errors = validateState(next.state, map, constants);
@@ -209,7 +249,7 @@ export function processEconomy(game, map, constants, nowMs = Date.now(), timing 
       job.resolved_at = new Date(nowMs).toISOString();
       job.failure_reason = null;
     } catch (error) {
-      failAndRefund(next, job, error instanceof Error ? error.message : String(error));
+      failAndRefund(next, job, error instanceof Error ? error.message : String(error), nowMs);
     }
     changed = true;
   }
