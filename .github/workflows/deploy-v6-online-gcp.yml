@@ -22,14 +22,23 @@ jobs:
       run:
         working-directory: v6
     env:
-      PROJECT_ID: skoomaholic-poster-editor
-      REGION: europe-west1
+      PROJECT_ID: ${{ vars.AOB_GCP_PROJECT_ID }}
+      REGION: ${{ vars.AOB_GCP_REGION || 'europe-west1' }}
       SERVICE: age-of-brutality-v6
-      WIF_PROVIDER: projects/1046342400775/locations/global/workloadIdentityPools/poster-editor-github/providers/github
-      DEPLOY_SA: poster-editor-deployer@skoomaholic-poster-editor.iam.gserviceaccount.com
+      WIF_PROVIDER: ${{ vars.AOB_GCP_WIF_PROVIDER }}
+      DEPLOY_SA: ${{ vars.AOB_GCP_DEPLOY_SA }}
+      RUNTIME_SA: ${{ vars.AOB_GCP_RUNTIME_SA }}
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Require dedicated game cloud config
+        run: |
+          set -euo pipefail
+          test -n "${PROJECT_ID}"
+          test -n "${WIF_PROVIDER}"
+          test -n "${DEPLOY_SA}"
+          test -n "${RUNTIME_SA}"
 
       - id: google-auth
         uses: google-github-actions/auth@v2
@@ -46,7 +55,7 @@ jobs:
             --project="${PROJECT_ID}" \
             --region="${REGION}" \
             --source=. \
-            --service-account="${DEPLOY_SA}" \
+            --service-account="${RUNTIME_SA}" \
             --no-invoker-iam-check \
             --ingress=all \
             --min-instances=0 \
@@ -63,6 +72,7 @@ jobs:
           echo "URL=${URL}" >> "${GITHUB_ENV}"
           echo "### Age of Brutality V6 Online" >> "${GITHUB_STEP_SUMMARY}"
           echo "" >> "${GITHUB_STEP_SUMMARY}"
+          echo "Project: ${PROJECT_ID}" >> "${GITHUB_STEP_SUMMARY}"
           echo "URL: ${URL}" >> "${GITHUB_STEP_SUMMARY}"
           echo "Commit: ${GITHUB_SHA}" >> "${GITHUB_STEP_SUMMARY}"
 
