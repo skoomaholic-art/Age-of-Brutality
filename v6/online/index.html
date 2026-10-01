@@ -60,10 +60,57 @@
     .territory { cursor: pointer; transition: .15s ease; }
     .territory circle { stroke: #e6ddcb; stroke-width: 1.2; }
     .territory:hover circle { stroke-width: 2.5; }
-    .territory.origin circle { stroke: #fff4a8; stroke-width: 4; }
-    .territory.legal circle { stroke: #87e6a7; stroke-width: 4; }
+    .territory.selectable circle { stroke: #77bfff; stroke-width: 3; }
+    .territory.origin circle { stroke: #ffd45c; stroke-width: 5; filter: drop-shadow(0 0 6px rgba(255,212,92,.9)); }
+    .territory.legal circle { stroke: #70ef9b; stroke-width: 5; filter: drop-shadow(0 0 6px rgba(112,239,155,.75)); }
+    .territory.target circle { stroke: #ff8d65; stroke-width: 6; filter: drop-shadow(0 0 7px rgba(255,141,101,.9)); }
+    .territory.dim { opacity: .34; }
     .territory text { fill: #e9e2d6; font-size: 9px; pointer-events: none; text-anchor: middle; }
     .territory .count { font-size: 11px; font-weight: 800; }
+    .territory .badge-bg { stroke: none; }
+    .territory .badge { fill: #11161a; font-size: 7px; font-weight: 900; letter-spacing: .04em; }
+    .map-guide {
+      position: absolute;
+      z-index: 5;
+      left: 12px;
+      top: 12px;
+      right: 12px;
+      max-width: 560px;
+      border: 1px solid #46515a;
+      border-radius: 12px;
+      padding: 10px 12px;
+      background: rgba(8,12,15,.9);
+      backdrop-filter: blur(10px);
+      pointer-events: none;
+    }
+    .guide-title { font-weight: 850; font-size: 14px; }
+    .guide-sub { color: #aeb7bd; font-size: 11px; margin-top: 3px; }
+    .route-card {
+      position: absolute;
+      z-index: 6;
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      border: 1px solid #52606a;
+      border-radius: 14px;
+      padding: 12px;
+      background: rgba(8,12,15,.94);
+      backdrop-filter: blur(12px);
+      display: none;
+    }
+    .route-card.show { display: block; }
+    .route-line { display: flex; align-items: center; gap: 10px; font-weight: 850; font-size: 15px; }
+    .route-place { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .route-place.to { text-align: right; }
+    .route-arrow { color: #ffd45c; font-size: 22px; }
+    .route-meta { color: #aeb7bd; font-size: 11px; margin: 6px 0 10px; }
+    .troop-controls { display: grid; grid-template-columns: minmax(0,1fr) 84px 128px; gap: 8px; align-items: end; }
+    .troop-controls input { width: 100%; }
+    .troop-max { width: 100%; }
+    .primary.big { min-height: 42px; font-weight: 800; }
+    .selection-legend { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+    .legend-pill { border:1px solid #36414a; border-radius:999px; padding:4px 8px; font-size:10px; color:#aeb7bd; }
+    .legend-pill b { color:#ece6d8; }
     aside {
       border-left: 1px solid #30383e;
       background: rgba(14,18,21,.94);
@@ -96,6 +143,10 @@
       main { grid-template-columns: 1fr; }
       aside { max-height: none; border-left: 0; border-top: 1px solid #30383e; }
       .map-card { height: 68vh; min-height: 520px; }
+      .map-guide { max-width: none; }
+      .route-card { left: 8px; right: 8px; bottom: 8px; }
+      .troop-controls { grid-template-columns: 1fr 74px; }
+      .primary.big { grid-column: 1 / -1; }
     }
   </style>
 </head>
@@ -117,7 +168,33 @@
 <main>
   <section class="map-wrap">
     <div class="map-card">
+      <div id="map-guide" class="map-guide">
+        <div id="guide-title" class="guide-title">1. Выбери, ОТКУДА идти</div>
+        <div id="guide-sub" class="guide-sub">Синим отмечены твои территории, где есть воины.</div>
+        <div class="selection-legend">
+          <span class="legend-pill"><b>Синий</b> можно выбрать</span>
+          <span class="legend-pill"><b>Жёлтый</b> откуда</span>
+          <span class="legend-pill"><b>Зелёный</b> куда можно</span>
+          <span class="legend-pill"><b>Красный</b> куда выбрано</span>
+        </div>
+      </div>
       <svg id="map" viewBox="40 30 760 490" role="img" aria-label="Карта Жестокого Века"></svg>
+      <div id="route-card" class="route-card">
+        <div class="route-line">
+          <span id="from-name" class="route-place">...</span>
+          <span class="route-arrow">→</span>
+          <span id="to-name" class="route-place to">...</span>
+        </div>
+        <div id="route-meta" class="route-meta"></div>
+        <div class="troop-controls">
+          <label>
+            <span class="muted">3. Сколько воинов отправить</span>
+            <input id="warriors" type="number" min="1" value="1" />
+          </label>
+          <button id="max-warriors" class="troop-max">Все</button>
+          <button id="send" class="primary big">Отдать приказ</button>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -133,18 +210,7 @@
 
     <div class="panel">
       <h2>Марш</h2>
-      <div id="selection" class="muted">Выбери свою территорию с воинами.</div>
-      <div id="move-box" class="move-box">
-        <div id="route" style="margin:10px 0;font-weight:700"></div>
-        <div class="move-grid">
-          <label>
-            <span class="muted">Воинов</span>
-            <input id="warriors" type="number" min="1" value="1" style="width:100%" />
-          </label>
-          <button id="send" class="primary">Отдать приказ</button>
-        </div>
-        <div id="eta" class="muted" style="margin-top:8px"></div>
-      </div>
+      <div id="selection" class="muted">1. Выбери свою территорию с воинами.</div>
     </div>
 
     <div class="panel">
@@ -231,14 +297,22 @@ function renderMap() {
     const c = coords[t.id];
     const r = t.type === 'Столица' ? 16 : 12;
     const classes = ['territory'];
+    const ownMovable = owner === house && warriorsAt(t.id, house) > 0;
+    if (!origin && ownMovable) classes.push('selectable');
     if (t.id === origin) classes.push('origin');
     if (origin && legalTargets.has(t.id)) classes.push('legal');
+    if (t.id === target) classes.push('target');
+    if (origin && t.id !== origin && !legalTargets.has(t.id) && t.id !== target) classes.push('dim');
     const fill = owner ? (colors[owner] || '#59636a') : '#2c353b';
+    let badge = '';
+    if (t.id === origin) badge = '<rect class="badge-bg" x="-24" y="19" width="48" height="13" rx="5" fill="#ffd45c"></rect><text class="badge" y="28">ОТКУДА</text>';
+    if (t.id === target) badge = '<rect class="badge-bg" x="-19" y="19" width="38" height="13" rx="5" fill="#ff8d65"></rect><text class="badge" y="28">КУДА</text>';
     return `
       <g class="${classes.join(' ')}" data-id="${t.id}" transform="translate(${c.x} ${c.y})">
         <circle r="${r}" fill="${fill}"></circle>
         <text y="-18">${escapeHtml(t.name.replace(/ - [AB]$/, ''))}</text>
         <text class="count" y="4">${total || ''}</text>
+        ${badge}
       </g>`;
   });
 
@@ -255,18 +329,24 @@ async function loadLegal() {
 }
 
 function renderSelection() {
+  const card = $('route-card');
+
   if (!origin) {
-    $('selection').textContent = 'Выбери свою территорию с воинами.';
-    $('move-box').classList.remove('show');
+    $('selection').textContent = '1. Выбери свою территорию с воинами.';
+    $('guide-title').textContent = '1. Выбери, ОТКУДА идти';
+    $('guide-sub').textContent = 'Синим отмечены твои территории, где есть воины.';
+    card.classList.remove('show');
     return;
   }
 
   const o = territoryById(origin);
   const own = warriorsAt(origin, house);
-  $('selection').textContent = `${o.name}: ${own} воинов. Теперь выбери подсвеченную цель.`;
+  $('selection').textContent = `ОТКУДА: ${o.name}. Доступно ${own} воинов.`;
 
   if (!target) {
-    $('move-box').classList.remove('show');
+    $('guide-title').textContent = `2. Выбери, КУДА идти из ${o.name}`;
+    $('guide-sub').textContent = 'Зелёным отмечены допустимые цели. Нажми на одну из них.';
+    card.classList.remove('show');
     return;
   }
 
@@ -274,18 +354,21 @@ function renderSelection() {
   const matching = legal.filter(a => a.from === origin && a.to === target);
   const max = Math.max(...matching.map(a => a.warriors));
   const preferred = matching.find(a => a.warriors === max) || matching[0];
+  const current = Number($('warriors').value || 1);
 
   $('warriors').max = max;
-  $('warriors').value = Math.min(Number($('warriors').value || 1), max);
-  $('route').textContent = `${o.name} -> ${t.name}`;
-  const segmentCount = preferred.mode === 'SEA' ? 1 : (
-    preferred.duration_ms ? 1 : 1
-  );
+  $('warriors').value = Math.min(Math.max(current, 1), max);
+  $('from-name').textContent = o.name;
+  $('to-name').textContent = t.name;
+
   const seconds = preferred.mode === 'SEA'
     ? snapshot.timing.seaSegmentMs / 1000
     : snapshot.timing.landSegmentMs / 1000;
-  $('eta').textContent = `Режим: ${preferred.mode}. Базовое время сегмента: ${seconds} сек.`;
-  $('move-box').classList.add('show');
+  const modeName = preferred.mode === 'SEA' ? 'море' : 'суша';
+  $('route-meta').textContent = `Отряд: до ${max} воинов · путь: ${modeName} · время: около ${seconds} сек.`;
+  $('guide-title').textContent = '3. Выбери, СКОЛЬКО воинов отправить';
+  $('guide-sub').textContent = 'Марш полностью выбран. Проверь маршрут внизу карты и отдай приказ.';
+  card.classList.add('show');
 }
 
 async function selectTerritory(id) {
@@ -431,6 +514,10 @@ $('house').addEventListener('change', async event => {
 });
 
 $('send').addEventListener('click', sendOrder);
+$('max-warriors').addEventListener('click', () => {
+  const max = Number($('warriors').max || 1);
+  $('warriors').value = max;
+});
 
 $('reset').addEventListener('click', async () => {
   await api('/api/reset', { method: 'POST' });
