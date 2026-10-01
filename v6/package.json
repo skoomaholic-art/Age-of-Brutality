@@ -1,0 +1,14 @@
+{
+  "name": "age-of-brutality-v6-core",
+  "version": "6.0.0-alpha.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "validate": "node tools/validate.mjs",
+    "test": "node --test",
+    "check": "npm run validate && npm test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
