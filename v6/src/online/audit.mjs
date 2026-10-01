@@ -376,6 +376,7 @@ export function syncAuditFromJournal(game, map, {
     next.audit_seq += 1;
     next.audit_log.push(item);
     recordActivity(next, item);
+    item.session = sessionSummary(next, eventMs);
 
     if (next.audit_log.length > maxEntries) {
       next.audit_log.splice(0, next.audit_log.length - maxEntries);
@@ -398,7 +399,8 @@ export function emitCloudAudit(item) {
     audit_type: item.type,
     at: item.at,
     details: item.details,
-    stats: item.stats
+    stats: item.stats,
+    session: item.session
   };
   console.log(JSON.stringify(payload));
 }
