@@ -50,37 +50,20 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
-      - name: Ensure Firestore backend
+      - name: Verify Firestore API
         run: |
           set -euo pipefail
-
-          if ! gcloud services list \
+          ENABLED="$(gcloud services list \
             --project="${PROJECT_ID}" \
             --enabled \
             --filter='config.name:firestore.googleapis.com' \
-            --format='value(config.name)' | grep -qx 'firestore.googleapis.com'; then
-            gcloud services enable firestore.googleapis.com --project="${PROJECT_ID}"
+            --format='value(config.name)')"
+          if [[ "${ENABLED}" != "firestore.googleapis.com" ]]; then
+            echo "Firestore API is not enabled in project ${PROJECT_ID}."
+            echo "Run the one-time Firestore bootstrap as a project owner, then redeploy."
+            exit 1
           fi
-
-          if ! gcloud firestore databases describe \
-            --project="${PROJECT_ID}" \
-            --database="${FIRESTORE_DATABASE}" >/dev/null 2>&1; then
-            gcloud firestore databases create \
-              --project="${PROJECT_ID}" \
-              --database="${FIRESTORE_DATABASE}" \
-              --location="${FIRESTORE_LOCATION}" \
-              --edition=standard \
-              --type=firestore-native \
-              --delete-protection
-          fi
-
-          gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
-            --member="serviceAccount:${RUNTIME_SA}" \
-            --role="roles/datastore.user" \
-            --condition=None \
-            --quiet
-
-          echo "Firestore backend is ready."
+          echo "Firestore API is enabled."
 
       - name: Snapshot live game before deploy
         run: |
