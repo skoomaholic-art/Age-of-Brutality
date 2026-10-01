@@ -28,7 +28,8 @@
     }
     h1 { margin: 0; font-size: 19px; letter-spacing: .08em; }
     .sub { color: #aeb7bd; font-size: 12px; margin-top: 4px; }
-    .controls { display: flex; gap: 8px; align-items: center; }
+    .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .save-status { font-size: 10px; color: #8f9aa1; min-width: 132px; text-align: right; }
     select, input, button {
       background: #171d22;
       color: #ece6d8;
@@ -156,6 +157,9 @@
       .route-card { left: 8px; right: 8px; bottom: 8px; }
       .troop-controls { grid-template-columns: 1fr 74px; }
       .primary.big { grid-column: 1 / -1; }
+      header { align-items:flex-start; flex-direction:column; }
+      .controls { width:100%; }
+      .save-status { width:100%; text-align:left; }
     }
   </style>
 </head>
@@ -170,7 +174,10 @@
       <span class="muted">Дом</span>
       <select id="house"></select>
     </label>
+    <button id="save-game">Сохранить</button>
+    <button id="restore-game">Восстановить</button>
     <button id="reset">Новая партия</button>
+    <div id="save-status" class="save-status">Сохранений ещё нет</div>
   </div>
 </header>
 
@@ -272,6 +279,10 @@ let target = null;
 let legal = [];
 let economy = null;
 let managedTerritory = null;
+let lastAutoSavedUpdatedAt = null;
+
+const AUTO_SAVE_KEY = 'aob-v6-autosave';
+const MANUAL_SAVE_KEY = 'aob-v6-manual-save';
 
 const $ = id => document.getElementById(id);
 
@@ -288,6 +299,55 @@ function territoryById(id) {
 
 function warriorsAt(id, owner) {
   return Number(snapshot.game.state.territories[id]?.warriors?.[owner] || 0);
+}
+
+function makeLocalSnapshot(game, savedAt = new Date().toISOString()) {
+  return {
+    schema_version: 1,
+    saved_at: savedAt,
+    game
+  };
+}
+
+function saveLocal(key, payload) {
+  localStorage.setItem(key, JSON.stringify(payload));
+}
+
+function loadLocal(key) {
+  const raw = localStorage.getItem(key);
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch { return null; }
+}
+
+function latestLocalSave() {
+  const manual = loadLocal(MANUAL_SAVE_KEY);
+  const auto = loadLocal(AUTO_SAVE_KEY);
+  const candidates = [manual, auto].filter(Boolean);
+  return candidates.sort((a,b) => Date.parse(b.saved_at || 0) - Date.parse(a.saved_at || 0))[0] || null;
+}
+
+function renderSaveStatus() {
+  const latest = latestLocalSave();
+  if (!latest?.saved_at) {
+    $('save-status').textContent = 'Сохранений ещё нет';
+    return;
+  }
+  const when = new Date(latest.saved_at).toLocaleString('ru-RU', {
+    day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit'
+  });
+  const manual = loadLocal(MANUAL_SAVE_KEY);
+  const kind = manual?.saved_at === latest.saved_at ? 'Ручной сейв' : 'Автосейв';
+  $('save-status').textContent = `${kind}: ${when}`;
+}
+
+function autoSaveCurrentGame() {
+  if (!snapshot?.game) return;
+  const version = snapshot.game.updated_at || snapshot.game.created_at;
+  if (!version || version === lastAutoSavedUpdatedAt) return;
+  const payload = makeLocalSnapshot(snapshot.game);
+  saveLocal(AUTO_SAVE_KEY, payload);
+  lastAutoSavedUpdatedAt = version;
+  renderSaveStatus();
 }
 
 function escapeHtml(value) {
@@ -601,6 +661,7 @@ async function refresh() {
   renderSelection();
   renderOrders();
   renderJournal();
+  autoSaveCurrentGame();
 }
 
 $('house').addEventListener('change', async event => {
@@ -650,6 +711,43 @@ $('build-fort').addEventListener('click', async () => {
   }
 });
 
+$('save-game').addEventListener('click', async () => {
+  try {
+    const payload = await api('/api/snapshot');
+    saveLocal(MANUAL_SAVE_KEY, payload);
+    saveLocal(AUTO_SAVE_KEY, payload);
+    lastAutoSavedUpdatedAt = payload.game?.updated_at || null;
+    renderSaveStatus();
+    $('save-status').textContent = 'Сохранено вручную: ' + new Date(payload.saved_at).toLocaleTimeString('ru-RU');
+  } catch (error) {
+    alert('Не удалось сохранить: ' + error.message);
+  }
+});
+
+$('restore-game').addEventListener('click', async () => {
+  const payload = loadLocal(MANUAL_SAVE_KEY) || loadLocal(AUTO_SAVE_KEY);
+  if (!payload) {
+    alert('Локального сохранения пока нет.');
+    return;
+  }
+  const when = payload.saved_at ? new Date(payload.saved_at).toLocaleString('ru-RU') : 'неизвестное время';
+  if (!confirm(`Восстановить сохранение от ${when}? Текущее состояние партии будет заменено.`)) return;
+  try {
+    await api('/api/snapshot/restore', {
+      method: 'POST',
+      headers: {'content-type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    origin = null;
+    target = null;
+    managedTerritory = null;
+    await refresh();
+    $('save-status').textContent = 'Восстановлено: ' + new Date().toLocaleTimeString('ru-RU');
+  } catch (error) {
+    alert('Не удалось восстановить: ' + error.message);
+  }
+});
+
 $('send').addEventListener('click', sendOrder);
 $('max-warriors').addEventListener('click', () => {
   const max = Number($('warriors').max || 1);
@@ -662,6 +760,8 @@ $('reset').addEventListener('click', async () => {
   target = null;
   await refresh();
 });
+
+renderSaveStatus();
 
 refresh().catch(error => {
   console.error(error);
