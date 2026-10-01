@@ -559,16 +559,14 @@ function renderOrders() {
 }
 
 function renderJournal() {
-  const items = snapshot.game.state.journal.slice(-18).reverse();
+  const items = (snapshot.game.audit_log || []).slice(-18).reverse();
   if (!items.length) {
     $('journal').textContent = 'Пока пусто.';
     return;
   }
   $('journal').innerHTML = items.map(item => {
-    const kind = item.kind || 'EVENT';
-    const place = item.to ? ` -> ${item.to}` : '';
-    const who = item.house || item.attacker || '';
-    return `<div><b>${escapeHtml(kind)}</b> ${escapeHtml(who)}${escapeHtml(place)}</div>`;
+    const time = item.at ? new Date(item.at).toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit', second:'2-digit'}) : '';
+    return `<div style="margin-bottom:7px"><span class="tiny">${escapeHtml(time)}</span><br>${escapeHtml(item.message)}</div>`;
   }).join('');
 }
 
