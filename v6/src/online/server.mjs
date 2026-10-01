@@ -25,6 +25,10 @@ import {
   sessionSummary,
   syncAuditFromJournal
 } from './audit.mjs';
+import {
+  createSnapshotEnvelope,
+  restoreGameFromSnapshot
+} from './snapshot.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const v6Root = path.resolve(here, '../..');
@@ -111,6 +115,23 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'GET' && url.pathname === '/api/state') {
       return json(res, 200, publicState());
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/snapshot') {
+      return json(res, 200, createSnapshotEnvelope(game));
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/snapshot/restore') {
+      const body = await readBody(req);
+      game = restoreGameFromSnapshot(body, map, constants);
+      game = finalizeGame(game);
+      return json(res, 200, {
+        restored: true,
+        game_id: game.id,
+        session_id: game.session_id,
+        restored_at: game.last_restored_at,
+        snapshot_saved_at: game.last_snapshot_saved_at
+      });
     }
 
     if (req.method === 'GET' && url.pathname === '/api/legal') {
