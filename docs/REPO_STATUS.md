@@ -12,6 +12,9 @@
 | LEGAL_ACTIONS | GREEN | 16 normal + 2 free; blocked = 0 |
 | AI | GREEN | canonical config, six agents, deterministic tests |
 | Automated QA | GREEN | invariants + 100/500 seeds |
+| Human UI controls | GREEN DEV | New Game, full-party simulation, map, Houses, Diplomacy, Journal and Game Master panel |
+| Human diplomacy | GREEN DEV | Pact/dynastic/access proposals pause for receiver consent |
+| Player count | OPEN | rules permit 3–6; current reference run is six Houses until 3–5 setup is approved |
 | Legacy recovery | ARCHIVED/MANUAL | retained for provenance, no push bot-commits |
 | Browser validation | OPEN | required before STABLE promotion |
 | Art/BOM/print | INCOMPLETE | blocks print-ready/STABLE, not current digital deploy |

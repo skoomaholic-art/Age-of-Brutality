@@ -13,6 +13,8 @@
 - Capability report больше не показывает Интриги как заблокированные: загружен explicit 40-card canonical new-design module.
 - Статусы README/docs/release inventory синхронизированы с фактическим current source.
 - Legacy recovery/diagnostic workflows переведены в manual-only режим, чтобы исключить автоматические bot-коммиты.
+- Human diplomacy now pauses on explicit Accept/Reject for Pact, dynastic and access proposals; no action or resource is spent before acceptance.
+- March exposes every legal army quantity up to the territory cap; AI-only force scoring saturates at three warriors, so the tabletop choice is unchanged.
 
 ### Added
 
@@ -21,6 +23,8 @@
 - Explicit invariant tests for 16 normal actions, 2 free procedures, port movement, family commanders, prisoner decisions and succession.
 - Current 100/500-seed Game Master gates.
 - Embedded favicon, metadata, responsive typography and accessible focus states for web deployment.
+- Full-party simulation button, Game Master panel and a source-to-runtime tabletop integrity checker.
+- Canonical zero-card Intrigue setup and a draft physical component BOM with unresolved production quantities marked TBD.
 
 ### Status
 
