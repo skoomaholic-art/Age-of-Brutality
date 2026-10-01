@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Жестокий Век - Online Prototype</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f1216;
+      color: #ece6d8;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 30% 20%, #202a31, #0f1216 55%); }
+    button, select, input { font: inherit; }
+    header {
+      display: flex;
+      gap: 18px;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      border-bottom: 1px solid #343b42;
+      background: rgba(12,15,18,.92);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    h1 { margin: 0; font-size: 19px; letter-spacing: .08em; }
+    .sub { color: #aeb7bd; font-size: 12px; margin-top: 4px; }
+    .controls { display: flex; gap: 8px; align-items: center; }
+    select, input, button {
+      background: #171d22;
+      color: #ece6d8;
+      border: 1px solid #424b52;
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    button { cursor: pointer; }
+    button:hover { border-color: #8b9aa4; }
+    button.primary { background: #704528; border-color: #9a6847; }
+    main {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 340px;
+      min-height: calc(100vh - 74px);
+    }
+    .map-wrap { min-width: 0; padding: 16px; }
+    .map-card {
+      height: calc(100vh - 108px);
+      min-height: 620px;
+      border: 1px solid #323a40;
+      border-radius: 14px;
+      overflow: hidden;
+      background: linear-gradient(180deg, #182129, #10171d);
+      position: relative;
+    }
+    svg { width: 100%; height: 100%; display: block; }
+    .land-edge { stroke: #39444c; stroke-width: 1.4; opacity: .8; }
+    .sea-edge { stroke: #557389; stroke-width: 1.2; stroke-dasharray: 6 5; opacity: .7; }
+    .territory { cursor: pointer; transition: .15s ease; }
+    .territory circle { stroke: #e6ddcb; stroke-width: 1.2; }
+    .territory:hover circle { stroke-width: 2.5; }
+    .territory.origin circle { stroke: #fff4a8; stroke-width: 4; }
+    .territory.legal circle { stroke: #87e6a7; stroke-width: 4; }
+    .territory text { fill: #e9e2d6; font-size: 9px; pointer-events: none; text-anchor: middle; }
+    .territory .count { font-size: 11px; font-weight: 800; }
+    aside {
+      border-left: 1px solid #30383e;
+      background: rgba(14,18,21,.94);
+      padding: 16px;
+      overflow: auto;
+      max-height: calc(100vh - 74px);
+    }
+    .panel {
+      border: 1px solid #30383e;
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 12px;
+      background: #13191e;
+    }
+    .panel h2 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: #bfc7cb; }
+    .stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
+    .stat { background: #0e1317; border-radius: 8px; padding: 9px; }
+    .stat b { display: block; font-size: 18px; margin-top: 2px; }
+    .muted { color: #8f9aa1; font-size: 12px; }
+    .order { padding: 9px 0; border-top: 1px solid #293138; font-size: 12px; }
+    .order:first-child { border-top: 0; }
+    .pending { color: #ffd27a; }
+    .resolved { color: #8adca0; }
+    .failed { color: #ff8d8d; }
+    .journal { font-size: 11px; line-height: 1.45; max-height: 220px; overflow: auto; }
+    .move-box { display: none; }
+    .move-box.show { display: block; }
+    .move-grid { display: grid; grid-template-columns: 1fr 86px; gap: 8px; align-items: end; }
+    @media (max-width: 980px) {
+      main { grid-template-columns: 1fr; }
+      aside { max-height: none; border-left: 0; border-top: 1px solid #30383e; }
+      .map-card { height: 68vh; min-height: 520px; }
+    }
+  </style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>ЖЕСТОКИЙ ВЕК - ONLINE PROTOTYPE</h1>
+    <div class="sub">Persistent vertical slice on the existing V6 rules core</div>
+  </div>
+  <div class="controls">
+    <label>
+      <span class="muted">Дом</span>
+      <select id="house"></select>
+    </label>
+    <button id="reset">Новая партия</button>
+  </div>
+</header>
+
+<main>
+  <section class="map-wrap">
+    <div class="map-card">
+      <svg id="map" viewBox="40 30 760 490" role="img" aria-label="Карта Жестокого Века"></svg>
+    </div>
+  </section>
+
+  <aside>
+    <div class="panel">
+      <h2 id="house-title">Дом</h2>
+      <div class="stats">
+        <div class="stat"><span class="muted">Золото</span><b id="gold">0</b></div>
+        <div class="stat"><span class="muted">Влияние</span><b id="influence">0</b></div>
+        <div class="stat"><span class="muted">ОП</span><b id="vp">0</b></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Марш</h2>
+      <div id="selection" class="muted">Выбери свою территорию с воинами.</div>
+      <div id="move-box" class="move-box">
+        <div id="route" style="margin:10px 0;font-weight:700"></div>
+        <div class="move-grid">
+          <label>
+            <span class="muted">Воинов</span>
+            <input id="warriors" type="number" min="1" value="1" style="width:100%" />
+          </label>
+          <button id="send" class="primary">Отдать приказ</button>
+        </div>
+        <div id="eta" class="muted" style="margin-top:8px"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Приказы</h2>
+      <div id="orders" class="muted">Нет приказов.</div>
+    </div>
+
+    <div class="panel">
+      <h2>Журнал</h2>
+      <div id="journal" class="journal muted">Пока пусто.</div>
+    </div>
+  </aside>
+</main>
+
+<script>
+const colors = {
+  'Варкайр': '#76454a',
+  'Сайрвен': '#496276',
+  'Ортайн': '#6b623d',
+  'Эркай': '#48684f',
+  'Тасвар': '#775b35',
+  'Айрель': '#665176'
+};
+
+let snapshot = null;
+let house = null;
+let origin = null;
+let target = null;
+let legal = [];
+
+const $ = id => document.getElementById(id);
+
+async function api(url, options) {
+  const res = await fetch(url, options);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'request failed');
+  return data;
+}
+
+function territoryById(id) {
+  return snapshot.map.territories.find(t => t.id === id);
+}
+
+function warriorsAt(id, owner) {
+  return Number(snapshot.game.state.territories[id]?.warriors?.[owner] || 0);
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&','&amp;')
+    .replaceAll('<','&lt;')
+    .replaceAll('>','&gt;')
+    .replaceAll('"','&quot;');
+}
+
+function renderHouse() {
+  const state = snapshot.game.state.houses[house];
+  $('house-title').textContent = house;
+  $('gold').textContent = state.gold;
+  $('influence').textContent = state.influence;
+  $('vp').textContent = state.victory_points;
+}
+
+function renderMap() {
+  const svg = $('map');
+  const state = snapshot.game.state;
+  const coords = snapshot.map.coordinates;
+  const legalTargets = new Set(
+    legal.filter(a => !origin || a.from === origin).map(a => a.to)
+  );
+
+  const lines = [];
+  for (const [a,b] of snapshot.map.land_edges) {
+    lines.push(`<line class="land-edge" x1="${coords[a].x}" y1="${coords[a].y}" x2="${coords[b].x}" y2="${coords[b].y}" />`);
+  }
+  for (const [a,b] of snapshot.map.sea_edges) {
+    lines.push(`<line class="sea-edge" x1="${coords[a].x}" y1="${coords[a].y}" x2="${coords[b].x}" y2="${coords[b].y}" />`);
+  }
+
+  const nodes = snapshot.map.territories.map(t => {
+    const s = state.territories[t.id];
+    const owner = s.owner;
+    const total = Object.values(s.warriors || {}).reduce((a,b) => a + Number(b || 0), 0);
+    const c = coords[t.id];
+    const r = t.type === 'Столица' ? 16 : 12;
+    const classes = ['territory'];
+    if (t.id === origin) classes.push('origin');
+    if (origin && legalTargets.has(t.id)) classes.push('legal');
+    const fill = owner ? (colors[owner] || '#59636a') : '#2c353b';
+    return `
+      <g class="${classes.join(' ')}" data-id="${t.id}" transform="translate(${c.x} ${c.y})">
+        <circle r="${r}" fill="${fill}"></circle>
+        <text y="-18">${escapeHtml(t.name.replace(/ - [AB]$/, ''))}</text>
+        <text class="count" y="4">${total || ''}</text>
+      </g>`;
+  });
+
+  svg.innerHTML = lines.join('') + nodes.join('');
+  svg.querySelectorAll('.territory').forEach(node => {
+    node.addEventListener('click', () => selectTerritory(node.dataset.id));
+  });
+}
+
+async function loadLegal() {
+  if (!house) return;
+  const data = await api('/api/legal?house=' + encodeURIComponent(house));
+  legal = data.actions;
+}
+
+function renderSelection() {
+  if (!origin) {
+    $('selection').textContent = 'Выбери свою территорию с воинами.';
+    $('move-box').classList.remove('show');
+    return;
+  }
+
+  const o = territoryById(origin);
+  const own = warriorsAt(origin, house);
+  $('selection').textContent = `${o.name}: ${own} воинов. Теперь выбери подсвеченную цель.`;
+
+  if (!target) {
+    $('move-box').classList.remove('show');
+    return;
+  }
+
+  const t = territoryById(target);
+  const matching = legal.filter(a => a.from === origin && a.to === target);
+  const max = Math.max(...matching.map(a => a.warriors));
+  const preferred = matching.find(a => a.warriors === max) || matching[0];
+
+  $('warriors').max = max;
+  $('warriors').value = Math.min(Number($('warriors').value || 1), max);
+  $('route').textContent = `${o.name} -> ${t.name}`;
+  const segmentCount = preferred.mode === 'SEA' ? 1 : (
+    preferred.duration_ms ? 1 : 1
+  );
+  const seconds = preferred.mode === 'SEA'
+    ? snapshot.timing.seaSegmentMs / 1000
+    : snapshot.timing.landSegmentMs / 1000;
+  $('eta').textContent = `Режим: ${preferred.mode}. Базовое время сегмента: ${seconds} сек.`;
+  $('move-box').classList.add('show');
+}
+
+async function selectTerritory(id) {
+  const s = snapshot.game.state.territories[id];
+
+  if (!origin) {
+    if (s.owner !== house || warriorsAt(id, house) < 1) return;
+    origin = id;
+    target = null;
+    await loadLegal();
+  } else if (id === origin) {
+    origin = null;
+    target = null;
+  } else {
+    const valid = legal.some(a => a.from === origin && a.to === id);
+    if (!valid) {
+      if (s.owner === house && warriorsAt(id, house) > 0) {
+        origin = id;
+        target = null;
+        await loadLegal();
+      }
+    } else {
+      target = id;
+    }
+  }
+
+  renderMap();
+  renderSelection();
+}
+
+async function sendOrder() {
+  if (!origin || !target) return;
+  const warriors = Number($('warriors').value);
+  const choices = legal.filter(a =>
+    a.from === origin &&
+    a.to === target &&
+    a.warriors === warriors
+  );
+  if (!choices.length) {
+    alert('Такой приказ больше не является легальным.');
+    await refresh();
+    return;
+  }
+
+  const action = choices[0];
+  await api('/api/orders', {
+    method: 'POST',
+    headers: {'content-type':'application/json'},
+    body: JSON.stringify(action)
+  });
+
+  origin = null;
+  target = null;
+  await refresh();
+}
+
+function countdown(order) {
+  if (order.status !== 'PENDING') return order.status;
+  const left = Math.max(0, Date.parse(order.due_at) - Date.now());
+  return `${Math.ceil(left / 1000)} сек`;
+}
+
+function renderOrders() {
+  const orders = snapshot.game.orders
+    .filter(order => order.action.house === house)
+    .slice()
+    .reverse();
+
+  if (!orders.length) {
+    $('orders').innerHTML = '<span class="muted">Нет приказов.</span>';
+    return;
+  }
+
+  $('orders').innerHTML = orders.slice(0, 12).map(order => {
+    const cls = order.status.toLowerCase();
+    const a = order.action;
+    const from = territoryById(a.from)?.name || a.from;
+    const to = territoryById(a.to)?.name || a.to;
+    const extra = order.failure_reason
+      ? `<div class="failed">${escapeHtml(order.failure_reason)}</div>`
+      : '';
+    return `
+      <div class="order">
+        <div><b>${escapeHtml(from)} -> ${escapeHtml(to)}</b></div>
+        <div>${a.warriors} воин(а), ${a.mode}</div>
+        <div class="${cls}">${escapeHtml(countdown(order))}</div>
+        ${extra}
+      </div>`;
+  }).join('');
+}
+
+function renderJournal() {
+  const items = snapshot.game.state.journal.slice(-18).reverse();
+  if (!items.length) {
+    $('journal').textContent = 'Пока пусто.';
+    return;
+  }
+  $('journal').innerHTML = items.map(item => {
+    const kind = item.kind || 'EVENT';
+    const place = item.to ? ` -> ${item.to}` : '';
+    const who = item.house || item.attacker || '';
+    return `<div><b>${escapeHtml(kind)}</b> ${escapeHtml(who)}${escapeHtml(place)}</div>`;
+  }).join('');
+}
+
+async function refresh() {
+  snapshot = await api('/api/state');
+
+  const select = $('house');
+  if (!select.options.length) {
+    for (const h of snapshot.houses) {
+      const option = document.createElement('option');
+      option.value = h;
+      option.textContent = h;
+      select.appendChild(option);
+    }
+  }
+
+  house = house || select.value || snapshot.houses[0];
+  select.value = house;
+  await loadLegal();
+
+  if (origin) {
+    const stillOwned = snapshot.game.state.territories[origin]?.owner === house;
+    if (!stillOwned) {
+      origin = null;
+      target = null;
+    }
+  }
+
+  renderHouse();
+  renderMap();
+  renderSelection();
+  renderOrders();
+  renderJournal();
+}
+
+$('house').addEventListener('change', async event => {
+  house = event.target.value;
+  origin = null;
+  target = null;
+  await refresh();
+});
+
+$('send').addEventListener('click', sendOrder);
+
+$('reset').addEventListener('click', async () => {
+  await api('/api/reset', { method: 'POST' });
+  origin = null;
+  target = null;
+  await refresh();
+});
+
+refresh().catch(error => {
+  console.error(error);
+  alert(error.message);
+});
+
+setInterval(() => {
+  refresh().catch(console.error);
+}, 1500);
+</script>
+</body>
+</html>
