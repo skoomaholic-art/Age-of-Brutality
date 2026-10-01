@@ -1,9 +1,7 @@
 name: Verify Age of Brutality GCP auth
 
 on:
-  push:
-    branches:
-      - feature/v6-persistent-prototype
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -13,19 +11,26 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     env:
-      PROJECT_ID: skoomaholic-poster-editor
-      WIF_PROVIDER: projects/1046342400775/locations/global/workloadIdentityPools/poster-editor-github/providers/github
-      DEPLOY_SA: poster-editor-deployer@skoomaholic-poster-editor.iam.gserviceaccount.com
+      PROJECT_ID: ${{ vars.AOB_GCP_PROJECT_ID }}
+      REGION: ${{ vars.AOB_GCP_REGION || 'europe-west1' }}
+      WIF_PROVIDER: ${{ vars.AOB_GCP_WIF_PROVIDER }}
+      DEPLOY_SA: ${{ vars.AOB_GCP_DEPLOY_SA }}
     steps:
       - uses: actions/checkout@v4
+      - name: Require dedicated game cloud config
+        run: |
+          set -euo pipefail
+          test -n "${PROJECT_ID}"
+          test -n "${WIF_PROVIDER}"
+          test -n "${DEPLOY_SA}"
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ env.WIF_PROVIDER }}
           service_account: ${{ env.DEPLOY_SA }}
       - uses: google-github-actions/setup-gcloud@v2
-      - name: Verify read access only
+      - name: Verify game project access only
         run: |
           set -euo pipefail
           gcloud projects describe "${PROJECT_ID}" --format='value(projectId)'
-          gcloud run services list --project="${PROJECT_ID}" --region=europe-west1 --format='value(metadata.name)' >/dev/null
-          echo "GCP authentication from Age-of-Brutality is working."
+          gcloud run services list --project="${PROJECT_ID}" --region="${REGION}" --format='value(metadata.name)' >/dev/null
+          echo "Dedicated Age-of-Brutality GCP authentication is working."
