@@ -136,6 +136,15 @@
     .resolved { color: #8adca0; }
     .failed { color: #ff8d8d; }
     .journal { font-size: 11px; line-height: 1.45; max-height: 220px; overflow: auto; }
+    .economy-line { display:flex; justify-content:space-between; gap:10px; align-items:center; margin:7px 0; font-size:12px; }
+    .economy-line b { font-size:13px; }
+    .economy-actions { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-top:8px; }
+    .economy-actions button { padding:8px 6px; }
+    .fort-button { width:100%; margin-top:8px; }
+    .jobs { margin-top:10px; }
+    .job { border-top:1px solid #293138; padding:8px 0; font-size:11px; }
+    .job:first-child { border-top:0; }
+    .tiny { font-size:10px; color:#79858c; }
     .move-box { display: none; }
     .move-box.show { display: block; }
     .move-grid { display: grid; grid-template-columns: 1fr 86px; gap: 8px; align-items: end; }
@@ -209,6 +218,27 @@
     </div>
 
     <div class="panel">
+      <h2>Экономика</h2>
+      <div class="economy-line"><span class="muted">Доход за цикл</span><b id="income-rate">+0 золота</b></div>
+      <div class="economy-line"><span class="muted">Следующий доход</span><b id="income-countdown">...</b></div>
+      <div class="tiny">Тестовый онлайн-цикл: каждые 2 минуты. Формула дохода взята из правил настолки.</div>
+      <div style="margin-top:10px">
+        <label>
+          <span class="muted">Управлять территорией</span>
+          <select id="manage-territory" style="width:100%;margin-top:4px"></select>
+        </label>
+      </div>
+      <div id="manage-info" class="muted" style="margin-top:8px"></div>
+      <div class="economy-actions">
+        <button data-recruit="1">+1 воин<br><span class="tiny">1 золото</span></button>
+        <button data-recruit="2">+2 воина<br><span class="tiny">2 золота</span></button>
+        <button data-recruit="3">+3 воина<br><span class="tiny">3 золота</span></button>
+      </div>
+      <button id="build-fort" class="fort-button">Построить крепость · 3 золота</button>
+      <div id="jobs" class="jobs muted">Нет строительства.</div>
+    </div>
+
+    <div class="panel">
       <h2>Марш</h2>
       <div id="selection" class="muted">1. Выбери свою территорию с воинами.</div>
     </div>
@@ -240,6 +270,8 @@ let house = null;
 let origin = null;
 let target = null;
 let legal = [];
+let economy = null;
+let managedTerritory = null;
 
 const $ = id => document.getElementById(id);
 
@@ -326,6 +358,72 @@ async function loadLegal() {
   if (!house) return;
   const data = await api('/api/legal?house=' + encodeURIComponent(house));
   legal = data.actions;
+}
+
+async function loadEconomy() {
+  if (!house) return;
+  economy = await api('/api/economy?house=' + encodeURIComponent(house));
+  const owned = economy.territories || [];
+  if (!owned.some(t => t.id === managedTerritory)) {
+    managedTerritory = owned[0]?.id || null;
+  }
+}
+
+function secondsLeft(iso) {
+  return Math.max(0, Math.ceil((Date.parse(iso) - Date.now()) / 1000));
+}
+
+function renderEconomy() {
+  if (!economy) return;
+  const gain = economy.income;
+  const influence = gain.influence ? ` +${gain.influence} влияния` : '';
+  $('income-rate').textContent = `+${gain.gold} золота${influence}`;
+  $('income-countdown').textContent = `${secondsLeft(economy.next_income_at)} сек`;
+
+  const select = $('manage-territory');
+  const previous = managedTerritory;
+  select.innerHTML = '';
+  for (const territory of economy.territories) {
+    const option = document.createElement('option');
+    option.value = territory.id;
+    option.textContent = `${territory.name} · ${territory.warriors} воин.${territory.fort ? ' · крепость' : ''}`;
+    select.appendChild(option);
+  }
+  managedTerritory = economy.territories.some(t => t.id === previous)
+    ? previous
+    : (economy.territories[0]?.id || null);
+  if (managedTerritory) select.value = managedTerritory;
+
+  const selected = economy.territories.find(t => t.id === managedTerritory);
+  if (!selected) {
+    $('manage-info').textContent = 'Нет контролируемых территорий.';
+  } else {
+    $('manage-info').textContent = `${selected.name}: ${selected.warriors} воинов${selected.fort ? ', крепость построена' : ''}.`;
+  }
+
+  const jobs = economy.jobs || [];
+  if (!jobs.length) {
+    $('jobs').innerHTML = '<span class="muted">Нет строительства.</span>';
+  } else {
+    $('jobs').innerHTML = jobs.slice(0,8).map(job => {
+      const cls = job.status.toLowerCase();
+      const territory = territoryById(job.territory)?.name || job.territory;
+      const label = job.type === 'RECRUIT'
+        ? `Найм ${job.warriors} воин.`
+        : 'Крепость';
+      const status = job.status === 'PENDING' ? `${secondsLeft(job.due_at)} сек` : job.status;
+      const error = job.failure_reason ? `<div class="failed">${escapeHtml(job.failure_reason)}</div>` : '';
+      return `<div class="job"><b>${escapeHtml(label)}</b> · ${escapeHtml(territory)}<div class="${cls}">${escapeHtml(status)}</div>${error}</div>`;
+    }).join('');
+  }
+
+  const fortButton = $('build-fort');
+  fortButton.disabled = !selected || selected.isCapital || selected.fort;
+  fortButton.textContent = selected?.fort
+    ? 'Крепость уже построена'
+    : selected?.isCapital
+      ? 'В столице крепость запрещена'
+      : 'Построить крепость · 3 золота';
 }
 
 function renderSelection() {
@@ -489,7 +587,7 @@ async function refresh() {
 
   house = house || select.value || snapshot.houses[0];
   select.value = house;
-  await loadLegal();
+  await Promise.all([loadLegal(), loadEconomy()]);
 
   if (origin) {
     const stillOwned = snapshot.game.state.territories[origin]?.owner === house;
@@ -500,6 +598,7 @@ async function refresh() {
   }
 
   renderHouse();
+  renderEconomy();
   renderMap();
   renderSelection();
   renderOrders();
@@ -510,7 +609,47 @@ $('house').addEventListener('change', async event => {
   house = event.target.value;
   origin = null;
   target = null;
+  managedTerritory = null;
   await refresh();
+});
+
+$('manage-territory').addEventListener('change', event => {
+  managedTerritory = event.target.value;
+  renderEconomy();
+});
+
+document.querySelectorAll('[data-recruit]').forEach(button => {
+  button.addEventListener('click', async () => {
+    if (!managedTerritory) return;
+    try {
+      await api('/api/recruit', {
+        method: 'POST',
+        headers: {'content-type':'application/json'},
+        body: JSON.stringify({
+          house,
+          territory: managedTerritory,
+          warriors: Number(button.dataset.recruit)
+        })
+      });
+      await refresh();
+    } catch (error) {
+      alert(error.message);
+    }
+  });
+});
+
+$('build-fort').addEventListener('click', async () => {
+  if (!managedTerritory) return;
+  try {
+    await api('/api/fort', {
+      method: 'POST',
+      headers: {'content-type':'application/json'},
+      body: JSON.stringify({ house, territory: managedTerritory })
+    });
+    await refresh();
+  } catch (error) {
+    alert(error.message);
+  }
 });
 
 $('send').addEventListener('click', sendOrder);
