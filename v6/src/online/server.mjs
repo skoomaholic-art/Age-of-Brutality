@@ -19,6 +19,11 @@ import {
   queueFortJob,
   queueRecruitJob
 } from './economy.mjs';
+import {
+  emitCloudAudit,
+  normalizeAudit,
+  syncAuditFromJournal
+} from './audit.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const v6Root = path.resolve(here, '../..');
@@ -26,8 +31,17 @@ const map = loadJson(path.join(v6Root, 'src/data/map.v6.json'));
 const constants = loadJson(path.join(v6Root, 'src/data/constants.v6.json'));
 const stateFile = process.env.AOB_ONLINE_STATE_FILE || path.join(v6Root, 'runtime/online-game.json');
 const store = new JsonGameStore(stateFile);
-let game = normalizeOnlineEconomy(store.loadOrCreate(map, constants));
-store.save(game);
+function finalizeGame(next, nowMs = Date.now()) {
+  const audited = syncAuditFromJournal(next, map, {
+    nowMs,
+    emit: emitCloudAudit
+  });
+  store.save(audited);
+  return audited;
+}
+
+let game = normalizeAudit(normalizeOnlineEconomy(store.loadOrCreate(map, constants)));
+game = finalizeGame(game);
 
 function json(res, status, payload) {
   const body = JSON.stringify(payload);
@@ -62,9 +76,11 @@ function tick() {
   const nowMs = Date.now();
   let processed = processDueOrders(game, map, constants, nowMs);
   processed = processEconomy(processed, map, constants, nowMs);
-  if (processed.updated_at !== game.updated_at) {
-    game = processed;
-    store.save(game);
+  if (
+    processed.updated_at !== game.updated_at ||
+    processed.state.journal.length !== game.state.journal.length
+  ) {
+    game = finalizeGame(processed, nowMs);
   }
 }
 
@@ -120,8 +136,7 @@ const server = http.createServer(async (req, res) => {
         territory: body.territory,
         warriors: Number(body.warriors)
       });
-      game = queued.game;
-      store.save(game);
+      game = finalizeGame(queued.game);
       return json(res, 201, { job: queued.job, game });
     }
 
@@ -131,8 +146,7 @@ const server = http.createServer(async (req, res) => {
         house: body.house,
         territory: body.territory
       });
-      game = queued.game;
-      store.save(game);
+      game = finalizeGame(queued.game);
       return json(res, 201, { job: queued.job, game });
     }
 
@@ -148,15 +162,25 @@ const server = http.createServer(async (req, res) => {
       };
 
       const queued = queueTimedOrder(game, map, constants, action);
-      game = queued.game;
-      store.save(game);
+      game = finalizeGame(queued.game);
       return json(res, 201, { order: queued.order, game });
     }
 
     if (req.method === 'POST' && url.pathname === '/api/reset') {
-      game = normalizeOnlineEconomy(store.reset(map, constants));
-      store.save(game);
+      game = normalizeAudit(normalizeOnlineEconomy(store.reset(map, constants)));
+      game = finalizeGame(game);
       return json(res, 200, publicState());
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/audit') {
+      const requested = Number(url.searchParams.get('limit') || 200);
+      const limit = Math.max(1, Math.min(2000, Number.isFinite(requested) ? requested : 200));
+      return json(res, 200, {
+        game_id: game.id,
+        session_id: game.session_id,
+        count: Math.min(limit, game.audit_log.length),
+        entries: game.audit_log.slice(-limit)
+      });
     }
 
     if (req.method === 'GET' && url.pathname === '/api/debug/all-legal') {
