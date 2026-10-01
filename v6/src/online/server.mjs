@@ -22,6 +22,7 @@ import {
 import {
   emitCloudAudit,
   normalizeAudit,
+  sessionSummary,
   syncAuditFromJournal
 } from './audit.mjs';
 
@@ -178,6 +179,7 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, {
         game_id: game.id,
         session_id: game.session_id,
+        session: sessionSummary(game),
         count: Math.min(limit, game.audit_log.length),
         entries: game.audit_log.slice(-limit)
       });
