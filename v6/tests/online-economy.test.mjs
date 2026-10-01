@@ -14,7 +14,7 @@ import {
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const map = loadJson(path.join(root, 'src/data/map.v6.json'));
 const c = loadJson(path.join(root, 'src/data/constants.v6.json'));
-const timing = { incomeIntervalMs: 100, recruitPerWarriorMs: 10, fortBuildMs: 20 };
+const timing = { incomeIntervalMs: 100, recruitBuildMs: 10, fortBuildMs: 20 };
 
 test('online income pulse accrues while game is persistent', () => {
   let game = createOnlineGame(map, c, { nowMs: 1000 });
