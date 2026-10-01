@@ -5,10 +5,12 @@ import { fileURLToPath } from 'node:url';
 import { loadJson } from '../src/core/map.mjs';
 import { createOnlineGame } from '../src/online/store.mjs';
 import {
+  ONLINE_TIMING,
   listQueueableMarches,
   processDueOrders,
   queueTimedOrder,
-  reservedWarriors
+  reservedWarriors,
+  travelDurationMs
 } from '../src/online/orders.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -106,4 +108,30 @@ test('a stale timed order fails atomically if its origin changes owner before ar
 
   assert.equal(game.orders[0].status, 'FAILED');
   assert.deepEqual(game.state.territories.W02, before);
+});
+
+
+test('accelerated test movement stays within 3-5 seconds', () => {
+  const game = createOnlineGame(map, constants, { nowMs: 5_000 });
+  const oneHop = {
+    type: 'MARCH',
+    mode: 'LAND',
+    house: 'Варкайр',
+    from: 'W01',
+    to: 'W02',
+    warriors: 1
+  };
+  assert.equal(travelDurationMs(game.state, map, constants, oneHop, ONLINE_TIMING), 3000);
+
+  const seaFrom = map.ports.find(id => map.territories.find(t => t.id === id)?.house_sector === 'Варкайр');
+  if (seaFrom) {
+    game.state.territories[seaFrom].owner = 'Варкайр';
+    game.state.territories[seaFrom].warriors['Варкайр'] = 1;
+    const seaTo = map.sea_edges.find(([a,b]) => a === seaFrom || b === seaFrom);
+    if (seaTo) {
+      const to = seaTo[0] === seaFrom ? seaTo[1] : seaTo[0];
+      const seaAction = { type:'MARCH', mode:'SEA', house:'Варкайр', from:seaFrom, to, warriors:1 };
+      assert.equal(travelDurationMs(game.state, map, constants, seaAction, ONLINE_TIMING), 5000);
+    }
+  }
 });
