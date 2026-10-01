@@ -69,6 +69,10 @@ test('sync audit keeps a cursor and does not duplicate journal events', () => {
   });
   assert.equal(game.audit_log.length, 1);
   assert.equal(emitted.length, 1);
+  assert.equal(game.audit_log[0].stats.houses['Варкайр'].gold, 8);
+  assert.equal(game.audit_log[0].stats.houses['Варкайр'].victory_points, 0);
+  assert.equal(game.audit_log[0].stats.houses['Варкайр'].warriors, 4);
+  assert.equal(game.audit_log[0].session.actions_total, 0);
 
   game = syncAuditFromJournal(game, map, {
     nowMs: 1200,
@@ -76,4 +80,42 @@ test('sync audit keeps a cursor and does not duplicate journal events', () => {
   });
   assert.equal(game.audit_log.length, 1);
   assert.equal(emitted.length, 1);
+});
+
+
+test('audit tracks real action window and resource stats', () => {
+  let game = createOnlineGame(map, constants, { nowMs: 10_000 });
+  game.state.journal.push({
+    kind: 'MARCH_QUEUED',
+    house: 'Варкайр',
+    from: 'W01',
+    to: 'W02',
+    warriors: 2,
+    mode: 'LAND',
+    order_id: 'O1',
+    started_at: '1970-01-01T00:00:11.000Z',
+    due_at: '1970-01-01T00:00:14.000Z',
+    planned_duration_ms: 3000
+  });
+  game = syncAuditFromJournal(game, map, { nowMs: 11_000 });
+
+  game.state.houses['Варкайр'].gold = 6;
+  game.state.journal.push({
+    kind: 'RECRUIT_QUEUED',
+    job_id: 'J1',
+    house: 'Варкайр',
+    territory: 'W01',
+    warriors: 2,
+    gold_spent: 2,
+    started_at: '1970-01-01T00:00:15.000Z',
+    due_at: '1970-01-01T00:00:19.000Z',
+    planned_duration_ms: 4000
+  });
+  game = syncAuditFromJournal(game, map, { nowMs: 15_000 });
+
+  const last = game.audit_log.at(-1);
+  assert.equal(last.session.actions_total, 2);
+  assert.equal(last.session.action_span_seconds, 4);
+  assert.equal(last.session.actions_by_house['Варкайр'], 2);
+  assert.equal(last.stats.houses['Варкайр'].gold, 6);
 });
