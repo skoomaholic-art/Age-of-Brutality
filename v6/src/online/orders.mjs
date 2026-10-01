@@ -1,0 +1,170 @@
+import { enumerateMarches, assertLegalAction } from '../core/legal-actions.mjs';
+import { applyFriendlyMarch, classifyDestination, findLegalLandPaths } from '../core/movement.mjs';
+import { resolveNeutralCapture } from '../core/neutral.mjs';
+import { resolveBattle } from '../core/combat.mjs';
+import { resolveEmptyEnemyOccupation } from '../core/occupation.mjs';
+import { validateState, warriorsAt } from '../core/state.mjs';
+
+export const ONLINE_TIMING = Object.freeze({
+  landSegmentMs: 30_000,
+  seaSegmentMs: 45_000
+});
+
+function actionKey(action) {
+  return JSON.stringify([
+    action.type,
+    action.mode,
+    action.house,
+    action.from,
+    action.to,
+    action.warriors
+  ]);
+}
+
+function hash32(input) {
+  let hash = 2166136261;
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function deterministicDice(seed) {
+  const a = hash32(seed);
+  const b = hash32(seed + ':second');
+  return [(a % 6) + 1, (b % 6) + 1];
+}
+
+export function reservedWarriors(game, house, from) {
+  return game.orders
+    .filter(order =>
+      order.status === 'PENDING' &&
+      order.action.house === house &&
+      order.action.from === from
+    )
+    .reduce((sum, order) => sum + order.action.warriors, 0);
+}
+
+export function listQueueableMarches(game, map, constants, house) {
+  const legal = enumerateMarches(game.state, map, constants, house);
+  return legal.filter(action => {
+    const available = warriorsAt(game.state, action.from, house);
+    const reserved = reservedWarriors(game, house, action.from);
+    return action.warriors <= available - reserved;
+  });
+}
+
+export function travelDurationMs(state, map, constants, action, timing = ONLINE_TIMING) {
+  if (action.mode === 'SEA') return timing.seaSegmentMs;
+
+  const paths = findLegalLandPaths(
+    state,
+    map,
+    action.house,
+    action.from,
+    action.to,
+    constants.march.max_land_segments
+  );
+  if (!paths.length) throw new Error('no legal land path for timed order');
+  const segments = Math.min(...paths.map(path => path.length - 1));
+  return timing.landSegmentMs * segments;
+}
+
+export function queueTimedOrder(
+  game,
+  map,
+  constants,
+  action,
+  { nowMs = Date.now(), timing = ONLINE_TIMING } = {}
+) {
+  const legal = listQueueableMarches(game, map, constants, action.house);
+  assertLegalAction(action, legal);
+
+  const next = structuredClone(game);
+  const id = `O${String(next.next_order_id).padStart(6, '0')}`;
+  const durationMs = travelDurationMs(next.state, map, constants, action, timing);
+  const order = {
+    id,
+    status: 'PENDING',
+    created_at: new Date(nowMs).toISOString(),
+    due_at: new Date(nowMs + durationMs).toISOString(),
+    duration_ms: durationMs,
+    action: structuredClone(action),
+    result: null,
+    failure_reason: null
+  };
+
+  next.next_order_id += 1;
+  next.orders.push(order);
+  next.updated_at = new Date(nowMs).toISOString();
+  return { game: next, order };
+}
+
+function resolveOrder(state, map, constants, gameId, order) {
+  const legal = enumerateMarches(state, map, constants, order.action.house);
+  assertLegalAction(order.action, legal);
+
+  const destination = classifyDestination(state, order.action.house, order.action.to);
+
+  if (destination === 'FRIENDLY') {
+    return {
+      state: applyFriendlyMarch(state, map, constants, order.action),
+      result: { kind: 'FRIENDLY_MARCH' }
+    };
+  }
+
+  if (destination === 'NEUTRAL') {
+    const dice = deterministicDice(`${gameId}:${order.id}:neutral`);
+    return resolveNeutralCapture(state, map, constants, order.action, dice);
+  }
+
+  const defenderHouse = state.territories[order.action.to].owner;
+  const defenders = warriorsAt(state, order.action.to, defenderHouse);
+  if (defenders === 0) {
+    return resolveEmptyEnemyOccupation(state, map, constants, order.action);
+  }
+
+  const [attackerDie, defenderDie] = deterministicDice(`${gameId}:${order.id}:battle`);
+  return resolveBattle(state, map, constants, order.action, {
+    attackerDie,
+    defenderDie
+  });
+}
+
+export function processDueOrders(game, map, constants, nowMs = Date.now()) {
+  const next = structuredClone(game);
+  const due = next.orders
+    .filter(order => order.status === 'PENDING' && Date.parse(order.due_at) <= nowMs)
+    .sort((a, b) => {
+      const timeDiff = Date.parse(a.due_at) - Date.parse(b.due_at);
+      if (timeDiff !== 0) return timeDiff;
+      return a.id.localeCompare(b.id);
+    });
+
+  for (const dueOrder of due) {
+    const liveOrder = next.orders.find(order => order.id === dueOrder.id);
+    try {
+      const resolved = resolveOrder(next.state, map, constants, next.id, liveOrder);
+      const errors = validateState(resolved.state, map, constants);
+      if (errors.length) throw new Error(`post-order state invalid: ${errors.join('; ')}`);
+
+      next.state = resolved.state;
+      liveOrder.status = 'RESOLVED';
+      liveOrder.resolved_at = new Date(nowMs).toISOString();
+      liveOrder.result = resolved.result;
+      liveOrder.failure_reason = null;
+    } catch (error) {
+      liveOrder.status = 'FAILED';
+      liveOrder.resolved_at = new Date(nowMs).toISOString();
+      liveOrder.failure_reason = error instanceof Error ? error.message : String(error);
+    }
+  }
+
+  if (due.length) next.updated_at = new Date(nowMs).toISOString();
+  return next;
+}
+
+export function isSameAction(a, b) {
+  return actionKey(a) === actionKey(b);
+}
