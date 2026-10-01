@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { loadJson } from '../src/core/map.mjs';
 import { createOnlineGame } from '../src/online/store.mjs';
 import {
+  ONLINE_ECONOMY_TIMING,
   normalizeOnlineEconomy,
   processEconomy,
   queueFortJob,
@@ -57,4 +58,10 @@ test('timed fort refunds if territory changes owner before completion', () => {
   assert.equal(game.jobs[0].status, 'FAILED');
   assert.equal(game.state.houses['Варкайр'].gold, 8);
   assert.equal(game.state.territories.W03.fort, false);
+});
+
+
+test('accelerated test build timers are 4 and 5 seconds', () => {
+  assert.equal(ONLINE_ECONOMY_TIMING.recruitBuildMs, 4000);
+  assert.equal(ONLINE_ECONOMY_TIMING.fortBuildMs, 5000);
 });
