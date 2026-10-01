@@ -50,7 +50,7 @@ export class FirestoreGameStore {
     if (databaseId && databaseId !== '(default)') options.databaseId = databaseId;
 
     this.db = new Firestore(options);
-    this.loadedExisting = false;
+    this.loadedExistingAtStartup = null;
     this.orderCache = new Map();
     this.jobCache = new Map();
     this.eventMaxSeq = 0;
@@ -93,7 +93,6 @@ export class FirestoreGameStore {
     const maxSeq = auditLog.reduce((max, item) => Math.max(max, Number(item.seq || 0)), 0);
     game.audit_seq = Math.max(Number(game.audit_seq || 1), maxSeq + 1);
 
-    this.loadedExisting = true;
     this.orderCache = new Map(orders.map(item => [item.id, JSON.stringify(item)]));
     this.jobCache = new Map(jobs.map(item => [item.id, JSON.stringify(item)]));
     this.eventMaxSeq = maxSeq;
@@ -173,16 +172,18 @@ export class FirestoreGameStore {
       this.appendNewEvents(session, game.audit_log || [])
     ]);
 
-    this.loadedExisting = true;
     return game;
   }
 
   async loadOrCreate(map, constants) {
     const existing = await this.load();
-    if (existing) return existing;
+    if (existing) {
+      this.loadedExistingAtStartup = true;
+      return existing;
+    }
     const created = createOnlineGame(map, constants);
     await this.save(created);
-    this.loadedExisting = false;
+    this.loadedExistingAtStartup = false;
     return created;
   }
 
@@ -229,7 +230,7 @@ export class FirestoreGameStore {
       project_id: this.projectId || null,
       database_id: this.databaseId,
       game_id: this.gameId,
-      loaded_existing_game: this.loadedExisting
+      loaded_existing_at_startup: this.loadedExistingAtStartup
     };
   }
 }
