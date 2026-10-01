@@ -4,11 +4,21 @@ import { normalizeAudit } from './audit.mjs';
 
 export const SNAPSHOT_SCHEMA_VERSION = 1;
 
+function compactSnapshotGame(game) {
+  const next = structuredClone(game);
+  next.audit_log = [];
+  if (next.state) next.state.journal = [];
+  next.orders = (next.orders || []).filter(item => item.status === 'PENDING');
+  next.jobs = (next.jobs || []).filter(item => item.status === 'PENDING');
+  next.audit_journal_cursor = 0;
+  return next;
+}
+
 export function createSnapshotEnvelope(game, nowMs = Date.now()) {
   return {
     schema_version: SNAPSHOT_SCHEMA_VERSION,
     saved_at: new Date(nowMs).toISOString(),
-    game: structuredClone(game)
+    game: compactSnapshotGame(game)
   };
 }
 
