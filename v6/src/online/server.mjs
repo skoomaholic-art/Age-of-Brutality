@@ -11,6 +11,14 @@ import {
   processDueOrders,
   queueTimedOrder
 } from './orders.mjs';
+import {
+  ONLINE_ECONOMY_TIMING,
+  economyView,
+  normalizeOnlineEconomy,
+  processEconomy,
+  queueFortJob,
+  queueRecruitJob
+} from './economy.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const v6Root = path.resolve(here, '../..');
@@ -18,7 +26,8 @@ const map = loadJson(path.join(v6Root, 'src/data/map.v6.json'));
 const constants = loadJson(path.join(v6Root, 'src/data/constants.v6.json'));
 const stateFile = process.env.AOB_ONLINE_STATE_FILE || path.join(v6Root, 'runtime/online-game.json');
 const store = new JsonGameStore(stateFile);
-let game = store.loadOrCreate(map, constants);
+let game = normalizeOnlineEconomy(store.loadOrCreate(map, constants));
+store.save(game);
 
 function json(res, status, payload) {
   const body = JSON.stringify(payload);
@@ -50,7 +59,9 @@ async function readBody(req) {
 }
 
 function tick() {
-  const processed = processDueOrders(game, map, constants, Date.now());
+  const nowMs = Date.now();
+  let processed = processDueOrders(game, map, constants, nowMs);
+  processed = processEconomy(processed, map, constants, nowMs);
   if (processed.updated_at !== game.updated_at) {
     game = processed;
     store.save(game);
@@ -69,7 +80,10 @@ function publicState() {
       capitals: map.capitals
     },
     houses: constants.houses,
-    timing: ONLINE_TIMING
+    timing: {
+      ...ONLINE_TIMING,
+      ...ONLINE_ECONOMY_TIMING
+    }
   };
 }
 
@@ -91,6 +105,37 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { house, actions: legal });
     }
 
+    if (req.method === 'GET' && url.pathname === '/api/economy') {
+      const house = url.searchParams.get('house');
+      if (!constants.houses.includes(house)) {
+        return json(res, 400, { error: 'unknown house' });
+      }
+      return json(res, 200, economyView(game, map, constants, house));
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/recruit') {
+      const body = await readBody(req);
+      const queued = queueRecruitJob(game, constants, {
+        house: body.house,
+        territory: body.territory,
+        warriors: Number(body.warriors)
+      });
+      game = queued.game;
+      store.save(game);
+      return json(res, 201, { job: queued.job, game });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/fort') {
+      const body = await readBody(req);
+      const queued = queueFortJob(game, map, constants, {
+        house: body.house,
+        territory: body.territory
+      });
+      game = queued.game;
+      store.save(game);
+      return json(res, 201, { job: queued.job, game });
+    }
+
     if (req.method === 'POST' && url.pathname === '/api/orders') {
       const body = await readBody(req);
       const action = {
@@ -109,7 +154,8 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && url.pathname === '/api/reset') {
-      game = store.reset(map, constants);
+      game = normalizeOnlineEconomy(store.reset(map, constants));
+      store.save(game);
       return json(res, 200, publicState());
     }
 
