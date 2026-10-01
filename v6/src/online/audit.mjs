@@ -3,7 +3,7 @@ function territoryName(map, id) {
 }
 
 function battleWinner(entry) {
-  return entry.attackerWins ? entry.attacker : entry.defender;
+  return entry.captured ? entry.attacker : entry.defender;
 }
 
 export function journalEntryToAudit(entry, map, game) {
