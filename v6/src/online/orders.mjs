@@ -97,6 +97,16 @@ export function queueTimedOrder(
 
   next.next_order_id += 1;
   next.orders.push(order);
+  next.state.journal.push({
+    kind: 'MARCH_QUEUED',
+    order_id: id,
+    house: action.house,
+    from: action.from,
+    to: action.to,
+    warriors: action.warriors,
+    mode: action.mode,
+    due_at: order.due_at
+  });
   next.updated_at = new Date(nowMs).toISOString();
   return { game: next, order };
 }
@@ -158,6 +168,16 @@ export function processDueOrders(game, map, constants, nowMs = Date.now()) {
       liveOrder.status = 'FAILED';
       liveOrder.resolved_at = new Date(nowMs).toISOString();
       liveOrder.failure_reason = error instanceof Error ? error.message : String(error);
+      next.state.journal.push({
+        kind: 'MARCH_FAILED',
+        order_id: liveOrder.id,
+        house: liveOrder.action.house,
+        from: liveOrder.action.from,
+        to: liveOrder.action.to,
+        warriors: liveOrder.action.warriors,
+        mode: liveOrder.action.mode,
+        reason: liveOrder.failure_reason
+      });
     }
   }
 
