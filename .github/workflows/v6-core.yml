@@ -31,4 +31,5 @@ jobs:
           node --check src/online/server.mjs
           node --check src/online/firestore-store.mjs
           node --check src/online/multiplayer.mjs
+          node --check src/online/commands.mjs
           node --check src/online/snapshot.mjs
