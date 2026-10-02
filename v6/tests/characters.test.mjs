@@ -5,12 +5,15 @@ import { fileURLToPath } from 'node:url';
 import { loadJson } from '../src/core/map.mjs';
 import { createInitialState } from '../src/core/state.mjs';
 import {
+  CHARACTER_HEALTH,
   CHARACTER_MODE,
   CHARACTER_STATUS,
   assignCharacterToArmy,
   charactersForHouse,
   commanderStats,
+  markCommanderFatePending,
   normalizeCharacterLayer,
+  resolveCommanderFate,
   returnCharacterToCourt
 } from '../src/core/characters.mjs';
 import { createOnlineGame } from '../src/online/store.mjs';
@@ -132,7 +135,7 @@ test('full timed March carries the starting commander and applies Attack stat', 
   );
 });
 
-test('losing commander enters explicit Fate pending state instead of inventing an outcome', () => {
+test('losing commander resolves Fate deterministically after battle', () => {
   let game = createOnlineGame(map, constants, {
     nowMs:20_000,
     characterCatalog:catalog
@@ -158,13 +161,10 @@ test('losing commander enters explicit Fate pending state instead of inventing a
   game = processDueOrders(game, map, constants, 20_011);
 
   assert.equal(game.orders[0].status, 'RESOLVED');
-  assert.equal(
+  assert.ok(game.orders[0].result.attacker_commander_fate);
+  assert.notEqual(
     game.state.characters['RUL-ВАР'].status,
     CHARACTER_STATUS.FATE_PENDING
-  );
-  assert.equal(
-    game.state.characters['RUL-ВАР'].fate_pending.side,
-    'ATTACKER'
   );
 });
 
@@ -215,4 +215,82 @@ test('partial March may leave commander with remaining army', () => {
     game.state.armies['ARM-RUL-ВАР'].territory,
     'W01'
   );
+});
+
+
+function pendingFateState({
+  armyDestroyed = false,
+  fallback = 'W01'
+} = {}) {
+  let state = createInitialState(map, constants, catalog);
+  state = markCommanderFatePending(state, 'RUL-ВАР', {
+    battle_territory:'W02',
+    opponent_house:'Сайрвен',
+    side:'ATTACKER',
+    army_destroyed:armyDestroyed,
+    fallback_territory:fallback,
+    created_at:'2026-10-02T10:00:00.000Z'
+  });
+  return state;
+}
+
+test('Fate 10+ saves commander and keeps surviving army active', () => {
+  const state = pendingFateState();
+  const {state:next,result} = resolveCommanderFate(
+    state,map,constants,'RUL-ВАР',[6,6],{nowMs:1000}
+  );
+  assert.equal(result.outcome,'SAVED');
+  assert.equal(next.characters['RUL-ВАР'].status,CHARACTER_STATUS.ACTIVE);
+  assert.equal(next.characters['RUL-ВАР'].mode,CHARACTER_MODE.ARMY);
+  assert.equal(next.armies['ARM-RUL-ВАР'].territory,'W01');
+});
+
+test('Fate 7-9 weakens commander', () => {
+  const state = pendingFateState();
+  const {state:next,result} = resolveCommanderFate(
+    state,map,constants,'RUL-ВАР',[3,3],{nowMs:1000}
+  );
+  assert.equal(result.outcome,'WEAKENED');
+  assert.equal(next.characters['RUL-ВАР'].health,CHARACTER_HEALTH.WEAKENED);
+  assert.equal(next.characters['RUL-ВАР'].status,CHARACTER_STATUS.ACTIVE);
+});
+
+test('Fate 5-6 captures commander and records captor context', () => {
+  const state = pendingFateState();
+  const {state:next,result} = resolveCommanderFate(
+    state,map,constants,'RUL-ВАР',[2,2],{nowMs:1000}
+  );
+  assert.equal(result.outcome,'CAPTURED');
+  assert.equal(next.characters['RUL-ВАР'].mode,CHARACTER_MODE.CAPTIVE);
+  assert.equal(next.characters['RUL-ВАР'].alive,true);
+  assert.equal(next.characters['RUL-ВАР'].captivity.held_by,'Сайрвен');
+  assert.equal(next.characters['RUL-ВАР'].army_id,null);
+});
+
+test('Fate 4 or less kills commander', () => {
+  const state = pendingFateState();
+  const {state:next,result} = resolveCommanderFate(
+    state,map,constants,'RUL-ВАР',[1,1],{nowMs:1000}
+  );
+  assert.equal(result.outcome,'DEAD');
+  assert.equal(next.characters['RUL-ВАР'].alive,false);
+  assert.equal(next.characters['RUL-ВАР'].mode,CHARACTER_MODE.DEAD);
+  assert.equal(next.characters['RUL-ВАР'].army_id,null);
+});
+
+test('saved or weakened commander with destroyed army waits for a location rule', () => {
+  const state = pendingFateState({
+    armyDestroyed:true,
+    fallback:null
+  });
+  const {state:next,result} = resolveCommanderFate(
+    state,map,constants,'RUL-ВАР',[6,6],{nowMs:1000}
+  );
+  assert.equal(result.outcome,'SAVED');
+  assert.equal(result.location_pending,true);
+  assert.equal(
+    next.characters['RUL-ВАР'].status,
+    CHARACTER_STATUS.FATE_LOCATION_PENDING
+  );
+  assert.equal(next.characters['RUL-ВАР'].army_id,null);
 });
