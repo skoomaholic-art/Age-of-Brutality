@@ -162,6 +162,18 @@
       background: #13191e;
     }
     .panel h2 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: #bfc7cb; }
+    .game-status-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:8px; }
+    .game-status-cell { background:#0f1519; border-radius:8px; padding:8px; }
+    .game-status-cell span { display:block; font-size:9px; color:#7f8c93; }
+    .game-status-cell b { display:block; margin-top:2px; font-size:12px; }
+    .standings { display:grid; gap:4px; margin-top:8px; }
+    .standing-row { display:grid; grid-template-columns:1fr auto auto; gap:8px; align-items:center; padding:5px 0; border-top:1px solid #253039; font-size:10px; }
+    .standing-row:first-child { border-top:0; }
+    .standing-house { font-weight:700; }
+    .standing-meta { color:#809098; }
+    .standing-exile { color:#d3a16e; font-size:9px; }
+    .status-warning { margin-top:8px; padding:8px; border:1px solid #5b4a2b; border-radius:8px; background:#17140e; font-size:9px; line-height:1.45; color:#d8c49a; }
+    .status-final { border-color:#46634d; background:#101711; color:#a8d9b1; }
     .character-list { display:grid; gap:8px; }
     .character-card { border:1px solid #2e3940; border-radius:10px; padding:10px; background:#0f1519; }
     .character-top { display:flex; justify-content:space-between; gap:8px; align-items:flex-start; }
@@ -275,6 +287,16 @@
   </section>
 
   <aside>
+    <div id="game-status-panel" class="panel">
+      <h2>Партия</h2>
+      <div class="game-status-grid">
+        <div class="game-status-cell"><span>Статус</span><b id="game-status">...</b></div>
+        <div class="game-status-cell"><span>Раунд</span><b id="game-round">...</b></div>
+      </div>
+      <div id="game-status-note" class="status-warning"></div>
+      <div id="standings" class="standings"></div>
+    </div>
+
     <div id="house-panel" class="panel">
       <h2 id="house-title">Дом</h2>
       <div class="stats">
@@ -625,6 +647,68 @@ function renderCharacters() {
       }
     };
   });
+}
+
+function renderVictory() {
+  const victory = snapshot?.victory;
+  if (!victory) return;
+
+  const final = victory.status === 'FINISHED';
+  $('game-status').textContent = final ? 'ЗАВЕРШЕНА' : 'ИДЁТ';
+  $('game-round').textContent =
+    String(victory.round || 1) + ' / ' + String(victory.max_rounds || 6);
+
+  const exiled = victory.exiled_houses || [];
+  const winners = victory.winners || [];
+  const note = $('game-status-note');
+  note.classList.toggle('status-final', final);
+
+  if (final) {
+    note.textContent = winners.length > 1
+      ? 'Совместная победа: ' + winners.join(', ') + '.'
+      : 'Победитель: ' + (winners[0] || 'не определён') + '.';
+  } else {
+    const parts = [
+      'По правилам победитель определяется после фазы Династии 6-го раунда.'
+    ];
+    if (exiled.length) {
+      parts.push(
+        exiled.length + ' Дом' +
+        (exiled.length === 1 ? '' : exiled.length < 5 ? 'а' : 'ов') +
+        ' сейчас в Изгнании. Потеря всех земель не означает уничтожение Дома.'
+      );
+    }
+    if (victory.scoring?.coverage === 'PARTIAL') {
+      parts.push(
+        'Текущий online-счёт неполный: сейчас подключены только первые военные ОП. ' +
+        'Власть, Династия, центральный остров и секретная Амбиция ещё не мигрированы.'
+      );
+    }
+    if (victory.online_adapter?.canonical_round_progression_connected === false) {
+      parts.push(
+        'Раундовый цикл persistent-режима ещё не подключён к каноническому финишу.'
+      );
+    }
+    note.textContent = parts.join(' ');
+  }
+
+  const rows = victory.standings || [];
+  $('standings').innerHTML = rows.map((item, index) => {
+    const exile = item.exiled
+      ? '<div class="standing-exile">Изгнание</div>'
+      : '';
+    return '<div class="standing-row">' +
+      '<div><span class="standing-house">' +
+      (index + 1) + '. ' + escapeHtml(item.house) +
+      '</span>' + exile + '</div>' +
+      '<div><b>' + Number(item.victory_points || 0) +
+      ' ОП</b><div class="standing-meta">' +
+      Number(item.influence || 0) + ' влияния</div></div>' +
+      '<div class="standing-meta">' +
+      Number(item.territories || 0) + ' терр.<br>' +
+      Number(item.gold || 0) + ' зол.</div>' +
+      '</div>';
+  }).join('');
 }
 
 function renderHouse() {
@@ -1119,6 +1203,7 @@ async function refresh() {
     }
   }
 
+  renderVictory();
   renderHouse();
   renderCharacters();
   renderEconomy();
