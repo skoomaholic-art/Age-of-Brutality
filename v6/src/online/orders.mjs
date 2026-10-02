@@ -14,17 +14,15 @@ import {
   settleCommander
 } from '../core/characters.mjs';
 import {
-  coreSeaAction,
-  createSeaLandingBridge,
-  enumerateOnlineSeaMarches,
-  findSeaLaneRoute,
   finishSeaLandingBridge,
-  isSeaWaypoint,
-  onlineWarriorsAt,
-  resolveSeaWaypointMove,
-  seaRouteMap,
-  validateOnlineSeaMarch
+  isSeaWaypoint
 } from './sea-navigation.mjs';
+import {
+  findOnlineRoute,
+  listReachableOnlineRoutes,
+  onlinePositionOwner,
+  onlinePositionWarriors
+} from './route-planner.mjs';
 
 export const ONLINE_TIMING = Object.freeze({
   landSegmentMs: 3_000,
@@ -40,7 +38,7 @@ function actionKey(action) {
     action.from,
     action.to,
     action.warriors,
-    action.mode === 'SEA' ? (action.path || null) : null
+    action.path || null
   ]);
 }
 
@@ -52,26 +50,38 @@ function assertOnlineLegalAction(action, legalActions) {
   return true;
 }
 
-function hydrateSeaAction(map, action) {
-  if (action.mode !== 'SEA') return structuredClone(action);
-  const route = findSeaLaneRoute(map, action.from, action.to);
-  if (!route) throw new Error(`no sea-lane route from ${action.from} to ${action.to}`);
+function hydrateOnlineRoute(state,map,constants,action,timing=ONLINE_TIMING) {
+  const route=findOnlineRoute(
+    state,
+    map,
+    constants,
+    action.house,
+    action.from,
+    action.to,
+    timing
+  );
+  if(!route) {
+    throw new Error(`no legal route from ${action.from} to ${action.to}`);
+  }
 
-  if (Array.isArray(action.path) && action.path.length) {
-    const same =
-      action.path.length === route.path.length &&
-      route.path.every((id, index) => id === action.path[index]);
-    if (!same) {
+  if(Array.isArray(action.path) && action.path.length) {
+    const same=
+      action.path.length===route.path.length &&
+      route.path.every((id,index)=>id===action.path[index]);
+    if(!same) {
       throw new Error(
-        `stored sea path is no longer legal: ${action.path.join(' -> ')}`
+        `stored route is no longer legal: ${action.path.join(' -> ')}`
       );
     }
   }
 
   return {
     ...structuredClone(action),
-    path: [...route.path],
-    sea_segments: route.segments
+    mode:route.mode,
+    path:[...route.path],
+    route_segments:route.segments.map(segment=>({...segment})),
+    route_hops:route.hops,
+    route_duration_ms:route.duration_ms
   };
 }
 
@@ -100,43 +110,97 @@ export function reservedWarriors(game, house, from) {
     .reduce((sum, order) => sum + order.action.warriors, 0);
 }
 
-export function enumerateOnlineMarches(state, map, constants, house) {
-  const land = enumerateMarches(state, map, constants, house)
-    .filter(action => action.mode === 'LAND');
-  const sea = enumerateOnlineSeaMarches(state, map, constants, house);
-  return [...land, ...sea];
+function destinationCapacityAllows(state,map,constants,house,route,warriors) {
+  const to=route.to;
+  const owner=onlinePositionOwner(state,to);
+  if(owner!==house) return true;
+
+  const current=onlinePositionWarriors(state,to,house);
+  return current+warriors<=constants.territory_warrior_cap;
 }
 
-export function listQueueableMarches(game, map, constants, house) {
-  const legal = enumerateOnlineMarches(game.state, map, constants, house);
+export function enumerateOnlineMarches(
+  state,
+  map,
+  constants,
+  house,
+  timing=ONLINE_TIMING
+) {
+  const origins=[];
+
+  for(const [id,territory] of Object.entries(state.territories || {})) {
+    if(
+      territory.owner===house &&
+      onlinePositionWarriors(state,id,house)>0
+    ) origins.push(id);
+  }
+
+  for(const id of Object.keys(map.sea_waypoints || {})) {
+    if(
+      onlinePositionOwner(state,id)===house &&
+      onlinePositionWarriors(state,id,house)>0
+    ) origins.push(id);
+  }
+
+  const actions=[];
+  for(const from of origins) {
+    const count=onlinePositionWarriors(state,from,house);
+    const routes=listReachableOnlineRoutes(
+      state,map,constants,house,from,timing
+    );
+
+    for(const route of routes) {
+      for(let warriors=1;warriors<=count;warriors+=1) {
+        if(!destinationCapacityAllows(
+          state,map,constants,house,route,warriors
+        )) continue;
+
+        actions.push({
+          type:'MARCH',
+          mode:route.mode,
+          house,
+          from,
+          to:route.to,
+          warriors,
+          path:[...route.path],
+          route_segments:route.segments.map(segment=>({...segment})),
+          route_hops:route.hops,
+          route_duration_ms:route.duration_ms
+        });
+      }
+    }
+  }
+  return actions;
+}
+
+export function listQueueableMarches(game,map,constants,house) {
+  const legal=enumerateOnlineMarches(
+    game.state,map,constants,house,ONLINE_TIMING
+  );
+
   return legal.filter(action => {
-    const available = onlineWarriorsAt(game.state, action.from, house);
-    const reserved = reservedWarriors(game, house, action.from);
-    return action.warriors <= available - reserved;
+    const available=onlinePositionWarriors(
+      game.state,action.from,house
+    );
+    const reserved=reservedWarriors(
+      game,house,action.from
+    );
+    return action.warriors<=available-reserved;
   });
 }
 
-export function travelDurationMs(state, map, constants, action, timing = ONLINE_TIMING) {
-  if (action.mode === 'SEA') {
-    const route = findSeaLaneRoute(map, action.from, action.to);
-    if (!route) throw new Error('no legal sea-lane route for timed order');
-    return timing.seaSegmentMs * route.segments;
-  }
-
-  const paths = findLegalLandPaths(
-    state,
-    map,
-    action.house,
-    action.from,
-    action.to,
-    constants.march.max_land_segments
+export function travelDurationMs(
+  state,
+  map,
+  constants,
+  action,
+  timing=ONLINE_TIMING
+) {
+  const route=findOnlineRoute(
+    state,map,constants,action.house,action.from,action.to,timing
   );
-  if (!paths.length) throw new Error('no legal land path for timed order');
-  const segments = Math.min(...paths.map(path => path.length - 1));
-  return Math.min(
-    Number(timing.landMaxMs || Number.MAX_SAFE_INTEGER),
-    timing.landSegmentMs * segments
-  );
+  if(!route) throw new Error('no legal route for timed order');
+  return route.duration_ms;
 }
 
 export function queueTimedOrder(
@@ -146,7 +210,9 @@ export function queueTimedOrder(
   action,
   { nowMs = Date.now(), timing = ONLINE_TIMING } = {}
 ) {
-  const hydratedAction = hydrateSeaAction(map, action);
+  const hydratedAction = hydrateOnlineRoute(
+    game.state,map,constants,action,timing
+  );
   const legal = listQueueableMarches(
     game,
     map,
@@ -160,7 +226,7 @@ export function queueTimedOrder(
   const id = `O${String(next.next_order_id).padStart(6, '0')}`;
   const durationMs = travelDurationMs(next.state, map, constants, action, timing);
   const availableWarriors =
-    onlineWarriorsAt(game.state, action.from, action.house) -
+    onlinePositionWarriors(game.state, action.from, action.house) -
     reservedWarriors(game, action.house, action.from);
   const originCommanders = commandersAt(
     game.state,
@@ -222,159 +288,253 @@ export function queueTimedOrder(
     started_at: order.created_at,
     due_at: order.due_at,
     planned_duration_ms: durationMs,
-    sea_path: action.mode === 'SEA' ? [...(action.path || [])] : null,
-    sea_segments: action.mode === 'SEA' ? Number(action.sea_segments || 0) : null
+    route_path: [...(action.path || [])],
+    route_hops: Number(action.route_hops || 0),
+    route_segments: structuredClone(action.route_segments || []),
+    route_duration_ms: Number(action.route_duration_ms || durationMs)
   });
   next.updated_at = new Date(nowMs).toISOString();
   return { game: next, order };
 }
 
-function resolveOrder(state, map, constants, gameId, order, nowMs) {
-  const action = hydrateSeaAction(map, order.action);
-  const legal = enumerateOnlineMarches(
-    state,
-    map,
-    constants,
-    action.house
-  );
-  assertOnlineLegalAction(action, legal);
+function removeFromOnlineOrigin(next,action) {
+  const source=next.territories?.[action.from] ||
+    next.sea_nodes?.[action.from];
+  if(!source) throw new Error(`unknown route origin ${action.from}`);
 
-  if (action.mode === 'SEA' && isSeaWaypoint(map, action.to)) {
-    let moved = resolveSeaWaypointMove(
-      state,
-      map,
-      constants,
-      action
+  source.warriors[action.house]=
+    Number(source.warriors?.[action.house] || 0)-action.warriors;
+  if(source.warriors[action.house]<=0) {
+    delete source.warriors[action.house];
+  }
+
+  if(next.sea_nodes?.[action.from]) {
+    const houses=Object.keys(source.warriors || {})
+      .filter(h=>Number(source.warriors[h] || 0)>0);
+    source.owner=houses.length===1 ? houses[0] : null;
+  }
+}
+
+function moveToSeaWaypoint(state,map,constants,action) {
+  const next=structuredClone(state);
+  removeFromOnlineOrigin(next,action);
+
+  const target=next.sea_nodes?.[action.to];
+  if(!target || !isSeaWaypoint(map,action.to)) {
+    throw new Error('route destination is not a sea waypoint');
+  }
+  if(target.owner && target.owner!==action.house) {
+    throw new Error(
+      `sea waypoint ${action.to} is occupied by ${target.owner}; sea combat is not implemented`
     );
-    moved = settleCommander(
-      moved,
-      order.commander_id,
-      action.to
+  }
+
+  const current=Number(target.warriors?.[action.house] || 0);
+  if(current+action.warriors>constants.territory_warrior_cap) {
+    throw new Error(
+      `sea waypoint ${action.to} would exceed warrior cap ${constants.territory_warrior_cap}`
+    );
+  }
+
+  target.owner=action.house;
+  target.warriors[action.house]=current+action.warriors;
+  next.journal.push({
+    kind:'ROUTE_MARCH',
+    house:action.house,
+    from:action.from,
+    to:action.to,
+    warriors:action.warriors,
+    route_path:[...(action.path || [])],
+    destination:'SEA_WAYPOINT'
+  });
+  return next;
+}
+
+function routeResolutionBridge(state,map,action) {
+  const bridgedState=structuredClone(state);
+  const bridgedMap=structuredClone(map);
+  let syntheticOrigin=false;
+
+  if(isSeaWaypoint(map,action.from)) {
+    const sea=bridgedState.sea_nodes?.[action.from];
+    if(!sea) throw new Error('missing sea origin state');
+
+    bridgedState.territories[action.from]={
+      owner:action.house,
+      warriors:{
+        [action.house]:Number(sea.warriors?.[action.house] || 0)
+      },
+      fort:false
+    };
+    bridgedMap.territories.push({
+      id:action.from,
+      name:action.from,
+      house_sector:'Море',
+      type:'Половина острова',
+      gold_income:0,
+      is_central_half:false,
+      island:null,
+      island_bonus:null,
+      icon:''
+    });
+    syntheticOrigin=true;
+  }
+
+  bridgedMap.land_edges=[
+    ...(bridgedMap.land_edges || []),
+    [action.from,action.to]
+  ];
+
+  return {
+    state:bridgedState,
+    map:bridgedMap,
+    action:{
+      type:'MARCH',
+      mode:'LAND',
+      house:action.house,
+      from:action.from,
+      to:action.to,
+      warriors:action.warriors,
+      path:[action.from,action.to]
+    },
+    syntheticOrigin
+  };
+}
+
+function finishRouteBridge(originalState,resolvedState,action,syntheticOrigin) {
+  if(!syntheticOrigin) return resolvedState;
+
+  const next=structuredClone(resolvedState);
+  const synthetic=next.territories[action.from];
+  const remaining=Number(synthetic?.warriors?.[action.house] || 0);
+
+  delete next.territories[action.from];
+  next.sea_nodes ||= {};
+  next.sea_nodes[action.from] ||= {owner:null,warriors:{}};
+  next.sea_nodes[action.from].warriors=remaining>0
+    ? {[action.house]:remaining}
+    : {};
+  next.sea_nodes[action.from].owner=remaining>0
+    ? action.house
+    : null;
+  return next;
+}
+
+function resolveOrder(state,map,constants,gameId,order,nowMs) {
+  const action=hydrateOnlineRoute(
+    state,map,constants,order.action,ONLINE_TIMING
+  );
+  const legal=enumerateOnlineMarches(
+    state,map,constants,action.house,ONLINE_TIMING
+  );
+  assertOnlineLegalAction(action,legal);
+
+  if(isSeaWaypoint(map,action.to)) {
+    let moved=moveToSeaWaypoint(
+      state,map,constants,action
+    );
+    moved=settleCommander(
+      moved,order.commander_id,action.to
     );
     return {
       state:moved,
       result:{
         kind:'SEA_WAYPOINT_MARCH',
-        waypoint:action.to,
+        route_path:[...action.path],
         commander_id:order.commander_id || null
       }
     };
   }
 
-  let resolutionState = state;
-  let resolutionMap = map;
-  let resolutionAction = action;
-  let seaLanding = false;
+  const bridge=routeResolutionBridge(
+    state,map,action
+  );
+  const resolutionState=bridge.state;
+  const resolutionMap=bridge.map;
+  const resolutionAction=bridge.action;
 
-  if (action.mode === 'SEA' && isSeaWaypoint(map, action.from)) {
-    const bridge = createSeaLandingBridge(
-      state,
-      map,
-      action
+  const finalize=resolvedState =>
+    finishRouteBridge(
+      state,resolvedState,action,bridge.syntheticOrigin
     );
-    if (!bridge) throw new Error('sea landing bridge could not be created');
-    resolutionState = bridge.state;
-    resolutionMap = bridge.map;
-    resolutionAction = coreSeaAction(action);
-    seaLanding = true;
-  } else if (action.mode === 'SEA') {
-    resolutionMap = seaRouteMap(map, action);
-    resolutionAction = coreSeaAction(action);
-  }
 
-  const finalizeSeaState = resolvedState => (
-    seaLanding
-      ? finishSeaLandingBridge(state, resolvedState, action)
-      : resolvedState
+  const destination=classifyDestination(
+    resolutionState,action.house,action.to
   );
 
-  const destination = classifyDestination(
-    resolutionState,
-    action.house,
-    action.to
-  );
-
-  if (destination === 'FRIENDLY') {
-    let moved = applyFriendlyMarch(
-      resolutionState,
-      resolutionMap,
-      constants,
-      resolutionAction
+  if(destination==='FRIENDLY') {
+    let moved=applyFriendlyMarch(
+      resolutionState,resolutionMap,constants,resolutionAction
     );
-    moved = finalizeSeaState(moved);
-    moved = settleCommander(
-      moved,
-      order.commander_id,
-      action.to
+    moved=finalize(moved);
+    moved=settleCommander(
+      moved,order.commander_id,action.to
     );
     return {
       state:moved,
       result:{
-        kind: action.mode === 'SEA'
-          ? 'SEA_LANDING_FRIENDLY'
-          : 'FRIENDLY_MARCH',
+        kind:'ROUTE_FRIENDLY_MARCH',
+        route_path:[...action.path],
         commander_id:order.commander_id || null
       }
     };
   }
 
-  if (destination === 'NEUTRAL') {
-    const dice = deterministicDice(`${gameId}:${order.id}:neutral`);
-    let resolved = resolveNeutralCapture(
+  if(destination==='NEUTRAL') {
+    const dice=deterministicDice(
+      `${gameId}:${order.id}:neutral`
+    );
+    let resolved=resolveNeutralCapture(
       resolutionState,
       resolutionMap,
       constants,
       resolutionAction,
       dice
     );
-    resolved.state = finalizeSeaState(resolved.state);
-    resolved.state = settleCommander(
+    resolved.state=finalize(resolved.state);
+    resolved.state=settleCommander(
       resolved.state,
       order.commander_id,
       resolved.result.success ? action.to : action.from
     );
-    resolved.result.commander_id = order.commander_id || null;
+    resolved.result.route_path=[...action.path];
+    resolved.result.commander_id=order.commander_id || null;
     return resolved;
   }
 
-  const defenderHouse = resolutionState.territories[action.to].owner;
-  const defenders = warriorsAt(
-    resolutionState,
-    action.to,
-    defenderHouse
+  const defenderHouse=resolutionState.territories[action.to].owner;
+  const defenders=warriorsAt(
+    resolutionState,action.to,defenderHouse
   );
 
-  if (defenders === 0) {
-    let resolved = resolveEmptyEnemyOccupation(
+  if(defenders===0) {
+    let resolved=resolveEmptyEnemyOccupation(
       resolutionState,
       resolutionMap,
       constants,
       resolutionAction
     );
-    resolved.state = finalizeSeaState(resolved.state);
-    resolved.state = settleCommander(
-      resolved.state,
-      order.commander_id,
-      action.to
+    resolved.state=finalize(resolved.state);
+    resolved.state=settleCommander(
+      resolved.state,order.commander_id,action.to
     );
-    resolved.result.commander_id = order.commander_id || null;
+    resolved.result.route_path=[...action.path];
+    resolved.result.commander_id=order.commander_id || null;
     return resolved;
   }
 
-  const attackerCommander = order.commander_id
+  const attackerCommander=order.commander_id
     ? state.characters?.[order.commander_id] || null
     : null;
-  const defenderCommander = commanderAt(
-    state,
-    defenderHouse,
-    action.to
+  const defenderCommander=commanderAt(
+    state,defenderHouse,action.to
   );
 
-  const [attackerDie, defenderDie] = deterministicDice(
+  const [attackerDie,defenderDie]=deterministicDice(
     `${gameId}:${order.id}:battle`
   );
 
-  let resolved = resolveBattle(
+  let resolved=resolveBattle(
     resolutionState,
     resolutionMap,
     constants,
@@ -387,19 +547,18 @@ function resolveOrder(state, map, constants, gameId, order, nowMs) {
     }
   );
 
-  resolved.state = finalizeSeaState(resolved.state);
-  resolved.result.attacker_commander_id = attackerCommander?.id || null;
-  resolved.result.defender_commander_id = defenderCommander?.id || null;
+  resolved.state=finalize(resolved.state);
+  resolved.result.route_path=[...action.path];
+  resolved.result.attacker_commander_id=attackerCommander?.id || null;
+  resolved.result.defender_commander_id=defenderCommander?.id || null;
 
-  if (resolved.result.attackerWins) {
-    resolved.state = settleCommander(
-      resolved.state,
-      attackerCommander?.id,
-      action.to
+  if(resolved.result.attackerWins) {
+    resolved.state=settleCommander(
+      resolved.state,attackerCommander?.id,action.to
     );
 
-    if (defenderCommander) {
-      resolved.state = markCommanderFatePending(
+    if(defenderCommander) {
+      resolved.state=markCommanderFatePending(
         resolved.state,
         defenderCommander.id,
         {
@@ -407,37 +566,31 @@ function resolveOrder(state, map, constants, gameId, order, nowMs) {
           opponent_house:action.house,
           side:'DEFENDER',
           army_destroyed:
-            Number(resolved.result.defenderSurvivors || 0) === 0,
+            Number(resolved.result.defenderSurvivors || 0)===0,
           fallback_territory:
             resolved.result.defenderRetreatTo || null,
           created_at:new Date(nowMs).toISOString()
         }
       );
-      const fateDice = deterministicDice(
+      const fateDice=deterministicDice(
         `${gameId}:${order.id}:fate:${defenderCommander.id}`
       );
-      const fate = resolveCommanderFate(
-        resolved.state,
-        map,
-        constants,
-        defenderCommander.id,
-        fateDice,
-        {nowMs}
+      const fate=resolveCommanderFate(
+        resolved.state,map,constants,defenderCommander.id,
+        fateDice,{nowMs}
       );
-      resolved.state = fate.state;
-      resolved.result.defender_commander_fate = fate.result;
+      resolved.state=fate.state;
+      resolved.result.defender_commander_fate=fate.result;
     }
   } else {
-    if (defenderCommander) {
-      resolved.state = settleCommander(
-        resolved.state,
-        defenderCommander.id,
-        action.to
+    if(defenderCommander) {
+      resolved.state=settleCommander(
+        resolved.state,defenderCommander.id,action.to
       );
     }
 
-    if (attackerCommander) {
-      resolved.state = markCommanderFatePending(
+    if(attackerCommander) {
+      resolved.state=markCommanderFatePending(
         resolved.state,
         attackerCommander.id,
         {
@@ -445,27 +598,23 @@ function resolveOrder(state, map, constants, gameId, order, nowMs) {
           opponent_house:defenderHouse,
           side:'ATTACKER',
           army_destroyed:
-            Number(resolved.result.attackerSurvivors || 0) === 0,
+            Number(resolved.result.attackerSurvivors || 0)===0,
           fallback_territory:
-            Number(resolved.result.attackerSurvivors || 0) > 0
+            Number(resolved.result.attackerSurvivors || 0)>0
               ? action.from
               : null,
           created_at:new Date(nowMs).toISOString()
         }
       );
-      const fateDice = deterministicDice(
+      const fateDice=deterministicDice(
         `${gameId}:${order.id}:fate:${attackerCommander.id}`
       );
-      const fate = resolveCommanderFate(
-        resolved.state,
-        map,
-        constants,
-        attackerCommander.id,
-        fateDice,
-        {nowMs}
+      const fate=resolveCommanderFate(
+        resolved.state,map,constants,attackerCommander.id,
+        fateDice,{nowMs}
       );
-      resolved.state = fate.state;
-      resolved.result.attacker_commander_fate = fate.result;
+      resolved.state=fate.state;
+      resolved.result.attacker_commander_fate=fate.result;
     }
   }
 
