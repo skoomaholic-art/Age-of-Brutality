@@ -4,6 +4,12 @@ import { createOnlineGame } from './store.mjs';
 import { repairForeignWarriors } from '../core/state.mjs';
 import { calculateNextDueAt } from './scheduling.mjs';
 import {
+  hashProfileToken,
+  normalizeProfileHandle,
+  parseProfileToken,
+  safeHashEqual
+} from './profile.mjs';
+import {
   GAME_STATUS,
   GAME_MODE,
   GAME_VISIBILITY,
@@ -84,6 +90,177 @@ export class FirestoreGameStore {
 
   playerRef(playerId) {
     return this.playersRef().doc(String(playerId));
+  }
+
+  profilesRef() {
+    return this.db.collection('profiles');
+  }
+
+  profileRef(profileId) {
+    return this.profilesRef().doc(String(profileId));
+  }
+
+  profileHandleRef(handle) {
+    return this.db.collection('profile_handles').doc(normalizeProfileHandle(handle));
+  }
+
+  profileSessionRef(profileId, sessionId) {
+    return this.profileRef(profileId).collection('sessions').doc(String(sessionId));
+  }
+
+  profileGamesRef(profileId) {
+    return this.profileRef(profileId).collection('games');
+  }
+
+  async createProfile(profile, session) {
+    const profileRef = this.profileRef(profile.id);
+    const handleRef = this.profileHandleRef(profile.handle);
+    const sessionRef = this.profileSessionRef(profile.id, session.session_id);
+
+    await this.db.runTransaction(async tx => {
+      const [existingProfile, existingHandle] = await Promise.all([
+        tx.get(profileRef),
+        tx.get(handleRef)
+      ]);
+
+      if (existingProfile.exists || existingHandle.exists) {
+        throw new Error('profile login already exists');
+      }
+
+      tx.set(profileRef, plain(profile), { merge: false });
+      tx.set(handleRef, {
+        handle: profile.handle,
+        profile_id: profile.id,
+        created_at: profile.created_at
+      }, { merge: false });
+      tx.set(sessionRef, {
+        session_id: session.session_id,
+        token_hash: session.token_hash,
+        created_at: session.created_at,
+        expires_at: session.expires_at,
+        revoked_at: null
+      }, { merge: false });
+    });
+
+    return profile;
+  }
+
+  async getProfile(profileId) {
+    if (!profileId) return null;
+    const doc = await this.profileRef(profileId).get();
+    return doc.exists ? doc.data() : null;
+  }
+
+  async getProfileByHandle(handle) {
+    const handleDoc = await this.profileHandleRef(handle).get();
+    if (!handleDoc.exists) return null;
+    return this.getProfile(handleDoc.data()?.profile_id);
+  }
+
+  async addProfileSession(profileId, session) {
+    await this.profileSessionRef(profileId, session.session_id).set({
+      session_id: session.session_id,
+      token_hash: session.token_hash,
+      created_at: session.created_at,
+      expires_at: session.expires_at,
+      revoked_at: null
+    }, { merge: false });
+    return session;
+  }
+
+  async authenticateProfileSession(token, nowMs = Date.now()) {
+    const parsed = parseProfileToken(token);
+    if (!parsed) return null;
+
+    const [profileDoc, sessionDoc] = await Promise.all([
+      this.profileRef(parsed.profile_id).get(),
+      this.profileSessionRef(parsed.profile_id, parsed.session_id).get()
+    ]);
+
+    if (!profileDoc.exists || !sessionDoc.exists) return null;
+
+    const session = sessionDoc.data();
+    if (session.revoked_at) return null;
+    if (!session.expires_at || Date.parse(session.expires_at) <= nowMs) return null;
+
+    const actualHash = hashProfileToken(token);
+    if (!safeHashEqual(session.token_hash, actualHash)) return null;
+
+    return profileDoc.data();
+  }
+
+  async revokeProfileSession(token, nowMs = Date.now()) {
+    const parsed = parseProfileToken(token);
+    if (!parsed) return false;
+    const ref = this.profileSessionRef(parsed.profile_id, parsed.session_id);
+    const doc = await ref.get();
+    if (!doc.exists) return false;
+    await ref.update({ revoked_at: new Date(nowMs).toISOString() });
+    return true;
+  }
+
+  async linkPlayerToProfile(playerId, profileId) {
+    const playerRef = this.playerRef(playerId);
+    const profileGameRef = this.profileGamesRef(profileId).doc(this.gameId);
+
+    await this.db.runTransaction(async tx => {
+      const [playerDoc, profileDoc] = await Promise.all([
+        tx.get(playerRef),
+        tx.get(this.profileRef(profileId))
+      ]);
+
+      if (!playerDoc.exists) throw new Error('player not found');
+      if (!profileDoc.exists) throw new Error('profile not found');
+
+      const player = playerDoc.data();
+      if (player.profile_id && player.profile_id !== profileId) {
+        throw new Error('game player already linked to another profile');
+      }
+
+      tx.update(playerRef, { profile_id: profileId });
+      tx.set(profileGameRef, {
+        game_id: this.gameId,
+        player_id: playerId,
+        linked_at: new Date().toISOString()
+      }, { merge: true });
+    });
+
+    return true;
+  }
+
+  async findPlayerByProfileId(profileId) {
+    if (!profileId) return null;
+    const snap = await this.playersRef()
+      .where('profile_id', '==', profileId)
+      .limit(1)
+      .get();
+    return snap.empty ? null : snap.docs[0].data();
+  }
+
+  async listProfileGames(profileId) {
+    const memberships = await this.profileGamesRef(profileId).get();
+    const items = [];
+
+    for (const membershipDoc of memberships.docs) {
+      const membership = membershipDoc.data();
+      const gameId = membership.game_id || membershipDoc.id;
+      const [gameDoc, playerDoc] = await Promise.all([
+        this.db.collection('games').doc(gameId).get(),
+        membership.player_id
+          ? this.db.collection('games').doc(gameId).collection('players').doc(membership.player_id).get()
+          : Promise.resolve(null)
+      ]);
+
+      if (!gameDoc.exists) continue;
+      items.push({
+        game_id: gameId,
+        game: gameDoc.data(),
+        player: playerDoc?.exists ? playerDoc.data() : null,
+        linked_at: membership.linked_at || null
+      });
+    }
+
+    return items;
   }
 
   async getPlayer(playerId) {
