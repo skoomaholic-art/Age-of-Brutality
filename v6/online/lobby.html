@@ -1718,14 +1718,15 @@ async function initialize() {
     $('room').style.display = 'none';
     await loadHub();
     setInterval(loadHub,5000);
-    setInterval(profilePresenceHeartbeat,60000);
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') profilePresenceHeartbeat();
-    });
     setInterval(() => {
       if (activeChatProfile) refreshChat();
     },3000);
   }
+
+  setInterval(profilePresenceHeartbeat,60000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') profilePresenceHeartbeat();
+  });
 }
 
 initialize().catch(error => {
