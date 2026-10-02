@@ -38,6 +38,8 @@ import {
 import {
   ACCESS_MODE,
   GAME_STATUS,
+  GAME_MODE,
+  GAME_VISIBILITY,
   PLAYER_ROLE,
   assertGameRunning,
   assertHouseAccess,
@@ -400,8 +402,8 @@ function errorStatus(error) {
   if (/authentication required|invalid player token/i.test(message)) return 401;
   if (/admin role required|cannot control|spectator|ownership mismatch/i.test(message)) return 403;
   if (/game not found|player not found|no snapshot found/i.test(message)) return 404;
-  if (/already|claimed|full|closed|not joinable|not in lobby|require all six|missing:|only a running game|only a finished game|unique invite/i.test(message)) return 409;
-  if (/Idempotency-Key|unknown|invalid|must be|request body|not running/i.test(message)) return 400;
+  if (/already|claimed|full|closed|not joinable|not in lobby|require all six|missing:|only a running game|only a finished game|unique invite|not a public room|not multiplayer/i.test(message)) return 409;
+  if (/Idempotency-Key|unknown|invalid|must be|request body|not running|solo game requires/i.test(message)) return 400;
   if (/stale game state|could not be committed/i.test(message)) return 409;
   return 500;
 }
@@ -415,9 +417,22 @@ async function uniqueInviteCode() {
   throw new Error('could not allocate unique invite code');
 }
 
+function safeRoomName(value, fallback) {
+  const name = String(value || '').trim().replace(/\s+/g, ' ');
+  return (name || fallback).slice(0, 60);
+}
+
 async function createMultiplayerGame(body) {
   const gameId = newGameId();
   const inviteCode = await uniqueInviteCode();
+  const visibility = body.visibility === GAME_VISIBILITY.PUBLIC
+    ? GAME_VISIBILITY.PUBLIC
+    : GAME_VISIBILITY.PRIVATE;
+  const roomName = safeRoomName(
+    body.room_name,
+    visibility === GAME_VISIBILITY.PUBLIC ? 'Открытая комната' : 'Приватная комната'
+  );
+
   const credentials = createPlayerCredentials();
   const host = createPlayerRecord({
     playerId: credentials.player_id,
@@ -430,7 +445,12 @@ async function createMultiplayerGame(body) {
   let game = createOnlineGame(map, constants, {
     id: gameId,
     accessMode: ACCESS_MODE.PLAYER_BOUND,
-    inviteCode
+    inviteCode,
+    lifecycleOptions: {
+      gameMode: GAME_MODE.MULTIPLAYER,
+      visibility,
+      roomName
+    }
   });
   game = normalizeAudit(normalizeOnlineEconomy(game));
 
@@ -460,13 +480,78 @@ async function createMultiplayerGame(body) {
   };
 }
 
-async function joinMultiplayerGame(body) {
-  const inviteCode = String(body.invite_code || '').trim().toUpperCase();
-  const gameId = await defaultContext.store.findGameIdByInviteCode(inviteCode);
-  if (!gameId) throw new Error('game not found');
+async function createSoloGame(body) {
+  const house = String(body.house || '').trim();
+  if (!constants.houses.includes(house)) throw new Error('solo game requires a valid house');
 
+  const gameId = newGameId();
+  const credentials = createPlayerCredentials();
+  const player = createPlayerRecord({
+    playerId: credentials.player_id,
+    tokenHash: credentials.token_hash,
+    displayName: body.display_name || 'Player',
+    role: PLAYER_ROLE.ADMIN
+  });
+
+  const store = createStore(gameId);
+  let game = createOnlineGame(map, constants, {
+    id: gameId,
+    accessMode: ACCESS_MODE.PLAYER_BOUND,
+    inviteCode: null,
+    lifecycleOptions: {
+      gameMode: GAME_MODE.SOLO,
+      visibility: GAME_VISIBILITY.PRIVATE,
+      roomName: safeRoomName(body.room_name, `Соло · ${house}`)
+    }
+  });
+  game = normalizeAudit(normalizeOnlineEconomy(game));
+
+  const ctx = {
+    gameId,
+    store,
+    game,
+    chain: Promise.resolve()
+  };
+  contexts.set(gameId, ctx);
+
+  await finalizeGame(ctx, game);
+  await store.addPlayer(player);
+  await refreshContext(ctx);
+  await store.claimHouse(player.id, house, constants);
+  await refreshContext(ctx);
+
+  const nowMs = Date.now();
+  const lifecycle = await store.startGame(player.id, constants, nowMs);
+  await refreshContext(ctx);
+  ctx.game.lifecycle = lifecycle;
+  ctx.game.next_income_at = new Date(nowMs + ONLINE_ECONOMY_TIMING.incomeIntervalMs).toISOString();
+  ctx.game.updated_at = new Date(nowMs).toISOString();
+  ctx.game.state.journal.push({
+    kind: 'GAME_STARTED',
+    at: ctx.game.updated_at,
+    game_id: ctx.game.id,
+    ruleset_version: ctx.game.ruleset_version,
+    game_mode: GAME_MODE.SOLO
+  });
+  await finalizeGame(ctx, ctx.game, nowMs);
+
+  return {
+    game_id: gameId,
+    player: publicPlayer(await store.getPlayer(player.id)),
+    access_token: credentials.token,
+    lifecycle: publicLifecycle(ctx.game.lifecycle)
+  };
+}
+
+async function joinGameById(gameId, body, { publicOnly = false } = {}) {
   const ctx = await loadContext(gameId);
-  if (ctx.game.lifecycle?.status !== GAME_STATUS.LOBBY) throw new Error('game is not joinable');
+  const lifecycle = ctx.game.lifecycle || {};
+
+  if (lifecycle.status !== GAME_STATUS.LOBBY) throw new Error('game is not joinable');
+  if (lifecycle.game_mode !== GAME_MODE.MULTIPLAYER) throw new Error('game is not multiplayer');
+  if (publicOnly && lifecycle.visibility !== GAME_VISIBILITY.PUBLIC) {
+    throw new Error('game is not a public room');
+  }
 
   const role = body.spectator ? PLAYER_ROLE.SPECTATOR : PLAYER_ROLE.PLAYER;
   const credentials = createPlayerCredentials();
@@ -486,6 +571,17 @@ async function joinMultiplayerGame(body) {
     access_token: credentials.token,
     lifecycle: publicLifecycle(ctx.game.lifecycle)
   };
+}
+
+async function joinMultiplayerGame(body) {
+  const inviteCode = String(body.invite_code || '').trim().toUpperCase();
+  const gameId = await defaultContext.store.findGameIdByInviteCode(inviteCode);
+  if (!gameId) throw new Error('game not found');
+  return joinGameById(gameId, body);
+}
+
+async function joinPublicGame(gameId, body) {
+  return joinGameById(gameId, body, { publicOnly: true });
 }
 
 async function handleGameApi(req, res, url, ctx, subpath) {
@@ -922,6 +1018,16 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, result);
     }
 
+    if (req.method === 'GET' && url.pathname === '/api/rooms/open') {
+      const rooms = await defaultContext.store.listOpenPublicGames(50);
+      return json(res, 200, { rooms });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/games/solo') {
+      const body = await readBody(req);
+      return json(res, 201, await createSoloGame(body));
+    }
+
     if (req.method === 'POST' && url.pathname === '/api/games') {
       const body = await readBody(req);
       return json(res, 201, await createMultiplayerGame(body));
@@ -930,6 +1036,16 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && url.pathname === '/api/games/join') {
       const body = await readBody(req);
       return json(res, 201, await joinMultiplayerGame(body));
+    }
+
+    const publicJoin = url.pathname.match(/^\/api\/games\/([^/]+)\/join-public$/);
+    if (req.method === 'POST' && publicJoin) {
+      const body = await readBody(req);
+      return json(
+        res,
+        201,
+        await joinPublicGame(decodeURIComponent(publicJoin[1]), body)
+      );
     }
 
     const scoped = gamePath(url.pathname);
