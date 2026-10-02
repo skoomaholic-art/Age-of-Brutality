@@ -331,6 +331,20 @@ function scopedApiUrl(url) {
   return '/api/games/' + encodeURIComponent(scopedGameId) + url.slice('/api'.length);
 }
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function decodeResponse(res) {
+  const raw = await res.text();
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return { error: raw.trim() || ('HTTP ' + res.status) };
+  }
+}
+
 async function api(url, options = {}) {
   const next = { ...options };
   const method = String(next.method || 'GET').toUpperCase();
@@ -345,10 +359,35 @@ async function api(url, options = {}) {
   }
 
   next.headers = headers;
-  const res = await fetch(scopedApiUrl(url), next);
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'request failed');
-  return data;
+  const target = scopedApiUrl(url);
+  const retryable = new Set([502, 503, 504]);
+  const delays = [0, 600, 1200, 2400];
+
+  let lastError = null;
+  for (let attempt = 0; attempt < delays.length; attempt += 1) {
+    if (delays[attempt]) await sleep(delays[attempt]);
+
+    try {
+      const res = await fetch(target, next);
+      const data = await decodeResponse(res);
+
+      if (res.ok) return data;
+
+      if (retryable.has(res.status) && attempt < delays.length - 1) {
+        lastError = new Error('Сервер временно недоступен. Повторяем запрос...');
+        continue;
+      }
+
+      throw new Error(data.error || ('Ошибка сервера HTTP ' + res.status));
+    } catch (error) {
+      lastError = error;
+      const networkFailure = error instanceof TypeError;
+      if (networkFailure && attempt < delays.length - 1) continue;
+      throw error;
+    }
+  }
+
+  throw lastError || new Error('Сервер временно недоступен. Попробуй ещё раз через несколько секунд.');
 }
 
 function territoryById(id) {
@@ -836,14 +875,26 @@ $('reset').addEventListener('click', async () => {
   await refresh();
 });
 
+let refreshInFlight = false;
+
+async function backgroundRefresh() {
+  if (refreshInFlight) return;
+  refreshInFlight = true;
+  try {
+    await refresh();
+  } catch (error) {
+    console.error('background refresh failed', error);
+  } finally {
+    refreshInFlight = false;
+  }
+}
+
 refresh().catch(error => {
   console.error(error);
   alert(error.message);
 });
 
-setInterval(() => {
-  refresh().catch(console.error);
-}, 1500);
+setInterval(backgroundRefresh, 1500);
 </script>
 </body>
 </html>
