@@ -63,6 +63,53 @@ export function journalEntryToAudit(entry, map, game) {
     type: entry.kind || 'EVENT'
   };
 
+  if (entry.kind === 'GAME_STARTED') {
+    return {
+      ...base,
+      message: 'Партия началась.',
+      details: {
+        game_id: entry.game_id || game.id,
+        ruleset_version: entry.ruleset_version || null,
+        at: entry.at || null
+      }
+    };
+  }
+
+  if (entry.kind === 'GAME_FINISHED') {
+    return {
+      ...base,
+      message: 'Партия завершена.',
+      details: {
+        game_id: entry.game_id || game.id,
+        reason: entry.reason || null,
+        at: entry.at || null
+      }
+    };
+  }
+
+  if (entry.kind === 'GAME_ARCHIVED') {
+    return {
+      ...base,
+      message: 'Партия отправлена в архив.',
+      details: {
+        game_id: entry.game_id || game.id,
+        at: entry.at || null
+      }
+    };
+  }
+
+  if (entry.kind === 'HOUSE_RELEASED') {
+    return {
+      ...base,
+      message: `Игрок освободил Дом ${entry.house}.`,
+      details: {
+        player_id: entry.player_id || null,
+        house: entry.house || null,
+        at: entry.at || null
+      }
+    };
+  }
+
   if (entry.kind === 'STATE_REPAIR') {
     const repairs = Array.isArray(entry.repairs) ? entry.repairs : [];
     return {
