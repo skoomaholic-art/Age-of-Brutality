@@ -3,22 +3,42 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Жестокий век - Лобби</title>
+<title>Жестокий век - Игровой центр</title>
 <style>
-:root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif; }
+:root { color-scheme:dark; font-family:Inter,ui-sans-serif,system-ui,-apple-system,sans-serif; }
 * { box-sizing:border-box; }
 body { margin:0; background:#0d1114; color:#eee7d8; min-height:100vh; }
-main { width:min(880px,100%); margin:0 auto; padding:24px 16px 60px; }
+main { width:min(980px,100%); margin:0 auto; padding:24px 16px 60px; }
 h1 { margin:0 0 6px; font-size:28px; letter-spacing:.06em; }
-h2 { margin:0 0 14px; font-size:18px; }
+h2 { margin:0 0 14px; font-size:19px; }
+h3 { margin:0 0 10px; font-size:15px; }
 .muted { color:#89969d; }
-.grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:20px; }
 .card { border:1px solid #313b42; border-radius:18px; padding:18px; background:#151b1f; }
-label { display:block; font-size:12px; color:#9da8ae; margin:12px 0 5px; }
-input,select,button { width:100%; border:1px solid #46545d; border-radius:12px; padding:12px; background:#0e1418; color:#f4eee2; font:inherit; }
+.grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+.create-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+.section { margin-top:22px; }
+label { display:block; font-size:12px; color:#9da8ae; margin:11px 0 5px; }
+input,select,button {
+  width:100%; border:1px solid #46545d; border-radius:12px; padding:12px;
+  background:#0e1418; color:#f4eee2; font:inherit;
+}
 button { cursor:pointer; font-weight:700; }
 button.primary { background:#eee7d8; color:#13181b; border-color:#eee7d8; }
 button:disabled { opacity:.42; cursor:not-allowed; }
+button.loading { opacity:.65; cursor:wait; }
+.profile-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:end; margin-top:18px; }
+.profile-row button { width:auto; min-width:130px; }
+.game-list,.room-list { display:grid; gap:10px; }
+.game-card,.room-card {
+  border:1px solid #2f3940; border-radius:14px; padding:14px;
+  display:grid; grid-template-columns:minmax(0,1fr) auto; gap:14px; align-items:center;
+  background:#11171b;
+}
+.game-title { font-weight:850; font-size:15px; }
+.game-meta { margin-top:5px; color:#93a0a7; font-size:12px; line-height:1.45; }
+.game-actions { display:flex; gap:8px; }
+.game-actions button { width:auto; min-width:120px; }
+.empty { border:1px dashed #344047; border-radius:14px; padding:18px; color:#819098; text-align:center; }
 .code { font-size:32px; letter-spacing:.18em; font-weight:900; margin:8px 0 18px; }
 .house-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
 .house { position:relative; min-height:60px; }
@@ -32,53 +52,113 @@ button:disabled { opacity:.42; cursor:not-allowed; }
 .room-topbar { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
 .room-topbar button { width:auto; min-width:150px; }
 .start-hint { margin-top:10px; font-size:12px; color:#9da8ae; }
-button.loading { opacity:.65; cursor:wait; }
 .error { color:#ff9b8a; margin-top:10px; white-space:pre-wrap; }
-.ok { color:#80e6a3; }
-@media(max-width:700px) {
-  .grid { grid-template-columns:1fr; }
+.badge { display:inline-block; border:1px solid #43515a; border-radius:999px; padding:3px 7px; font-size:10px; color:#a9b4ba; margin-right:5px; }
+.badge.solo { border-color:#806e3a; color:#e9d685; }
+.badge.public { border-color:#3c6b55; color:#87d7ad; }
+.badge.private { border-color:#565b72; color:#b2b8df; }
+@media(max-width:780px) {
+  .grid,.create-grid { grid-template-columns:1fr; }
+  .profile-row { grid-template-columns:1fr; }
+  .profile-row button { width:100%; }
+  .game-card,.room-card { grid-template-columns:1fr; }
+  .game-actions button { flex:1; width:100%; }
   .house-grid { grid-template-columns:1fr 1fr; }
   .actions { flex-direction:column; }
+  .room-topbar { flex-direction:column; }
+  .room-topbar button { width:100%; }
 }
 </style>
 </head>
 <body>
 <main>
   <h1>ЖЕСТОКИЙ ВЕК</h1>
-  <div class="muted">Мультиплеерное лобби</div>
+  <div class="muted">Игровой центр</div>
 
-  <section id="entry" class="grid">
-    <div class="card">
-      <h2>Создать игру</h2>
-      <label>Твоё имя</label>
-      <input id="create-name" maxlength="40" placeholder="Например, Александр">
-      <label>Дом сразу</label>
-      <select id="create-house">
-        <option value="">Выбрать позже</option>
-      </select>
-      <button id="create" class="primary" style="margin-top:14px">Создать партию</button>
-      <div id="create-error" class="error"></div>
+  <section id="hub">
+    <div class="profile-row">
+      <div>
+        <label>Имя игрока на этом устройстве</label>
+        <input id="profile-name" maxlength="40" placeholder="Например, Skoomaholic">
+      </div>
+      <button id="save-profile">Сохранить имя</button>
     </div>
 
-    <div class="card">
+    <section class="section card">
+      <h2>Мои игры</h2>
+      <div id="my-games" class="game-list">
+        <div class="empty">Загружаем сохранённые партии...</div>
+      </div>
+    </section>
+
+    <section class="section card">
+      <h2>Открытые комнаты</h2>
+      <div class="muted" style="margin-bottom:12px">Публичные лобби, к которым можно подключиться без кода.</div>
+      <div id="open-rooms" class="room-list">
+        <div class="empty">Ищем открытые комнаты...</div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Новая игра</h2>
+      <div class="create-grid">
+        <div class="card">
+          <h3>Соло</h3>
+          <div class="muted">Отдельная сохраняемая партия для одного игрока.</div>
+          <label>Дом</label>
+          <select id="solo-house"></select>
+          <button id="create-solo" class="primary" style="margin-top:14px">Начать соло</button>
+          <div id="solo-error" class="error"></div>
+        </div>
+
+        <div class="card">
+          <h3>Открытая комната</h3>
+          <div class="muted">Появится в общем списке комнат.</div>
+          <label>Название комнаты</label>
+          <input id="public-room-name" maxlength="60" placeholder="Например, Комната 1">
+          <label>Твой Дом</label>
+          <select id="public-house">
+            <option value="">Выбрать позже</option>
+          </select>
+          <button id="create-public" class="primary" style="margin-top:14px">Создать открытую</button>
+          <div id="public-error" class="error"></div>
+        </div>
+
+        <div class="card">
+          <h3>Приватная комната</h3>
+          <div class="muted">Вход только по коду приглашения.</div>
+          <label>Название комнаты</label>
+          <input id="private-room-name" maxlength="60" placeholder="Например, Для друзей">
+          <label>Твой Дом</label>
+          <select id="private-house">
+            <option value="">Выбрать позже</option>
+          </select>
+          <button id="create-private" class="primary" style="margin-top:14px">Создать приватную</button>
+          <div id="private-error" class="error"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section card">
       <h2>Войти по коду</h2>
-      <label>Код приглашения</label>
-      <input id="join-code" maxlength="6" placeholder="ABC234" style="text-transform:uppercase">
-      <label>Твоё имя</label>
-      <input id="join-name" maxlength="40" placeholder="Имя игрока">
-      <label style="display:flex;gap:8px;align-items:center;margin-top:14px">
-        <input id="spectator" type="checkbox" style="width:auto">
-        Войти наблюдателем
-      </label>
-      <button id="join" class="primary" style="margin-top:14px">Подключиться</button>
+      <div class="grid">
+        <div>
+          <label>Код приглашения</label>
+          <input id="join-code" maxlength="6" placeholder="ABC234" style="text-transform:uppercase">
+        </div>
+        <div>
+          <label>&nbsp;</label>
+          <button id="join-private" class="primary">Подключиться</button>
+        </div>
+      </div>
       <div id="join-error" class="error"></div>
-    </div>
+    </section>
   </section>
 
   <section id="room" class="card" style="display:none;margin-top:20px">
     <div class="room-topbar">
       <div>
-        <div class="muted">Код приглашения</div>
+        <div id="room-kind" class="muted"></div>
         <div id="invite" class="code">------</div>
         <div id="status" class="muted"></div>
       </div>
@@ -101,19 +181,31 @@ button.loading { opacity:.65; cursor:wait; }
     <div id="room-error" class="error"></div>
   </section>
 </main>
+
 <script>
 const houses = ['Варкайр','Сайрвен','Ортайн','Эркай','Тасвар','Айрель'];
 const params = new URLSearchParams(location.search);
 let gameId = params.get('game');
 let token = gameId ? localStorage.getItem('aob-token-' + gameId) : null;
 let roomLoadInFlight = false;
+let hubLoadInFlight = false;
 const $ = id => document.getElementById(id);
 
-for (const house of houses) {
-  const option = document.createElement('option');
-  option.value = house;
-  option.textContent = house;
-  $('create-house').appendChild(option);
+for (const selectId of ['solo-house','public-house','private-house']) {
+  for (const house of houses) {
+    const option = document.createElement('option');
+    option.value = house;
+    option.textContent = house;
+    $(selectId).appendChild(option);
+  }
+}
+
+$('profile-name').value = localStorage.getItem('aob-display-name') || '';
+
+function displayName() {
+  const value = $('profile-name').value.trim() || localStorage.getItem('aob-display-name') || 'Игрок';
+  localStorage.setItem('aob-display-name', value);
+  return value;
 }
 
 function commandId() {
@@ -129,11 +221,8 @@ function sleep(ms) {
 async function decodeResponse(res) {
   const raw = await res.text();
   if (!raw) return {};
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return { error: raw.trim() || ('HTTP ' + res.status) };
-  }
+  try { return JSON.parse(raw); }
+  catch { return { error: raw.trim() || ('HTTP ' + res.status) }; }
 }
 
 async function request(url, options = {}, authToken = null) {
@@ -147,35 +236,29 @@ async function request(url, options = {}, authToken = null) {
   if (authToken) headers.set('Authorization', 'Bearer ' + authToken);
   next.headers = headers;
 
-  const retryable = new Set([502, 503, 504]);
-  const delays = [0, 600, 1200, 2400];
-
+  const retryable = new Set([502,503,504]);
+  const delays = [0,600,1200,2400];
   let lastError = null;
+
   for (let attempt = 0; attempt < delays.length; attempt += 1) {
     if (delays[attempt]) await sleep(delays[attempt]);
-
     try {
       const res = await fetch(url, next);
       const data = await decodeResponse(res);
-
       if (res.ok) return data;
 
       if (retryable.has(res.status) && attempt < delays.length - 1) {
         lastError = new Error('Сервер временно недоступен. Повторяем запрос...');
         continue;
       }
-
-      const message = data.error || ('Ошибка сервера HTTP ' + res.status);
-      throw new Error(message);
+      throw new Error(data.error || ('Ошибка сервера HTTP ' + res.status));
     } catch (error) {
       lastError = error;
-      const networkFailure = error instanceof TypeError;
-      if (networkFailure && attempt < delays.length - 1) continue;
+      if (error instanceof TypeError && attempt < delays.length - 1) continue;
       throw error;
     }
   }
-
-  throw lastError || new Error('Сервер временно недоступен. Попробуй ещё раз через несколько секунд.');
+  throw lastError || new Error('Сервер временно недоступен.');
 }
 
 async function withBusy(button, busyText, fn) {
@@ -184,9 +267,8 @@ async function withBusy(button, busyText, fn) {
   button.disabled = true;
   button.classList.add('loading');
   button.textContent = busyText;
-  try {
-    return await fn();
-  } finally {
+  try { return await fn(); }
+  finally {
     button.classList.remove('loading');
     button.textContent = original;
     button.disabled = wasDisabled;
@@ -196,7 +278,7 @@ async function withBusy(button, busyText, fn) {
 function friendlyError(error) {
   const message = String(error?.message || error || '');
   if (/Service Unavailable|Bad Gateway|Gateway Timeout|HTTP 50[234]/i.test(message)) {
-    return 'Сервер временно недоступен. Подожди несколько секунд и нажми «Обновить».';
+    return 'Сервер временно недоступен. Попробуй ещё раз через несколько секунд.';
   }
   return message;
 }
@@ -205,41 +287,240 @@ function saveAccess(data) {
   gameId = data.game_id;
   token = data.access_token;
   localStorage.setItem('aob-token-' + gameId, token);
-  history.replaceState(null, '', '/lobby.html?game=' + encodeURIComponent(gameId));
+  if (data.player?.display_name) {
+    localStorage.setItem('aob-display-name', data.player.display_name);
+    $('profile-name').value = data.player.display_name;
+  }
 }
 
-$('create').onclick = async () => {
-  $('create-error').textContent = '';
+function savedGames() {
+  const result = [];
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const key = localStorage.key(i);
+    if (!key?.startsWith('aob-token-game-')) continue;
+    const id = key.slice('aob-token-'.length);
+    const accessToken = localStorage.getItem(key);
+    if (id && accessToken) result.push({ gameId:id, token:accessToken });
+  }
+  return result;
+}
+
+function badgeFor(life) {
+  if (life.game_mode === 'SOLO') return '<span class="badge solo">СОЛО</span>';
+  if (life.visibility === 'PUBLIC') return '<span class="badge public">ОТКРЫТАЯ</span>';
+  return '<span class="badge private">ПРИВАТНАЯ</span>';
+}
+
+function statusText(status) {
+  return {
+    LOBBY:'Лобби',
+    RUNNING:'Идёт игра',
+    FINISHED:'Завершена',
+    ARCHIVED:'Архив'
+  }[status] || status;
+}
+
+async function loadMyGames() {
+  const entries = savedGames();
+  if (!entries.length) {
+    $('my-games').innerHTML = '<div class="empty">Пока нет сохранённых игр на этом устройстве.</div>';
+    return [];
+  }
+
+  const loaded = await Promise.all(entries.map(async entry => {
+    try {
+      const data = await request('/api/games/' + encodeURIComponent(entry.gameId) + '/lobby', {}, entry.token);
+      return { ...data, token:entry.token };
+    } catch (error) {
+      if (/invalid player token|authentication required|game not found/i.test(String(error.message))) {
+        localStorage.removeItem('aob-token-' + entry.gameId);
+      }
+      return null;
+    }
+  }));
+
+  const games = loaded
+    .filter(Boolean)
+    .filter(item => ['LOBBY','RUNNING'].includes(item.lifecycle?.status))
+    .sort((a,b) => String(b.lifecycle?.created_at || '').localeCompare(String(a.lifecycle?.created_at || '')));
+
+  if (!games.length) {
+    $('my-games').innerHTML = '<div class="empty">Активных игр нет.</div>';
+    return [];
+  }
+
+  $('my-games').innerHTML = games.map(item => {
+    const life = item.lifecycle;
+    const me = item.current_player;
+    const target = life.status === 'RUNNING'
+      ? '/?game=' + encodeURIComponent(item.game_id)
+      : '/lobby.html?game=' + encodeURIComponent(item.game_id);
+    const action = life.status === 'RUNNING' ? 'Продолжить' : 'В лобби';
+    const house = me?.house ? ' · Дом: ' + escapeHtml(me.house) : '';
+    return `
+      <div class="game-card">
+        <div>
+          <div>${badgeFor(life)}</div>
+          <div class="game-title">${escapeHtml(life.room_name || 'Игра')}</div>
+          <div class="game-meta">
+            ${escapeHtml(statusText(life.status))}${house}
+            · Игроков: ${Number(life.player_count || 0)}/${Number(life.max_players || 6)}
+          </div>
+        </div>
+        <div class="game-actions">
+          <button class="primary" onclick="location.href='${target}'">${action}</button>
+        </div>
+      </div>`;
+  }).join('');
+
+  return games;
+}
+
+async function loadOpenRooms() {
   try {
-    const data = await request('/api/games', {
-      method:'POST',
-      headers:{'content-type':'application/json'},
-      body:JSON.stringify({
-        display_name:$('create-name').value.trim(),
-        house:$('create-house').value || null
-      })
+    const data = await request('/api/rooms/open');
+    const myIds = new Set(savedGames().map(item => item.gameId));
+    const rooms = data.rooms || [];
+
+    if (!rooms.length) {
+      $('open-rooms').innerHTML = '<div class="empty">Сейчас нет открытых комнат.</div>';
+      return;
+    }
+
+    $('open-rooms').innerHTML = rooms.map(room => {
+      const already = myIds.has(room.game_id);
+      const free = Number(room.max_players || 6) - Number(room.player_count || 0);
+      const claimed = (room.claimed_houses || []).join(', ') || 'пока никто';
+      return `
+        <div class="room-card">
+          <div>
+            <div><span class="badge public">ОТКРЫТАЯ</span></div>
+            <div class="game-title">${escapeHtml(room.room_name || 'Открытая комната')}</div>
+            <div class="game-meta">
+              Игроков: ${room.player_count}/${room.max_players} · Свободно мест: ${free}<br>
+              Заняты Дома: ${escapeHtml(claimed)}
+            </div>
+          </div>
+          <div class="game-actions">
+            <button class="primary" data-public-game="${escapeHtml(room.game_id)}">
+              ${already ? 'Вернуться' : 'Подключиться'}
+            </button>
+          </div>
+        </div>`;
+    }).join('');
+
+    document.querySelectorAll('[data-public-game]').forEach(button => {
+      button.onclick = async () => {
+        const id = button.dataset.publicGame;
+        const existingToken = localStorage.getItem('aob-token-' + id);
+        if (existingToken) {
+          location.href = '/lobby.html?game=' + encodeURIComponent(id);
+          return;
+        }
+        try {
+          await withBusy(button, 'Подключаем...', async () => {
+            const joined = await request(
+              '/api/games/' + encodeURIComponent(id) + '/join-public',
+              {
+                method:'POST',
+                headers:{'content-type':'application/json'},
+                body:JSON.stringify({ display_name:displayName() })
+              }
+            );
+            saveAccess(joined);
+            location.href = '/lobby.html?game=' + encodeURIComponent(joined.game_id);
+          });
+        } catch (error) {
+          alert(friendlyError(error));
+        }
+      };
     });
-    saveAccess(data);
-    await loadRoom();
   } catch (error) {
-    $('create-error').textContent = friendlyError(error);
+    $('open-rooms').innerHTML = '<div class="empty">' + escapeHtml(friendlyError(error)) + '</div>';
+  }
+}
+
+async function loadHub() {
+  if (hubLoadInFlight) return;
+  hubLoadInFlight = true;
+  try {
+    await Promise.all([loadMyGames(), loadOpenRooms()]);
+  } finally {
+    hubLoadInFlight = false;
+  }
+}
+
+async function createMultiplayer(visibility, button, errorId, roomInputId, houseSelectId) {
+  $(errorId).textContent = '';
+  try {
+    await withBusy(button, 'Создаём...', async () => {
+      const data = await request('/api/games', {
+        method:'POST',
+        headers:{'content-type':'application/json'},
+        body:JSON.stringify({
+          display_name:displayName(),
+          room_name:$(roomInputId).value.trim(),
+          visibility,
+          house:$(houseSelectId).value || null
+        })
+      });
+      saveAccess(data);
+      location.href = '/lobby.html?game=' + encodeURIComponent(data.game_id);
+    });
+  } catch (error) {
+    $(errorId).textContent = friendlyError(error);
+  }
+}
+
+$('save-profile').onclick = () => {
+  localStorage.setItem('aob-display-name', $('profile-name').value.trim());
+  loadHub();
+};
+
+$('create-solo').onclick = async () => {
+  $('solo-error').textContent = '';
+  const button = $('create-solo');
+  try {
+    await withBusy(button, 'Создаём...', async () => {
+      const data = await request('/api/games/solo', {
+        method:'POST',
+        headers:{'content-type':'application/json'},
+        body:JSON.stringify({
+          display_name:displayName(),
+          house:$('solo-house').value,
+          room_name:'Соло · ' + $('solo-house').value
+        })
+      });
+      saveAccess(data);
+      location.href = '/?game=' + encodeURIComponent(data.game_id);
+    });
+  } catch (error) {
+    $('solo-error').textContent = friendlyError(error);
   }
 };
 
-$('join').onclick = async () => {
+$('create-public').onclick = () =>
+  createMultiplayer('PUBLIC',$('create-public'),'public-error','public-room-name','public-house');
+
+$('create-private').onclick = () =>
+  createMultiplayer('PRIVATE',$('create-private'),'private-error','private-room-name','private-house');
+
+$('join-private').onclick = async () => {
   $('join-error').textContent = '';
+  const button = $('join-private');
   try {
-    const data = await request('/api/games/join', {
-      method:'POST',
-      headers:{'content-type':'application/json'},
-      body:JSON.stringify({
-        invite_code:$('join-code').value.trim().toUpperCase(),
-        display_name:$('join-name').value.trim(),
-        spectator:$('spectator').checked
-      })
+    await withBusy(button, 'Подключаем...', async () => {
+      const data = await request('/api/games/join', {
+        method:'POST',
+        headers:{'content-type':'application/json'},
+        body:JSON.stringify({
+          invite_code:$('join-code').value.trim().toUpperCase(),
+          display_name:displayName()
+        })
+      });
+      saveAccess(data);
+      location.href = '/lobby.html?game=' + encodeURIComponent(data.game_id);
     });
-    saveAccess(data);
-    await loadRoom();
   } catch (error) {
     $('join-error').textContent = friendlyError(error);
   }
@@ -270,14 +551,27 @@ async function loadRoom() {
       token
     );
 
-    $('entry').style.display = 'none';
+    $('hub').style.display = 'none';
     $('room').style.display = 'block';
 
     const life = data.lifecycle;
     const me = data.current_player;
-    $('invite').textContent = life.invite_code || 'ИГРА НАЧАТА';
+    const publicRoom = life.visibility === 'PUBLIC';
+    const solo = life.game_mode === 'SOLO';
+
+    $('room-kind').textContent = solo
+      ? 'Соло-партия'
+      : publicRoom
+        ? 'Открытая комната'
+        : 'Приватная комната';
+
+    $('invite').textContent = solo
+      ? (life.room_name || 'СОЛО')
+      : (life.invite_code || 'ИГРА НАЧАТА');
+
     $('status').textContent =
-      'Статус: ' + life.status +
+      (life.room_name ? life.room_name + ' · ' : '') +
+      'Статус: ' + statusText(life.status) +
       ' · правила: ' + (life.ruleset_version || 'V6');
 
     const claims = life.house_claims || {};
@@ -293,6 +587,7 @@ async function loadRoom() {
 
       const canClaim =
         life.status === 'LOBBY' &&
+        !solo &&
         me?.role !== 'SPECTATOR' &&
         !me?.house &&
         !ownerId;
@@ -305,36 +600,37 @@ async function loadRoom() {
     $('players').innerHTML = data.players.map(player => {
       const role = player.role === 'ADMIN' ? 'хост' : player.role === 'SPECTATOR' ? 'наблюдатель' : 'игрок';
       const house = player.house ? ' · ' + player.house : '';
-      return '<div class="player"><span>' + escapeHtml(player.display_name) + '</span><span class="muted">' +
-        escapeHtml(role + house) + '</span></div>';
+      return '<div class="player"><span>' + escapeHtml(player.display_name) +
+        '</span><span class="muted">' + escapeHtml(role + house) + '</span></div>';
     }).join('');
 
     const isAdmin = me?.role === 'ADMIN';
     const claimedCount = houses.filter(house => Boolean(claims[house])).length;
     const missingCount = houses.length - claimedCount;
-    const canStart = isAdmin && life.status === 'LOBBY' && missingCount === 0;
+    const canStart = isAdmin && !solo && life.status === 'LOBBY' && missingCount === 0;
 
     $('release-house').style.display =
-      life.status === 'LOBBY' && me?.house ? 'block' : 'none';
+      !solo && life.status === 'LOBBY' && me?.house ? 'block' : 'none';
 
-    $('start').style.display = isAdmin && life.status === 'LOBBY' ? 'block' : 'none';
+    $('start').style.display =
+      isAdmin && !solo && life.status === 'LOBBY' ? 'block' : 'none';
     $('start').disabled = !canStart;
     $('start').textContent = canStart
       ? 'Начать игру'
-      : `Начать игру · ждём ${missingCount}`;
+      : 'Начать игру · ждём ' + missingCount;
 
     $('start-hint').textContent =
-      life.status === 'LOBBY'
+      !solo && life.status === 'LOBBY'
         ? (missingCount === 0
             ? 'Все 6 Домов заняты. Хост может начинать партию.'
-            : `Для текущих правил V6 нужны все 6 Домов. Занято: ${claimedCount}/6.`)
+            : 'Для текущих правил V6 нужны все 6 Домов. Занято: ' + claimedCount + '/6.')
         : '';
 
     $('open-game').style.display = life.status === 'RUNNING' ? 'block' : 'none';
     $('room-error').textContent = '';
   } catch (error) {
     $('room-error').textContent = friendlyError(error);
-    $('entry').style.display = 'none';
+    $('hub').style.display = 'none';
     $('room').style.display = 'block';
   } finally {
     roomLoadInFlight = false;
@@ -346,17 +642,16 @@ function escapeHtml(value) {
     .replaceAll('&','&amp;')
     .replaceAll('<','&lt;')
     .replaceAll('>','&gt;')
-    .replaceAll('"','&quot;');
+    .replaceAll('"','&quot;')
+    .replaceAll("'",'&#039;');
 }
 
 $('release-house').onclick = async () => {
   $('room-error').textContent = '';
   const button = $('release-house');
   try {
-    await withBusy(button, 'Освобождаем...', async () => {
-      await request('/api/games/' + encodeURIComponent(gameId) + '/release-house', {
-        method:'POST'
-      }, token);
+    await withBusy(button,'Освобождаем...',async () => {
+      await request('/api/games/' + encodeURIComponent(gameId) + '/release-house',{method:'POST'},token);
       await loadRoom();
     });
   } catch (error) {
@@ -369,10 +664,8 @@ $('start').onclick = async () => {
   $('room-error').textContent = '';
   const button = $('start');
   try {
-    await withBusy(button, 'Запускаем...', async () => {
-      await request('/api/games/' + encodeURIComponent(gameId) + '/start', {
-        method:'POST'
-      }, token);
+    await withBusy(button,'Запускаем...',async () => {
+      await request('/api/games/' + encodeURIComponent(gameId) + '/start',{method:'POST'},token);
       await loadRoom();
     });
   } catch (error) {
@@ -384,23 +677,20 @@ $('open-game').onclick = () => {
   location.href = '/?game=' + encodeURIComponent(gameId);
 };
 
-$('refresh').onclick = async () => {
-  $('room-error').textContent = '';
-  const button = $('refresh');
-  try {
-    await withBusy(button, 'Обновляем...', loadRoom);
-  } catch (error) {
-    $('room-error').textContent = friendlyError(error);
-  }
-};
-
-$('back-menu').onclick = () => {
-  location.href = '/lobby';
-};
+$('refresh').onclick = loadRoom;
+$('back-menu').onclick = () => { location.href = '/lobby'; };
 
 if (gameId && token) {
+  $('hub').style.display = 'none';
   loadRoom();
-  setInterval(loadRoom, 3000);
+  setInterval(loadRoom,3000);
+} else {
+  $('room').style.display = 'none';
+  loadHub();
+  setInterval(() => {
+    loadOpenRooms();
+    loadMyGames();
+  },5000);
 }
 </script>
 </body>
