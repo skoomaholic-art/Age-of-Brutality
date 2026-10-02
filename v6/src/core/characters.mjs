@@ -381,7 +381,7 @@ export function beginCommanderMarch(state, characterId, order) {
   return next;
 }
 
-export function settleCommander(state, characterId, territory) {
+export function settleCommander(state, characterId, position) {
   if (!characterId) return state;
   const next = structuredClone(state);
   const character = next.characters?.[characterId];
@@ -391,8 +391,10 @@ export function settleCommander(state, characterId, territory) {
   army.moving_order_id = null;
   army.from = null;
   army.to = null;
-  army.territory = territory;
-  character.location = { kind: 'TERRITORY', territory };
+  army.territory = position;
+  character.location = next.sea_nodes?.[position]
+    ? { kind: 'SEA_WAYPOINT', waypoint: position }
+    : { kind: 'TERRITORY', territory: position };
   return next;
 }
 
@@ -632,8 +634,12 @@ export function validateCharacterLayer(state, map, constants) {
     }
     commanderByArmy.add(army.commander_id);
 
-    if (army.territory && !state.territories?.[army.territory]) {
-      errors.push('army ' + army.id + ' has unknown territory');
+    if (
+      army.territory &&
+      !state.territories?.[army.territory] &&
+      !state.sea_nodes?.[army.territory]
+    ) {
+      errors.push('army ' + army.id + ' has unknown position');
     }
   }
 
