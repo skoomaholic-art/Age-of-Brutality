@@ -66,6 +66,14 @@
     .sea-lane-edge { stroke:#4f6e80; stroke-width:1.15; opacity:.78; }
     .sea-waypoint { fill:#6f93a8; stroke:#b8ccd7; stroke-width:.7; opacity:.88; pointer-events:none; }
     .sea-waypoint-halo { fill:none; stroke:#4f6e80; stroke-width:.8; opacity:.32; pointer-events:none; }
+    .sea-node { cursor:pointer; transition:.15s ease; }
+    .sea-node .selection-ring { fill:none; stroke:transparent; stroke-width:0; pointer-events:none; vector-effect:non-scaling-stroke; }
+    .sea-node.selectable .selection-ring { stroke:#58c7ff; stroke-width:2.5; stroke-dasharray:2 2; }
+    .sea-node.origin .selection-ring { stroke:#ffd45c; stroke-width:3.5; filter:drop-shadow(0 0 5px rgba(255,212,92,.9)); }
+    .sea-node.legal .selection-ring { stroke:#70ef9b; stroke-width:3; stroke-dasharray:3 2; filter:drop-shadow(0 0 4px rgba(112,239,155,.65)); }
+    .sea-node.target .selection-ring { stroke:#fff; stroke-width:4; filter:drop-shadow(0 0 6px rgba(255,255,255,.9)); }
+    .sea-node.dim { opacity:.25; }
+    .sea-node .sea-count { fill:#11161a; font-size:6px; font-weight:900; text-anchor:middle; pointer-events:none; }
     .sea-lane-edge.active-route { stroke:#ffd45c; stroke-width:2.2; opacity:1; }
     .sea-waypoint.active-route { fill:#ffd45c; stroke:#fff2b2; opacity:1; }
     .sea-waypoint-halo.active-route { stroke:#ffd45c; stroke-width:1.5; opacity:.55; }
@@ -470,8 +478,27 @@ function territoryById(id) {
   return snapshot.map.territories.find(t => t.id === id);
 }
 
+function mapNodeById(id) {
+  const territory = territoryById(id);
+  if (territory) return territory;
+  if (snapshot.map.sea_waypoints?.[id]) {
+    return { id, name:'Морская точка', type:'Море', is_sea_waypoint:true };
+  }
+  return null;
+}
+
 function warriorsAt(id, owner) {
-  return Number(snapshot.game.state.territories[id]?.warriors?.[owner] || 0);
+  return Number(
+    snapshot.game.state.territories[id]?.warriors?.[owner] ||
+    snapshot.game.state.sea_nodes?.[id]?.warriors?.[owner] ||
+    0
+  );
+}
+
+function nodeOwner(id) {
+  return snapshot.game.state.territories[id]?.owner ??
+    snapshot.game.state.sea_nodes?.[id]?.owner ??
+    null;
 }
 
 function renderSaveStatus() {
@@ -571,7 +598,7 @@ function renderCharacters() {
                 ? army?.moving_order_id
                   ? 'В марше · приказ ' + army.moving_order_id
                   : 'Армия · ' +
-                    (territoryById(army?.territory)?.name ||
+                    (mapNodeById(army?.territory)?.name ||
                       army?.territory ||
                       'не определено')
                 : 'При Дворе';
@@ -834,8 +861,27 @@ function renderMap() {
   }
 
   const waypointNodes = Object.entries(seaWaypoints).map(([id,point]) => {
+    const seaState = state.sea_nodes?.[id] || {owner:null, warriors:{}};
+    const owner = seaState.owner;
+    const total = Object.values(seaState.warriors || {})
+      .reduce((sum,value) => sum + Number(value || 0), 0);
+    const classes = ['sea-node'];
+    const ownMovable = owner === house && warriorsAt(id, house) > 0;
+    if (!origin && ownMovable) classes.push('selectable');
+    if (id === origin) classes.push('origin');
+    if (origin && legalTargets.has(id)) classes.push('legal');
+    if (id === target) classes.push('target');
+    if (origin && id !== origin && !legalTargets.has(id) && id !== target) classes.push('dim');
+
     const active = activeSeaNodes.has(id) ? ' active-route' : '';
-    return `<g transform="translate(${point.x} ${point.y})"><circle class="sea-waypoint-halo${active}" r="5"></circle><circle class="sea-waypoint${active}" r="2.3"></circle></g>`;
+    const fill = owner ? (colors[owner] || '#6f93a8') : '#6f93a8';
+    return `
+      <g class="${classes.join(' ')}" data-id="${id}" transform="translate(${point.x} ${point.y})">
+        <circle class="selection-ring" r="7"></circle>
+        <circle class="sea-waypoint-halo${active}" r="5"></circle>
+        <circle class="sea-waypoint${active}" r="${total ? 5 : 2.3}" fill="${fill}"></circle>
+        <text class="sea-count" y="2">${total || ''}</text>
+      </g>`;
   });
   const nodes = snapshot.map.territories.map(t => {
     const s = state.territories[t.id];
@@ -869,7 +915,7 @@ function renderMap() {
   });
 
   svg.innerHTML = lines.join('') + waypointNodes.join('') + nodes.join('');
-  svg.querySelectorAll('.territory').forEach(node => {
+  svg.querySelectorAll('.territory, .sea-node').forEach(node => {
     node.addEventListener('click', () => selectTerritory(node.dataset.id));
   });
 }
@@ -1039,7 +1085,7 @@ function renderSelection() {
     return;
   }
 
-  const o = territoryById(origin);
+  const o = mapNodeById(origin);
   const own = warriorsAt(origin, house);
   renderCommanderChoice();
   $('selection').textContent = `ОТКУДА: ${o.name}. Доступно ${own} воинов.`;
@@ -1051,7 +1097,7 @@ function renderSelection() {
     return;
   }
 
-  const t = territoryById(target);
+  const t = mapNodeById(target);
   const matching = actionsForSelection();
   const modes = [...new Set(matching.map(action => action.mode))];
   const modeRow = $('route-mode-row');
@@ -1100,10 +1146,12 @@ function renderSelection() {
 
 async function selectTerritory(id) {
   if (isSpectator) return;
-  const s = snapshot.game.state.territories[id];
+
+  const owner = nodeOwner(id);
+  const movable = warriorsAt(id, house);
 
   if (!origin) {
-    if (s.owner !== house || warriorsAt(id, house) < 1) return;
+    if (owner !== house || movable < 1) return;
     origin = id;
     target = null;
     marchModePreference = null;
@@ -1115,9 +1163,10 @@ async function selectTerritory(id) {
   } else {
     const valid = legal.some(a => a.from === origin && a.to === id);
     if (!valid) {
-      if (s.owner === house && warriorsAt(id, house) > 0) {
+      if (owner === house && movable > 0) {
         origin = id;
         target = null;
+        marchModePreference = null;
         await loadLegal();
       }
     } else {
@@ -1185,8 +1234,8 @@ function renderOrders() {
   $('orders').innerHTML = orders.slice(0, 12).map(order => {
     const cls = order.status.toLowerCase();
     const a = order.action;
-    const from = territoryById(a.from)?.name || a.from;
-    const to = territoryById(a.to)?.name || a.to;
+    const from = mapNodeById(a.from)?.name || a.from;
+    const to = mapNodeById(a.to)?.name || a.to;
     const extra = order.failure_reason
       ? `<div class="failed">${escapeHtml(order.failure_reason)}</div>`
       : '';
@@ -1333,10 +1382,11 @@ async function refresh() {
   }
 
   if (origin) {
-    const stillOwned = snapshot.game.state.territories[origin]?.owner === house;
+    const stillOwned = nodeOwner(origin) === house && warriorsAt(origin, house) > 0;
     if (!stillOwned) {
       origin = null;
       target = null;
+      marchModePreference = null;
     }
   }
 
