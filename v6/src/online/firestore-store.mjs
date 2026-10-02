@@ -4,13 +4,17 @@ import { createOnlineGame } from './store.mjs';
 import { repairForeignWarriors } from '../core/state.mjs';
 import { calculateNextDueAt } from './scheduling.mjs';
 import {
+  SOCIAL_LIMITS,
   applyRankedResult,
+  conversationIdFor,
   hashProfileToken,
   normalizeAvatarId,
   normalizeProfileHandle,
   normalizeProfileStats,
   parseProfileToken,
-  safeHashEqual
+  publicSocialProfile,
+  safeHashEqual,
+  validateChatMessage
 } from './profile.mjs';
 import {
   GAME_STATUS,
@@ -115,6 +119,54 @@ export class FirestoreGameStore {
     return this.profileRef(profileId).collection('games');
   }
 
+  profileFriendsRef(profileId) {
+    return this.profileRef(profileId).collection('friends');
+  }
+
+  profileFriendRef(profileId, friendId) {
+    return this.profileFriendsRef(profileId).doc(String(friendId));
+  }
+
+  incomingFriendRequestsRef(profileId) {
+    return this.profileRef(profileId).collection('friend_requests_in');
+  }
+
+  outgoingFriendRequestsRef(profileId) {
+    return this.profileRef(profileId).collection('friend_requests_out');
+  }
+
+  profileBlockedRef(profileId) {
+    return this.profileRef(profileId).collection('blocked');
+  }
+
+  profileBlockedUserRef(profileId, otherProfileId) {
+    return this.profileBlockedRef(profileId).doc(String(otherProfileId));
+  }
+
+  profileConversationsRef(profileId) {
+    return this.profileRef(profileId).collection('conversations');
+  }
+
+  profileConversationRef(profileId, conversationId) {
+    return this.profileConversationsRef(profileId).doc(String(conversationId));
+  }
+
+  conversationsRef() {
+    return this.db.collection('conversations');
+  }
+
+  conversationRef(conversationId) {
+    return this.conversationsRef().doc(String(conversationId));
+  }
+
+  profileGameInvitesRef(profileId) {
+    return this.profileRef(profileId).collection('game_invites');
+  }
+
+  profileGameInviteRef(profileId, inviteId) {
+    return this.profileGameInvitesRef(profileId).doc(String(inviteId));
+  }
+
   async createProfile(profile, session) {
     const profileRef = this.profileRef(profile.id);
     const handleRef = this.profileHandleRef(profile.handle);
@@ -158,6 +210,402 @@ export class FirestoreGameStore {
     const handleDoc = await this.profileHandleRef(handle).get();
     if (!handleDoc.exists) return null;
     return this.getProfile(handleDoc.data()?.profile_id);
+  }
+
+  async areProfilesFriends(profileId, otherProfileId) {
+    if (!profileId || !otherProfileId || profileId === otherProfileId) return false;
+    const doc = await this.profileFriendRef(profileId, otherProfileId).get();
+    return doc.exists;
+  }
+
+  async isBlockedBetween(profileId, otherProfileId) {
+    const [a, b] = await Promise.all([
+      this.profileBlockedUserRef(profileId, otherProfileId).get(),
+      this.profileBlockedUserRef(otherProfileId, profileId).get()
+    ]);
+    return a.exists || b.exists;
+  }
+
+  async sendFriendRequest(fromProfileId, toProfileId, nowMs = Date.now()) {
+    if (!fromProfileId || !toProfileId || fromProfileId === toProfileId) {
+      throw new Error('cannot add this profile as friend');
+    }
+
+    const fromProfileRef = this.profileRef(fromProfileId);
+    const toProfileRef = this.profileRef(toProfileId);
+    const fromFriendRef = this.profileFriendRef(fromProfileId, toProfileId);
+    const toFriendRef = this.profileFriendRef(toProfileId, fromProfileId);
+    const outgoingRef = this.outgoingFriendRequestsRef(fromProfileId).doc(toProfileId);
+    const incomingRef = this.incomingFriendRequestsRef(toProfileId).doc(fromProfileId);
+    const reverseOutgoingRef = this.outgoingFriendRequestsRef(toProfileId).doc(fromProfileId);
+    const reverseIncomingRef = this.incomingFriendRequestsRef(fromProfileId).doc(toProfileId);
+    const fromBlockRef = this.profileBlockedUserRef(fromProfileId, toProfileId);
+    const toBlockRef = this.profileBlockedUserRef(toProfileId, fromProfileId);
+    const createdAt = new Date(nowMs).toISOString();
+
+    return this.db.runTransaction(async tx => {
+      const [
+        fromProfileDoc, toProfileDoc, friendDoc, reverseFriendDoc,
+        outgoingDoc, reverseOutgoingDoc, fromBlockDoc, toBlockDoc
+      ] = await Promise.all([
+        tx.get(fromProfileRef),
+        tx.get(toProfileRef),
+        tx.get(fromFriendRef),
+        tx.get(toFriendRef),
+        tx.get(outgoingRef),
+        tx.get(reverseOutgoingRef),
+        tx.get(fromBlockRef),
+        tx.get(toBlockRef)
+      ]);
+
+      if (!fromProfileDoc.exists || !toProfileDoc.exists) throw new Error('profile not found');
+      if (fromBlockDoc.exists || toBlockDoc.exists) throw new Error('friend request blocked');
+      if (friendDoc.exists || reverseFriendDoc.exists) throw new Error('players are already friends');
+      if (outgoingDoc.exists) throw new Error('friend request already sent');
+
+      if (reverseOutgoingDoc.exists) {
+        tx.delete(reverseOutgoingRef);
+        tx.delete(reverseIncomingRef);
+        tx.set(fromFriendRef, {
+          profile_id: toProfileId,
+          friends_since: createdAt
+        }, { merge: false });
+        tx.set(toFriendRef, {
+          profile_id: fromProfileId,
+          friends_since: createdAt
+        }, { merge: false });
+        return { accepted: true, auto_accepted: true };
+      }
+
+      const request = {
+        from_profile_id: fromProfileId,
+        to_profile_id: toProfileId,
+        created_at: createdAt
+      };
+      tx.set(outgoingRef, request, { merge: false });
+      tx.set(incomingRef, request, { merge: false });
+      return { accepted: false, auto_accepted: false };
+    });
+  }
+
+  async respondFriendRequest(profileId, fromProfileId, { accept }, nowMs = Date.now()) {
+    const incomingRef = this.incomingFriendRequestsRef(profileId).doc(fromProfileId);
+    const outgoingRef = this.outgoingFriendRequestsRef(fromProfileId).doc(profileId);
+    const myFriendRef = this.profileFriendRef(profileId, fromProfileId);
+    const theirFriendRef = this.profileFriendRef(fromProfileId, profileId);
+    const myBlockRef = this.profileBlockedUserRef(profileId, fromProfileId);
+    const theirBlockRef = this.profileBlockedUserRef(fromProfileId, profileId);
+    const nowIso = new Date(nowMs).toISOString();
+
+    return this.db.runTransaction(async tx => {
+      const [incoming, myBlock, theirBlock] = await Promise.all([
+        tx.get(incomingRef),
+        tx.get(myBlockRef),
+        tx.get(theirBlockRef)
+      ]);
+      if (!incoming.exists) throw new Error('friend request not found');
+      if (accept && (myBlock.exists || theirBlock.exists)) throw new Error('friend request blocked');
+
+      tx.delete(incomingRef);
+      tx.delete(outgoingRef);
+
+      if (accept) {
+        tx.set(myFriendRef, {
+          profile_id: fromProfileId,
+          friends_since: nowIso
+        }, { merge: false });
+        tx.set(theirFriendRef, {
+          profile_id: profileId,
+          friends_since: nowIso
+        }, { merge: false });
+      }
+
+      return { accepted: Boolean(accept) };
+    });
+  }
+
+  async removeFriend(profileId, friendProfileId) {
+    const batch = this.db.batch();
+    batch.delete(this.profileFriendRef(profileId, friendProfileId));
+    batch.delete(this.profileFriendRef(friendProfileId, profileId));
+    await batch.commit();
+    return true;
+  }
+
+  async blockProfile(profileId, otherProfileId, nowMs = Date.now()) {
+    if (!profileId || !otherProfileId || profileId === otherProfileId) {
+      throw new Error('cannot block this profile');
+    }
+
+    const batch = this.db.batch();
+    batch.set(this.profileBlockedUserRef(profileId, otherProfileId), {
+      profile_id: otherProfileId,
+      blocked_at: new Date(nowMs).toISOString()
+    }, { merge: false });
+    batch.delete(this.profileFriendRef(profileId, otherProfileId));
+    batch.delete(this.profileFriendRef(otherProfileId, profileId));
+    batch.delete(this.incomingFriendRequestsRef(profileId).doc(otherProfileId));
+    batch.delete(this.outgoingFriendRequestsRef(profileId).doc(otherProfileId));
+    batch.delete(this.incomingFriendRequestsRef(otherProfileId).doc(profileId));
+    batch.delete(this.outgoingFriendRequestsRef(otherProfileId).doc(profileId));
+    await batch.commit();
+    return true;
+  }
+
+  async unblockProfile(profileId, otherProfileId) {
+    await this.profileBlockedUserRef(profileId, otherProfileId).delete();
+    return true;
+  }
+
+  async listSocialState(profileId) {
+    const [friendsSnap, incomingSnap, outgoingSnap, conversationsSnap, invitesSnap, blockedSnap] =
+      await Promise.all([
+        this.profileFriendsRef(profileId).get(),
+        this.incomingFriendRequestsRef(profileId).get(),
+        this.outgoingFriendRequestsRef(profileId).get(),
+        this.profileConversationsRef(profileId).get(),
+        this.profileGameInvitesRef(profileId).get(),
+        this.profileBlockedRef(profileId).get()
+      ]);
+
+    const profileIds = new Set();
+    for (const doc of friendsSnap.docs) profileIds.add(doc.id);
+    for (const doc of incomingSnap.docs) profileIds.add(doc.data()?.from_profile_id || doc.id);
+    for (const doc of outgoingSnap.docs) profileIds.add(doc.data()?.to_profile_id || doc.id);
+    for (const doc of conversationsSnap.docs) profileIds.add(doc.data()?.other_profile_id);
+    for (const doc of invitesSnap.docs) profileIds.add(doc.data()?.from_profile_id);
+
+    const profileMap = new Map();
+    await Promise.all(
+      [...profileIds].filter(Boolean).map(async id => {
+        const profile = await this.getProfile(id);
+        if (profile) profileMap.set(id, publicSocialProfile(profile));
+      })
+    );
+
+    const friends = friendsSnap.docs
+      .map(doc => ({
+        ...(profileMap.get(doc.id) || { id: doc.id }),
+        friends_since: doc.data()?.friends_since || null
+      }))
+      .sort((a, b) => String(a.display_name || a.handle || '').localeCompare(String(b.display_name || b.handle || ''), 'ru'));
+
+    const incoming = incomingSnap.docs.map(doc => {
+      const fromId = doc.data()?.from_profile_id || doc.id;
+      return {
+        ...(profileMap.get(fromId) || { id: fromId }),
+        created_at: doc.data()?.created_at || null
+      };
+    });
+
+    const outgoing = outgoingSnap.docs.map(doc => {
+      const toId = doc.data()?.to_profile_id || doc.id;
+      return {
+        ...(profileMap.get(toId) || { id: toId }),
+        created_at: doc.data()?.created_at || null
+      };
+    });
+
+    const conversations = conversationsSnap.docs
+      .map(doc => {
+        const data = doc.data() || {};
+        const other = profileMap.get(data.other_profile_id) || { id: data.other_profile_id };
+        return {
+          conversation_id: doc.id,
+          other,
+          unread_count: Number(data.unread_count || 0),
+          updated_at: data.updated_at || null,
+          last_message_preview: data.last_message_preview || ''
+        };
+      })
+      .sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')));
+
+    const nowMs = Date.now();
+    const invites = [];
+    for (const doc of invitesSnap.docs) {
+      const data = doc.data() || {};
+      if (data.status !== 'PENDING') continue;
+      if (data.expires_at && Date.parse(data.expires_at) <= nowMs) continue;
+      const gameDoc = data.game_id
+        ? await this.db.collection('games').doc(data.game_id).get()
+        : null;
+      invites.push({
+        invite_id: doc.id,
+        ...data,
+        from_profile: profileMap.get(data.from_profile_id) || { id: data.from_profile_id },
+        game: gameDoc?.exists ? {
+          game_id: gameDoc.id,
+          lifecycle: gameDoc.data()?.lifecycle || null
+        } : null
+      });
+    }
+
+    return {
+      friends,
+      incoming_requests: incoming,
+      outgoing_requests: outgoing,
+      conversations,
+      game_invites: invites,
+      blocked_count: blockedSnap.size,
+      unread_messages: conversations.reduce((sum, item) => sum + item.unread_count, 0)
+    };
+  }
+
+  async sendDirectMessage(fromProfileId, toProfileId, message, nowMs = Date.now()) {
+    const text = validateChatMessage(message);
+    if (!await this.areProfilesFriends(fromProfileId, toProfileId)) {
+      throw new Error('messages are allowed only between friends');
+    }
+    if (await this.isBlockedBetween(fromProfileId, toProfileId)) {
+      throw new Error('messages are blocked');
+    }
+
+    const conversationId = conversationIdFor(fromProfileId, toProfileId);
+    const conversationRef = this.conversationRef(conversationId);
+    const messageId = crypto.randomUUID();
+    const messageRef = conversationRef.collection('messages').doc(messageId);
+    const senderMetaRef = this.profileConversationRef(fromProfileId, conversationId);
+    const receiverMetaRef = this.profileConversationRef(toProfileId, conversationId);
+    const nowIso = new Date(nowMs).toISOString();
+    const preview = text.slice(0, 120);
+
+    await this.db.runTransaction(async tx => {
+      const receiverMeta = await tx.get(receiverMetaRef);
+      const receiverUnread = Number(receiverMeta.data()?.unread_count || 0) + 1;
+
+      tx.set(conversationRef, {
+        conversation_id: conversationId,
+        participants: [fromProfileId, toProfileId].sort(),
+        updated_at: nowIso,
+        last_message_preview: preview
+      }, { merge: true });
+
+      tx.set(messageRef, {
+        id: messageId,
+        conversation_id: conversationId,
+        from_profile_id: fromProfileId,
+        to_profile_id: toProfileId,
+        text,
+        created_at: nowIso
+      }, { merge: false });
+
+      tx.set(senderMetaRef, {
+        conversation_id: conversationId,
+        other_profile_id: toProfileId,
+        updated_at: nowIso,
+        last_message_preview: preview,
+        unread_count: 0
+      }, { merge: true });
+
+      tx.set(receiverMetaRef, {
+        conversation_id: conversationId,
+        other_profile_id: fromProfileId,
+        updated_at: nowIso,
+        last_message_preview: preview,
+        unread_count: receiverUnread
+      }, { merge: true });
+    });
+
+    return {
+      id: messageId,
+      conversation_id: conversationId,
+      from_profile_id: fromProfileId,
+      to_profile_id: toProfileId,
+      text,
+      created_at: nowIso
+    };
+  }
+
+  async listDirectMessages(profileId, otherProfileId, limit = 100) {
+    if (!await this.areProfilesFriends(profileId, otherProfileId)) {
+      throw new Error('messages are allowed only between friends');
+    }
+    const conversationId = conversationIdFor(profileId, otherProfileId);
+    const snap = await this.conversationRef(conversationId)
+      .collection('messages')
+      .orderBy('created_at', 'desc')
+      .limit(Math.max(1, Math.min(200, Number(limit) || 100)))
+      .get();
+
+    const items = snap.docs.map(doc => doc.data()).reverse();
+    await this.profileConversationRef(profileId, conversationId).set({
+      unread_count: 0,
+      last_read_at: new Date().toISOString()
+    }, { merge: true });
+
+    return {
+      conversation_id: conversationId,
+      messages: items
+    };
+  }
+
+  async createGameInvite(fromProfileId, toProfileId, gameId, nowMs = Date.now()) {
+    if (!await this.areProfilesFriends(fromProfileId, toProfileId)) {
+      throw new Error('game invites are allowed only between friends');
+    }
+    if (await this.isBlockedBetween(fromProfileId, toProfileId)) {
+      throw new Error('game invites are blocked');
+    }
+
+    const [senderMembership, gameDoc] = await Promise.all([
+      this.profileGamesRef(fromProfileId).doc(String(gameId)).get(),
+      this.db.collection('games').doc(String(gameId)).get()
+    ]);
+    if (!senderMembership.exists) throw new Error('sender is not a member of this game');
+    if (!gameDoc.exists) throw new Error('game not found');
+
+    const lifecycle = gameDoc.data()?.lifecycle || {};
+    if (lifecycle.status !== GAME_STATUS.LOBBY || lifecycle.game_mode !== GAME_MODE.MULTIPLAYER) {
+      throw new Error('game is not accepting invitations');
+    }
+
+    const existingPlayer = await this.db.collection('games').doc(String(gameId))
+      .collection('players')
+      .where('profile_id', '==', toProfileId)
+      .limit(1)
+      .get();
+    if (!existingPlayer.empty) throw new Error('friend is already in this game');
+
+    const inviteId = crypto.randomUUID();
+    const createdAt = new Date(nowMs).toISOString();
+    const expiresAt = new Date(
+      nowMs + SOCIAL_LIMITS.inviteLifetimeDays * 24 * 60 * 60 * 1000
+    ).toISOString();
+
+    await this.profileGameInviteRef(toProfileId, inviteId).set({
+      invite_id: inviteId,
+      from_profile_id: fromProfileId,
+      to_profile_id: toProfileId,
+      game_id: String(gameId),
+      status: 'PENDING',
+      created_at: createdAt,
+      expires_at: expiresAt
+    }, { merge: false });
+
+    return {
+      invite_id: inviteId,
+      game_id: String(gameId),
+      created_at: createdAt,
+      expires_at: expiresAt
+    };
+  }
+
+  async getGameInvite(profileId, inviteId) {
+    const doc = await this.profileGameInviteRef(profileId, inviteId).get();
+    return doc.exists ? doc.data() : null;
+  }
+
+  async resolveGameInvite(profileId, inviteId, status, nowMs = Date.now()) {
+    if (!['ACCEPTED', 'DECLINED'].includes(status)) throw new Error('invalid game invite status');
+    const ref = this.profileGameInviteRef(profileId, inviteId);
+    const doc = await ref.get();
+    if (!doc.exists) throw new Error('game invite not found');
+    await ref.set({
+      ...doc.data(),
+      status,
+      resolved_at: new Date(nowMs).toISOString()
+    }, { merge: false });
+    return { ...doc.data(), status };
   }
 
   async updateProfileAvatar(profileId, avatarId, nowMs = Date.now()) {
