@@ -213,7 +213,7 @@ export function queueTimedOrder(
 }
 
 function resolveOrder(state, map, constants, gameId, order, nowMs) {
-  const action = hydrateSeaAction(map, resolutionAction);
+  const action = hydrateSeaAction(map, order.action);
   const legal = enumerateOnlineMarches(
     state,
     map,
