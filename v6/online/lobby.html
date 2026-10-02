@@ -1115,10 +1115,7 @@ async function openPlayerProfile(profileId) {
       actions.push('<button class="primary" data-profile-add="' + profile.id + '">Добавить в друзья</button>');
     }
 
-    if (
-      presence.in_game &&
-      presence.game?.game_mode === 'MULTIPLAYER'
-    ) {
+    if (presence.in_game && presence.game?.game_id) {
       actions.push('<button class="primary" data-profile-watch="' + profile.id + '">Наблюдать</button>');
     }
 
