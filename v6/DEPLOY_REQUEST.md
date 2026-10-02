@@ -19,3 +19,5 @@ Deploy trigger: multiplayer foundation, atomic commands, ghost-warrior repair, d
 Deploy trigger: resilient multiplayer lobby, transient 503 retries, start gating, main-menu return.
 
 Deploy trigger: game hub with solo mode, public rooms, private rooms, and saved active games.
+
+Deploy trigger: autosave before returning from game screen to game hub.
