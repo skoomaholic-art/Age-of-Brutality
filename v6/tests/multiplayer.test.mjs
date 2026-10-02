@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {
   ACCESS_MODE,
   GAME_STATUS,
+  GAME_MODE,
+  GAME_VISIBILITY,
   PLAYER_ROLE,
   assertHouseAccess,
   createInviteCode,
@@ -42,6 +44,8 @@ test('new lobby is player-bound and versioned', () => {
   });
   assert.equal(lifecycle.status, GAME_STATUS.LOBBY);
   assert.equal(lifecycle.access_mode, ACCESS_MODE.PLAYER_BOUND);
+  assert.equal(lifecycle.game_mode, GAME_MODE.MULTIPLAYER);
+  assert.equal(lifecycle.visibility, GAME_VISIBILITY.PRIVATE);
   assert.equal(lifecycle.ruleset_version, 'V6.TEST');
   assert.equal(lifecycle.invite_code, 'ABC123');
   assert.equal(lifecycle.max_players, 6);
@@ -110,4 +114,43 @@ test('invite codes omit ambiguous characters', () => {
     const code = createInviteCode();
     assert.match(code, /^[A-HJ-NP-Z2-9]{6}$/);
   }
+});
+
+
+test('public multiplayer lobby keeps public visibility and room name', () => {
+  const lifecycle = createLobbyMetadata(constants, {
+    inviteCode: 'PUB234',
+    nowMs: 1000,
+    gameMode: GAME_MODE.MULTIPLAYER,
+    visibility: GAME_VISIBILITY.PUBLIC,
+    roomName: 'Комната 1'
+  });
+  assert.equal(lifecycle.game_mode, GAME_MODE.MULTIPLAYER);
+  assert.equal(lifecycle.visibility, GAME_VISIBILITY.PUBLIC);
+  assert.equal(lifecycle.room_name, 'Комната 1');
+  assert.equal(lifecycle.max_players, 6);
+  assert.equal(lifecycle.start_requirement, 'ALL_SIX_HOUSES_FOR_V6_REFERENCE');
+});
+
+test('solo lobby needs exactly one claimed house', () => {
+  const game = {
+    lifecycle: createLobbyMetadata(constants, {
+      inviteCode: null,
+      nowMs: 1000,
+      gameMode: GAME_MODE.SOLO,
+      visibility: GAME_VISIBILITY.PRIVATE,
+      roomName: 'Соло'
+    })
+  };
+
+  assert.equal(game.lifecycle.max_players, 1);
+  assert.equal(game.lifecycle.invite_code, null);
+  assert.equal(game.lifecycle.start_requirement, 'ONE_HOUSE_FOR_SOLO');
+  assert.throws(() => validateStart(game, constants), /exactly one claimed House/);
+
+  game.lifecycle.house_claims.A = 'p1';
+  assert.equal(validateStart(game, constants), true);
+
+  game.lifecycle.house_claims.B = 'p2';
+  assert.throws(() => validateStart(game, constants), /exactly one claimed House/);
 });
