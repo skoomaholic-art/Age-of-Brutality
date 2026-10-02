@@ -429,10 +429,10 @@ function newGameId() {
 function errorStatus(error) {
   const message = String(error?.message || error || '');
   if (/authentication required|invalid player token|invalid profile session/i.test(message)) return 401;
-  if (/admin role required|cannot control|spectator|ownership mismatch|friend request blocked|messages are blocked|game invites are blocked|messages are allowed only between friends|game invites are allowed only between friends|sender is not a member/i.test(message)) return 403;
+  if (/admin role required|cannot control|spectator|ownership mismatch|friend request blocked|messages are blocked|game invites are blocked|messages are allowed only between friends|game invites are allowed only between friends|sender is not a member|spectating this private game requires friendship/i.test(message)) return 403;
   if (/game not found|player not found|profile not found|friend request not found|game invite not found|no snapshot found/i.test(message)) return 404;
-  if (/already|claimed|full|closed|not joinable|not in lobby|require all six|missing:|only a running game|only a finished game|unique invite|not a public room|not multiplayer|profile login already exists|linked to another profile|players are already friends|friend request already sent|friend is already in this game|game is not accepting invitations|game invite already sent/i.test(message)) return 409;
-  if (/Idempotency-Key|unknown|invalid|must be|request body|not running|solo game requires|login must be|password must be|display name must be|invalid avatar|unknown winner house|message must be|conversation requires|profile id required|invite id required|cannot add this profile|cannot block this profile/i.test(message)) return 400;
+  if (/already|claimed|full|closed|not joinable|not in lobby|require all six|missing:|only a running game|only a finished game|unique invite|not a public room|not multiplayer|profile login already exists|linked to another profile|players are already friends|friend request already sent|friend is already in this game|game is not accepting invitations|game invite already sent|player is not in game|game is not watchable|spectating solo games is disabled/i.test(message)) return 409;
+  if (/Idempotency-Key|unknown|invalid|must be|request body|not running|solo game requires|login must be|password must be|display name must be|invalid avatar|unknown winner house|message must be|conversation requires|profile id required|invite id required|cannot add this profile|cannot block this profile|invalid watch target/i.test(message)) return 400;
   if (/stale game state|could not be committed/i.test(message)) return 409;
   return 500;
 }
@@ -802,7 +802,10 @@ async function handleGameApi(req, res, url, ctx, subpath) {
       return json(res, 200, { tracked: false });
     }
 
-    const activity = await defaultContext.store.heartbeatProfileActivity(profile.id);
+    const activity = await defaultContext.store.heartbeatProfileActivity(
+      profile.id,
+      { gameId: ctx.game.id }
+    );
     return json(res, 200, {
       tracked: true,
       ...activity
@@ -1230,9 +1233,106 @@ const server = http.createServer(async (req, res) => {
         return json(res, 404, { error: 'player not found' });
       }
       const areFriends = await defaultContext.store.areProfilesFriends(profile.id, found.id);
+      const presence = await defaultContext.store.profilePresence(found);
       return json(res, 200, {
-        player: publicSocialProfile(found),
+        player: {
+          ...publicSocialProfile(found),
+          presence
+        },
         are_friends: areFriends
+      });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/profile/presence') {
+      const profile = await requireProfile(req);
+      const presence = await defaultContext.store.heartbeatProfilePresence(profile.id);
+      return json(res, 200, { online: true, ...presence });
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/social/profile') {
+      const viewer = await requireProfile(req);
+      const targetId = String(url.searchParams.get('profile_id') || '').trim();
+      if (!targetId) throw new Error('profile id required');
+
+      const target = await defaultContext.store.getProfile(targetId);
+      if (!target) throw new Error('profile not found');
+      if (await defaultContext.store.isBlockedBetween(viewer.id, target.id)) {
+        throw new Error('profile not found');
+      }
+
+      const [presence, areFriends] = await Promise.all([
+        defaultContext.store.profilePresence(target),
+        defaultContext.store.areProfilesFriends(viewer.id, target.id)
+      ]);
+
+      return json(res, 200, {
+        profile: publicProfile(target),
+        presence,
+        are_friends: areFriends
+      });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/social/watch') {
+      const viewer = await requireProfile(req);
+      const body = await readBody(req);
+      const targetId = String(body.profile_id || '').trim();
+      if (!targetId || targetId === viewer.id) throw new Error('invalid watch target');
+
+      const target = await defaultContext.store.getProfile(targetId);
+      if (!target) throw new Error('profile not found');
+      if (await defaultContext.store.isBlockedBetween(viewer.id, target.id)) {
+        throw new Error('profile not found');
+      }
+
+      const presence = await defaultContext.store.profilePresence(target);
+      if (!presence.in_game || !presence.game?.game_id) {
+        throw new Error('player is not in game');
+      }
+
+      const gameId = presence.game.game_id;
+      const ctx = await loadContext(gameId);
+      if (
+        ctx.game.lifecycle?.status !== GAME_STATUS.RUNNING ||
+        ctx.game.lifecycle?.game_mode !== GAME_MODE.MULTIPLAYER
+      ) {
+        throw new Error('game is not watchable');
+      }
+
+      const areFriends = await defaultContext.store.areProfilesFriends(viewer.id, target.id);
+      if (
+        ctx.game.lifecycle?.visibility !== GAME_VISIBILITY.PUBLIC &&
+        !areFriends
+      ) {
+        throw new Error('spectating this private game requires friendship');
+      }
+
+      const existing = await ctx.store.findPlayerByProfileId(viewer.id);
+      if (existing) {
+        return json(res, 200, {
+          game_id: gameId,
+          player: publicPlayer(existing),
+          access_token: null,
+          lifecycle: publicLifecycle(ctx.game.lifecycle),
+          existing_membership: true
+        });
+      }
+
+      const credentials = createPlayerCredentials();
+      const spectator = createPlayerRecord({
+        playerId: credentials.player_id,
+        tokenHash: credentials.token_hash,
+        displayName: viewer.display_name,
+        role: PLAYER_ROLE.SPECTATOR,
+        profileId: viewer.id
+      });
+      await ctx.store.addSpectator(spectator);
+      await refreshContext(ctx);
+
+      return json(res, 201, {
+        game_id: gameId,
+        player: publicPlayer(await ctx.store.getPlayer(spectator.id)),
+        access_token: credentials.token,
+        lifecycle: publicLifecycle(ctx.game.lifecycle)
       });
     }
 
