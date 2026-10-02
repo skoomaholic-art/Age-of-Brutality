@@ -59,14 +59,41 @@
     .land-edge { stroke: #39444c; stroke-width: 1.4; opacity: .8; }
     .sea-edge { stroke: #557389; stroke-width: 1.2; stroke-dasharray: 6 5; opacity: .7; }
     .territory { cursor: pointer; transition: .15s ease; }
-    .territory circle { stroke: #e6ddcb; stroke-width: 1.2; }
-    .territory:hover circle { stroke-width: 2.5; }
-    .territory.selectable circle { stroke: #77bfff; stroke-width: 3; }
-    .territory.origin circle { stroke: #ffd45c; stroke-width: 5; filter: drop-shadow(0 0 6px rgba(255,212,92,.9)); }
-    .territory.legal circle { stroke: #70ef9b; stroke-width: 5; filter: drop-shadow(0 0 6px rgba(112,239,155,.75)); }
-    .territory.target circle { stroke: #ff8d65; stroke-width: 6; filter: drop-shadow(0 0 7px rgba(255,141,101,.9)); }
-    .territory.dim { opacity: .34; }
+    .territory .territory-body { stroke: #e6ddcb; stroke-width: 1.2; }
+    .territory:hover .territory-body { stroke-width: 2; }
+    .territory .selection-ring {
+      fill: none;
+      stroke: transparent;
+      stroke-width: 0;
+      pointer-events: none;
+      vector-effect: non-scaling-stroke;
+    }
+    .territory.selectable .selection-ring {
+      stroke: #58c7ff;
+      stroke-width: 3;
+      stroke-dasharray: 3 3;
+    }
+    .territory.origin .selection-ring {
+      stroke: #ffd45c;
+      stroke-width: 5;
+      stroke-dasharray: none;
+      filter: drop-shadow(0 0 6px rgba(255,212,92,.9));
+    }
+    .territory.legal .selection-ring {
+      stroke: #70ef9b;
+      stroke-width: 4;
+      stroke-dasharray: 5 3;
+      filter: drop-shadow(0 0 5px rgba(112,239,155,.65));
+    }
+    .territory.target .selection-ring {
+      stroke: #ffffff;
+      stroke-width: 6;
+      stroke-dasharray: none;
+      filter: drop-shadow(0 0 8px rgba(255,255,255,.95));
+    }
+    .territory.dim { opacity: .30; }
     .territory text { fill: #e9e2d6; font-size: 9px; pointer-events: none; text-anchor: middle; }
+    .territory.central text.territory-label { font-size: 7px; font-weight: 700; }
     .territory .count { font-size: 11px; font-weight: 800; }
     .territory .badge-bg { stroke: none; }
     .territory .badge { fill: #11161a; font-size: 7px; font-weight: 900; letter-spacing: .04em; }
@@ -110,8 +137,11 @@
     .troop-max { width: 100%; }
     .primary.big { min-height: 42px; font-weight: 800; }
     .selection-legend { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
-    .legend-pill { border:1px solid #36414a; border-radius:999px; padding:4px 8px; font-size:10px; color:#aeb7bd; }
-    .legend-pill b { color:#ece6d8; }
+    .legend-pill { display:inline-flex; align-items:center; gap:6px; border:1px solid #36414a; border-radius:999px; padding:4px 8px; font-size:10px; color:#aeb7bd; }
+    .legend-mark { width:12px; height:12px; border-radius:50%; display:inline-block; background:#202a31; border:2px solid #58c7ff; }
+    .legend-mark.origin { border-color:#ffd45c; border-width:3px; }
+    .legend-mark.legal { border-color:#70ef9b; border-style:dashed; }
+    .legend-mark.target { border-color:#fff; border-width:3px; box-shadow:0 0 5px rgba(255,255,255,.7); }
     aside {
       border-left: 1px solid #30383e;
       background: rgba(14,18,21,.94);
@@ -186,12 +216,12 @@
     <div class="map-card">
       <div id="map-guide" class="map-guide">
         <div id="guide-title" class="guide-title">1. Выбери, ОТКУДА идти</div>
-        <div id="guide-sub" class="guide-sub">Синим отмечены твои территории, где есть воины.</div>
+        <div id="guide-sub" class="guide-sub">Цвет внутри круга показывает Дом. Обводка показывает действие.</div>
         <div class="selection-legend">
-          <span class="legend-pill"><b>Синий</b> можно выбрать</span>
-          <span class="legend-pill"><b>Жёлтый</b> откуда</span>
-          <span class="legend-pill"><b>Зелёный</b> куда можно</span>
-          <span class="legend-pill"><b>Красный</b> куда выбрано</span>
+          <span class="legend-pill"><i class="legend-mark"></i>можно выбрать</span>
+          <span class="legend-pill"><i class="legend-mark origin"></i>откуда</span>
+          <span class="legend-pill"><i class="legend-mark legal"></i>куда можно</span>
+          <span class="legend-pill"><i class="legend-mark target"></i>цель выбрана</span>
         </div>
       </div>
       <svg id="map" viewBox="40 30 760 490" role="img" aria-label="Карта Жестокого Века"></svg>
@@ -334,6 +364,15 @@ function renderHouse() {
   $('vp').textContent = state.victory_points;
 }
 
+function mapLabel(t) {
+  if (!t.is_central_half) return t.name;
+  const side = t.id.endsWith('-A') ? 'A' : 'B';
+  const clean = t.name
+    .replace(/^Остров\s+/u, '')
+    .replace(/\s+[—-]\s+[AB]$/u, '');
+  return `${clean} ${side}`;
+}
+
 function renderMap() {
   const svg = $('map');
   const state = snapshot.game.state;
@@ -357,6 +396,7 @@ function renderMap() {
     const c = coords[t.id];
     const r = t.type === 'Столица' ? 16 : 12;
     const classes = ['territory'];
+    if (t.is_central_half) classes.push('central');
     const ownMovable = owner === house && warriorsAt(t.id, house) > 0;
     if (!origin && ownMovable) classes.push('selectable');
     if (t.id === origin) classes.push('origin');
@@ -365,12 +405,16 @@ function renderMap() {
     if (origin && t.id !== origin && !legalTargets.has(t.id) && t.id !== target) classes.push('dim');
     const fill = owner ? (colors[owner] || '#59636a') : '#2c353b';
     let badge = '';
-    if (t.id === origin) badge = '<rect class="badge-bg" x="-24" y="19" width="48" height="13" rx="5" fill="#ffd45c"></rect><text class="badge" y="28">ОТКУДА</text>';
-    if (t.id === target) badge = '<rect class="badge-bg" x="-19" y="19" width="38" height="13" rx="5" fill="#ff8d65"></rect><text class="badge" y="28">КУДА</text>';
+    if (t.id === origin) badge = '<rect class="badge-bg" x="-24" y="21" width="48" height="13" rx="5" fill="#ffd45c"></rect><text class="badge" y="30">ОТКУДА</text>';
+    if (t.id === target) badge = '<rect class="badge-bg" x="-21" y="21" width="42" height="13" rx="5" fill="#ffffff"></rect><text class="badge" y="30">ЦЕЛЬ</text>';
+    const labelY = t.is_central_half
+      ? (t.id.endsWith('-A') ? -18 : 27)
+      : -18;
     return `
       <g class="${classes.join(' ')}" data-id="${t.id}" transform="translate(${c.x} ${c.y})">
-        <circle r="${r}" fill="${fill}"></circle>
-        <text y="-18">${escapeHtml(t.name.replace(/ - [AB]$/, ''))}</text>
+        <circle class="selection-ring" r="${r + 5}"></circle>
+        <circle class="territory-body" r="${r}" fill="${fill}"></circle>
+        <text class="territory-label" y="${labelY}">${escapeHtml(mapLabel(t))}</text>
         <text class="count" y="4">${total || ''}</text>
         ${badge}
       </g>`;
@@ -460,7 +504,7 @@ function renderSelection() {
   if (!origin) {
     $('selection').textContent = '1. Выбери свою территорию с воинами.';
     $('guide-title').textContent = '1. Выбери, ОТКУДА идти';
-    $('guide-sub').textContent = 'Синим отмечены твои территории, где есть воины.';
+    $('guide-sub').textContent = 'Голубой пунктирной обводкой отмечены твои территории с воинами.';
     card.classList.remove('show');
     return;
   }
@@ -471,7 +515,7 @@ function renderSelection() {
 
   if (!target) {
     $('guide-title').textContent = `2. Выбери, КУДА идти из ${o.name}`;
-    $('guide-sub').textContent = 'Зелёным отмечены допустимые цели. Нажми на одну из них.';
+    $('guide-sub').textContent = 'Зелёной пунктирной обводкой отмечены допустимые цели.';
     card.classList.remove('show');
     return;
   }
