@@ -918,9 +918,22 @@ function renderMap() {
     legal.filter(a => !origin || a.from === origin).map(a => a.to)
   );
 
+  const activeAction = preferredActionForSelection();
+  const activePath = Array.isArray(activeAction?.path)
+    ? activeAction.path
+    : [];
+  const activeEdges = new Set();
+  for (let i = 0; i < activePath.length - 1; i += 1) {
+    activeEdges.add(routeEdgeKey(activePath[i], activePath[i + 1]));
+  }
+  const activeNodes = new Set(activePath);
+
   const lines = [];
   for (const [a,b] of snapshot.map.land_edges) {
-    lines.push(`<line class="land-edge" x1="${coords[a].x}" y1="${coords[a].y}" x2="${coords[b].x}" y2="${coords[b].y}" />`);
+    const active = activeEdges.has(routeEdgeKey(a,b))
+      ? ' active-route'
+      : '';
+    lines.push(`<line class="land-edge${active}" x1="${coords[a].x}" y1="${coords[a].y}" x2="${coords[b].x}" y2="${coords[b].y}" />`);
   }
 
   const seaWaypoints = snapshot.map.sea_waypoints || {};
@@ -929,16 +942,6 @@ function renderMap() {
     ? snapshot.map.sea_lane_edges
     : snapshot.map.sea_edges;
 
-  const activeAction = preferredActionForSelection();
-  const activeSeaPath =
-    activeAction?.mode === 'SEA' && Array.isArray(activeAction.path)
-      ? activeAction.path
-      : [];
-  const activeSeaEdges = new Set();
-  for (let i = 0; i < activeSeaPath.length - 1; i += 1) {
-    activeSeaEdges.add(routeEdgeKey(activeSeaPath[i], activeSeaPath[i + 1]));
-  }
-  const activeSeaNodes = new Set(activeSeaPath);
 
   for (const [a,b] of laneEdges) {
     const from = routeCoords[a];
@@ -947,7 +950,7 @@ function renderMap() {
     const baseClass = snapshot.map.sea_lane_edges?.length
       ? 'sea-lane-edge'
       : 'sea-edge';
-    const active = activeSeaEdges.has(routeEdgeKey(a,b))
+    const active = activeEdges.has(routeEdgeKey(a,b))
       ? ' active-route'
       : '';
     lines.push(`<line class="${baseClass}${active}" x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" />`);
@@ -956,8 +959,9 @@ function renderMap() {
   const waypointNodes = Object.entries(seaWaypoints).map(([id,point]) => {
     const seaState = state.sea_nodes?.[id] || {owner:null, warriors:{}};
     const owner = seaState.owner;
-    const total = Object.values(seaState.warriors || {})
+    const rawTotal = Object.values(seaState.warriors || {})
       .reduce((sum,value) => sum + Number(value || 0), 0);
+    const total = Math.max(0, rawTotal - pendingOutgoingAt(id, owner));
     const classes = ['sea-node'];
     const ownMovable = owner === house && warriorsAt(id, house) > 0;
     if (!origin && ownMovable) classes.push('selectable');
@@ -966,7 +970,7 @@ function renderMap() {
     if (id === target) classes.push('target');
     if (origin && id !== origin && !legalTargets.has(id) && id !== target) classes.push('dim');
 
-    const active = activeSeaNodes.has(id) ? ' active-route' : '';
+    const active = activeNodes.has(id) ? ' active-route' : '';
     const fill = owner ? (colors[owner] || '#6f93a8') : '#6f93a8';
     return `
       <g class="${classes.join(' ')}" data-id="${id}" transform="translate(${point.x} ${point.y})">
@@ -979,7 +983,8 @@ function renderMap() {
   const nodes = snapshot.map.territories.map(t => {
     const s = state.territories[t.id];
     const owner = s.owner;
-    const total = Object.values(s.warriors || {}).reduce((a,b) => a + Number(b || 0), 0);
+    const rawTotal = Object.values(s.warriors || {}).reduce((a,b) => a + Number(b || 0), 0);
+    const total = Math.max(0, rawTotal - pendingOutgoingAt(t.id, owner));
     const c = coords[t.id];
     const r = t.type === 'Столица' ? 16 : 12;
     const classes = ['territory'];
@@ -1007,7 +1012,30 @@ function renderMap() {
       </g>`;
   });
 
-  svg.innerHTML = lines.join('') + waypointNodes.join('') + nodes.join('');
+  const movingArmies = (snapshot.game.orders || [])
+    .filter(order =>
+      order.status === 'PENDING' &&
+      Array.isArray(order.action?.path) &&
+      order.action.path.length > 1
+    )
+    .map(order => {
+      const pos = movingOrderPosition(order);
+      if (!pos) return '';
+      const fill = colors[order.action.house] || '#ffd45c';
+      return `
+        <g class="moving-army" data-order-id="${escapeHtml(order.id)}"
+          transform="translate(${pos.x} ${pos.y}) rotate(${pos.angle})">
+          <circle class="army-disc" r="7" fill="${fill}"></circle>
+          <path class="army-arrow" d="M 2 -3 L 7 0 L 2 3 Z"></path>
+          <text class="army-count" x="-1" y="0">${Number(order.action.warriors || 0)}</text>
+        </g>`;
+    });
+
+  svg.innerHTML =
+    lines.join('') +
+    waypointNodes.join('') +
+    nodes.join('') +
+    movingArmies.join('');
   svg.querySelectorAll('.territory, .sea-node').forEach(node => {
     node.addEventListener('click', () => selectTerritory(node.dataset.id));
   });
