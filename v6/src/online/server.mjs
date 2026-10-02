@@ -365,15 +365,24 @@ function errorStatus(error) {
   if (/authentication required|invalid player token/i.test(message)) return 401;
   if (/admin role required|cannot control|spectator|ownership mismatch/i.test(message)) return 403;
   if (/game not found|player not found|no snapshot found/i.test(message)) return 404;
-  if (/already|claimed|full|closed|not joinable|not in lobby|require all six|missing:/i.test(message)) return 409;
+  if (/already|claimed|full|closed|not joinable|not in lobby|require all six|missing:|only a running game|only a finished game|unique invite/i.test(message)) return 409;
   if (/Idempotency-Key|unknown|invalid|must be|request body|not running/i.test(message)) return 400;
   if (/stale game state|could not be committed/i.test(message)) return 409;
   return 500;
 }
 
+async function uniqueInviteCode() {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const code = createInviteCode();
+    const existing = await defaultContext.store.findGameIdByInviteCode(code);
+    if (!existing) return code;
+  }
+  throw new Error('could not allocate unique invite code');
+}
+
 async function createMultiplayerGame(body) {
   const gameId = newGameId();
-  const inviteCode = createInviteCode();
+  const inviteCode = await uniqueInviteCode();
   const credentials = createPlayerCredentials();
   const host = createPlayerRecord({
     playerId: credentials.player_id,
@@ -491,6 +500,61 @@ async function handleGameApi(req, res, url, ctx, subpath) {
         lifecycle: publicLifecycle(ctx.game.lifecycle)
       };
     });
+    return json(res, 200, payload);
+  }
+
+  if (req.method === 'POST' && subpath === '/finish') {
+    const player = await requireAdmin(ctx, req);
+    const body = await readBody(req);
+
+    const payload = await serial(ctx, async () => {
+      const nowMs = Date.now();
+      const lifecycle = await ctx.store.finishGame(player.id, {
+        nowMs,
+        reason: body.reason || null
+      });
+      await refreshContext(ctx);
+      ctx.game.lifecycle = lifecycle;
+      ctx.game.updated_at = new Date(nowMs).toISOString();
+      ctx.game.state.journal.push({
+        kind: 'GAME_FINISHED',
+        at: ctx.game.updated_at,
+        game_id: ctx.game.id,
+        reason: lifecycle.finish_reason || null
+      });
+      await finalizeGame(ctx, ctx.game, nowMs);
+
+      return {
+        game_id: ctx.game.id,
+        lifecycle: publicLifecycle(ctx.game.lifecycle)
+      };
+    });
+
+    return json(res, 200, payload);
+  }
+
+  if (req.method === 'POST' && subpath === '/archive') {
+    const player = await requireAdmin(ctx, req);
+
+    const payload = await serial(ctx, async () => {
+      const nowMs = Date.now();
+      const lifecycle = await ctx.store.archiveGame(player.id, nowMs);
+      await refreshContext(ctx);
+      ctx.game.lifecycle = lifecycle;
+      ctx.game.updated_at = new Date(nowMs).toISOString();
+      ctx.game.state.journal.push({
+        kind: 'GAME_ARCHIVED',
+        at: ctx.game.updated_at,
+        game_id: ctx.game.id
+      });
+      await finalizeGame(ctx, ctx.game, nowMs);
+
+      return {
+        game_id: ctx.game.id,
+        lifecycle: publicLifecycle(ctx.game.lifecycle)
+      };
+    });
+
     return json(res, 200, payload);
   }
 
