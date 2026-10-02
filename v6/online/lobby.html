@@ -83,6 +83,7 @@ button:disabled { opacity:.42; cursor:not-allowed; }
     <div id="players" class="players"></div>
 
     <div class="actions">
+      <button id="release-house" style="display:none">Освободить Дом</button>
       <button id="start" class="primary" style="display:none">Начать игру</button>
       <button id="open-game" style="display:none">Открыть карту</button>
       <button id="refresh">Обновить</button>
@@ -233,6 +234,8 @@ async function loadRoom() {
     }).join('');
 
     const isAdmin = me?.role === 'ADMIN';
+    $('release-house').style.display =
+      life.status === 'LOBBY' && me?.house ? 'block' : 'none';
     $('start').style.display = isAdmin && life.status === 'LOBBY' ? 'block' : 'none';
     $('open-game').style.display = life.status === 'RUNNING' ? 'block' : 'none';
     $('room-error').textContent = '';
@@ -250,6 +253,18 @@ function escapeHtml(value) {
     .replaceAll('>','&gt;')
     .replaceAll('"','&quot;');
 }
+
+$('release-house').onclick = async () => {
+  $('room-error').textContent = '';
+  try {
+    await request('/api/games/' + encodeURIComponent(gameId) + '/release-house', {
+      method:'POST'
+    }, token);
+    await loadRoom();
+  } catch (error) {
+    $('room-error').textContent = error.message;
+  }
+};
 
 $('start').onclick = async () => {
   $('room-error').textContent = '';
