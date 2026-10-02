@@ -737,6 +737,21 @@ async function handleGameApi(req, res, url, ctx, subpath) {
     return json(res, 200, payload);
   }
 
+  if (req.method === 'POST' && subpath === '/save-exit') {
+    await requirePlayer(ctx, req);
+    const saved = await serial(ctx, async () => {
+      await tickUnlocked(ctx);
+      const envelope = createSnapshotEnvelope(ctx.game);
+      return ctx.store.saveCheckpoint(envelope);
+    });
+    return json(res, 201, {
+      saved: true,
+      game_id: ctx.game.id,
+      session_id: ctx.game.session_id,
+      ...saved
+    });
+  }
+
   if (req.method === 'GET' && subpath === '/snapshot') {
     await requireAdmin(ctx, req);
     const payload = await serial(ctx, async () => {
