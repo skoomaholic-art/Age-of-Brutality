@@ -63,6 +63,9 @@
     svg { width: 100%; height: 100%; display: block; }
     .land-edge { stroke: #39444c; stroke-width: 1.4; opacity: .8; }
     .sea-edge { stroke: #557389; stroke-width: 1.2; stroke-dasharray: 6 5; opacity: .7; }
+    .sea-lane-edge { stroke:#4f6e80; stroke-width:1.15; opacity:.78; }
+    .sea-waypoint { fill:#6f93a8; stroke:#b8ccd7; stroke-width:.7; opacity:.88; pointer-events:none; }
+    .sea-waypoint-halo { fill:none; stroke:#4f6e80; stroke-width:.8; opacity:.32; pointer-events:none; }
     .territory { cursor: pointer; transition: .15s ease; }
     .territory .territory-body { stroke: #e6ddcb; stroke-width: 1.2; }
     .territory:hover .territory-body { stroke-width: 2; }
@@ -755,9 +758,23 @@ function renderMap() {
   for (const [a,b] of snapshot.map.land_edges) {
     lines.push(`<line class="land-edge" x1="${coords[a].x}" y1="${coords[a].y}" x2="${coords[b].x}" y2="${coords[b].y}" />`);
   }
-  for (const [a,b] of snapshot.map.sea_edges) {
-    lines.push(`<line class="sea-edge" x1="${coords[a].x}" y1="${coords[a].y}" x2="${coords[b].x}" y2="${coords[b].y}" />`);
+
+  const seaWaypoints = snapshot.map.sea_waypoints || {};
+  const routeCoords = { ...coords, ...seaWaypoints };
+  const laneEdges = snapshot.map.sea_lane_edges?.length
+    ? snapshot.map.sea_lane_edges
+    : snapshot.map.sea_edges;
+
+  for (const [a,b] of laneEdges) {
+    const from = routeCoords[a];
+    const to = routeCoords[b];
+    if (!from || !to) continue;
+    lines.push(`<line class="${snapshot.map.sea_lane_edges?.length ? 'sea-lane-edge' : 'sea-edge'}" x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" />`);
   }
+
+  const waypointNodes = Object.entries(seaWaypoints).map(([id,point]) =>
+    `<g transform="translate(${point.x} ${point.y})"><circle class="sea-waypoint-halo" r="5"></circle><circle class="sea-waypoint" r="2.3"></circle></g>`
+  );
 
   const nodes = snapshot.map.territories.map(t => {
     const s = state.territories[t.id];
@@ -790,7 +807,7 @@ function renderMap() {
       </g>`;
   });
 
-  svg.innerHTML = lines.join('') + nodes.join('');
+  svg.innerHTML = lines.join('') + waypointNodes.join('') + nodes.join('');
   svg.querySelectorAll('.territory').forEach(node => {
     node.addEventListener('click', () => selectTerritory(node.dataset.id));
   });
