@@ -36,6 +36,8 @@ import {
   restoreGameFromSnapshot
 } from './snapshot.mjs';
 import {
+  PROFILE_AVATARS,
+  PROFILE_MMR,
   createProfileRecord,
   createProfileSessionCredentials,
   normalizeProfileHandle,
@@ -429,7 +431,7 @@ function errorStatus(error) {
   if (/admin role required|cannot control|spectator|ownership mismatch/i.test(message)) return 403;
   if (/game not found|player not found|profile not found|no snapshot found/i.test(message)) return 404;
   if (/already|claimed|full|closed|not joinable|not in lobby|require all six|missing:|only a running game|only a finished game|unique invite|not a public room|not multiplayer|profile login already exists|linked to another profile/i.test(message)) return 409;
-  if (/Idempotency-Key|unknown|invalid|must be|request body|not running|solo game requires|login must be|password must be|display name must be/i.test(message)) return 400;
+  if (/Idempotency-Key|unknown|invalid|must be|request body|not running|solo game requires|login must be|password must be|display name must be|invalid avatar|unknown winner house/i.test(message)) return 400;
   if (/stale game state|could not be committed/i.test(message)) return 409;
   return 500;
 }
@@ -695,6 +697,11 @@ async function handleGameApi(req, res, url, ctx, subpath) {
   if (req.method === 'POST' && subpath === '/finish') {
     const player = await requireAdmin(ctx, req);
     const body = await readBody(req);
+    const winnerHouse = body.winner_house ? String(body.winner_house) : null;
+
+    if (winnerHouse && !constants.houses.includes(winnerHouse)) {
+      throw new Error('unknown winner house');
+    }
 
     const payload = await serial(ctx, async () => {
       const nowMs = Date.now();
@@ -709,13 +716,39 @@ async function handleGameApi(req, res, url, ctx, subpath) {
         kind: 'GAME_FINISHED',
         at: ctx.game.updated_at,
         game_id: ctx.game.id,
-        reason: lifecycle.finish_reason || null
+        reason: lifecycle.finish_reason || null,
+        winner_house: winnerHouse
       });
       await finalizeGame(ctx, ctx.game, nowMs);
 
+      const rankedResults = [];
+      if (
+        winnerHouse &&
+        ctx.game.lifecycle?.game_mode === GAME_MODE.MULTIPLAYER
+      ) {
+        const players = await ctx.store.listPlayers();
+        for (const participant of players) {
+          if (!participant.profile_id || !participant.house) continue;
+          const result = await ctx.store.recordProfileRankedResult(
+            participant.profile_id,
+            ctx.game.id,
+            { won: participant.house === winnerHouse },
+            nowMs
+          );
+          rankedResults.push({
+            profile_id: participant.profile_id,
+            house: participant.house,
+            result: participant.house === winnerHouse ? 'WIN' : 'LOSS',
+            duplicate: Boolean(result.duplicate)
+          });
+        }
+      }
+
       return {
         game_id: ctx.game.id,
-        lifecycle: publicLifecycle(ctx.game.lifecycle)
+        lifecycle: publicLifecycle(ctx.game.lifecycle),
+        winner_house: winnerHouse,
+        ranked_results_recorded: rankedResults
       };
     });
 
@@ -745,6 +778,21 @@ async function handleGameApi(req, res, url, ctx, subpath) {
     });
 
     return json(res, 200, payload);
+  }
+
+  if (req.method === 'POST' && subpath === '/profile-heartbeat') {
+    const player = await requirePlayer(ctx, req);
+    const profile = await optionalProfile(req);
+
+    if (!profile || !player?.profile_id || player.profile_id !== profile.id) {
+      return json(res, 200, { tracked: false });
+    }
+
+    const activity = await defaultContext.store.heartbeatProfileActivity(profile.id);
+    return json(res, 200, {
+      tracked: true,
+      ...activity
+    });
   }
 
   if (req.method === 'GET' && subpath === '/storage') {
@@ -1100,6 +1148,23 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && url.pathname === '/api/profile') {
       const profile = await requireProfile(req);
       return json(res, 200, { profile: publicProfile(profile) });
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/profile/meta') {
+      return json(res, 200, {
+        avatars: PROFILE_AVATARS,
+        mmr: PROFILE_MMR
+      });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/profile/avatar') {
+      const profile = await requireProfile(req);
+      const body = await readBody(req);
+      const updated = await defaultContext.store.updateProfileAvatar(
+        profile.id,
+        body.avatar_id
+      );
+      return json(res, 200, { profile: publicProfile(updated) });
     }
 
     if (req.method === 'POST' && url.pathname === '/api/profile/logout') {
