@@ -1,5 +1,6 @@
 import { Firestore } from '@google-cloud/firestore';
 import { createOnlineGame } from './store.mjs';
+import { repairForeignWarriors } from '../core/state.mjs';
 import {
   GAME_STATUS,
   PLAYER_ROLE,
@@ -238,7 +239,18 @@ export class FirestoreGameStore {
     const auditLog = eventsSnap.docs.map(d => d.data()).reverse();
 
     if (!game.state) throw new Error('Firestore game is missing state');
+
+    const repaired = repairForeignWarriors(game.state);
+    game.state = repaired.state;
     game.state.journal = [];
+    if (repaired.repairs.length) {
+      game.state.journal.push({
+        kind: 'STATE_REPAIR',
+        reason: 'REMOVED_FOREIGN_WARRIORS',
+        repairs: repaired.repairs
+      });
+    }
+
     game.orders = orders;
     game.jobs = jobs;
     game.audit_log = auditLog;
@@ -268,7 +280,7 @@ export class FirestoreGameStore {
     for (const group of chunk(changed)) {
       const batch = this.db.batch();
       for (const [id, normalized] of group) {
-        batch.set(ref.doc(String(id)), normalized, { merge: true });
+        batch.set(ref.doc(String(id)), normalized, { merge: false });
       }
       await batch.commit();
     }
@@ -309,7 +321,7 @@ export class FirestoreGameStore {
         ...current,
         storage_backend: 'firestore',
         firestore_database: this.databaseId
-      }, { merge: true }),
+      }, { merge: false }),
       session.set({
         session_id: sessionId,
         game_id: game.id,
