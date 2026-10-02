@@ -207,6 +207,7 @@
     <button id="save-game">Сохранить</button>
     <button id="restore-game">Восстановить</button>
     <button id="reset">Новая партия</button>
+    <button id="back-menu">Вернуться в меню</button>
     <div id="save-status" class="save-status">Сохранений ещё нет</div>
   </div>
 </header>
@@ -835,6 +836,24 @@ $('build-fort').addEventListener('click', async () => {
     await refresh();
   } catch (error) {
     alert(error.message);
+  }
+});
+
+$('back-menu').addEventListener('click', async () => {
+  const button = $('back-menu');
+  const original = button.textContent;
+  button.disabled = true;
+  button.textContent = 'Сохраняем...';
+
+  try {
+    const saved = await api('/api/save-exit', { method: 'POST' });
+    lastManualSnapshotAt = saved.saved_at || new Date().toISOString();
+    renderSaveStatus();
+    location.href = '/lobby';
+  } catch (error) {
+    button.disabled = false;
+    button.textContent = original;
+    alert('Не удалось сохранить игру перед выходом: ' + error.message);
   }
 });
 
