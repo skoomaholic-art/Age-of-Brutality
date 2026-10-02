@@ -14,11 +14,15 @@ V6 is a clean implementation, not a continuation of the V5.7.2 runtime.
 
 - 52 territories: 42 mainland + 10 central halves.
 - Capitals: Варкайр W01; Сайрвен W08; Ортайн W15; Эркай E01; Тасвар E08; Айрель E15.
-- Mainland sea-route endpoints after the approved 2026-10-02 correction: W05, W07, W12, W14, W18, E05, E12, E19.
+- Mainland sea-route endpoints after the approved 2026-10-02 redesign: W07, W14, W18, E05, E12, E19.
 - Central ports: all ten S01-A…S05-B halves.
-- Graph remains 96 land edges and 20 direct sea edges.
-- Туман A (S04-A) connects to Эйрвик (W18) and Келвар (W14), not Селвар (W19) or Вельмар (W12).
-- Короны A (S03-A) connects to Эйрвик (W18), Келвар (W14) and Нордмар (W07), plus Короны B (S03-B), Вейр B (S01-B) and Туман B (S04-B). The stale west links to Скархольм (W05), Вельмар (W12) and Селвар (W19) are removed.
+- The legal strategic graph remains 96 land edges and 20 sea connections.
+- The visual sea network adds 10 non-territory navigation waypoints and 32 lane segments. These are route geometry, not new provinces or combat spaces.
+- Вейр A (S01-A) connects to Нордмар (W07) and Келвар (W14), not Скархольм (W05) or Вельмар (W12).
+- Короны A (S03-A) connects to Нордмар (W07), Келвар (W14) and Эйрвик (W18), plus Вейр B (S01-B) and Туман B (S04-B).
+- Туман A (S04-A) connects to Келвар (W14) and Эйрвик (W18), not Вельмар (W12) or Селвар (W19).
+- East-side access mirrors the same 2-3-2 pattern: Рун B -> Аркен/Дайрвен; Короны B -> Аркен/Дайрвен/Найвар; Клятвы B -> Дайрвен/Найвар.
+- Each A/B pair is one island split into two land territories. The pair shares a land edge and never a sea edge.
 - A/B halves of one central island are connected by land.
 - Visual proximity never creates a route.
 
