@@ -798,6 +798,46 @@ async function handleGameApi(req, res, url, ctx, subpath) {
   return json(res, 404, { error: 'not found' });
 }
 
+async function tickDueGames({
+  nowMs = Date.now(),
+  limit = 100
+} = {}) {
+  const ids = await defaultContext.store.listDueGameIds(nowMs, limit);
+  const results = [];
+
+  for (const gameId of ids) {
+    try {
+      const ctx = await loadContext(gameId);
+      await serial(ctx, () => tickUnlocked(ctx));
+      results.push({
+        game_id: gameId,
+        status: 'OK',
+        next_due_at: ctx.game.next_due_at || null
+      });
+    } catch (error) {
+      results.push({
+        game_id: gameId,
+        status: 'ERROR',
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
+
+  return {
+    checked_at: new Date(nowMs).toISOString(),
+    due_games: ids.length,
+    results
+  };
+}
+
+function internalTickAuthorized(req) {
+  const configured = String(process.env.AOB_INTERNAL_TICK_TOKEN || '');
+  if (!configured) return false;
+  const supplied = String(req.headers['x-aob-internal-token'] || '');
+  if (!supplied || supplied.length !== configured.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(supplied), Buffer.from(configured));
+}
+
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://localhost');
@@ -810,6 +850,22 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && (url.pathname === '/lobby' || url.pathname === '/lobby.html')) {
       const html = fs.readFileSync(path.join(v6Root, 'online/lobby.html'), 'utf8');
       return text(res, 200, html, 'text/html; charset=utf-8');
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/internal/tick-due') {
+      if (!process.env.AOB_INTERNAL_TICK_TOKEN) {
+        return json(res, 404, { error: 'internal resolver is not configured' });
+      }
+      if (!internalTickAuthorized(req)) {
+        return json(res, 403, { error: 'forbidden' });
+      }
+
+      const body = await readBody(req);
+      const result = await tickDueGames({
+        nowMs: Date.now(),
+        limit: Number(body.limit || 100)
+      });
+      return json(res, 200, result);
     }
 
     if (req.method === 'POST' && url.pathname === '/api/games') {
