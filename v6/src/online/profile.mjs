@@ -5,6 +5,52 @@ const PASSWORD_MIN = 8;
 const PASSWORD_MAX = 128;
 const SESSION_DAYS = 90;
 
+export const PROFILE_AVATARS = Object.freeze([
+  'sigil-01','sigil-02','sigil-03','sigil-04',
+  'sigil-05','sigil-06','sigil-07','sigil-08',
+  'sigil-09','sigil-10','sigil-11','sigil-12'
+]);
+
+export const PROFILE_MMR = Object.freeze({
+  initial: 1000,
+  winDelta: 25,
+  lossDelta: 25
+});
+
+export function normalizeAvatarId(value) {
+  const avatarId = String(value || 'sigil-01');
+  if (!PROFILE_AVATARS.includes(avatarId)) throw new Error('invalid avatar');
+  return avatarId;
+}
+
+export function normalizeProfileStats(stats = {}) {
+  const achievements = Array.isArray(stats.achievements)
+    ? [...new Set(stats.achievements.map(String))].slice(0, 500)
+    : [];
+
+  return {
+    games_played: Math.max(0, Number(stats.games_played || 0)),
+    wins: Math.max(0, Number(stats.wins || 0)),
+    losses: Math.max(0, Number(stats.losses || 0)),
+    mmr: Math.max(0, Number.isFinite(Number(stats.mmr)) ? Number(stats.mmr) : PROFILE_MMR.initial),
+    play_seconds: Math.max(0, Number(stats.play_seconds || 0)),
+    achievements
+  };
+}
+
+export function applyRankedResult(stats, { won }) {
+  const next = normalizeProfileStats(stats);
+  next.games_played += 1;
+  if (won) {
+    next.wins += 1;
+    next.mmr += PROFILE_MMR.winDelta;
+  } else {
+    next.losses += 1;
+    next.mmr = Math.max(0, next.mmr - PROFILE_MMR.lossDelta);
+  }
+  return next;
+}
+
 export function normalizeProfileHandle(value) {
   const handle = String(value || '').trim().normalize('NFKC').toLowerCase();
   if (!HANDLE_RE.test(handle)) {
@@ -61,6 +107,11 @@ export function createProfileRecord({
     id: profileId,
     handle: normalizedHandle,
     display_name: name,
+    avatar_id: 'sigil-01',
+    stats: normalizeProfileStats(),
+    activity: {
+      last_game_heartbeat_at: null
+    },
     ...createPasswordRecord(password),
     created_at: new Date(nowMs).toISOString(),
     updated_at: new Date(nowMs).toISOString()
@@ -113,7 +164,12 @@ export function publicProfile(profile) {
     password_hash,
     password_salt,
     password_scheme,
+    activity,
     ...safe
   } = profile;
-  return safe;
+  return {
+    ...safe,
+    avatar_id: normalizeAvatarId(profile.avatar_id || 'sigil-01'),
+    stats: normalizeProfileStats(profile.stats)
+  };
 }
