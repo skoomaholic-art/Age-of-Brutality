@@ -28,6 +28,11 @@ button:disabled { opacity:.42; cursor:not-allowed; }
 button.loading { opacity:.65; cursor:wait; }
 .profile-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:end; margin-top:18px; }
 .profile-row button { width:auto; min-width:130px; }
+.account-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.account-head { display:flex; justify-content:space-between; gap:14px; align-items:center; }
+.account-head button { width:auto; min-width:120px; }
+.account-name { font-size:18px; font-weight:850; }
+.account-handle { margin-top:3px; color:#89969d; font-size:12px; }
 .game-list,.room-list { display:grid; gap:10px; }
 .game-card,.room-card {
   border:1px solid #2f3940; border-radius:14px; padding:14px;
@@ -58,7 +63,7 @@ button.loading { opacity:.65; cursor:wait; }
 .badge.public { border-color:#3c6b55; color:#87d7ad; }
 .badge.private { border-color:#565b72; color:#b2b8df; }
 @media(max-width:780px) {
-  .grid,.create-grid { grid-template-columns:1fr; }
+  .grid,.create-grid,.account-grid { grid-template-columns:1fr; }
   .profile-row { grid-template-columns:1fr; }
   .profile-row button { width:100%; }
   .game-card,.room-card { grid-template-columns:1fr; }
@@ -76,13 +81,48 @@ button.loading { opacity:.65; cursor:wait; }
   <div class="muted">Игровой центр</div>
 
   <section id="hub">
-    <div class="profile-row">
-      <div>
-        <label>Имя игрока на этом устройстве</label>
-        <input id="profile-name" maxlength="40" placeholder="Например, Skoomaholic">
+    <section class="section card" id="account-card">
+      <div id="account-signed-out">
+        <h2>Профиль игрока</h2>
+        <div class="muted" style="margin-bottom:12px">
+          Войди в профиль, чтобы видеть свои партии на любом устройстве.
+        </div>
+        <div class="account-grid">
+          <div>
+            <h3>Войти</h3>
+            <label>Логин</label>
+            <input id="login-handle" maxlength="24" autocomplete="username" placeholder="skoomaholic">
+            <label>Пароль</label>
+            <input id="login-password" type="password" maxlength="128" autocomplete="current-password">
+            <button id="login-profile" class="primary" style="margin-top:14px">Войти</button>
+          </div>
+          <div>
+            <h3>Создать профиль</h3>
+            <label>Логин</label>
+            <input id="register-handle" maxlength="24" autocomplete="username" placeholder="skoomaholic">
+            <label>Имя в игре</label>
+            <input id="register-name" maxlength="40" placeholder="Например, Александр">
+            <label>Пароль</label>
+            <input id="register-password" type="password" maxlength="128" autocomplete="new-password" placeholder="Минимум 8 символов">
+            <button id="register-profile" class="primary" style="margin-top:14px">Создать профиль</button>
+          </div>
+        </div>
+        <div id="profile-error" class="error"></div>
       </div>
-      <button id="save-profile">Сохранить имя</button>
-    </div>
+
+      <div id="account-signed-in" style="display:none">
+        <div class="account-head">
+          <div>
+            <div id="account-name" class="account-name">Игрок</div>
+            <div id="account-handle" class="account-handle">@login</div>
+          </div>
+          <button id="logout-profile">Выйти</button>
+        </div>
+        <div class="muted" style="margin-top:10px">
+          Профиль синхронизирует список игр между устройствами.
+        </div>
+      </div>
+    </section>
 
     <section class="section card">
       <h2>Мои игры</h2>
@@ -186,9 +226,14 @@ button.loading { opacity:.65; cursor:wait; }
 const houses = ['Варкайр','Сайрвен','Ортайн','Эркай','Тасвар','Айрель'];
 const params = new URLSearchParams(location.search);
 let gameId = params.get('game');
-let token = gameId ? localStorage.getItem('aob-token-' + gameId) : null;
+let profileToken = localStorage.getItem('aob-profile-token');
+let activeProfile = null;
+let token = gameId
+  ? (profileToken || localStorage.getItem('aob-token-' + gameId))
+  : null;
 let roomLoadInFlight = false;
 let hubLoadInFlight = false;
+let knownGameIds = new Set();
 const $ = id => document.getElementById(id);
 
 for (const selectId of ['solo-house','public-house','private-house']) {
@@ -200,12 +245,77 @@ for (const selectId of ['solo-house','public-house','private-house']) {
   }
 }
 
-$('profile-name').value = localStorage.getItem('aob-display-name') || '';
-
 function displayName() {
-  const value = $('profile-name').value.trim() || localStorage.getItem('aob-display-name') || 'Игрок';
-  localStorage.setItem('aob-display-name', value);
-  return value;
+  return activeProfile?.display_name || localStorage.getItem('aob-display-name') || 'Игрок';
+}
+
+function profileAuth() {
+  return profileToken || null;
+}
+
+function renderAccount() {
+  const signedIn = Boolean(activeProfile && profileToken);
+  $('account-signed-out').style.display = signedIn ? 'none' : 'block';
+  $('account-signed-in').style.display = signedIn ? 'block' : 'none';
+
+  if (signedIn) {
+    $('account-name').textContent = activeProfile.display_name;
+    $('account-handle').textContent = '@' + activeProfile.handle;
+    localStorage.setItem('aob-display-name', activeProfile.display_name);
+  }
+}
+
+async function migrateLocalGamesToProfile() {
+  if (!profileToken) return;
+  const local = savedGames();
+
+  for (const entry of local) {
+    try {
+      await request('/api/profile/link-game', {
+        method:'POST',
+        headers:{'content-type':'application/json'},
+        body:JSON.stringify({
+          game_id:entry.gameId,
+          game_token:entry.token
+        })
+      }, profileToken);
+    } catch (error) {
+      if (!/already linked|linked to another profile/i.test(String(error.message))) {
+        console.warn('Could not link local game', entry.gameId, error);
+      }
+    }
+  }
+}
+
+async function acceptProfileSession(data) {
+  profileToken = data.profile_token;
+  activeProfile = data.profile;
+  localStorage.setItem('aob-profile-token', profileToken);
+  localStorage.setItem('aob-display-name', activeProfile.display_name);
+  renderAccount();
+  await migrateLocalGamesToProfile();
+  await loadHub();
+}
+
+async function restoreProfileSession() {
+  if (!profileToken) {
+    activeProfile = null;
+    renderAccount();
+    return false;
+  }
+  try {
+    const data = await request('/api/profile', {}, profileToken);
+    activeProfile = data.profile;
+    renderAccount();
+    return true;
+  } catch {
+    localStorage.removeItem('aob-profile-token');
+    profileToken = null;
+    activeProfile = null;
+    token = gameId ? localStorage.getItem('aob-token-' + gameId) : null;
+    renderAccount();
+    return false;
+  }
 }
 
 function commandId() {
@@ -285,12 +395,13 @@ function friendlyError(error) {
 
 function saveAccess(data) {
   gameId = data.game_id;
-  token = data.access_token;
-  localStorage.setItem('aob-token-' + gameId, token);
+  const gameToken = data.access_token;
+  if (gameToken) localStorage.setItem('aob-token-' + gameId, gameToken);
+  token = profileToken || gameToken || token;
   if (data.player?.display_name) {
     localStorage.setItem('aob-display-name', data.player.display_name);
-    $('profile-name').value = data.player.display_name;
   }
+  knownGameIds.add(gameId);
 }
 
 function savedGames() {
@@ -321,28 +432,55 @@ function statusText(status) {
 }
 
 async function loadMyGames() {
-  const entries = savedGames();
-  if (!entries.length) {
-    $('my-games').innerHTML = '<div class="empty">Пока нет сохранённых игр на этом устройстве.</div>';
-    return [];
+  let games = [];
+
+  if (profileToken && activeProfile) {
+    try {
+      const data = await request('/api/profile/games', {}, profileToken);
+      games = (data.games || [])
+        .filter(item => ['LOBBY','RUNNING'].includes(item.lifecycle?.status))
+        .map(item => ({
+          game_id:item.game_id,
+          lifecycle:item.lifecycle,
+          current_player:item.player
+        }));
+    } catch (error) {
+      $('my-games').innerHTML = '<div class="empty">' + escapeHtml(friendlyError(error)) + '</div>';
+      return [];
+    }
+  } else {
+    const entries = savedGames();
+    if (!entries.length) {
+      $('my-games').innerHTML = '<div class="empty">Войди в профиль или создай игру на этом устройстве.</div>';
+      knownGameIds = new Set();
+      return [];
+    }
+
+    const loaded = await Promise.all(entries.map(async entry => {
+      try {
+        const data = await request(
+          '/api/games/' + encodeURIComponent(entry.gameId) + '/lobby',
+          {},
+          entry.token
+        );
+        return { ...data, token:entry.token };
+      } catch (error) {
+        if (/invalid player token|authentication required|game not found/i.test(String(error.message))) {
+          localStorage.removeItem('aob-token-' + entry.gameId);
+        }
+        return null;
+      }
+    }));
+
+    games = loaded
+      .filter(Boolean)
+      .filter(item => ['LOBBY','RUNNING'].includes(item.lifecycle?.status));
   }
 
-  const loaded = await Promise.all(entries.map(async entry => {
-    try {
-      const data = await request('/api/games/' + encodeURIComponent(entry.gameId) + '/lobby', {}, entry.token);
-      return { ...data, token:entry.token };
-    } catch (error) {
-      if (/invalid player token|authentication required|game not found/i.test(String(error.message))) {
-        localStorage.removeItem('aob-token-' + entry.gameId);
-      }
-      return null;
-    }
-  }));
-
-  const games = loaded
-    .filter(Boolean)
-    .filter(item => ['LOBBY','RUNNING'].includes(item.lifecycle?.status))
-    .sort((a,b) => String(b.lifecycle?.created_at || '').localeCompare(String(a.lifecycle?.created_at || '')));
+  games.sort((a,b) =>
+    String(b.lifecycle?.created_at || '').localeCompare(String(a.lifecycle?.created_at || ''))
+  );
+  knownGameIds = new Set(games.map(item => item.game_id));
 
   if (!games.length) {
     $('my-games').innerHTML = '<div class="empty">Активных игр нет.</div>';
@@ -379,7 +517,7 @@ async function loadMyGames() {
 async function loadOpenRooms() {
   try {
     const data = await request('/api/rooms/open');
-    const myIds = new Set(savedGames().map(item => item.gameId));
+    const myIds = new Set(knownGameIds);
     const rooms = data.rooms || [];
 
     if (!rooms.length) {
@@ -425,7 +563,8 @@ async function loadOpenRooms() {
                 method:'POST',
                 headers:{'content-type':'application/json'},
                 body:JSON.stringify({ display_name:displayName() })
-              }
+              },
+              profileAuth()
             );
             saveAccess(joined);
             location.href = '/lobby.html?game=' + encodeURIComponent(joined.game_id);
@@ -444,7 +583,8 @@ async function loadHub() {
   if (hubLoadInFlight) return;
   hubLoadInFlight = true;
   try {
-    await Promise.all([loadMyGames(), loadOpenRooms()]);
+    await loadMyGames();
+    await loadOpenRooms();
   } finally {
     hubLoadInFlight = false;
   }
@@ -463,7 +603,7 @@ async function createMultiplayer(visibility, button, errorId, roomInputId, house
           visibility,
           house:$(houseSelectId).value || null
         })
-      });
+      }, profileAuth());
       saveAccess(data);
       location.href = '/lobby.html?game=' + encodeURIComponent(data.game_id);
     });
@@ -472,9 +612,58 @@ async function createMultiplayer(visibility, button, errorId, roomInputId, house
   }
 }
 
-$('save-profile').onclick = () => {
-  localStorage.setItem('aob-display-name', $('profile-name').value.trim());
-  loadHub();
+$('register-profile').onclick = async () => {
+  $('profile-error').textContent = '';
+  const button = $('register-profile');
+  try {
+    await withBusy(button, 'Создаём...', async () => {
+      const data = await request('/api/profiles/register', {
+        method:'POST',
+        headers:{'content-type':'application/json'},
+        body:JSON.stringify({
+          handle:$('register-handle').value.trim(),
+          display_name:$('register-name').value.trim(),
+          password:$('register-password').value
+        })
+      });
+      await acceptProfileSession(data);
+    });
+  } catch (error) {
+    $('profile-error').textContent = friendlyError(error);
+  }
+};
+
+$('login-profile').onclick = async () => {
+  $('profile-error').textContent = '';
+  const button = $('login-profile');
+  try {
+    await withBusy(button, 'Входим...', async () => {
+      const data = await request('/api/profiles/login', {
+        method:'POST',
+        headers:{'content-type':'application/json'},
+        body:JSON.stringify({
+          handle:$('login-handle').value.trim(),
+          password:$('login-password').value
+        })
+      });
+      await acceptProfileSession(data);
+    });
+  } catch (error) {
+    $('profile-error').textContent = friendlyError(error);
+  }
+};
+
+$('logout-profile').onclick = async () => {
+  const current = profileToken;
+  localStorage.removeItem('aob-profile-token');
+  profileToken = null;
+  activeProfile = null;
+  token = gameId ? localStorage.getItem('aob-token-' + gameId) : null;
+  renderAccount();
+  if (current) {
+    request('/api/profile/logout', { method:'POST' }, current).catch(console.warn);
+  }
+  await loadHub();
 };
 
 $('create-solo').onclick = async () => {
@@ -490,7 +679,7 @@ $('create-solo').onclick = async () => {
           house:$('solo-house').value,
           room_name:'Соло · ' + $('solo-house').value
         })
-      });
+      }, profileAuth());
       saveAccess(data);
       location.href = '/?game=' + encodeURIComponent(data.game_id);
     });
@@ -517,7 +706,7 @@ $('join-private').onclick = async () => {
           invite_code:$('join-code').value.trim().toUpperCase(),
           display_name:displayName()
         })
-      });
+      }, profileAuth());
       saveAccess(data);
       location.href = '/lobby.html?game=' + encodeURIComponent(data.game_id);
     });
@@ -541,6 +730,7 @@ async function claimHouse(house) {
 }
 
 async function loadRoom() {
+  token = profileToken || localStorage.getItem('aob-token-' + gameId) || token;
   if (!gameId || !token || roomLoadInFlight) return;
   roomLoadInFlight = true;
 
@@ -680,18 +870,27 @@ $('open-game').onclick = () => {
 $('refresh').onclick = loadRoom;
 $('back-menu').onclick = () => { location.href = '/lobby'; };
 
-if (gameId && token) {
-  $('hub').style.display = 'none';
-  loadRoom();
-  setInterval(loadRoom,3000);
-} else {
-  $('room').style.display = 'none';
-  loadHub();
-  setInterval(() => {
-    loadOpenRooms();
-    loadMyGames();
-  },5000);
+async function initialize() {
+  await restoreProfileSession();
+  token = gameId
+    ? (profileToken || localStorage.getItem('aob-token-' + gameId))
+    : null;
+
+  if (gameId && token) {
+    $('hub').style.display = 'none';
+    await loadRoom();
+    setInterval(loadRoom,3000);
+  } else {
+    $('room').style.display = 'none';
+    await loadHub();
+    setInterval(loadHub,5000);
+  }
 }
+
+initialize().catch(error => {
+  console.error(error);
+  $('profile-error').textContent = friendlyError(error);
+});
 </script>
 </body>
 </html>
