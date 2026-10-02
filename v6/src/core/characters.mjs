@@ -7,7 +7,8 @@ export const CHARACTER_MODE = Object.freeze({
 
 export const CHARACTER_STATUS = Object.freeze({
   ACTIVE: 'ACTIVE',
-  FATE_PENDING: 'FATE_PENDING'
+  FATE_PENDING: 'FATE_PENDING',
+  FATE_LOCATION_PENDING: 'FATE_LOCATION_PENDING'
 });
 
 export const CHARACTER_HEALTH = Object.freeze({
@@ -315,6 +316,154 @@ export function settleCommander(state, characterId, territory) {
   army.territory = territory;
   character.location = { kind: 'TERRITORY', territory };
   return next;
+}
+
+function fateDie(value, label) {
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 1 || n > 6) {
+    throw new Error(label + ' must be d6 1..6');
+  }
+  return n;
+}
+
+function removeCommanderArmy(next, character) {
+  if (character.army_id && next.armies?.[character.army_id]) {
+    delete next.armies[character.army_id];
+  }
+  character.army_id = null;
+}
+
+export function resolveCommanderFate(
+  state,
+  map,
+  constants,
+  characterId,
+  dice,
+  { nowMs = Date.now() } = {}
+) {
+  const next = structuredClone(state);
+  const character = next.characters?.[characterId];
+  if (!character) throw new Error('unknown character');
+  if (!character.alive) throw new Error('dead character has no Fate check');
+  if (character.status !== CHARACTER_STATUS.FATE_PENDING) {
+    throw new Error('character has no pending Fate check');
+  }
+  if (!Array.isArray(dice) || dice.length !== 2) {
+    throw new Error('Fate requires two d6 values');
+  }
+
+  const first = fateDie(dice[0], 'first Fate die');
+  const second = fateDie(dice[1], 'second Fate die');
+  const pending = structuredClone(character.fate_pending || {});
+  const survival = Number(character.stats?.survival || 0);
+  const destroyedPenalty = pending.army_destroyed ? -1 : 0;
+  const roll = first + second;
+  const total = roll + survival + destroyedPenalty;
+
+  let outcome = null;
+  if (total >= 10) outcome = 'SAVED';
+  else if (total >= 7) outcome = 'WEAKENED';
+  else if (total >= 5) outcome = 'CAPTURED';
+  else outcome = 'DEAD';
+
+  const resolvedAt = new Date(nowMs).toISOString();
+  const fallback = pending.fallback_territory || null;
+
+  if (outcome === 'SAVED' || outcome === 'WEAKENED') {
+    character.health = outcome === 'WEAKENED'
+      ? CHARACTER_HEALTH.WEAKENED
+      : character.health;
+
+    if (fallback) {
+      character.status = CHARACTER_STATUS.ACTIVE;
+      character.fate_pending = null;
+      character.location = {
+        kind: 'TERRITORY',
+        territory: fallback
+      };
+
+      if (character.army_id && next.armies?.[character.army_id]) {
+        const army = next.armies[character.army_id];
+        army.moving_order_id = null;
+        army.from = null;
+        army.to = null;
+        army.territory = fallback;
+      }
+    } else {
+      removeCommanderArmy(next, character);
+      character.status = CHARACTER_STATUS.FATE_LOCATION_PENDING;
+      character.fate_pending = {
+        ...pending,
+        fate_outcome: outcome,
+        fate_total: total,
+        fate_dice: [first, second],
+        resolved_at: resolvedAt,
+        location_rule_required: true
+      };
+      character.location = {
+        kind: 'FATE_LOCATION_PENDING',
+        territory: pending.battle_territory || null
+      };
+    }
+  } else if (outcome === 'CAPTURED') {
+    removeCommanderArmy(next, character);
+    character.mode = CHARACTER_MODE.CAPTIVE;
+    character.status = CHARACTER_STATUS.ACTIVE;
+    character.fate_pending = null;
+    character.location = {
+      kind: 'CAPTURE_CONTEXT',
+      territory: pending.battle_territory || null
+    };
+    character.captivity = {
+      held_by: pending.opponent_house || null,
+      detention_location: pending.battle_territory || null,
+      decision_pending: true,
+      ransom_offer: null,
+      ransom_amount: null,
+      ransom_response: null,
+      history: [{
+        kind: 'CAPTURED_IN_BATTLE',
+        at: resolvedAt,
+        territory: pending.battle_territory || null,
+        captor_house: pending.opponent_house || null
+      }]
+    };
+  } else {
+    removeCommanderArmy(next, character);
+    character.alive = false;
+    character.mode = CHARACTER_MODE.DEAD;
+    character.status = CHARACTER_STATUS.ACTIVE;
+    character.fate_pending = null;
+    character.location = {
+      kind: 'DEAD',
+      territory: pending.battle_territory || null
+    };
+    character.captivity = null;
+  }
+
+  const result = {
+    character_id: character.id,
+    character_name: character.name,
+    house: character.house,
+    dice: [first, second],
+    roll,
+    survival,
+    destroyed_penalty: destroyedPenalty,
+    total,
+    outcome,
+    location_pending:
+      character.status === CHARACTER_STATUS.FATE_LOCATION_PENDING
+  };
+
+  next.journal.push({
+    kind: 'COMMANDER_FATE',
+    at: resolvedAt,
+    ...result,
+    battle_territory: pending.battle_territory || null,
+    opponent_house: pending.opponent_house || null
+  });
+
+  return { state: next, result };
 }
 
 export function markCommanderFatePending(state, characterId, details) {
