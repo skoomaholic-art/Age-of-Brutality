@@ -4,8 +4,11 @@ import { createOnlineGame } from './store.mjs';
 import { repairForeignWarriors } from '../core/state.mjs';
 import { calculateNextDueAt } from './scheduling.mjs';
 import {
+  applyRankedResult,
   hashProfileToken,
+  normalizeAvatarId,
   normalizeProfileHandle,
+  normalizeProfileStats,
   parseProfileToken,
   safeHashEqual
 } from './profile.mjs';
@@ -155,6 +158,99 @@ export class FirestoreGameStore {
     const handleDoc = await this.profileHandleRef(handle).get();
     if (!handleDoc.exists) return null;
     return this.getProfile(handleDoc.data()?.profile_id);
+  }
+
+  async updateProfileAvatar(profileId, avatarId, nowMs = Date.now()) {
+    const normalized = normalizeAvatarId(avatarId);
+    const ref = this.profileRef(profileId);
+    const doc = await ref.get();
+    if (!doc.exists) throw new Error('profile not found');
+
+    await ref.update({
+      avatar_id: normalized,
+      updated_at: new Date(nowMs).toISOString()
+    });
+
+    return this.getProfile(profileId);
+  }
+
+  async heartbeatProfileActivity(profileId, nowMs = Date.now()) {
+    const ref = this.profileRef(profileId);
+    const nowIso = new Date(nowMs).toISOString();
+
+    return this.db.runTransaction(async tx => {
+      const doc = await tx.get(ref);
+      if (!doc.exists) throw new Error('profile not found');
+
+      const profile = doc.data();
+      const stats = normalizeProfileStats(profile.stats);
+      const lastIso = profile.activity?.last_game_heartbeat_at || null;
+      const lastMs = lastIso ? Date.parse(lastIso) : NaN;
+      let addedSeconds = 0;
+
+      if (Number.isFinite(lastMs)) {
+        const deltaSeconds = Math.floor((nowMs - lastMs) / 1000);
+        if (deltaSeconds > 0 && deltaSeconds <= 120) {
+          addedSeconds = deltaSeconds;
+          stats.play_seconds += deltaSeconds;
+        }
+      }
+
+      tx.update(ref, {
+        stats,
+        activity: {
+          ...(profile.activity || {}),
+          last_game_heartbeat_at: nowIso
+        },
+        updated_at: nowIso
+      });
+
+      return {
+        added_seconds: addedSeconds,
+        play_seconds: stats.play_seconds,
+        heartbeat_at: nowIso
+      };
+    });
+  }
+
+  async recordProfileRankedResult(profileId, gameId, { won }, nowMs = Date.now()) {
+    const profileRef = this.profileRef(profileId);
+    const membershipRef = this.profileGamesRef(profileId).doc(String(gameId));
+    const nowIso = new Date(nowMs).toISOString();
+
+    return this.db.runTransaction(async tx => {
+      const [profileDoc, membershipDoc] = await Promise.all([
+        tx.get(profileRef),
+        tx.get(membershipRef)
+      ]);
+
+      if (!profileDoc.exists) throw new Error('profile not found');
+      if (!membershipDoc.exists) throw new Error('profile game membership not found');
+
+      const membership = membershipDoc.data();
+      if (membership.result_recorded_at) {
+        return {
+          duplicate: true,
+          stats: normalizeProfileStats(profileDoc.data().stats)
+        };
+      }
+
+      const stats = applyRankedResult(profileDoc.data().stats, { won: Boolean(won) });
+      tx.update(profileRef, {
+        stats,
+        updated_at: nowIso
+      });
+      tx.set(membershipRef, {
+        ...membership,
+        ranked_result: won ? 'WIN' : 'LOSS',
+        result_recorded_at: nowIso
+      }, { merge: false });
+
+      return {
+        duplicate: false,
+        stats
+      };
+    });
   }
 
   async addProfileSession(profileId, session) {
