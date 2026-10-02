@@ -630,8 +630,22 @@ function renderCharacters() {
             : character.mode === 'DEAD'
               ? '<div class="tiny failed">Персонаж погиб.</div>'
               : canAssign
-        ? '<div class="character-actions"><button data-char-army="' +
-          escapeHtml(character.id) + '">Назначить в армию</button></div>'
+        ? (
+            '<div class="character-actions" style="display:grid;gap:6px">' +
+            '<select data-char-army-target="' + escapeHtml(character.id) + '">' +
+            (assignment?.targets || []).map(target =>
+              '<option value="' + escapeHtml(target.id) + '">' +
+              escapeHtml(
+                target.name +
+                (target.kind === 'SEA_WAYPOINT' ? ' · море' : '') +
+                ' · ' + Number(target.warriors || 0) + ' воин.'
+              ) +
+              '</option>'
+            ).join('') +
+            '</select>' +
+            '<button data-char-army="' + escapeHtml(character.id) + '">Назначить в армию</button>' +
+            '</div>'
+          )
         : character.mode === 'COURT' && assignment && !assignment.allowed
           ? '<div class="character-actions"><button disabled title="' +
             escapeHtml(assignment.reason || '') +
@@ -672,12 +686,16 @@ function renderCharacters() {
   document.querySelectorAll('[data-char-army]').forEach(button => {
     button.onclick = async () => {
       try {
+        const selector = document.querySelector(
+          '[data-char-army-target="' + button.dataset.charArmy + '"]'
+        );
         await api('/api/characters/assign-army', {
           method:'POST',
           headers:{'content-type':'application/json'},
           body:JSON.stringify({
             house,
-            character_id:button.dataset.charArmy
+            character_id:button.dataset.charArmy,
+            position:selector?.value || null
           })
         });
         await refresh();
