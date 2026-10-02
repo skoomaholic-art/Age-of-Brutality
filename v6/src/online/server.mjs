@@ -779,6 +779,11 @@ const server = http.createServer(async (req, res) => {
       return text(res, 200, html, 'text/html; charset=utf-8');
     }
 
+    if (req.method === 'GET' && (url.pathname === '/lobby' || url.pathname === '/lobby.html')) {
+      const html = fs.readFileSync(path.join(v6Root, 'online/lobby.html'), 'utf8');
+      return text(res, 200, html, 'text/html; charset=utf-8');
+    }
+
     if (req.method === 'POST' && url.pathname === '/api/games') {
       const body = await readBody(req);
       return json(res, 201, await createMultiplayerGame(body));
