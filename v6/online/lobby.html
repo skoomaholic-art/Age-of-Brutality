@@ -258,6 +258,11 @@ function renderAccount() {
   $('account-signed-out').style.display = signedIn ? 'none' : 'block';
   $('account-signed-in').style.display = signedIn ? 'block' : 'none';
 
+  for (const id of ['create-solo','create-public','create-private','join-private']) {
+    $(id).disabled = !signedIn;
+    $(id).title = signedIn ? '' : 'Сначала войди в профиль';
+  }
+
   if (signedIn) {
     $('account-name').textContent = activeProfile.display_name;
     $('account-handle').textContent = '@' + activeProfile.handle;
@@ -551,8 +556,12 @@ async function loadOpenRooms() {
       button.onclick = async () => {
         const id = button.dataset.publicGame;
         const existingToken = localStorage.getItem('aob-token-' + id);
-        if (existingToken) {
+        if (knownGameIds.has(id) && (profileToken || existingToken)) {
           location.href = '/lobby.html?game=' + encodeURIComponent(id);
+          return;
+        }
+        if (!profileToken) {
+          alert('Сначала войди в профиль, чтобы подключиться к комнате.');
           return;
         }
         try {
