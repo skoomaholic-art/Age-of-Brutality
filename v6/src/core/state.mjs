@@ -52,6 +52,30 @@ export function totalHouseWarriors(state, house) {
   return Object.values(state.territories).reduce((sum, t) => sum + Number(t.warriors?.[house] ?? 0), 0);
 }
 
+export function repairForeignWarriors(state) {
+  const next = structuredClone(state);
+  const repairs = [];
+
+  for (const [territoryId, territory] of Object.entries(next.territories || {})) {
+    for (const [house, count] of Object.entries(territory.warriors || {})) {
+      const n = Number(count || 0);
+      if (n > 0 && territory.owner !== house) {
+        repairs.push({
+          territory: territoryId,
+          owner: territory.owner ?? null,
+          removed_house: house,
+          removed_warriors: n
+        });
+        delete territory.warriors[house];
+      } else if (n === 0) {
+        delete territory.warriors[house];
+      }
+    }
+  }
+
+  return { state: next, repairs };
+}
+
 export function validateState(state, map, constants) {
   const errors = [];
   const mapIds = new Set(map.territories.map(t => t.id));
@@ -72,6 +96,9 @@ export function validateState(state, map, constants) {
     for (const [house, count] of Object.entries(t.warriors || {})) {
       if (!constants.houses.includes(house)) errors.push(`${id} contains unknown house ${house}`);
       if (!Number.isInteger(count) || count < 0) errors.push(`${id}/${house} has invalid warrior count ${count}`);
+      if (Number(count) > 0 && t.owner !== house) {
+        errors.push(`${id} has ${count} foreign warriors of ${house} while owner is ${t.owner}`);
+      }
     }
   }
 
