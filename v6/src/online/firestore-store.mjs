@@ -501,7 +501,14 @@ export class FirestoreGameStore {
   }
 
   async reset(map, constants) {
+    const currentDoc = await this.gameRef().get();
+    const currentRevision = currentDoc.exists
+      ? Number(currentDoc.data()?.state_revision || 0)
+      : 0;
+
     const created = createOnlineGame(map, constants, { id: this.gameId });
+    created.state_revision = currentRevision;
+
     this.orderCache = new Map();
     this.jobCache = new Map();
     this.eventMaxSeq = 0;
