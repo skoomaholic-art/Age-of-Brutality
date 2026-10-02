@@ -1,4 +1,5 @@
 import { Firestore } from '@google-cloud/firestore';
+import crypto from 'node:crypto';
 import { createOnlineGame } from './store.mjs';
 import { repairForeignWarriors } from '../core/state.mjs';
 import {
@@ -129,8 +130,9 @@ export class FirestoreGameStore {
         lifecycle.player_count = current + 1;
       }
 
+      const nextRevision = Number(game.state_revision || 0) + 1;
       tx.set(playerRef, plain(player), { merge: false });
-      tx.update(gameRef, { lifecycle });
+      tx.update(gameRef, { lifecycle, state_revision: nextRevision });
     });
 
     return player;
@@ -169,7 +171,8 @@ export class FirestoreGameStore {
       lifecycle.house_claims = claims;
       player.house = house;
 
-      tx.update(gameRef, { lifecycle });
+      const nextRevision = Number(game.state_revision || 0) + 1;
+      tx.update(gameRef, { lifecycle, state_revision: nextRevision });
       tx.update(playerRef, { house });
 
       return { house, player_id: playerId };
@@ -200,7 +203,12 @@ export class FirestoreGameStore {
       lifecycle.started_at = new Date(nowMs).toISOString();
       lifecycle.invite_code = null;
 
-      tx.update(gameRef, { lifecycle, updated_at: lifecycle.started_at });
+      const nextRevision = Number(game.state_revision || 0) + 1;
+      tx.update(gameRef, {
+        lifecycle,
+        updated_at: lifecycle.started_at,
+        state_revision: nextRevision
+      });
       return lifecycle;
     });
   }
@@ -219,11 +227,24 @@ export class FirestoreGameStore {
     return live?.id || null;
   }
 
+
+  commandReceiptRef(commandId) {
+    const digest = crypto.createHash('sha256').update(String(commandId)).digest('hex');
+    return this.gameRef().collection('command_receipts').doc(digest);
+  }
+
+  async getCommandReceipt(commandId) {
+    if (!commandId) return null;
+    const doc = await this.commandReceiptRef(commandId).get();
+    return doc.exists ? doc.data() : null;
+  }
+
   async load() {
     const doc = await this.gameRef().get();
     if (!doc.exists) return null;
 
     const game = doc.data();
+    game.state_revision = Number(game.state_revision || 0);
     const sessionId = game.session_id;
     if (!sessionId) throw new Error('Firestore game is missing session_id');
 
@@ -266,7 +287,7 @@ export class FirestoreGameStore {
     return game;
   }
 
-  async writeChangedCollection(ref, items, cache, idField = 'id') {
+  changedCollectionItems(items, cache, idField = 'id') {
     const changed = [];
     for (const item of items) {
       const id = item?.[idField];
@@ -274,71 +295,121 @@ export class FirestoreGameStore {
       const normalized = plain(item);
       const serialized = JSON.stringify(normalized);
       if (cache.get(id) === serialized) continue;
-      changed.push([id, normalized, serialized]);
+      changed.push([String(id), normalized, serialized]);
     }
-
-    for (const group of chunk(changed)) {
-      const batch = this.db.batch();
-      for (const [id, normalized] of group) {
-        batch.set(ref.doc(String(id)), normalized, { merge: false });
-      }
-      await batch.commit();
-    }
-
-    for (const [id, , serialized] of changed) cache.set(id, serialized);
+    return changed;
   }
 
-  async appendNewEvents(session, auditLog = []) {
-    const fresh = auditLog
+  freshEvents(auditLog = []) {
+    return auditLog
       .filter(item => Number(item.seq || 0) > this.eventMaxSeq)
       .sort((a, b) => Number(a.seq || 0) - Number(b.seq || 0));
-
-    for (const group of chunk(fresh)) {
-      const batch = this.db.batch();
-      for (const item of group) {
-        const seq = Number(item.seq || 0);
-        const id = String(seq).padStart(10, '0');
-        batch.set(session.collection('events').doc(id), plain(item), { merge: false });
-      }
-      await batch.commit();
-    }
-
-    if (fresh.length) {
-      this.eventMaxSeq = Math.max(this.eventMaxSeq, ...fresh.map(item => Number(item.seq || 0)));
-    }
   }
 
-  async save(game) {
+  async save(game, {
+    commandId = null,
+    commandResponse = null,
+    commandStatus = 200
+  } = {}) {
     const sessionId = game.session_id;
     if (!sessionId) throw new Error('cannot persist game without session_id');
 
     const gameRef = this.gameRef();
     const session = this.sessionRef(sessionId);
-    const current = compactGameDoc(game);
+    const expectedRevision = Number(game.state_revision || 0);
+    const changedOrders = this.changedCollectionItems(game.orders || [], this.orderCache);
+    const changedJobs = this.changedCollectionItems(game.jobs || [], this.jobCache);
+    const freshEvents = this.freshEvents(game.audit_log || []);
+    const receiptRef = commandId ? this.commandReceiptRef(commandId) : null;
 
-    await Promise.all([
-      gameRef.set({
+    const writeCount =
+      2 + changedOrders.length + changedJobs.length + freshEvents.length + (receiptRef ? 1 : 0);
+    if (writeCount > 450) {
+      throw new Error(`atomic Firestore write set too large: ${writeCount}`);
+    }
+
+    const result = await this.db.runTransaction(async tx => {
+      const gameDoc = await tx.get(gameRef);
+      let receiptDoc = null;
+      if (receiptRef) receiptDoc = await tx.get(receiptRef);
+
+      if (receiptDoc?.exists) {
+        return { duplicate: true, receipt: receiptDoc.data() };
+      }
+
+      const currentRevision = gameDoc.exists
+        ? Number(gameDoc.data()?.state_revision || 0)
+        : 0;
+
+      if (currentRevision !== expectedRevision) {
+        const error = new Error(
+          `stale game state: expected revision ${expectedRevision}, current ${currentRevision}`
+        );
+        error.code = 'STALE_GAME_STATE';
+        throw error;
+      }
+
+      const nextRevision = expectedRevision + 1;
+      game.state_revision = nextRevision;
+      const current = compactGameDoc(game);
+
+      tx.set(gameRef, {
         ...current,
+        state_revision: nextRevision,
         storage_backend: 'firestore',
         firestore_database: this.databaseId
-      }, { merge: false }),
-      session.set({
+      }, { merge: false });
+
+      tx.set(session, {
         session_id: sessionId,
         game_id: game.id,
         created_at: game.created_at,
         updated_at: game.updated_at,
         session_metrics: plain(game.session_metrics || {}),
-        audit_seq: Number(game.audit_seq || 1)
-      }, { merge: true })
-    ]);
+        audit_seq: Number(game.audit_seq || 1),
+        state_revision: nextRevision
+      }, { merge: true });
 
-    await Promise.all([
-      this.writeChangedCollection(session.collection('orders'), game.orders || [], this.orderCache),
-      this.writeChangedCollection(session.collection('jobs'), game.jobs || [], this.jobCache),
-      this.appendNewEvents(session, game.audit_log || [])
-    ]);
+      for (const [id, normalized] of changedOrders) {
+        tx.set(session.collection('orders').doc(id), normalized, { merge: false });
+      }
+      for (const [id, normalized] of changedJobs) {
+        tx.set(session.collection('jobs').doc(id), normalized, { merge: false });
+      }
+      for (const item of freshEvents) {
+        const seq = Number(item.seq || 0);
+        const id = String(seq).padStart(10, '0');
+        tx.set(session.collection('events').doc(id), plain(item), { merge: false });
+      }
 
-    return game;
+      if (receiptRef) {
+        tx.set(receiptRef, {
+          command_id_hash: receiptRef.id,
+          created_at: new Date().toISOString(),
+          state_revision: nextRevision,
+          status_code: Number(commandStatus || 200),
+          response: plain(commandResponse || {})
+        }, { merge: false });
+      }
+
+      return {
+        duplicate: false,
+        state_revision: nextRevision
+      };
+    });
+
+    if (result.duplicate) return result;
+
+    for (const [id, , serialized] of changedOrders) this.orderCache.set(id, serialized);
+    for (const [id, , serialized] of changedJobs) this.jobCache.set(id, serialized);
+    if (freshEvents.length) {
+      this.eventMaxSeq = Math.max(
+        this.eventMaxSeq,
+        ...freshEvents.map(item => Number(item.seq || 0))
+      );
+    }
+
+    return result;
   }
 
   async loadOrCreate(map, constants) {
