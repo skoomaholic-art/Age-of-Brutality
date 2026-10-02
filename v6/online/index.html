@@ -28,6 +28,11 @@
     }
     h1 { margin: 0; font-size: 19px; letter-spacing: .08em; }
     .sub { color: #aeb7bd; font-size: 12px; margin-top: 4px; }
+    .spectator-badge {
+      display:none; margin-top:7px; width:max-content; border:1px solid #806e3a;
+      border-radius:999px; padding:4px 8px; color:#e9d685; font-size:10px;
+      font-weight:850; letter-spacing:.05em;
+    }
     .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     .save-status { font-size: 10px; color: #8f9aa1; min-width: 132px; text-align: right; }
     select, input, button {
@@ -198,6 +203,7 @@
   <div>
     <h1>ЖЕСТОКИЙ ВЕК - ONLINE PROTOTYPE</h1>
     <div class="sub">Persistent vertical slice on the existing V6 rules core</div>
+    <div id="spectator-badge" class="spectator-badge">РЕЖИМ НАБЛЮДАТЕЛЯ</div>
   </div>
   <div class="controls">
     <label>
@@ -246,7 +252,7 @@
   </section>
 
   <aside>
-    <div class="panel">
+    <div id="house-panel" class="panel">
       <h2 id="house-title">Дом</h2>
       <div class="stats">
         <div class="stat"><span class="muted">Золото</span><b id="gold">0</b></div>
@@ -255,7 +261,7 @@
       </div>
     </div>
 
-    <div class="panel">
+    <div id="economy-panel" class="panel">
       <h2>Экономика</h2>
       <div class="economy-line"><span class="muted">Доход за цикл</span><b id="income-rate">+0 золота</b></div>
       <div class="economy-line"><span class="muted">Следующий доход</span><b id="income-countdown">...</b></div>
@@ -276,12 +282,12 @@
       <div id="jobs" class="jobs muted">Нет строительства.</div>
     </div>
 
-    <div class="panel">
+    <div id="march-panel" class="panel">
       <h2>Марш</h2>
       <div id="selection" class="muted">1. Выбери свою территорию с воинами.</div>
     </div>
 
-    <div class="panel">
+    <div id="orders-panel" class="panel">
       <h2>Приказы</h2>
       <div id="orders" class="muted">Нет приказов.</div>
     </div>
@@ -312,6 +318,7 @@ let legal = [];
 let economy = null;
 let managedTerritory = null;
 let lastManualSnapshotAt = null;
+let isSpectator = false;
 
 const pageParams = new URLSearchParams(location.search);
 const scopedGameId = pageParams.get('game');
@@ -429,6 +436,7 @@ function escapeHtml(value) {
 }
 
 function renderHouse() {
+  if (isSpectator || !house) return;
   const state = snapshot.game.state.houses[house];
   $('house-title').textContent = house;
   $('gold').textContent = state.gold;
@@ -499,13 +507,20 @@ function renderMap() {
 }
 
 async function loadLegal() {
-  if (!house) return;
+  if (isSpectator || !house) {
+    legal = [];
+    return;
+  }
   const data = await api('/api/legal?house=' + encodeURIComponent(house));
   legal = data.actions;
 }
 
 async function loadEconomy() {
-  if (!house) return;
+  if (isSpectator || !house) {
+    economy = null;
+    managedTerritory = null;
+    return;
+  }
   economy = await api('/api/economy?house=' + encodeURIComponent(house));
   const owned = economy.territories || [];
   if (!owned.some(t => t.id === managedTerritory)) {
@@ -518,7 +533,7 @@ function secondsLeft(iso) {
 }
 
 function renderEconomy() {
-  if (!economy) return;
+  if (isSpectator || !economy) return;
   const gain = economy.income;
   const influence = gain.influence ? ` +${gain.influence} влияния` : '';
   $('income-rate').textContent = `+${gain.gold} золота${influence}`;
@@ -573,6 +588,16 @@ function renderEconomy() {
 function renderSelection() {
   const card = $('route-card');
 
+  if (isSpectator) {
+    origin = null;
+    target = null;
+    card.classList.remove('show');
+    $('selection').textContent = 'Наблюдение за партией без управления Домом.';
+    $('guide-title').textContent = 'РЕЖИМ НАБЛЮДАТЕЛЯ';
+    $('guide-sub').textContent = 'Карта обновляется автоматически. Ты не можешь отдавать приказы или менять состояние партии.';
+    return;
+  }
+
   if (!origin) {
     $('selection').textContent = '1. Выбери свою территорию с воинами.';
     $('guide-title').textContent = '1. Выбери, ОТКУДА идти';
@@ -614,6 +639,7 @@ function renderSelection() {
 }
 
 async function selectTerritory(id) {
+  if (isSpectator) return;
   const s = snapshot.game.state.territories[id];
 
   if (!origin) {
@@ -674,6 +700,10 @@ function countdown(order) {
 }
 
 function renderOrders() {
+  if (isSpectator || !house) {
+    $('orders').innerHTML = '<span class="muted">Приказы скрыты в режиме наблюдателя.</span>';
+    return;
+  }
   const orders = snapshot.game.orders
     .filter(order => order.action.house === house)
     .slice()
@@ -737,28 +767,74 @@ async function refresh() {
     const me = snapshot.lobby?.current_player;
     if (
       snapshot.game.lifecycle?.status !== 'RUNNING' ||
-      !me ||
-      !me.house
+      !me
     ) {
       location.href = '/lobby.html?game=' + encodeURIComponent(scopedGameId);
       return;
     }
 
-    house = me.house;
-    select.innerHTML = '';
-    const option = document.createElement('option');
-    option.value = house;
-    option.textContent = house;
-    select.appendChild(option);
-    select.value = house;
-    select.disabled = true;
+    isSpectator = me.role === 'SPECTATOR';
 
-    if (me.role !== 'ADMIN') {
+    if (isSpectator) {
+      house = null;
+      origin = null;
+      target = null;
+      legal = [];
+      economy = null;
+      managedTerritory = null;
+
+      select.innerHTML = '';
+      const option = document.createElement('option');
+      option.value = '';
+      option.textContent = 'Наблюдатель';
+      select.appendChild(option);
+      select.disabled = true;
+      select.closest('label').style.display = 'none';
+
+      $('spectator-badge').style.display = 'block';
       $('save-game').style.display = 'none';
       $('restore-game').style.display = 'none';
+      $('reset').style.display = 'none';
+      $('house-panel').style.display = 'none';
+      $('economy-panel').style.display = 'none';
+      $('march-panel').style.display = 'none';
+      $('orders-panel').style.display = 'none';
+      $('route-card').classList.remove('show');
+    } else {
+      if (!me.house) {
+        location.href = '/lobby.html?game=' + encodeURIComponent(scopedGameId);
+        return;
+      }
+
+      house = me.house;
+      select.innerHTML = '';
+      const option = document.createElement('option');
+      option.value = house;
+      option.textContent = house;
+      select.appendChild(option);
+      select.value = house;
+      select.disabled = true;
+      select.closest('label').style.display = '';
+      $('spectator-badge').style.display = 'none';
+      $('house-panel').style.display = '';
+      $('economy-panel').style.display = '';
+      $('march-panel').style.display = '';
+      $('orders-panel').style.display = '';
+
+      if (me.role !== 'ADMIN') {
+        $('save-game').style.display = 'none';
+        $('restore-game').style.display = 'none';
+      }
+      $('reset').style.display = 'none';
     }
-    $('reset').style.display = 'none';
   } else {
+    isSpectator = false;
+    $('spectator-badge').style.display = 'none';
+    $('house-panel').style.display = '';
+    $('economy-panel').style.display = '';
+    $('march-panel').style.display = '';
+    $('orders-panel').style.display = '';
+    select.closest('label').style.display = '';
     select.disabled = false;
     if (!select.options.length) {
       for (const h of snapshot.houses) {
@@ -773,7 +849,12 @@ async function refresh() {
     select.value = house;
   }
 
-  await Promise.all([loadLegal(), loadEconomy()]);
+  if (isSpectator) {
+    legal = [];
+    economy = null;
+  } else {
+    await Promise.all([loadLegal(), loadEconomy()]);
+  }
 
   if (origin) {
     const stillOwned = snapshot.game.state.territories[origin]?.owner === house;
@@ -841,6 +922,11 @@ $('build-fort').addEventListener('click', async () => {
 });
 
 $('back-menu').addEventListener('click', async () => {
+  if (isSpectator) {
+    location.href = '/lobby';
+    return;
+  }
+
   const button = $('back-menu');
   const original = button.textContent;
   button.disabled = true;
