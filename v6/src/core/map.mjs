@@ -32,7 +32,7 @@ export function validateMap(map) {
   if (idSet.size !== ids.length) errors.push('territory ids must be unique');
   if (map.land_edges.length !== 96) errors.push(`expected 96 land edges from V5.4.3 geometry, got ${map.land_edges.length}`);
   if (map.sea_edges.length !== 20) errors.push(`expected 20 sea edges from V5.4.3 geometry, got ${map.sea_edges.length}`);
-  if (ports.size !== 16) errors.push(`expected 16 ports, got ${ports.size}`);
+  if (ports.size !== 18) errors.push(`expected 18 ports after approved 2026-10-02 topology correction, got ${ports.size}`);
   if (new Set(capitalIds).size !== 6) errors.push('six capitals must be unique');
 
   for (const p of ports) if (!idSet.has(p)) errors.push(`unknown port ${p}`);
