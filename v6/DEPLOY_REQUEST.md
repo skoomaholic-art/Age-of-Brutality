@@ -17,3 +17,5 @@ Deploy trigger: march selection UX cleanup and central island label fixes.
 Deploy trigger: multiplayer foundation, atomic commands, ghost-warrior repair, due scheduling, bootstrap split and stats.
 
 Deploy trigger: resilient multiplayer lobby, transient 503 retries, start gating, main-menu return.
+
+Deploy trigger: game hub with solo mode, public rooms, private rooms, and saved active games.
