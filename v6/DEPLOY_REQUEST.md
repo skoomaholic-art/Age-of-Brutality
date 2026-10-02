@@ -33,3 +33,5 @@ Deploy trigger: corrected Tuman A and Korony A routes, victory status UI, standi
 Deploy trigger: symmetric branched sea network, corrected Veir A coast links, sea waypoints, and character assignment UX.
 
 Deploy trigger: graph-based sea movement with stored waypoint routes, segment timing, route highlighting and no port skipping.
+
+Deploy trigger: selected-army commander assignment, weighted long-distance auto routing, route duration scaling, and animated army movement.
