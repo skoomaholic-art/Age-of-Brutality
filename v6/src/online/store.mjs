@@ -31,7 +31,7 @@ export function createOnlineGame(map, constants, {
 
   if (accessMode === ACCESS_MODE.PLAYER_BOUND) {
     base.lifecycle = createLobbyMetadata(constants, {
-      inviteCode: inviteCode || undefined,
+      inviteCode: inviteCode === null ? null : inviteCode,
       nowMs,
       accessMode,
       ...lifecycleOptions
