@@ -20,6 +20,27 @@ function sortByIso(items, field = 'created_at') {
   return items.sort((a, b) => String(a?.[field] || '').localeCompare(String(b?.[field] || '')));
 }
 
+export function calculateNextDueAt(game) {
+  if (game.lifecycle?.status !== GAME_STATUS.RUNNING) return null;
+
+  const candidates = [];
+  if (game.next_income_at) candidates.push(game.next_income_at);
+
+  for (const order of game.orders || []) {
+    if (order.status === 'PENDING' && order.due_at) candidates.push(order.due_at);
+  }
+  for (const job of game.jobs || []) {
+    if (job.status === 'PENDING' && job.due_at) candidates.push(job.due_at);
+  }
+
+  const valid = candidates
+    .map(value => String(value))
+    .filter(value => Number.isFinite(Date.parse(value)))
+    .sort();
+
+  return valid[0] || null;
+}
+
 function compactGameDoc(game) {
   const next = structuredClone(game);
   delete next.orders;
@@ -463,6 +484,7 @@ export class FirestoreGameStore {
 
       const nextRevision = expectedRevision + 1;
       game.state_revision = nextRevision;
+      game.next_due_at = calculateNextDueAt(game);
       const current = compactGameDoc(game);
 
       tx.set(gameRef, {
@@ -550,6 +572,18 @@ export class FirestoreGameStore {
     this.eventMaxSeq = 0;
     await this.save(created);
     return created;
+  }
+
+  async listDueGameIds(nowMs = Date.now(), limit = 100) {
+    const nowIso = new Date(nowMs).toISOString();
+    const snap = await this.db.collection('games')
+      .where('next_due_at', '<=', nowIso)
+      .limit(Math.max(1, Math.min(250, Number(limit) || 100)))
+      .get();
+
+    return snap.docs
+      .filter(doc => doc.data()?.lifecycle?.status === GAME_STATUS.RUNNING)
+      .map(doc => doc.id);
   }
 
   async saveCheckpoint(snapshot) {
