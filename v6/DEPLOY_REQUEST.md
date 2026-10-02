@@ -23,3 +23,5 @@ Deploy trigger: game hub with solo mode, public rooms, private rooms, and saved 
 Deploy trigger: autosave before returning from game screen to game hub.
 
 Deploy trigger: permanent player profiles, secure sessions, cross-device game library.
+
+Deploy trigger: profile avatars, stats, MMR, active playtime, achievements placeholder.
