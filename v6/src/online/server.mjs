@@ -453,6 +453,31 @@ function safeRoomName(value, fallback) {
   return (name || fallback).slice(0, 60);
 }
 
+function publicPresenceForViewer(presence, { canSeePrivateGame = false } = {}) {
+  const next = structuredClone(presence || {
+    status: 'OFFLINE',
+    online: false,
+    in_game: false,
+    game: null
+  });
+
+  if (
+    next.game &&
+    next.game.visibility === GAME_VISIBILITY.PRIVATE &&
+    !canSeePrivateGame
+  ) {
+    next.game = {
+      game_id: null,
+      room_name: null,
+      visibility: next.game.visibility,
+      game_mode: next.game.game_mode,
+      status: next.game.status
+    };
+  }
+
+  return next;
+}
+
 async function createMultiplayerGame(body, profile = null) {
   const gameId = newGameId();
   const inviteCode = await uniqueInviteCode();
@@ -1253,7 +1278,10 @@ const server = http.createServer(async (req, res) => {
         return json(res, 404, { error: 'player not found' });
       }
       const areFriends = await defaultContext.store.areProfilesFriends(profile.id, found.id);
-      const presence = await defaultContext.store.profilePresence(found);
+      const presence = publicPresenceForViewer(
+        await defaultContext.store.profilePresence(found),
+        { canSeePrivateGame: areFriends }
+      );
       return json(res, 200, {
         player: {
           ...publicSocialProfile(found),
@@ -1287,7 +1315,9 @@ const server = http.createServer(async (req, res) => {
 
       return json(res, 200, {
         profile: publicProfile(target),
-        presence,
+        presence: publicPresenceForViewer(presence, {
+          canSeePrivateGame: areFriends
+        }),
         are_friends: areFriends
       });
     }
