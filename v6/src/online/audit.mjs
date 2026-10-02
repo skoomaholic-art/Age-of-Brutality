@@ -63,6 +63,18 @@ export function journalEntryToAudit(entry, map, game) {
     type: entry.kind || 'EVENT'
   };
 
+  if (entry.kind === 'STATE_REPAIR') {
+    const repairs = Array.isArray(entry.repairs) ? entry.repairs : [];
+    return {
+      ...base,
+      message: `Исправлено некорректное состояние войск: ${repairs.length} записей.`,
+      details: {
+        reason: entry.reason || null,
+        repairs
+      }
+    };
+  }
+
   if (entry.kind === 'SNAPSHOT_RESTORED') {
     return {
       ...base,
