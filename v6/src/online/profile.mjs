@@ -17,6 +17,39 @@ export const PROFILE_MMR = Object.freeze({
   lossDelta: 25
 });
 
+export const SOCIAL_LIMITS = Object.freeze({
+  messageMax: 1000,
+  inviteLifetimeDays: 7
+});
+
+export function validateChatMessage(value) {
+  const text = String(value || '').trim();
+  if (!text || text.length > SOCIAL_LIMITS.messageMax) {
+    throw new Error(`message must be 1..${SOCIAL_LIMITS.messageMax} characters`);
+  }
+  return text;
+}
+
+export function conversationIdFor(a, b) {
+  const pair = [String(a || ''), String(b || '')].sort();
+  if (!pair[0] || !pair[1] || pair[0] === pair[1]) {
+    throw new Error('conversation requires two different profiles');
+  }
+  return crypto.createHash('sha256').update(pair.join(':')).digest('hex').slice(0, 32);
+}
+
+export function publicSocialProfile(profile) {
+  if (!profile) return null;
+  const safe = publicProfile(profile);
+  return {
+    id: safe.id,
+    handle: safe.handle,
+    display_name: safe.display_name,
+    avatar_id: safe.avatar_id,
+    mmr: Number(safe.stats?.mmr || PROFILE_MMR.initial)
+  };
+}
+
 export function normalizeAvatarId(value) {
   const avatarId = String(value || 'sigil-01');
   if (!PROFILE_AVATARS.includes(avatarId)) throw new Error('invalid avatar');
