@@ -256,6 +256,12 @@
           <span id="to-name" class="route-place to">...</span>
         </div>
         <div id="route-meta" class="route-meta"></div>
+        <div id="commander-row" style="display:none;margin-bottom:10px">
+          <label>
+            <span class="muted">Командир этой группы</span>
+            <select id="commander" style="width:100%;margin-top:4px"></select>
+          </label>
+        </div>
         <div class="troop-controls">
           <label>
             <span class="muted">3. Сколько воинов отправить</span>
@@ -746,6 +752,59 @@ function renderEconomy() {
       : 'Построить крепость · 3 золота';
 }
 
+function availableCommandersAtOrigin() {
+  if (!origin || !house) return [];
+  const armies = snapshot?.game?.state?.armies || {};
+  const characters = snapshot?.game?.state?.characters || {};
+
+  return Object.values(armies)
+    .filter(army =>
+      army.house === house &&
+      army.territory === origin &&
+      !army.moving_order_id
+    )
+    .map(army => characters[army.commander_id])
+    .filter(character =>
+      character &&
+      character.mode === 'ARMY' &&
+      character.status === 'ACTIVE' &&
+      character.alive
+    );
+}
+
+function renderCommanderChoice() {
+  const row = $('commander-row');
+  const select = $('commander');
+  const commanders = availableCommandersAtOrigin();
+
+  if (!commanders.length) {
+    row.style.display = 'none';
+    select.innerHTML = '';
+    return;
+  }
+
+  const previous = select.value;
+  select.innerHTML = '<option value="">Без командира</option>';
+
+  for (const character of commanders) {
+    const option = document.createElement('option');
+    option.value = character.id;
+    option.textContent =
+      character.name +
+      ' · Атака ' + Number(character.stats?.attack || 0) +
+      ' · Защита ' + Number(character.stats?.defense || 0);
+    select.appendChild(option);
+  }
+
+  if (previous && commanders.some(item => item.id === previous)) {
+    select.value = previous;
+  } else if (commanders.length === 1) {
+    select.value = commanders[0].id;
+  }
+
+  row.style.display = 'block';
+}
+
 function renderSelection() {
   const card = $('route-card');
 
@@ -753,6 +812,7 @@ function renderSelection() {
     origin = null;
     target = null;
     card.classList.remove('show');
+    $('commander-row').style.display = 'none';
     $('selection').textContent = 'Наблюдение за партией без управления Домом.';
     $('guide-title').textContent = 'РЕЖИМ НАБЛЮДАТЕЛЯ';
     $('guide-sub').textContent = 'Карта обновляется автоматически. Ты не можешь отдавать приказы или менять состояние партии.';
@@ -760,6 +820,7 @@ function renderSelection() {
   }
 
   if (!origin) {
+    $('commander-row').style.display = 'none';
     $('selection').textContent = '1. Выбери свою территорию с воинами.';
     $('guide-title').textContent = '1. Выбери, ОТКУДА идти';
     $('guide-sub').textContent = 'Голубой пунктирной обводкой отмечены твои территории с воинами.';
@@ -769,6 +830,7 @@ function renderSelection() {
 
   const o = territoryById(origin);
   const own = warriorsAt(origin, house);
+  renderCommanderChoice();
   $('selection').textContent = `ОТКУДА: ${o.name}. Доступно ${own} воинов.`;
 
   if (!target) {
@@ -843,10 +905,14 @@ async function sendOrder() {
   }
 
   const action = choices[0];
+  const commanderId = $('commander').value || null;
   await api('/api/orders', {
     method: 'POST',
     headers: {'content-type':'application/json'},
-    body: JSON.stringify(action)
+    body: JSON.stringify({
+      ...action,
+      commander_id: commanderId
+    })
   });
 
   origin = null;
