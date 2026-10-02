@@ -1,4 +1,5 @@
-export function createInitialState(map, constants) {
+import { createInitialCharacterLayer, validateCharacterLayer } from './characters.mjs';
+export function createInitialState(map, constants, characterCatalog = null) {
   const houses = {};
   const territories = {};
 
@@ -30,7 +31,7 @@ export function createInitialState(map, constants) {
     territories[capital].warriors[house] = constants.start_warriors;
   }
 
-  return {
+  const state = {
     version: constants.version,
     round: 1,
     cycle: 1,
@@ -42,6 +43,15 @@ export function createInitialState(map, constants) {
     passage_rights: [],
     journal: []
   };
+
+  if (characterCatalog) {
+    Object.assign(
+      state,
+      createInitialCharacterLayer(characterCatalog, map, constants)
+    );
+  }
+
+  return state;
 }
 
 export function warriorsAt(state, territoryId, house) {
@@ -104,5 +114,6 @@ export function validateState(state, map, constants) {
 
   if (state.round < 1 || state.round > constants.rounds) errors.push(`invalid round ${state.round}`);
   if (state.cycle < 1 || state.cycle > constants.actions_per_round) errors.push(`invalid action cycle ${state.cycle}`);
+  errors.push(...validateCharacterLayer(state, map, constants));
   return errors;
 }
