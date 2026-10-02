@@ -374,6 +374,7 @@ export class FirestoreGameStore {
     for (const doc of outgoingSnap.docs) profileIds.add(doc.data()?.to_profile_id || doc.id);
     for (const doc of conversationsSnap.docs) profileIds.add(doc.data()?.other_profile_id);
     for (const doc of invitesSnap.docs) profileIds.add(doc.data()?.from_profile_id);
+    for (const doc of blockedSnap.docs) profileIds.add(doc.id);
 
     const profileMap = new Map();
     await Promise.all(
@@ -440,13 +441,18 @@ export class FirestoreGameStore {
       });
     }
 
+    const blocked = blockedSnap.docs.map(doc => ({
+      ...(profileMap.get(doc.id) || { id: doc.id }),
+      blocked_at: doc.data()?.blocked_at || null
+    }));
+
     return {
       friends,
       incoming_requests: incoming,
       outgoing_requests: outgoing,
       conversations,
       game_invites: invites,
-      blocked_count: blockedSnap.size,
+      blocked,
       unread_messages: conversations.reduce((sum, item) => sum + item.unread_count, 0)
     };
   }
