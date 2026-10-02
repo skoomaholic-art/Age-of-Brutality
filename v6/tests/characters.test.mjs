@@ -9,6 +9,7 @@ import {
   CHARACTER_MODE,
   CHARACTER_STATUS,
   assignCharacterToArmy,
+  characterArmyAssignmentEligibility,
   charactersForHouse,
   commanderStats,
   markCommanderFatePending,
@@ -293,4 +294,43 @@ test('saved or weakened commander with destroyed army waits for a location rule'
     CHARACTER_STATUS.FATE_LOCATION_PENDING
   );
   assert.equal(next.characters['RUL-ВАР'].army_id,null);
+});
+
+
+test('assignment eligibility explains lost-capital exile state', () => {
+  const state = createInitialState(map, constants, catalog);
+  state.territories.W08.owner = 'Варкайр';
+  state.territories.W08.warriors = {};
+
+  const eligibility = characterArmyAssignmentEligibility(
+    state,
+    map,
+    constants,
+    {
+      house:'Сайрвен',
+      characterId:'RUL-САЙ'
+    }
+  );
+
+  assert.equal(eligibility.allowed, false);
+  assert.equal(eligibility.code, 'CAPITAL_NOT_CONTROLLED');
+  assert.match(eligibility.reason, /Элсайр/);
+});
+
+test('assignment eligibility becomes available after capital and army are restored', () => {
+  const state = createInitialState(map, constants, catalog);
+
+  const eligibility = characterArmyAssignmentEligibility(
+    state,
+    map,
+    constants,
+    {
+      house:'Сайрвен',
+      characterId:'RUL-САЙ'
+    }
+  );
+
+  assert.equal(eligibility.allowed, true);
+  assert.equal(eligibility.capital, 'W08');
+  assert.equal(eligibility.warriors, 4);
 });
