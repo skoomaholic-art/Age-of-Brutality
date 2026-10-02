@@ -19,6 +19,7 @@ import { FirestoreGameStore } from './firestore-store.mjs';
 import { createOnlineGame } from './store.mjs';
 import {
   ONLINE_TIMING,
+  enumerateOnlineMarches,
   listQueueableMarches,
   processDueOrders
 } from './orders.mjs';
@@ -1231,7 +1232,7 @@ async function handleGameApi(req, res, url, ctx, subpath) {
     const byHouse = await serial(ctx, async () => {
       await tickUnlocked(ctx);
       return Object.fromEntries(
-        constants.houses.map(house => [house, enumerateMarches(ctx.game.state, map, constants, house)])
+        constants.houses.map(house => [house, enumerateOnlineMarches(ctx.game.state, map, constants, house)])
       );
     });
     return json(res, 200, byHouse);
