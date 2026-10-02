@@ -10,10 +10,11 @@ export function createOnlineGame(map, constants, {
   nowMs = Date.now(),
   accessMode = ACCESS_MODE.ADMIN_SANDBOX,
   inviteCode = null,
-  lifecycleOptions = {}
+  lifecycleOptions = {},
+  characterCatalog = null
 } = {}) {
   const now = new Date(nowMs).toISOString();
-  const state = createInitialState(map, constants);
+  const state = createInitialState(map, constants, characterCatalog);
   const sessionId = `S${nowMs}`;
   state.journal.push({ kind: 'SESSION_START', session_id: sessionId, at: now });
 
