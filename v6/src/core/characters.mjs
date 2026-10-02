@@ -194,6 +194,49 @@ export function commanderStats(character) {
   };
 }
 
+export function characterArmyAssignmentTargets(
+  state,
+  map,
+  house
+) {
+  const targets=[];
+
+  for (const [id,territory] of Object.entries(state.territories || {})) {
+    const warriors=Number(territory.warriors?.[house] || 0);
+    if (territory.owner !== house || warriors < 1) continue;
+    if (commandersAt(state,house,id).length) continue;
+
+    const meta=map.territories?.find(item=>item.id===id);
+    targets.push({
+      id,
+      kind:'TERRITORY',
+      name:meta?.name || id,
+      warriors
+    });
+  }
+
+  for (const [id,node] of Object.entries(state.sea_nodes || {})) {
+    const warriors=Number(node.warriors?.[house] || 0);
+    if (node.owner !== house || warriors < 1) continue;
+    if (commandersAt(state,house,id).length) continue;
+
+    targets.push({
+      id,
+      kind:'SEA_WAYPOINT',
+      name:'Морская точка',
+      warriors
+    });
+  }
+
+  const capital=map.capitals?.[house] || null;
+  return targets.sort((a,b) => {
+    if (a.id===capital && b.id!==capital) return -1;
+    if (b.id===capital && a.id!==capital) return 1;
+    return String(a.name).localeCompare(String(b.name),'ru') ||
+      String(a.id).localeCompare(String(b.id));
+  });
+}
+
 export function characterArmyAssignmentEligibility(
   state,
   map,
@@ -202,52 +245,22 @@ export function characterArmyAssignmentEligibility(
 ) {
   const character = state.characters?.[characterId];
   if (!character || character.house !== house) {
-    return { allowed:false, code:'WRONG_HOUSE', reason:'Персонаж не принадлежит этому Дому.' };
+    return { allowed:false, code:'WRONG_HOUSE', reason:'Персонаж не принадлежит этому Дому.', targets:[] };
   }
   if (!character.alive) {
-    return { allowed:false, code:'DEAD', reason:'Мёртвый персонаж не может командовать армией.' };
+    return { allowed:false, code:'DEAD', reason:'Мёртвый персонаж не может командовать армией.', targets:[] };
   }
   if (character.age !== 'ADULT') {
-    return { allowed:false, code:'NOT_ADULT', reason:'Назначить командиром можно только взрослого персонажа.' };
+    return { allowed:false, code:'NOT_ADULT', reason:'Назначить командиром можно только взрослого персонажа.', targets:[] };
   }
   if (character.health !== CHARACTER_HEALTH.HEALTHY) {
-    return { allowed:false, code:'WEAKENED', reason:'Ослабленного персонажа нельзя назначить командиром.' };
+    return { allowed:false, code:'WEAKENED', reason:'Ослабленного персонажа нельзя назначить командиром.', targets:[] };
   }
   if (character.status !== CHARACTER_STATUS.ACTIVE) {
-    return { allowed:false, code:'UNAVAILABLE', reason:'Персонаж сейчас недоступен для назначения.' };
+    return { allowed:false, code:'UNAVAILABLE', reason:'Персонаж сейчас недоступен для назначения.', targets:[] };
   }
   if (character.mode !== CHARACTER_MODE.COURT) {
-    return { allowed:false, code:'NOT_AT_COURT', reason:'Персонаж должен находиться при Дворе.' };
-  }
-
-  const capital = map.capitals[house];
-  const territory = state.territories?.[capital];
-  const capitalName =
-    map.territories?.find(item => item.id === capital)?.name || capital;
-  const warriors = Number(territory?.warriors?.[house] || 0);
-
-  if (territory?.owner !== house) {
-    return {
-      allowed:false,
-      code:'CAPITAL_NOT_CONTROLLED',
-      reason:`Нельзя назначить в армию: столица ${capitalName} не контролируется Домом.`,
-      capital,
-      capital_name:capitalName,
-      capital_owner:territory?.owner || null,
-      warriors
-    };
-  }
-
-  if (warriors < 1) {
-    return {
-      allowed:false,
-      code:'NO_ARMY_IN_CAPITAL',
-      reason:`Нельзя назначить в армию: в столице ${capitalName} нет воинов Дома.`,
-      capital,
-      capital_name:capitalName,
-      capital_owner:territory?.owner || null,
-      warriors
-    };
+    return { allowed:false, code:'NOT_AT_COURT', reason:'Персонаж должен находиться при Дворе.', targets:[] };
   }
 
   const activeArmyCharacters = charactersForHouse(state, house)
@@ -255,25 +268,23 @@ export function characterArmyAssignmentEligibility(
       item.mode === CHARACTER_MODE.ARMY &&
       item.status === CHARACTER_STATUS.ACTIVE
     );
+
   if (activeArmyCharacters.length >= 2) {
     return {
       allowed:false,
       code:'HOUSE_ARMY_CHARACTER_LIMIT',
       reason:'У Дома уже два персонажа одновременно находятся в АРМИИ.',
-      capital,
-      capital_name:capitalName,
-      warriors
+      targets:[]
     };
   }
 
-  if (commandersAt(state, house, capital).length > 0) {
+  const targets=characterArmyAssignmentTargets(state,map,house);
+  if (!targets.length) {
     return {
       allowed:false,
-      code:'CAPITAL_ARMY_ALREADY_COMMANDED',
-      reason:`Армия в столице ${capitalName} уже имеет командира.`,
-      capital,
-      capital_name:capitalName,
-      warriors
+      code:'NO_AVAILABLE_ARMY',
+      reason:'Нет свободной армии Дома, к которой можно назначить командира.',
+      targets:[]
     };
   }
 
@@ -281,15 +292,14 @@ export function characterArmyAssignmentEligibility(
     allowed:true,
     code:'OK',
     reason:null,
-    capital,
-    capital_name:capitalName,
-    warriors
+    targets
   };
 }
 
 export function assignCharacterToArmy(state, map, constants, {
   house,
-  characterId
+  characterId,
+  position = null
 }) {
   const next = structuredClone(state);
   const character = next.characters?.[characterId];
@@ -301,27 +311,37 @@ export function assignCharacterToArmy(state, map, constants, {
   );
   if (!eligibility.allowed) throw new Error(eligibility.reason);
 
-  const capital = eligibility.capital;
+  const target = eligibility.targets.find(item => item.id === position) ||
+    (eligibility.targets.length === 1 ? eligibility.targets[0] : null);
+
+  if (!target) {
+    throw new Error('Выберите армию Дома, к которой назначить персонажа.');
+  }
+
   const id = armyId(characterId);
   next.armies[id] = {
     id,
     house,
     commander_id: characterId,
-    territory: capital,
+    territory: target.id,
     moving_order_id: null,
     from: null,
     to: null
   };
   character.mode = CHARACTER_MODE.ARMY;
   character.army_id = id;
-  character.location = { kind: 'TERRITORY', territory: capital };
+  character.location = target.kind === 'SEA_WAYPOINT'
+    ? { kind:'SEA_WAYPOINT', waypoint:target.id }
+    : { kind:'TERRITORY', territory:target.id };
 
   next.journal.push({
     kind: 'CHARACTER_ASSIGNED_ARMY',
     house,
     character_id: characterId,
     character_name: character.name,
-    territory: capital
+    territory: target.kind === 'TERRITORY' ? target.id : null,
+    sea_waypoint: target.kind === 'SEA_WAYPOINT' ? target.id : null,
+    position: target.id
   });
   return next;
 }
