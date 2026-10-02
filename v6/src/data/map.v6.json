@@ -16,6 +16,17 @@
           "S03-A (Короны A): W05/W12/W19 replaced by W18/W14/W07",
           "Existing S03-A links to S03-B, S01-B and S04-B retained"
         ]
+      },
+      {
+        "date": "2026-10-02",
+        "source": "Explicit project-owner correction and Supremacy-style sea-route redesign",
+        "changes": [
+          "S01-A (Вейр A): W05/W12 replaced by W07/W14 (Нордмар/Келвар)",
+          "West coast sea access normalized to W07/W14/W18 with 2-3-2 island degree pattern",
+          "East coast remains mirrored through E05/E12/E19",
+          "Added deterministic sea_waypoints and sea_lane_edges for branched route rendering",
+          "A/B halves of every central island remain connected only by land_edges"
+        ]
       }
     ]
   },
@@ -23,7 +34,9 @@
     "territories": 52,
     "land_edges": 96,
     "sea_edges": 20,
-    "ports": 18
+    "ports": 16,
+    "sea_waypoints": 10,
+    "sea_lane_edges": 32
   },
   "territories": [
     {
@@ -1207,14 +1220,6 @@
   ],
   "sea_edges": [
     [
-      "W05",
-      "S01-A"
-    ],
-    [
-      "W12",
-      "S01-A"
-    ],
-    [
       "E05",
       "S02-B"
     ],
@@ -1285,12 +1290,17 @@
     [
       "W07",
       "S03-A"
+    ],
+    [
+      "W07",
+      "S01-A"
+    ],
+    [
+      "W14",
+      "S01-A"
     ]
   ],
   "ports": [
-    "W05",
-    "S01-A",
-    "W12",
     "E05",
     "S02-B",
     "S03-B",
@@ -1305,7 +1315,8 @@
     "W18",
     "S04-A",
     "W14",
-    "W07"
+    "W07",
+    "S01-A"
   ],
   "capitals": {
     "Варкайр": "W01",
@@ -1364,5 +1375,177 @@
     "visual_proximity_creates_no_edge": true,
     "sea_requires_port_endpoints": true,
     "island_pair_edge_is_land": true
-  }
+  },
+  "sea_waypoints": {
+    "M-WN": {
+      "x": 317,
+      "y": 218
+    },
+    "M-WS": {
+      "x": 300,
+      "y": 369
+    },
+    "M-EN": {
+      "x": 522,
+      "y": 220
+    },
+    "M-ES": {
+      "x": 520,
+      "y": 385
+    },
+    "M-CN": {
+      "x": 420,
+      "y": 190
+    },
+    "M-CNW": {
+      "x": 399,
+      "y": 217
+    },
+    "M-CNE": {
+      "x": 441,
+      "y": 217
+    },
+    "M-CS": {
+      "x": 420,
+      "y": 375
+    },
+    "M-CSW": {
+      "x": 399,
+      "y": 349
+    },
+    "M-CSE": {
+      "x": 441,
+      "y": 349
+    }
+  },
+  "sea_lane_edges": [
+    [
+      "W07",
+      "M-WN"
+    ],
+    [
+      "W14",
+      "M-WN"
+    ],
+    [
+      "M-WN",
+      "S01-A"
+    ],
+    [
+      "M-WN",
+      "S03-A"
+    ],
+    [
+      "W14",
+      "M-WS"
+    ],
+    [
+      "W18",
+      "M-WS"
+    ],
+    [
+      "M-WS",
+      "S03-A"
+    ],
+    [
+      "M-WS",
+      "S04-A"
+    ],
+    [
+      "E05",
+      "M-EN"
+    ],
+    [
+      "E12",
+      "M-EN"
+    ],
+    [
+      "M-EN",
+      "S02-B"
+    ],
+    [
+      "M-EN",
+      "S03-B"
+    ],
+    [
+      "E12",
+      "M-ES"
+    ],
+    [
+      "E19",
+      "M-ES"
+    ],
+    [
+      "M-ES",
+      "S03-B"
+    ],
+    [
+      "M-ES",
+      "S05-B"
+    ],
+    [
+      "S01-B",
+      "M-CN"
+    ],
+    [
+      "S02-A",
+      "M-CN"
+    ],
+    [
+      "S01-B",
+      "M-CNW"
+    ],
+    [
+      "M-CNW",
+      "S03-A"
+    ],
+    [
+      "M-CNW",
+      "M-CN"
+    ],
+    [
+      "S02-A",
+      "M-CNE"
+    ],
+    [
+      "M-CNE",
+      "S03-B"
+    ],
+    [
+      "M-CNE",
+      "M-CN"
+    ],
+    [
+      "S04-B",
+      "M-CS"
+    ],
+    [
+      "S05-A",
+      "M-CS"
+    ],
+    [
+      "S03-A",
+      "M-CSW"
+    ],
+    [
+      "M-CSW",
+      "S04-B"
+    ],
+    [
+      "M-CSW",
+      "M-CS"
+    ],
+    [
+      "S03-B",
+      "M-CSE"
+    ],
+    [
+      "M-CSE",
+      "S05-A"
+    ],
+    [
+      "M-CSE",
+      "M-CS"
+    ]
+  ]
 }
