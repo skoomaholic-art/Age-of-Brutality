@@ -67,11 +67,13 @@ export class FirestoreGameStore {
   constructor({
     projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT,
     databaseId = process.env.AOB_FIRESTORE_DATABASE || '(default)',
-    gameId = 'prototype-1'
+    gameId = 'prototype-1',
+    characterCatalog = null
   } = {}) {
     this.projectId = projectId;
     this.databaseId = databaseId;
     this.gameId = gameId;
+    this.characterCatalog = characterCatalog;
 
     const options = projectId ? { projectId } : {};
     if (databaseId && databaseId !== '(default)') options.databaseId = databaseId;
@@ -1438,7 +1440,10 @@ export class FirestoreGameStore {
       this.loadedExistingAtStartup = true;
       return existing;
     }
-    const created = createOnlineGame(map, constants, { id: this.gameId });
+    const created = createOnlineGame(map, constants, {
+      id: this.gameId,
+      characterCatalog: this.characterCatalog
+    });
     await this.save(created);
     this.loadedExistingAtStartup = false;
     return created;
@@ -1450,7 +1455,10 @@ export class FirestoreGameStore {
       ? Number(currentDoc.data()?.state_revision || 0)
       : 0;
 
-    const created = createOnlineGame(map, constants, { id: this.gameId });
+    const created = createOnlineGame(map, constants, {
+      id: this.gameId,
+      characterCatalog: this.characterCatalog
+    });
     created.state_revision = currentRevision;
 
     this.orderCache = new Map();
