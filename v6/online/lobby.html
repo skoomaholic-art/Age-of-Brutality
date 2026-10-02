@@ -81,6 +81,21 @@ button.loading { opacity:.65; cursor:wait; }
 }
 .social-name { font-weight:800; }
 .social-meta { margin-top:3px; color:#89969d; font-size:11px; }
+.presence { display:inline-flex; align-items:center; gap:5px; margin-left:6px; }
+.presence::before { content:''; width:7px; height:7px; border-radius:999px; background:#66737b; }
+.presence.online::before { background:#69d28f; }
+.presence.in-game::before { background:#e7bf5c; box-shadow:0 0 0 3px rgba(231,191,92,.12); }
+.profile-view-head { display:flex; gap:14px; align-items:center; margin-top:10px; }
+.profile-view-avatar {
+  width:82px; height:82px; flex:0 0 82px; border-radius:22px; display:grid; place-items:center;
+  border:1px solid #53616a; background:#10161a; font-size:38px; font-weight:900;
+}
+.profile-view-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; }
+.profile-view-actions button { width:auto; min-width:120px; }
+.social-name-button {
+  padding:0; border:0; background:transparent; width:auto; text-align:left; border-radius:0;
+  color:#f4eee2; font-weight:800;
+}
 .social-actions { display:flex; flex-wrap:wrap; gap:6px; justify-content:flex-end; }
 .social-actions button { width:auto; min-width:0; padding:8px 10px; font-size:12px; }
 .social-search { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; }
@@ -362,6 +377,44 @@ button.loading { opacity:.65; cursor:wait; }
   </div>
 </div>
 
+<div id="player-profile-modal" class="social-modal" role="dialog" aria-modal="true" aria-labelledby="player-profile-name">
+  <div class="social-dialog">
+    <div class="social-dialog-head">
+      <div>
+        <h2 id="player-profile-name" style="margin:0">Профиль игрока</h2>
+        <div id="player-profile-handle" class="muted" style="margin-top:4px"></div>
+      </div>
+      <button id="player-profile-close" type="button">✕</button>
+    </div>
+
+    <div class="profile-view-head">
+      <div id="player-profile-avatar" class="profile-view-avatar">✦</div>
+      <div>
+        <div id="player-profile-presence"></div>
+        <div id="player-profile-game" class="muted" style="margin-top:6px"></div>
+      </div>
+    </div>
+
+    <div class="profile-stats">
+      <div class="profile-stat"><span>MMR</span><b id="view-stat-mmr">1000</b></div>
+      <div class="profile-stat"><span>Сыграно</span><b id="view-stat-games">0</b></div>
+      <div class="profile-stat"><span>Победы</span><b id="view-stat-wins">0</b></div>
+      <div class="profile-stat"><span>Поражения</span><b id="view-stat-losses">0</b></div>
+      <div class="profile-stat"><span>В игре</span><b id="view-stat-time">0 мин</b></div>
+    </div>
+
+    <div class="achievement-box">
+      <h3>Достижения</h3>
+      <div id="player-profile-achievements" class="achievement-list">
+        <span class="muted">Пока достижений нет.</span>
+      </div>
+    </div>
+
+    <div id="player-profile-actions" class="profile-view-actions"></div>
+    <div id="player-profile-error" class="error"></div>
+  </div>
+</div>
+
 <div id="chat-modal" class="social-modal" role="dialog" aria-modal="true" aria-labelledby="chat-title">
   <div class="social-dialog">
     <div class="social-dialog-head">
@@ -416,6 +469,7 @@ let currentSocial = null;
 let socialLoadInFlight = false;
 let activeChatProfile = null;
 let inviteTargetProfile = null;
+let viewedPlayerProfile = null;
 let pendingAvatarId = null;
 const $ = id => document.getElementById(id);
 
@@ -786,12 +840,28 @@ async function loadMyGames() {
   return games;
 }
 
+function presenceLabel(presence) {
+  if (presence?.status === 'IN_GAME') {
+    return '<span class="presence in-game">В игре</span>';
+  }
+  if (presence?.status === 'ONLINE') {
+    return '<span class="presence online">В сети</span>';
+  }
+  return '<span class="presence">Offline</span>';
+}
+
 function socialUserCard(player, actionsHtml = '', extra = '') {
+  const profileButton =
+    '<button class="social-name-button" data-view-profile="' + escapeHtml(player.id || '') + '">' +
+    escapeHtml(player.display_name || player.handle || 'Игрок') + '</button>';
+
   return '<div class="social-user">' +
-    '<div class="social-avatar">' + escapeHtml(avatarSymbol(player.avatar_id)) + '</div>' +
-    '<div><div class="social-name">' + escapeHtml(player.display_name || player.handle || 'Игрок') + '</div>' +
+    '<button class="social-avatar" data-view-profile="' + escapeHtml(player.id || '') + '">' +
+      escapeHtml(avatarSymbol(player.avatar_id)) + '</button>' +
+    '<div><div class="social-name">' + profileButton + '</div>' +
     '<div class="social-meta">@' + escapeHtml(player.handle || '') +
-    (player.mmr != null ? ' · MMR ' + Number(player.mmr) : '') + extra + '</div></div>' +
+    (player.mmr != null ? ' · MMR ' + Number(player.mmr) : '') +
+    presenceLabel(player.presence) + extra + '</div></div>' +
     '<div class="social-actions">' + actionsHtml + '</div></div>';
 }
 
@@ -880,7 +950,15 @@ async function socialPost(url, body) {
   }, profileToken);
 }
 
+function bindProfileViewActions() {
+  document.querySelectorAll('[data-view-profile]').forEach(button => {
+    button.onclick = () => openPlayerProfile(button.dataset.viewProfile);
+  });
+}
+
 function bindSocialActions() {
+  bindProfileViewActions();
+
   document.querySelectorAll('[data-accept-friend]').forEach(button => {
     button.onclick = async () => {
       await socialPost('/api/social/friends/respond', {
@@ -989,6 +1067,128 @@ async function findFriend() {
     }
   } catch (error) {
     $('friend-search-result').innerHTML = '<div class="empty">' + escapeHtml(friendlyError(error)) + '</div>';
+  }
+}
+
+async function openPlayerProfile(profileId) {
+  if (!profileId || !profileToken) return;
+  $('player-profile-error').textContent = '';
+
+  try {
+    const data = await request(
+      '/api/social/profile?profile_id=' + encodeURIComponent(profileId),
+      {},
+      profileToken
+    );
+
+    viewedPlayerProfile = data;
+    const profile = data.profile;
+    const stats = profile.stats || {};
+    const presence = data.presence || {};
+
+    $('player-profile-name').textContent = profile.display_name || profile.handle || 'Игрок';
+    $('player-profile-handle').textContent = '@' + (profile.handle || '');
+    $('player-profile-avatar').textContent = avatarSymbol(profile.avatar_id);
+    $('player-profile-presence').innerHTML = presenceLabel(presence);
+    $('player-profile-game').textContent = presence.in_game && presence.game
+      ? 'Сейчас играет: ' + (presence.game.room_name || 'Игра')
+      : '';
+
+    $('view-stat-mmr').textContent = Number(stats.mmr || 1000);
+    $('view-stat-games').textContent = Number(stats.games_played || 0);
+    $('view-stat-wins').textContent = Number(stats.wins || 0);
+    $('view-stat-losses').textContent = Number(stats.losses || 0);
+    $('view-stat-time').textContent = formatPlayTime(stats.play_seconds || 0);
+
+    const achievements = Array.isArray(stats.achievements) ? stats.achievements : [];
+    $('player-profile-achievements').innerHTML = achievements.length
+      ? achievements.map(item =>
+          '<span class="achievement-pill">' + escapeHtml(item) + '</span>'
+        ).join('')
+      : '<span class="muted">Пока достижений нет.</span>';
+
+    const actions = [];
+    if (data.are_friends) {
+      actions.push('<button data-profile-message="' + profile.id + '">Сообщение</button>');
+      actions.push('<button data-profile-invite="' + profile.id + '">Пригласить в игру</button>');
+    } else if (profile.id !== activeProfile?.id) {
+      actions.push('<button class="primary" data-profile-add="' + profile.id + '">Добавить в друзья</button>');
+    }
+
+    if (
+      presence.in_game &&
+      presence.game?.game_mode === 'MULTIPLAYER'
+    ) {
+      actions.push('<button class="primary" data-profile-watch="' + profile.id + '">Наблюдать</button>');
+    }
+
+    $('player-profile-actions').innerHTML = actions.join('');
+    bindViewedProfileActions();
+    $('player-profile-modal').classList.add('open');
+  } catch (error) {
+    $('player-profile-error').textContent = friendlyError(error);
+    $('player-profile-modal').classList.add('open');
+  }
+}
+
+function bindViewedProfileActions() {
+  const messageButton = document.querySelector('[data-profile-message]');
+  if (messageButton) {
+    messageButton.onclick = () => {
+      closePlayerProfile();
+      openChat(messageButton.dataset.profileMessage);
+    };
+  }
+
+  const inviteButton = document.querySelector('[data-profile-invite]');
+  if (inviteButton) {
+    inviteButton.onclick = () => {
+      closePlayerProfile();
+      openGameInviteModal(inviteButton.dataset.profileInvite);
+    };
+  }
+
+  const addButton = document.querySelector('[data-profile-add]');
+  if (addButton) {
+    addButton.onclick = async () => {
+      await socialPost('/api/social/friends/request', {
+        profile_id:addButton.dataset.profileAdd
+      });
+      addButton.disabled = true;
+      addButton.textContent = 'Заявка отправлена';
+      await loadSocial();
+    };
+  }
+
+  const watchButton = document.querySelector('[data-profile-watch]');
+  if (watchButton) {
+    watchButton.onclick = async () => {
+      try {
+        const data = await socialPost('/api/social/watch', {
+          profile_id:watchButton.dataset.profileWatch
+        });
+        if (data.game_id) {
+          location.href = '/?game=' + encodeURIComponent(data.game_id);
+        }
+      } catch (error) {
+        $('player-profile-error').textContent = friendlyError(error);
+      }
+    };
+  }
+}
+
+function closePlayerProfile() {
+  $('player-profile-modal').classList.remove('open');
+  $('player-profile-error').textContent = '';
+  viewedPlayerProfile = null;
+}
+
+async function profilePresenceHeartbeat() {
+  if (!profileToken || !activeProfile || document.visibilityState !== 'visible') return;
+  try {
+    await request('/api/profile/presence', { method:'POST' }, profileToken);
+  } catch (error) {
+    console.warn('profile presence heartbeat failed', error);
   }
 }
 
@@ -1204,6 +1404,10 @@ $('friend-search-button').onclick = findFriend;
 $('friend-search').addEventListener('keydown', event => {
   if (event.key === 'Enter') findFriend();
 });
+$('player-profile-close').onclick = closePlayerProfile;
+$('player-profile-modal').onclick = event => {
+  if (event.target === $('player-profile-modal')) closePlayerProfile();
+};
 $('chat-close').onclick = closeChat;
 $('chat-send').onclick = sendChatMessage;
 $('chat-input').addEventListener('keydown', event => {
@@ -1227,6 +1431,9 @@ $('avatar-modal').onclick = event => {
 document.addEventListener('keydown', event => {
   if (event.key === 'Escape' && $('avatar-modal').classList.contains('open')) {
     closeAvatarModal();
+  }
+  if (event.key === 'Escape' && $('player-profile-modal').classList.contains('open')) {
+    closePlayerProfile();
   }
   if (event.key === 'Escape' && $('chat-modal').classList.contains('open')) {
     closeChat();
@@ -1498,6 +1705,7 @@ $('back-menu').onclick = () => { location.href = '/lobby'; };
 
 async function initialize() {
   await restoreProfileSession();
+  await profilePresenceHeartbeat();
   token = gameId
     ? (profileToken || localStorage.getItem('aob-token-' + gameId))
     : null;
@@ -1510,6 +1718,10 @@ async function initialize() {
     $('room').style.display = 'none';
     await loadHub();
     setInterval(loadHub,5000);
+    setInterval(profilePresenceHeartbeat,60000);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') profilePresenceHeartbeat();
+    });
     setInterval(() => {
       if (activeChatProfile) refreshChat();
     },3000);
