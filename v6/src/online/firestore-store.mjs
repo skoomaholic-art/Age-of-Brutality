@@ -1006,9 +1006,6 @@ export class FirestoreGameStore {
 
       const game = gameDoc.data();
       const lifecycle = structuredClone(game.lifecycle || {});
-      if (lifecycle.game_mode !== GAME_MODE.MULTIPLAYER) {
-        throw new Error('spectating solo games is disabled');
-      }
       if (![GAME_STATUS.LOBBY, GAME_STATUS.RUNNING].includes(lifecycle.status)) {
         throw new Error('game is not watchable');
       }
