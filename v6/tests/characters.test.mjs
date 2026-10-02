@@ -79,12 +79,20 @@ test('healthy adult court character can be assigned in capital and returned', ()
   assert.equal(returned.characters['RUL-САЙ'].army_id, null);
 });
 
-test('one capital stack cannot silently receive two commanders', () => {
+test('a troop stack that already has a commander is not offered again', () => {
   const state = createInitialState(map, constants, catalog);
-  assert.throws(() => assignCharacterToArmy(state, map, constants, {
-    house: 'Варкайр',
-    characterId: 'CH-ВАР-1'
-  }), /уже имеет командира/i);
+  const eligibility = characterArmyAssignmentEligibility(
+    state,
+    map,
+    constants,
+    {
+      house:'Варкайр',
+      characterId:'CH-ВАР-1'
+    }
+  );
+
+  assert.equal(eligibility.allowed, false);
+  assert.equal(eligibility.code, 'NO_AVAILABLE_ARMY');
 });
 
 test('commander stats expose only the active army combat block', () => {
@@ -297,28 +305,12 @@ test('saved or weakened commander with destroyed army waits for a location rule'
 });
 
 
-test('assignment eligibility explains lost-capital exile state', () => {
+test('commander can be assigned to an existing army outside a lost capital', () => {
   const state = createInitialState(map, constants, catalog);
   state.territories.W08.owner = 'Варкайр';
   state.territories.W08.warriors = {};
-
-  const eligibility = characterArmyAssignmentEligibility(
-    state,
-    map,
-    constants,
-    {
-      house:'Сайрвен',
-      characterId:'RUL-САЙ'
-    }
-  );
-
-  assert.equal(eligibility.allowed, false);
-  assert.equal(eligibility.code, 'CAPITAL_NOT_CONTROLLED');
-  assert.match(eligibility.reason, /Элсайр/);
-});
-
-test('assignment eligibility becomes available after capital and army are restored', () => {
-  const state = createInitialState(map, constants, catalog);
+  state.territories.W09.owner = 'Сайрвен';
+  state.territories.W09.warriors = {'Сайрвен':2};
 
   const eligibility = characterArmyAssignmentEligibility(
     state,
@@ -331,6 +323,46 @@ test('assignment eligibility becomes available after capital and army are restor
   );
 
   assert.equal(eligibility.allowed, true);
-  assert.equal(eligibility.capital, 'W08');
-  assert.equal(eligibility.warriors, 4);
+  assert.equal(
+    eligibility.targets.some(target => target.id === 'W09'),
+    true
+  );
+
+  const assigned = assignCharacterToArmy(
+    state,
+    map,
+    constants,
+    {
+      house:'Сайрвен',
+      characterId:'RUL-САЙ',
+      position:'W09'
+    }
+  );
+
+  assert.equal(
+    assigned.armies[assigned.characters['RUL-САЙ'].army_id].territory,
+    'W09'
+  );
+});
+
+test('assignment eligibility returns selectable army targets', () => {
+  const state = createInitialState(map, constants, catalog);
+  state.territories.W09.owner = 'Сайрвен';
+  state.territories.W09.warriors = {'Сайрвен':2};
+
+  const eligibility = characterArmyAssignmentEligibility(
+    state,
+    map,
+    constants,
+    {
+      house:'Сайрвен',
+      characterId:'RUL-САЙ'
+    }
+  );
+
+  assert.equal(eligibility.allowed, true);
+  assert.deepEqual(
+    eligibility.targets.map(target => target.id),
+    ['W08','W09']
+  );
 });
