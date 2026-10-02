@@ -5,6 +5,8 @@ import { repairForeignWarriors } from '../core/state.mjs';
 import { calculateNextDueAt } from './scheduling.mjs';
 import {
   GAME_STATUS,
+  GAME_MODE,
+  GAME_VISIBILITY,
   PLAYER_ROLE,
   canAdminister,
   playerIdFromToken,
@@ -324,6 +326,32 @@ export class FirestoreGameStore {
 
       return lifecycle;
     });
+  }
+
+  async listOpenPublicGames(limit = 50) {
+    const snap = await this.db.collection('games')
+      .where('lifecycle.status', '==', GAME_STATUS.LOBBY)
+      .limit(Math.max(1, Math.min(100, Number(limit) || 50)))
+      .get();
+
+    return snap.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .filter(game =>
+        game.lifecycle?.game_mode === GAME_MODE.MULTIPLAYER &&
+        game.lifecycle?.visibility === GAME_VISIBILITY.PUBLIC &&
+        Number(game.lifecycle?.player_count || 0) < Number(game.lifecycle?.max_players || 6)
+      )
+      .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
+      .map(game => ({
+        game_id: game.id,
+        room_name: game.lifecycle?.room_name || 'Открытая комната',
+        player_count: Number(game.lifecycle?.player_count || 0),
+        max_players: Number(game.lifecycle?.max_players || 6),
+        spectator_count: Number(game.lifecycle?.spectator_count || 0),
+        claimed_houses: Object.keys(game.lifecycle?.house_claims || {}),
+        created_at: game.created_at || game.lifecycle?.created_at || null,
+        ruleset_version: game.lifecycle?.ruleset_version || game.ruleset_version || null
+      }));
   }
 
   async findGameIdByInviteCode(inviteCode) {
