@@ -1,11 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  PROFILE_AVATARS,
+  PROFILE_MMR,
+  applyRankedResult,
   createPasswordRecord,
   createProfileRecord,
   createProfileSessionCredentials,
   hashProfileToken,
+  normalizeAvatarId,
   normalizeProfileHandle,
+  normalizeProfileStats,
   parseProfileToken,
   publicProfile,
   safeHashEqual,
@@ -66,4 +71,42 @@ test('profile session token can be parsed and verified by hash', () => {
     safeHashEqual(session.token_hash, hashProfileToken('profile-1.session-1.wrong')),
     false
   );
+});
+
+
+test('new profile starts with avatar stats MMR and no achievements', () => {
+  const profile = createProfileRecord({
+    profileId: 'profile-stats',
+    handle: 'Player_1',
+    displayName: 'Player',
+    password: 'password123',
+    nowMs: 1000
+  });
+  assert.equal(profile.avatar_id, 'sigil-01');
+  assert.equal(profile.stats.games_played, 0);
+  assert.equal(profile.stats.wins, 0);
+  assert.equal(profile.stats.losses, 0);
+  assert.equal(profile.stats.mmr, PROFILE_MMR.initial);
+  assert.equal(profile.stats.play_seconds, 0);
+  assert.deepEqual(profile.stats.achievements, []);
+});
+
+test('avatar ids are restricted to the built-in set', () => {
+  assert.equal(normalizeAvatarId(PROFILE_AVATARS[3]), PROFILE_AVATARS[3]);
+  assert.throws(() => normalizeAvatarId('random-avatar'), /invalid avatar/);
+});
+
+test('ranked results update games wins losses and provisional MMR', () => {
+  let stats = normalizeProfileStats();
+  stats = applyRankedResult(stats, { won:true });
+  assert.equal(stats.games_played, 1);
+  assert.equal(stats.wins, 1);
+  assert.equal(stats.losses, 0);
+  assert.equal(stats.mmr, PROFILE_MMR.initial + PROFILE_MMR.winDelta);
+
+  stats = applyRankedResult(stats, { won:false });
+  assert.equal(stats.games_played, 2);
+  assert.equal(stats.wins, 1);
+  assert.equal(stats.losses, 1);
+  assert.equal(stats.mmr, PROFILE_MMR.initial);
 });
