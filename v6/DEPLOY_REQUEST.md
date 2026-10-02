@@ -31,3 +31,5 @@ Deploy trigger: social profiles, friends, messaging, presence, invites and spect
 Deploy trigger: corrected Tuman A and Korony A routes, victory status UI, standings and capital-hold VP.
 
 Deploy trigger: symmetric branched sea network, corrected Veir A coast links, sea waypoints, and character assignment UX.
+
+Deploy trigger: graph-based sea movement with stored waypoint routes, segment timing, route highlighting and no port skipping.
