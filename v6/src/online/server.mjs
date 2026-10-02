@@ -63,14 +63,28 @@ function createStore(gameId) {
   });
 }
 
-async function finalizeGame(ctx, next, nowMs = Date.now()) {
+async function finalizeGame(ctx, next, nowMs = Date.now(), saveOptions = {}) {
   const audited = syncAuditFromJournal(next, map, {
     nowMs,
     emit: emitCloudAudit
   });
-  await ctx.store.save(audited);
+
+  const persisted = await ctx.store.save(audited, saveOptions);
+  if (persisted?.duplicate) {
+    await refreshContext(ctx);
+    return {
+      game: ctx.game,
+      duplicate: true,
+      receipt: persisted.receipt
+    };
+  }
+
   ctx.game = audited;
-  return audited;
+  return {
+    game: audited,
+    duplicate: false,
+    state_revision: audited.state_revision
+  };
 }
 
 async function loadContext(gameId, {
@@ -176,6 +190,74 @@ function bearerToken(req) {
   return match ? match[1].trim() : null;
 }
 
+function commandKey(req, ctx, kind) {
+  let key = String(req.headers['idempotency-key'] || '').trim();
+
+  if (!key && ctx.game.lifecycle?.access_mode === ACCESS_MODE.PLAYER_BOUND) {
+    throw new Error('Idempotency-Key header required');
+  }
+
+  if (!key) key = `sandbox:${kind}:${crypto.randomUUID()}`;
+  if (key.length < 8 || key.length > 200) {
+    throw new Error('Idempotency-Key must be 8..200 characters');
+  }
+  return key;
+}
+
+async function priorCommandResponse(ctx, key) {
+  const receipt = await ctx.store.getCommandReceipt(key);
+  if (!receipt) return null;
+  return {
+    status: Number(receipt.status_code || 200),
+    response: receipt.response || {}
+  };
+}
+
+async function runGameCommand(ctx, req, {
+  kind,
+  status = 201,
+  mutate
+}) {
+  const key = commandKey(req, ctx, kind);
+
+  const prior = await priorCommandResponse(ctx, key);
+  if (prior) return prior;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      if (attempt > 0) await refreshContext(ctx);
+      await tickUnlocked(ctx);
+
+      const result = await mutate(ctx.game);
+      const response = result.response || {};
+      const persisted = await finalizeGame(
+        ctx,
+        result.game,
+        Date.now(),
+        {
+          commandId: key,
+          commandResponse: response,
+          commandStatus: status
+        }
+      );
+
+      if (persisted.duplicate) {
+        return {
+          status: Number(persisted.receipt?.status_code || status),
+          response: persisted.receipt?.response || response
+        };
+      }
+
+      return { status, response };
+    } catch (error) {
+      if (error?.code === 'STALE_GAME_STATE' && attempt < 2) continue;
+      throw error;
+    }
+  }
+
+  throw new Error('command could not be committed after retries');
+}
+
 async function requirePlayer(ctx, req) {
   if (ctx.game.lifecycle?.access_mode === ACCESS_MODE.ADMIN_SANDBOX) return null;
   const token = bearerToken(req);
@@ -276,7 +358,8 @@ function errorStatus(error) {
   if (/admin role required|cannot control|spectator|ownership mismatch/i.test(message)) return 403;
   if (/game not found|player not found|no snapshot found/i.test(message)) return 404;
   if (/already|claimed|full|closed|not joinable|not in lobby|require all six|missing:/i.test(message)) return 409;
-  if (/unknown|invalid|must be|request body|not running/i.test(message)) return 400;
+  if (/Idempotency-Key|unknown|invalid|must be|request body|not running/i.test(message)) return 400;
+  if (/stale game state|could not be committed/i.test(message)) return 409;
   return 500;
 }
 
@@ -504,53 +587,68 @@ async function handleGameApi(req, res, url, ctx, subpath) {
   if (req.method === 'POST' && subpath === '/recruit') {
     const body = await readBody(req);
     await requireHouse(ctx, req, body.house);
-    const payload = await serial(ctx, async () => {
-      await tickUnlocked(ctx);
-      const queued = queueRecruitJob(ctx.game, constants, {
-        house: body.house,
-        territory: body.territory,
-        warriors: Number(body.warriors)
-      });
-      await finalizeGame(ctx, queued.game);
-      return { job: queued.job, game: ctx.game };
-    });
-    return json(res, 201, payload);
+    const result = await serial(ctx, () => runGameCommand(ctx, req, {
+      kind: 'RECRUIT',
+      status: 201,
+      mutate: async game => {
+        const queued = queueRecruitJob(game, constants, {
+          house: body.house,
+          territory: body.territory,
+          warriors: Number(body.warriors)
+        });
+        return {
+          game: queued.game,
+          response: { job: queued.job }
+        };
+      }
+    }));
+    return json(res, result.status, result.response);
   }
 
   if (req.method === 'POST' && subpath === '/fort') {
     const body = await readBody(req);
     await requireHouse(ctx, req, body.house);
-    const payload = await serial(ctx, async () => {
-      await tickUnlocked(ctx);
-      const queued = queueFortJob(ctx.game, map, constants, {
-        house: body.house,
-        territory: body.territory
-      });
-      await finalizeGame(ctx, queued.game);
-      return { job: queued.job, game: ctx.game };
-    });
-    return json(res, 201, payload);
+    const result = await serial(ctx, () => runGameCommand(ctx, req, {
+      kind: 'FORT',
+      status: 201,
+      mutate: async game => {
+        const queued = queueFortJob(game, map, constants, {
+          house: body.house,
+          territory: body.territory
+        });
+        return {
+          game: queued.game,
+          response: { job: queued.job }
+        };
+      }
+    }));
+    return json(res, result.status, result.response);
   }
 
   if (req.method === 'POST' && subpath === '/orders') {
     const body = await readBody(req);
     await requireHouse(ctx, req, body.house);
-    const payload = await serial(ctx, async () => {
-      await tickUnlocked(ctx);
-      const action = {
-        type: 'MARCH',
-        mode: body.mode || 'LAND',
-        house: body.house,
-        from: body.from,
-        to: body.to,
-        warriors: Number(body.warriors)
-      };
+    const result = await serial(ctx, () => runGameCommand(ctx, req, {
+      kind: 'MARCH',
+      status: 201,
+      mutate: async game => {
+        const action = {
+          type: 'MARCH',
+          mode: body.mode || 'LAND',
+          house: body.house,
+          from: body.from,
+          to: body.to,
+          warriors: Number(body.warriors)
+        };
 
-      const queued = queueTimedOrder(ctx.game, map, constants, action);
-      await finalizeGame(ctx, queued.game);
-      return { order: queued.order, game: ctx.game };
-    });
-    return json(res, 201, payload);
+        const queued = queueTimedOrder(game, map, constants, action);
+        return {
+          game: queued.game,
+          response: { order: queued.order }
+        };
+      }
+    }));
+    return json(res, result.status, result.response);
   }
 
   if (req.method === 'POST' && subpath === '/reset') {
