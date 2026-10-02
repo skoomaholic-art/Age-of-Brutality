@@ -180,6 +180,7 @@ async function request(url, options = {}, authToken = null) {
 
 async function withBusy(button, busyText, fn) {
   const original = button.textContent;
+  const wasDisabled = button.disabled;
   button.disabled = true;
   button.classList.add('loading');
   button.textContent = busyText;
@@ -188,6 +189,7 @@ async function withBusy(button, busyText, fn) {
   } finally {
     button.classList.remove('loading');
     button.textContent = original;
+    button.disabled = wasDisabled;
   }
 }
 
