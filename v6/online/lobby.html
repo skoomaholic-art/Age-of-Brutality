@@ -27,8 +27,12 @@ button:disabled { opacity:.42; cursor:not-allowed; }
 .players { margin-top:14px; }
 .player { display:flex; justify-content:space-between; gap:12px; padding:9px 0; border-top:1px solid #283138; }
 .player:first-child { border-top:0; }
-.actions { display:flex; gap:8px; margin-top:16px; }
-.actions button { flex:1; }
+.actions { display:flex; gap:8px; margin-top:16px; flex-wrap:wrap; }
+.actions button { flex:1; min-width:140px; }
+.room-topbar { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
+.room-topbar button { width:auto; min-width:150px; }
+.start-hint { margin-top:10px; font-size:12px; color:#9da8ae; }
+button.loading { opacity:.65; cursor:wait; }
 .error { color:#ff9b8a; margin-top:10px; white-space:pre-wrap; }
 .ok { color:#80e6a3; }
 @media(max-width:700px) {
@@ -72,9 +76,14 @@ button:disabled { opacity:.42; cursor:not-allowed; }
   </section>
 
   <section id="room" class="card" style="display:none;margin-top:20px">
-    <div class="muted">Код приглашения</div>
-    <div id="invite" class="code">------</div>
-    <div id="status" class="muted"></div>
+    <div class="room-topbar">
+      <div>
+        <div class="muted">Код приглашения</div>
+        <div id="invite" class="code">------</div>
+        <div id="status" class="muted"></div>
+      </div>
+      <button id="back-menu">В главное меню</button>
+    </div>
 
     <h2 style="margin-top:22px">Дома</h2>
     <div id="houses" class="house-grid"></div>
@@ -88,6 +97,7 @@ button:disabled { opacity:.42; cursor:not-allowed; }
       <button id="open-game" style="display:none">Открыть карту</button>
       <button id="refresh">Обновить</button>
     </div>
+    <div id="start-hint" class="start-hint"></div>
     <div id="room-error" class="error"></div>
   </section>
 </main>
@@ -96,6 +106,7 @@ const houses = ['Варкайр','Сайрвен','Ортайн','Эркай','�
 const params = new URLSearchParams(location.search);
 let gameId = params.get('game');
 let token = gameId ? localStorage.getItem('aob-token-' + gameId) : null;
+let roomLoadInFlight = false;
 const $ = id => document.getElementById(id);
 
 for (const house of houses) {
@@ -167,6 +178,27 @@ async function request(url, options = {}, authToken = null) {
   throw lastError || new Error('Сервер временно недоступен. Попробуй ещё раз через несколько секунд.');
 }
 
+async function withBusy(button, busyText, fn) {
+  const original = button.textContent;
+  button.disabled = true;
+  button.classList.add('loading');
+  button.textContent = busyText;
+  try {
+    return await fn();
+  } finally {
+    button.classList.remove('loading');
+    button.textContent = original;
+  }
+}
+
+function friendlyError(error) {
+  const message = String(error?.message || error || '');
+  if (/Service Unavailable|Bad Gateway|Gateway Timeout|HTTP 50[234]/i.test(message)) {
+    return 'Сервер временно недоступен. Подожди несколько секунд и нажми «Обновить».';
+  }
+  return message;
+}
+
 function saveAccess(data) {
   gameId = data.game_id;
   token = data.access_token;
@@ -188,7 +220,7 @@ $('create').onclick = async () => {
     saveAccess(data);
     await loadRoom();
   } catch (error) {
-    $('create-error').textContent = error.message;
+    $('create-error').textContent = friendlyError(error);
   }
 };
 
@@ -207,7 +239,7 @@ $('join').onclick = async () => {
     saveAccess(data);
     await loadRoom();
   } catch (error) {
-    $('join-error').textContent = error.message;
+    $('join-error').textContent = friendlyError(error);
   }
 };
 
@@ -221,12 +253,13 @@ async function claimHouse(house) {
     }, token);
     await loadRoom();
   } catch (error) {
-    $('room-error').textContent = error.message;
+    $('room-error').textContent = friendlyError(error);
   }
 }
 
 async function loadRoom() {
-  if (!gameId || !token) return;
+  if (!gameId || !token || roomLoadInFlight) return;
+  roomLoadInFlight = true;
 
   try {
     const data = await request(
@@ -275,15 +308,34 @@ async function loadRoom() {
     }).join('');
 
     const isAdmin = me?.role === 'ADMIN';
+    const claimedCount = houses.filter(house => Boolean(claims[house])).length;
+    const missingCount = houses.length - claimedCount;
+    const canStart = isAdmin && life.status === 'LOBBY' && missingCount === 0;
+
     $('release-house').style.display =
       life.status === 'LOBBY' && me?.house ? 'block' : 'none';
+
     $('start').style.display = isAdmin && life.status === 'LOBBY' ? 'block' : 'none';
+    $('start').disabled = !canStart;
+    $('start').textContent = canStart
+      ? 'Начать игру'
+      : `Начать игру · ждём ${missingCount}`;
+
+    $('start-hint').textContent =
+      life.status === 'LOBBY'
+        ? (missingCount === 0
+            ? 'Все 6 Домов заняты. Хост может начинать партию.'
+            : `Для текущих правил V6 нужны все 6 Домов. Занято: ${claimedCount}/6.`)
+        : '';
+
     $('open-game').style.display = life.status === 'RUNNING' ? 'block' : 'none';
     $('room-error').textContent = '';
   } catch (error) {
-    $('room-error').textContent = error.message;
+    $('room-error').textContent = friendlyError(error);
     $('entry').style.display = 'none';
     $('room').style.display = 'block';
+  } finally {
+    roomLoadInFlight = false;
   }
 }
 
@@ -297,25 +349,32 @@ function escapeHtml(value) {
 
 $('release-house').onclick = async () => {
   $('room-error').textContent = '';
+  const button = $('release-house');
   try {
-    await request('/api/games/' + encodeURIComponent(gameId) + '/release-house', {
-      method:'POST'
-    }, token);
-    await loadRoom();
+    await withBusy(button, 'Освобождаем...', async () => {
+      await request('/api/games/' + encodeURIComponent(gameId) + '/release-house', {
+        method:'POST'
+      }, token);
+      await loadRoom();
+    });
   } catch (error) {
-    $('room-error').textContent = error.message;
+    $('room-error').textContent = friendlyError(error);
   }
 };
 
 $('start').onclick = async () => {
+  if ($('start').disabled) return;
   $('room-error').textContent = '';
+  const button = $('start');
   try {
-    await request('/api/games/' + encodeURIComponent(gameId) + '/start', {
-      method:'POST'
-    }, token);
-    await loadRoom();
+    await withBusy(button, 'Запускаем...', async () => {
+      await request('/api/games/' + encodeURIComponent(gameId) + '/start', {
+        method:'POST'
+      }, token);
+      await loadRoom();
+    });
   } catch (error) {
-    $('room-error').textContent = error.message;
+    $('room-error').textContent = friendlyError(error);
   }
 };
 
@@ -323,9 +382,24 @@ $('open-game').onclick = () => {
   location.href = '/?game=' + encodeURIComponent(gameId);
 };
 
-$('refresh').onclick = loadRoom;
+$('refresh').onclick = async () => {
+  $('room-error').textContent = '';
+  const button = $('refresh');
+  try {
+    await withBusy(button, 'Обновляем...', loadRoom);
+  } catch (error) {
+    $('room-error').textContent = friendlyError(error);
+  }
+};
 
-if (gameId && token) loadRoom();
+$('back-menu').onclick = () => {
+  location.href = '/lobby';
+};
+
+if (gameId && token) {
+  loadRoom();
+  setInterval(loadRoom, 3000);
+}
 </script>
 </body>
 </html>
