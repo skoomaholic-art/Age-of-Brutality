@@ -25,3 +25,5 @@ Deploy trigger: autosave before returning from game screen to game hub.
 Deploy trigger: permanent player profiles, secure sessions, cross-device game library.
 
 Deploy trigger: profile avatars, stats, MMR, active playtime, achievements placeholder.
+
+Deploy trigger: social profiles, friends, messaging, presence, invites and spectator mode.
