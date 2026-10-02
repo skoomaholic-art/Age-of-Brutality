@@ -12,7 +12,7 @@ test('provenance-locked map validates', () => {
   assert.equal(map.territories.length, 52);
   assert.equal(map.land_edges.length, 96);
   assert.equal(map.sea_edges.length, 20);
-  assert.equal(map.ports.length, 16);
+  assert.equal(map.ports.length, 18);
 });
 
 test('capitals are restored to Step 9 ids', () => {
@@ -22,11 +22,33 @@ test('capitals are restored to Step 9 ids', () => {
   });
 });
 
-test('mainland ports are the six old central-sea cities, not capitals/villages', () => {
-  const mainland = map.ports.filter(x => /^[WE]/.test(x));
-  assert.deepEqual(mainland, ['W05','W12','W19','E05','E12','E19']);
-  for (const id of mainland) assert.equal(map.territories.find(t=>t.id===id).type, 'Город');
-  for (const id of Object.values(map.capitals)) assert.equal(map.ports.includes(id), false);
+test('approved west-center sea routes use the corrected mainland endpoints', () => {
+  const edges = new Set(map.sea_edges.map(([a,b]) => edgeKey(a,b)));
+
+  for (const [a,b] of [
+    ['S04-A','W18'],
+    ['S04-A','W14'],
+    ['S03-A','W18'],
+    ['S03-A','W14'],
+    ['S03-A','W07'],
+    ['S03-A','S03-B'],
+    ['S03-A','S01-B'],
+    ['S03-A','S04-B']
+  ]) {
+    assert.ok(edges.has(edgeKey(a,b)), `missing corrected route ${a}-${b}`);
+  }
+
+  for (const [a,b] of [
+    ['S04-A','W12'],
+    ['S04-A','W19'],
+    ['S03-A','W05'],
+    ['S03-A','W12'],
+    ['S03-A','W19']
+  ]) {
+    assert.equal(edges.has(edgeKey(a,b)), false, `stale route remains ${a}-${b}`);
+  }
+
+  for (const id of ['W18','W14','W07']) assert.equal(map.ports.includes(id), true);
 });
 
 test('every sea route has port endpoints and island halves are land-connected', () => {
