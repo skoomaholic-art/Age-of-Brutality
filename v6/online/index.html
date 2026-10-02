@@ -896,6 +896,19 @@ $('reset').addEventListener('click', async () => {
 });
 
 let refreshInFlight = false;
+let heartbeatInFlight = false;
+
+async function profileHeartbeat() {
+  if (!profileToken || !scopedGameId || document.visibilityState !== 'visible' || heartbeatInFlight) return;
+  heartbeatInFlight = true;
+  try {
+    await api('/api/profile-heartbeat', { method:'POST' });
+  } catch (error) {
+    console.warn('profile heartbeat failed', error);
+  } finally {
+    heartbeatInFlight = false;
+  }
+}
 
 async function backgroundRefresh() {
   if (refreshInFlight) return;
@@ -909,12 +922,18 @@ async function backgroundRefresh() {
   }
 }
 
-refresh().catch(error => {
-  console.error(error);
-  alert(error.message);
-});
+refresh()
+  .then(() => profileHeartbeat())
+  .catch(error => {
+    console.error(error);
+    alert(error.message);
+  });
 
 setInterval(backgroundRefresh, 1500);
+setInterval(profileHeartbeat, 60000);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') profileHeartbeat();
+});
 </script>
 </body>
 </html>
