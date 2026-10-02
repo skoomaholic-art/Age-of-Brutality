@@ -1,0 +1,36 @@
+name: Verify Age of Brutality GCP auth
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      PROJECT_ID: ${{ vars.AOB_GCP_PROJECT_ID }}
+      REGION: ${{ vars.AOB_GCP_REGION || 'europe-west1' }}
+      WIF_PROVIDER: ${{ vars.AOB_GCP_WIF_PROVIDER }}
+      DEPLOY_SA: ${{ vars.AOB_GCP_DEPLOY_SA }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require dedicated game cloud config
+        run: |
+          set -euo pipefail
+          test -n "${PROJECT_ID}"
+          test -n "${WIF_PROVIDER}"
+          test -n "${DEPLOY_SA}"
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOY_SA }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Verify game project access only
+        run: |
+          set -euo pipefail
+          gcloud projects describe "${PROJECT_ID}" --format='value(projectId)'
+          gcloud run services list --project="${PROJECT_ID}" --region="${REGION}" --format='value(metadata.name)' >/dev/null
+          echo "Dedicated Age-of-Brutality GCP authentication is working."

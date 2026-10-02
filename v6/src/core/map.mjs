@@ -32,10 +32,45 @@ export function validateMap(map) {
   if (idSet.size !== ids.length) errors.push('territory ids must be unique');
   if (map.land_edges.length !== 96) errors.push(`expected 96 land edges from V5.4.3 geometry, got ${map.land_edges.length}`);
   if (map.sea_edges.length !== 20) errors.push(`expected 20 sea edges from V5.4.3 geometry, got ${map.sea_edges.length}`);
-  if (ports.size !== 16) errors.push(`expected 16 ports, got ${ports.size}`);
+  if (ports.size !== 16) errors.push(`expected 16 ports after approved sea-network redesign, got ${ports.size}`);
   if (new Set(capitalIds).size !== 6) errors.push('six capitals must be unique');
 
   for (const p of ports) if (!idSet.has(p)) errors.push(`unknown port ${p}`);
+  const seaWaypoints = map.sea_waypoints || {};
+  const waypointIds = new Set(Object.keys(seaWaypoints));
+  const laneEdges = map.sea_lane_edges || [];
+  const laneNodeIds = new Set([...idSet, ...waypointIds]);
+
+  for (const [id, point] of Object.entries(seaWaypoints)) {
+    if (!Number.isFinite(Number(point?.x)) || !Number.isFinite(Number(point?.y))) {
+      errors.push(`sea waypoint ${id} must have finite x/y`);
+    }
+  }
+
+  const laneSeen = new Set();
+  const waypointDegree = new Map();
+  for (const edge of laneEdges) {
+    if (!Array.isArray(edge) || edge.length !== 2) {
+      errors.push(`sea lane edge must have two endpoints: ${JSON.stringify(edge)}`);
+      continue;
+    }
+    const [a,b] = edge;
+    if (!laneNodeIds.has(a) || !laneNodeIds.has(b)) {
+      errors.push(`sea lane edge has unknown endpoint ${a}-${b}`);
+    }
+    if (a === b) errors.push(`sea lane self-edge ${a}`);
+    const k = edgeKey(a,b);
+    if (laneSeen.has(k)) errors.push(`duplicate sea lane edge ${k}`);
+    laneSeen.add(k);
+    if (waypointIds.has(a)) waypointDegree.set(a, Number(waypointDegree.get(a)||0)+1);
+    if (waypointIds.has(b)) waypointDegree.set(b, Number(waypointDegree.get(b)||0)+1);
+  }
+
+  for (const id of waypointIds) {
+    const degree = Number(waypointDegree.get(id) || 0);
+    if (degree < 2) errors.push(`sea waypoint ${id} is a dead end`);
+    if (degree > 5) errors.push(`sea waypoint ${id} is over-connected (${degree})`);
+  }
   for (const [kind, edges] of [['land', map.land_edges], ['sea', map.sea_edges]]) {
     const seen = new Set();
     for (const edge of edges) {

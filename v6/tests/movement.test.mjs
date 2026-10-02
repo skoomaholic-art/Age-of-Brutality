@@ -25,12 +25,30 @@ test('two-step land March becomes legal after intermediate territory is controll
   assert.equal(validateMarch(s,map,c,{type:'MARCH',mode:'LAND',house:'Варкайр',from:'W01',to:'W05',warriors:2}).length,0);
 });
 
-test('sea March starts only from the restored controlled city port', () => {
+test('sea March starts only from a controlled approved coast port', () => {
   const s=createInitialState(map,c);
   assert.ok(validateMarch(s,map,c,{type:'MARCH',mode:'SEA',house:'Варкайр',from:'W01',to:'S01-A',warriors:1}).length>0);
+
+  s.territories.W07.owner='Варкайр';
+  s.territories.W07.warriors['Варкайр']=2;
+  assert.equal(
+    validateMarch(s,map,c,{
+      type:'MARCH',mode:'SEA',house:'Варкайр',
+      from:'W07',to:'S01-A',warriors:2
+    }).length,
+    0
+  );
+
   s.territories.W05.owner='Варкайр';
   s.territories.W05.warriors['Варкайр']=2;
-  assert.equal(validateMarch(s,map,c,{type:'MARCH',mode:'SEA',house:'Варкайр',from:'W05',to:'S01-A',warriors:2}).length,0);
+  assert.ok(
+    validateMarch(s,map,c,{
+      type:'MARCH',mode:'SEA',house:'Варкайр',
+      from:'W05',to:'S01-A',warriors:2
+    }).length>0,
+    'Скархольм/W05 is no longer a sea port'
+  );
+
   assert.ok(validateMarch(s,map,c,{type:'MARCH',mode:'SEA',house:'Эркай',from:'E01',to:'S02-B',warriors:1}).length>0);
 });
 

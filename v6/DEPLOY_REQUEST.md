@@ -1,0 +1,37 @@
+# Cloud Run deployment request
+
+Dedicated Age of Brutality GCP project deployment trigger.
+
+Deploy trigger: session audit logging + human-readable battle/march logs.
+
+Deploy trigger: accelerated 3-5s timers + session/resource analytics.
+
+Deploy trigger: snapshot save/restore protection and browser save controls.
+
+Deploy trigger: migrate persistent backend from local JSON to Firestore only.
+
+Deploy trigger: retry Firestore migration after one-time GCP bootstrap completed.
+
+Deploy trigger: march selection UX cleanup and central island label fixes.
+
+Deploy trigger: multiplayer foundation, atomic commands, ghost-warrior repair, due scheduling, bootstrap split and stats.
+
+Deploy trigger: resilient multiplayer lobby, transient 503 retries, start gating, main-menu return.
+
+Deploy trigger: game hub with solo mode, public rooms, private rooms, and saved active games.
+
+Deploy trigger: autosave before returning from game screen to game hub.
+
+Deploy trigger: permanent player profiles, secure sessions, cross-device game library.
+
+Deploy trigger: profile avatars, stats, MMR, active playtime, achievements placeholder.
+
+Deploy trigger: social profiles, friends, messaging, presence, invites and spectator mode.
+
+Deploy trigger: corrected Tuman A and Korony A routes, victory status UI, standings and capital-hold VP.
+
+Deploy trigger: symmetric branched sea network, corrected Veir A coast links, sea waypoints, and character assignment UX.
+
+Deploy trigger: graph-based sea movement with stored waypoint routes, segment timing, route highlighting and no port skipping.
+
+Deploy trigger: selected-army commander assignment, weighted long-distance auto routing, route duration scaling, and animated army movement.

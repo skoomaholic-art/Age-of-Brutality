@@ -1,0 +1,1674 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Жестокий Век - Online Prototype</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f1216;
+      color: #ece6d8;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 30% 20%, #202a31, #0f1216 55%); }
+    button, select, input { font: inherit; }
+    header {
+      display: flex;
+      gap: 18px;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      border-bottom: 1px solid #343b42;
+      background: rgba(12,15,18,.92);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    h1 { margin: 0; font-size: 19px; letter-spacing: .08em; }
+    .sub { color: #aeb7bd; font-size: 12px; margin-top: 4px; }
+    .spectator-badge {
+      display:none; margin-top:7px; width:max-content; border:1px solid #806e3a;
+      border-radius:999px; padding:4px 8px; color:#e9d685; font-size:10px;
+      font-weight:850; letter-spacing:.05em;
+    }
+    .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .save-status { font-size: 10px; color: #8f9aa1; min-width: 132px; text-align: right; }
+    select, input, button {
+      background: #171d22;
+      color: #ece6d8;
+      border: 1px solid #424b52;
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    button { cursor: pointer; }
+    button:hover { border-color: #8b9aa4; }
+    button.primary { background: #704528; border-color: #9a6847; }
+    main {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 340px;
+      min-height: calc(100vh - 74px);
+    }
+    .map-wrap { min-width: 0; padding: 16px; }
+    .map-card {
+      height: calc(100vh - 108px);
+      min-height: 620px;
+      border: 1px solid #323a40;
+      border-radius: 14px;
+      overflow: hidden;
+      background: linear-gradient(180deg, #182129, #10171d);
+      position: relative;
+    }
+    svg { width: 100%; height: 100%; display: block; }
+    .land-edge { stroke: #39444c; stroke-width: 1.4; opacity: .8; }
+    .land-edge.active-route { stroke:#ffd45c; stroke-width:2.4; opacity:1; }
+    .moving-army { pointer-events:none; filter:drop-shadow(0 0 5px rgba(0,0,0,.75)); }
+    .moving-army .army-disc { stroke:#fff3cf; stroke-width:1.4; }
+    .moving-army .army-arrow { fill:#11161a; }
+    .moving-army .army-count { fill:#11161a; font-size:7px; font-weight:900; text-anchor:middle; dominant-baseline:central; }
+    .sea-edge { stroke: #557389; stroke-width: 1.2; stroke-dasharray: 6 5; opacity: .7; }
+    .sea-lane-edge { stroke:#4f6e80; stroke-width:1.15; opacity:.78; }
+    .sea-waypoint { fill:#6f93a8; stroke:#b8ccd7; stroke-width:.7; opacity:.88; pointer-events:none; }
+    .sea-waypoint-halo { fill:none; stroke:#4f6e80; stroke-width:.8; opacity:.32; pointer-events:none; }
+    .sea-node { cursor:pointer; transition:.15s ease; }
+    .sea-node .selection-ring { fill:none; stroke:transparent; stroke-width:0; pointer-events:none; vector-effect:non-scaling-stroke; }
+    .sea-node.selectable .selection-ring { stroke:#58c7ff; stroke-width:2.5; stroke-dasharray:2 2; }
+    .sea-node.origin .selection-ring { stroke:#ffd45c; stroke-width:3.5; filter:drop-shadow(0 0 5px rgba(255,212,92,.9)); }
+    .sea-node.legal .selection-ring { stroke:#70ef9b; stroke-width:3; stroke-dasharray:3 2; filter:drop-shadow(0 0 4px rgba(112,239,155,.65)); }
+    .sea-node.target .selection-ring { stroke:#fff; stroke-width:4; filter:drop-shadow(0 0 6px rgba(255,255,255,.9)); }
+    .sea-node.dim { opacity:.25; }
+    .sea-node .sea-count { fill:#11161a; font-size:6px; font-weight:900; text-anchor:middle; pointer-events:none; }
+    .sea-lane-edge.active-route { stroke:#ffd45c; stroke-width:2.2; opacity:1; }
+    .sea-waypoint.active-route { fill:#ffd45c; stroke:#fff2b2; opacity:1; }
+    .sea-waypoint-halo.active-route { stroke:#ffd45c; stroke-width:1.5; opacity:.55; }
+    .territory { cursor: pointer; transition: .15s ease; }
+    .territory .territory-body { stroke: #e6ddcb; stroke-width: 1.2; }
+    .territory:hover .territory-body { stroke-width: 2; }
+    .territory .selection-ring {
+      fill: none;
+      stroke: transparent;
+      stroke-width: 0;
+      pointer-events: none;
+      vector-effect: non-scaling-stroke;
+    }
+    .territory.selectable .selection-ring {
+      stroke: #58c7ff;
+      stroke-width: 3;
+      stroke-dasharray: 3 3;
+    }
+    .territory.origin .selection-ring {
+      stroke: #ffd45c;
+      stroke-width: 5;
+      stroke-dasharray: none;
+      filter: drop-shadow(0 0 6px rgba(255,212,92,.9));
+    }
+    .territory.legal .selection-ring {
+      stroke: #70ef9b;
+      stroke-width: 4;
+      stroke-dasharray: 5 3;
+      filter: drop-shadow(0 0 5px rgba(112,239,155,.65));
+    }
+    .territory.target .selection-ring {
+      stroke: #ffffff;
+      stroke-width: 6;
+      stroke-dasharray: none;
+      filter: drop-shadow(0 0 8px rgba(255,255,255,.95));
+    }
+    .territory.dim { opacity: .30; }
+    .territory text { fill: #e9e2d6; font-size: 9px; pointer-events: none; text-anchor: middle; }
+    .territory.central text.territory-label { font-size: 7px; font-weight: 700; }
+    .territory .count { font-size: 11px; font-weight: 800; }
+    .territory .badge-bg { stroke: none; }
+    .territory .badge { fill: #11161a; font-size: 7px; font-weight: 900; letter-spacing: .04em; }
+    .map-guide {
+      position: absolute;
+      z-index: 5;
+      left: 12px;
+      top: 12px;
+      right: 12px;
+      max-width: 560px;
+      border: 1px solid #46515a;
+      border-radius: 12px;
+      padding: 10px 12px;
+      background: rgba(8,12,15,.9);
+      backdrop-filter: blur(10px);
+      pointer-events: none;
+    }
+    .guide-title { font-weight: 850; font-size: 14px; }
+    .guide-sub { color: #aeb7bd; font-size: 11px; margin-top: 3px; }
+    .route-card {
+      position: absolute;
+      z-index: 6;
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      border: 1px solid #52606a;
+      border-radius: 14px;
+      padding: 12px;
+      background: rgba(8,12,15,.94);
+      backdrop-filter: blur(12px);
+      display: none;
+    }
+    .route-card.show { display: block; }
+    .route-line { display: flex; align-items: center; gap: 10px; font-weight: 850; font-size: 15px; }
+    .route-place { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .route-place.to { text-align: right; }
+    .route-arrow { color: #ffd45c; font-size: 22px; }
+    .route-meta { color: #aeb7bd; font-size: 11px; margin: 6px 0 10px; }
+    .troop-controls { display: grid; grid-template-columns: minmax(0,1fr) 84px 128px; gap: 8px; align-items: end; }
+    .troop-controls input { width: 100%; }
+    .troop-max { width: 100%; }
+    .primary.big { min-height: 42px; font-weight: 800; }
+    .selection-legend { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+    .legend-pill { display:inline-flex; align-items:center; gap:6px; border:1px solid #36414a; border-radius:999px; padding:4px 8px; font-size:10px; color:#aeb7bd; }
+    .legend-mark { width:12px; height:12px; border-radius:50%; display:inline-block; background:#202a31; border:2px solid #58c7ff; }
+    .legend-mark.origin { border-color:#ffd45c; border-width:3px; }
+    .legend-mark.legal { border-color:#70ef9b; border-style:dashed; }
+    .legend-mark.target { border-color:#fff; border-width:3px; box-shadow:0 0 5px rgba(255,255,255,.7); }
+    aside {
+      border-left: 1px solid #30383e;
+      background: rgba(14,18,21,.94);
+      padding: 16px;
+      overflow: auto;
+      max-height: calc(100vh - 74px);
+    }
+    .panel {
+      border: 1px solid #30383e;
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 12px;
+      background: #13191e;
+    }
+    .panel h2 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: #bfc7cb; }
+    .game-status-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:8px; }
+    .game-status-cell { background:#0f1519; border-radius:8px; padding:8px; }
+    .game-status-cell span { display:block; font-size:9px; color:#7f8c93; }
+    .game-status-cell b { display:block; margin-top:2px; font-size:12px; }
+    .standings { display:grid; gap:4px; margin-top:8px; }
+    .standing-row { display:grid; grid-template-columns:1fr auto auto; gap:8px; align-items:center; padding:5px 0; border-top:1px solid #253039; font-size:10px; }
+    .standing-row:first-child { border-top:0; }
+    .standing-house { font-weight:700; }
+    .standing-meta { color:#809098; }
+    .standing-exile { color:#d3a16e; font-size:9px; }
+    .status-warning { margin-top:8px; padding:8px; border:1px solid #5b4a2b; border-radius:8px; background:#17140e; font-size:9px; line-height:1.45; color:#d8c49a; }
+    .status-final { border-color:#46634d; background:#101711; color:#a8d9b1; }
+    .character-list { display:grid; gap:8px; }
+    .character-card { border:1px solid #2e3940; border-radius:10px; padding:10px; background:#0f1519; }
+    .character-top { display:flex; justify-content:space-between; gap:8px; align-items:flex-start; }
+    .character-name { font-weight:850; font-size:13px; }
+    .character-role { color:#87939a; font-size:10px; margin-top:2px; }
+    .character-mode { border:1px solid #47545c; border-radius:999px; padding:3px 7px; font-size:9px; white-space:nowrap; }
+    .character-mode.army { border-color:#806e3a; color:#e9d685; }
+    .character-mode.court { border-color:#3f6572; color:#8bc7dc; }
+    .character-mode.pending { border-color:#784d4d; color:#ef9f94; }
+    .character-stats { display:grid; grid-template-columns:repeat(6,1fr); gap:4px; margin-top:8px; }
+    .character-stat { background:#171e23; border-radius:6px; padding:5px 3px; text-align:center; }
+    .character-stat span { display:block; color:#77858d; font-size:8px; }
+    .character-stat b { display:block; margin-top:1px; font-size:12px; }
+    .character-location { color:#89969d; font-size:10px; margin-top:7px; }
+    .character-rule { color:#7d898f; font-size:9px; line-height:1.35; margin-top:7px; }
+    .character-actions { display:flex; gap:6px; margin-top:8px; }
+    .character-actions button { flex:1; padding:7px 8px; font-size:10px; }
+    .stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
+    .stat { background: #0e1317; border-radius: 8px; padding: 9px; }
+    .stat b { display: block; font-size: 18px; margin-top: 2px; }
+    .muted { color: #8f9aa1; font-size: 12px; }
+    .order { padding: 9px 0; border-top: 1px solid #293138; font-size: 12px; }
+    .order:first-child { border-top: 0; }
+    .pending { color: #ffd27a; }
+    .resolved { color: #8adca0; }
+    .failed { color: #ff8d8d; }
+    .journal { font-size: 11px; line-height: 1.45; max-height: 220px; overflow: auto; }
+    .economy-line { display:flex; justify-content:space-between; gap:10px; align-items:center; margin:7px 0; font-size:12px; }
+    .economy-line b { font-size:13px; }
+    .economy-actions { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-top:8px; }
+    .economy-actions button { padding:8px 6px; }
+    .fort-button { width:100%; margin-top:8px; }
+    .jobs { margin-top:10px; }
+    .job { border-top:1px solid #293138; padding:8px 0; font-size:11px; }
+    .job:first-child { border-top:0; }
+    .tiny { font-size:10px; color:#79858c; }
+    .move-box { display: none; }
+    .move-box.show { display: block; }
+    .move-grid { display: grid; grid-template-columns: 1fr 86px; gap: 8px; align-items: end; }
+    @media (max-width: 980px) {
+      main { grid-template-columns: 1fr; }
+      aside { max-height: none; border-left: 0; border-top: 1px solid #30383e; }
+      .map-card { height: 68vh; min-height: 520px; }
+      .map-guide { max-width: none; }
+      .route-card { left: 8px; right: 8px; bottom: 8px; }
+      .troop-controls { grid-template-columns: 1fr 74px; }
+      .primary.big { grid-column: 1 / -1; }
+      header { align-items:flex-start; flex-direction:column; }
+      .controls { width:100%; }
+      .save-status { width:100%; text-align:left; }
+    }
+  </style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>ЖЕСТОКИЙ ВЕК - ONLINE PROTOTYPE</h1>
+    <div class="sub">Persistent vertical slice on the existing V6 rules core</div>
+    <div id="spectator-badge" class="spectator-badge">РЕЖИМ НАБЛЮДАТЕЛЯ</div>
+  </div>
+  <div class="controls">
+    <label>
+      <span class="muted">Дом</span>
+      <select id="house"></select>
+    </label>
+    <button id="save-game">Сохранить</button>
+    <button id="restore-game">Восстановить</button>
+    <button id="reset">Новая партия</button>
+    <button id="back-menu">Вернуться в меню</button>
+    <div id="save-status" class="save-status">Сохранений ещё нет</div>
+  </div>
+</header>
+
+<main>
+  <section class="map-wrap">
+    <div class="map-card">
+      <div id="map-guide" class="map-guide">
+        <div id="guide-title" class="guide-title">1. Выбери, ОТКУДА идти</div>
+        <div id="guide-sub" class="guide-sub">Цвет внутри круга показывает Дом. Обводка показывает действие.</div>
+        <div class="selection-legend">
+          <span class="legend-pill"><i class="legend-mark"></i>можно выбрать</span>
+          <span class="legend-pill"><i class="legend-mark origin"></i>откуда</span>
+          <span class="legend-pill"><i class="legend-mark legal"></i>куда можно</span>
+          <span class="legend-pill"><i class="legend-mark target"></i>цель выбрана</span>
+        </div>
+      </div>
+      <svg id="map" viewBox="40 30 760 490" role="img" aria-label="Карта Жестокого Века"></svg>
+      <div id="route-card" class="route-card">
+        <div class="route-line">
+          <span id="from-name" class="route-place">...</span>
+          <span class="route-arrow">→</span>
+          <span id="to-name" class="route-place to">...</span>
+        </div>
+        <div id="route-meta" class="route-meta"></div>
+        <div id="route-mode-row" style="display:none;margin-bottom:10px">
+          <label>
+            <span class="muted">Маршрут</span>
+            <select id="march-mode" style="width:100%;margin-top:4px">
+              <option value="LAND">По суше</option>
+              <option value="SEA">По морю</option>
+            </select>
+          </label>
+        </div>
+        <div id="commander-row" style="display:none;margin-bottom:10px">
+          <label>
+            <span class="muted">Командир этой группы</span>
+            <select id="commander" style="width:100%;margin-top:4px"></select>
+          </label>
+        </div>
+        <div class="troop-controls">
+          <label>
+            <span class="muted">3. Сколько воинов отправить</span>
+            <input id="warriors" type="number" min="1" value="1" />
+          </label>
+          <button id="max-warriors" class="troop-max">Все</button>
+          <button id="send" class="primary big">Отдать приказ</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <aside>
+    <div id="game-status-panel" class="panel">
+      <h2>Партия</h2>
+      <div class="game-status-grid">
+        <div class="game-status-cell"><span>Статус</span><b id="game-status">...</b></div>
+        <div class="game-status-cell"><span>Раунд</span><b id="game-round">...</b></div>
+      </div>
+      <div id="game-status-note" class="status-warning"></div>
+      <div id="standings" class="standings"></div>
+    </div>
+
+    <div id="house-panel" class="panel">
+      <h2 id="house-title">Дом</h2>
+      <div class="stats">
+        <div class="stat"><span class="muted">Золото</span><b id="gold">0</b></div>
+        <div class="stat"><span class="muted">Влияние</span><b id="influence">0</b></div>
+        <div class="stat"><span class="muted">ОП</span><b id="vp">0</b></div>
+      </div>
+    </div>
+
+    <div id="characters-panel" class="panel">
+      <h2>Персонажи</h2>
+      <div id="characters" class="character-list muted">Загружаем персонажей...</div>
+    </div>
+
+    <div id="economy-panel" class="panel">
+      <h2>Экономика</h2>
+      <div class="economy-line"><span class="muted">Доход за цикл</span><b id="income-rate">+0 золота</b></div>
+      <div class="economy-line"><span class="muted">Следующий доход</span><b id="income-countdown">...</b></div>
+      <div class="tiny">Тестовый онлайн-цикл: каждые 2 минуты. Формула дохода взята из правил настолки.</div>
+      <div style="margin-top:10px">
+        <label>
+          <span class="muted">Управлять территорией</span>
+          <select id="manage-territory" style="width:100%;margin-top:4px"></select>
+        </label>
+      </div>
+      <div id="manage-info" class="muted" style="margin-top:8px"></div>
+      <div class="economy-actions">
+        <button data-recruit="1">+1 воин<br><span class="tiny">1 золото</span></button>
+        <button data-recruit="2">+2 воина<br><span class="tiny">2 золота</span></button>
+        <button data-recruit="3">+3 воина<br><span class="tiny">3 золота</span></button>
+      </div>
+      <button id="build-fort" class="fort-button">Построить крепость · 3 золота</button>
+      <div id="jobs" class="jobs muted">Нет строительства.</div>
+    </div>
+
+    <div id="march-panel" class="panel">
+      <h2>Марш</h2>
+      <div id="selection" class="muted">1. Выбери свою территорию с воинами.</div>
+    </div>
+
+    <div id="orders-panel" class="panel">
+      <h2>Приказы</h2>
+      <div id="orders" class="muted">Нет приказов.</div>
+    </div>
+
+    <div class="panel">
+      <h2>Журнал</h2>
+      <div id="journal" class="journal muted">Пока пусто.</div>
+    </div>
+  </aside>
+</main>
+
+<script>
+const colors = {
+  'Варкайр': '#76454a',
+  'Сайрвен': '#496276',
+  'Ортайн': '#6b623d',
+  'Эркай': '#48684f',
+  'Тасвар': '#775b35',
+  'Айрель': '#665176'
+};
+
+let snapshot = null;
+let bootstrap = null;
+let house = null;
+let origin = null;
+let target = null;
+let legal = [];
+let marchModePreference = null;
+let economy = null;
+let characterData = null;
+let managedTerritory = null;
+let lastManualSnapshotAt = null;
+let isSpectator = false;
+
+const pageParams = new URLSearchParams(location.search);
+const scopedGameId = pageParams.get('game');
+const profileToken = localStorage.getItem('aob-profile-token');
+const scopedToken = scopedGameId
+  ? (profileToken || localStorage.getItem('aob-token-' + scopedGameId))
+  : null;
+
+const $ = id => document.getElementById(id);
+
+function commandId() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return `cmd-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function scopedApiUrl(url) {
+  if (!scopedGameId) return url;
+  if (!url.startsWith('/api/')) return url;
+  return '/api/games/' + encodeURIComponent(scopedGameId) + url.slice('/api'.length);
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function decodeResponse(res) {
+  const raw = await res.text();
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return { error: raw.trim() || ('HTTP ' + res.status) };
+  }
+}
+
+async function api(url, options = {}) {
+  const next = { ...options };
+  const method = String(next.method || 'GET').toUpperCase();
+  const headers = new Headers(next.headers || {});
+
+  if (!['GET', 'HEAD'].includes(method) && !headers.has('Idempotency-Key')) {
+    headers.set('Idempotency-Key', commandId());
+  }
+
+  if (scopedGameId && scopedToken) {
+    headers.set('Authorization', 'Bearer ' + scopedToken);
+  }
+
+  next.headers = headers;
+  const target = scopedApiUrl(url);
+  const retryable = new Set([502, 503, 504]);
+  const delays = [0, 600, 1200, 2400];
+
+  let lastError = null;
+  for (let attempt = 0; attempt < delays.length; attempt += 1) {
+    if (delays[attempt]) await sleep(delays[attempt]);
+
+    try {
+      const res = await fetch(target, next);
+      const data = await decodeResponse(res);
+
+      if (res.ok) return data;
+
+      if (retryable.has(res.status) && attempt < delays.length - 1) {
+        lastError = new Error('Сервер временно недоступен. Повторяем запрос...');
+        continue;
+      }
+
+      throw new Error(data.error || ('Ошибка сервера HTTP ' + res.status));
+    } catch (error) {
+      lastError = error;
+      const networkFailure = error instanceof TypeError;
+      if (networkFailure && attempt < delays.length - 1) continue;
+      throw error;
+    }
+  }
+
+  throw lastError || new Error('Сервер временно недоступен. Попробуй ещё раз через несколько секунд.');
+}
+
+function territoryById(id) {
+  return snapshot.map.territories.find(t => t.id === id);
+}
+
+function mapNodeById(id) {
+  const territory = territoryById(id);
+  if (territory) return territory;
+  if (snapshot.map.sea_waypoints?.[id]) {
+    return { id, name:'Морская точка', type:'Море', is_sea_waypoint:true };
+  }
+  return null;
+}
+
+function warriorsAt(id, owner) {
+  return Number(
+    snapshot.game.state.territories[id]?.warriors?.[owner] ||
+    snapshot.game.state.sea_nodes?.[id]?.warriors?.[owner] ||
+    0
+  );
+}
+
+function nodeOwner(id) {
+  return snapshot.game.state.territories[id]?.owner ??
+    snapshot.game.state.sea_nodes?.[id]?.owner ??
+    null;
+}
+
+function renderSaveStatus() {
+  const backend = snapshot?.storage?.backend === 'firestore' ? 'Firestore' : 'Хранилище';
+  const updated = snapshot?.game?.updated_at;
+  if (lastManualSnapshotAt) {
+    const when = new Date(lastManualSnapshotAt).toLocaleString('ru-RU', {
+      day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit'
+    });
+    $('save-status').textContent = `${backend} · checkpoint: ${when}`;
+    return;
+  }
+  if (updated) {
+    const when = new Date(updated).toLocaleTimeString('ru-RU', {
+      hour:'2-digit', minute:'2-digit', second:'2-digit'
+    });
+    $('save-status').textContent = `${backend} · автосейв: ${when}`;
+    return;
+  }
+  $('save-status').textContent = backend;
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&','&amp;')
+    .replaceAll('<','&lt;')
+    .replaceAll('>','&gt;')
+    .replaceAll('"','&quot;');
+}
+
+function characterModeLabel(character) {
+  if (character.status === 'FATE_PENDING') return 'СУДЬБА';
+  if (character.mode === 'ARMY') return 'АРМИЯ';
+  if (character.mode === 'COURT') return 'ДВОР';
+  if (character.mode === 'CAPTIVE') return 'ПЛЕН';
+  if (character.mode === 'DEAD') return 'МЁРТВ';
+  return character.mode || '—';
+}
+
+function characterModeClass(character) {
+  if (character.status === 'FATE_PENDING') return 'pending';
+  if (character.mode === 'ARMY') return 'army';
+  return 'court';
+}
+
+function characterRoleLabel(role) {
+  if (role === 'RULER') return 'Правитель';
+  if (role === 'HEIR') return 'Взрослый наследник';
+  return role || 'Персонаж';
+}
+
+function renderCharacters() {
+  const box = $('characters');
+  if (isSpectator || !house) {
+    box.innerHTML = '<span class="muted">Недоступно наблюдателю.</span>';
+    return;
+  }
+
+  const characters = (characterData?.characters ||
+    Object.values(snapshot?.game?.state?.characters || {})
+      .filter(character => character.house === house))
+    .sort((a,b) => {
+      const rank = role => role === 'RULER' ? 0 : role === 'HEIR' ? 1 : 9;
+      return rank(a.role) - rank(b.role) ||
+        String(a.name).localeCompare(String(b.name), 'ru');
+    });
+
+  const armies = snapshot?.game?.state?.armies || {};
+  const capital = snapshot?.map?.capitals?.[house];
+
+  if (!characters.length) {
+    box.innerHTML = '<span class="muted">Персонажи ещё не мигрированы.</span>';
+    return;
+  }
+
+  box.innerHTML = characters.map(character => {
+    const army = character.army_id ? armies[character.army_id] : null;
+    const stats = character.stats || {};
+    const location =
+      character.status === 'FATE_PENDING'
+        ? 'Ожидает проверки Судьбы после боя'
+        : character.status === 'FATE_LOCATION_PENDING'
+          ? 'Судьба: ' +
+            (character.fate_pending?.fate_outcome === 'WEAKENED' ? 'Ослаблен' : 'Спасён') +
+            ' · требуется правило местонахождения'
+          : character.mode === 'CAPTIVE'
+            ? 'В плену у Дома ' +
+              (character.captivity?.held_by || 'не определено') +
+              (character.captivity?.detention_location
+                ? ' · ' +
+                  (territoryById(character.captivity.detention_location)?.name ||
+                    character.captivity.detention_location)
+                : '')
+            : character.mode === 'DEAD'
+              ? 'Мёртв'
+              : character.mode === 'ARMY'
+                ? army?.moving_order_id
+                  ? 'В марше · приказ ' + army.moving_order_id
+                  : 'Армия · ' +
+                    (mapNodeById(army?.territory)?.name ||
+                      army?.territory ||
+                      'не определено')
+                : 'При Дворе';
+
+    const assignment = character.assignment || null;
+    const canAssign =
+      assignment
+        ? assignment.allowed
+        : (
+            character.mode === 'COURT' &&
+            character.status === 'ACTIVE' &&
+            character.health === 'HEALTHY'
+          );
+
+    const canReturn =
+      character.mode === 'ARMY' &&
+      character.status === 'ACTIVE' &&
+      army &&
+      !army.moving_order_id &&
+      army.territory === capital;
+
+    const actions =
+      character.status === 'FATE_PENDING'
+        ? '<div class="tiny failed">Ожидается разрешение Судьбы командира.</div>'
+        : character.status === 'FATE_LOCATION_PENDING'
+          ? '<div class="tiny failed">Исход Судьбы определён, но правило местонахождения после уничтожения армии не задано.</div>'
+          : character.mode === 'CAPTIVE'
+            ? '<div class="tiny failed">Персонаж не может действовать, пока находится в плену.</div>'
+            : character.mode === 'DEAD'
+              ? '<div class="tiny failed">Персонаж погиб.</div>'
+              : canAssign
+        ? (
+            '<div class="character-actions" style="display:grid;gap:6px">' +
+            '<select data-char-army-target="' + escapeHtml(character.id) + '">' +
+            (assignment?.targets || []).map(target =>
+              '<option value="' + escapeHtml(target.id) + '">' +
+              escapeHtml(
+                target.name +
+                (target.kind === 'SEA_WAYPOINT' ? ' · море' : '') +
+                ' · ' + Number(target.warriors || 0) + ' воин.'
+              ) +
+              '</option>'
+            ).join('') +
+            '</select>' +
+            '<button data-char-army="' + escapeHtml(character.id) + '">Назначить в армию</button>' +
+            '</div>'
+          )
+        : character.mode === 'COURT' && assignment && !assignment.allowed
+          ? '<div class="character-actions"><button disabled title="' +
+            escapeHtml(assignment.reason || '') +
+            '">Назначить в армию</button></div>' +
+            '<div class="tiny failed" style="margin-top:6px">' +
+            escapeHtml(assignment.reason || 'Назначение сейчас недоступно.') +
+            '</div>'
+          : canReturn
+            ? '<div class="character-actions"><button data-char-court="' +
+              escapeHtml(character.id) + '">Вернуть во Двор</button></div>'
+            : '';
+
+    const special = character.special_rule && character.special_rule !== '—'
+      ? '<div class="character-rule">Особое правило: ' +
+        escapeHtml(character.special_rule) +
+        '<br><span class="tiny">Спецэффект будет подключён отдельным этапом.</span></div>'
+      : '';
+
+    return '<div class="character-card">' +
+      '<div class="character-top"><div><div class="character-name">' +
+      escapeHtml(character.name) + '</div><div class="character-role">' +
+      escapeHtml(characterRoleLabel(character.role)) +
+      (character.health === 'WEAKENED' ? ' · Ослаблен' : '') +
+      '</div></div><span class="character-mode ' +
+      characterModeClass(character) + '">' +
+      escapeHtml(characterModeLabel(character)) + '</span></div>' +
+      '<div class="character-stats">' +
+      '<div class="character-stat"><span>АТК</span><b>' + Number(stats.attack || 0) + '</b></div>' +
+      '<div class="character-stat"><span>ЗАЩ</span><b>' + Number(stats.defense || 0) + '</b></div>' +
+      '<div class="character-stat"><span>ВЫЖ</span><b>' + Number(stats.survival || 0) + '</b></div>' +
+      '<div class="character-stat"><span>ДИП</span><b>' + Number(stats.diplomacy || 0) + '</b></div>' +
+      '<div class="character-stat"><span>ИНТ</span><b>' + Number(stats.intrigue || 0) + '</b></div>' +
+      '<div class="character-stat"><span>УПР</span><b>' + Number(stats.stewardship || 0) + '</b></div>' +
+      '</div><div class="character-location">' + escapeHtml(location) + '</div>' +
+      special + actions + '</div>';
+  }).join('');
+
+  document.querySelectorAll('[data-char-army]').forEach(button => {
+    button.onclick = async () => {
+      try {
+        const selector = document.querySelector(
+          '[data-char-army-target="' + button.dataset.charArmy + '"]'
+        );
+        await api('/api/characters/assign-army', {
+          method:'POST',
+          headers:{'content-type':'application/json'},
+          body:JSON.stringify({
+            house,
+            character_id:button.dataset.charArmy,
+            position:selector?.value || null
+          })
+        });
+        await refresh();
+      } catch (error) {
+        alert(error.message);
+      }
+    };
+  });
+
+  document.querySelectorAll('[data-char-court]').forEach(button => {
+    button.onclick = async () => {
+      try {
+        await api('/api/characters/return-court', {
+          method:'POST',
+          headers:{'content-type':'application/json'},
+          body:JSON.stringify({
+            house,
+            character_id:button.dataset.charCourt
+          })
+        });
+        await refresh();
+      } catch (error) {
+        alert(error.message);
+      }
+    };
+  });
+}
+
+function renderVictory() {
+  const victory = snapshot?.victory;
+  if (!victory) return;
+
+  const final = victory.status === 'FINISHED';
+  $('game-status').textContent = final ? 'ЗАВЕРШЕНА' : 'ИДЁТ';
+  $('game-round').textContent =
+    String(victory.round || 1) + ' / ' + String(victory.max_rounds || 6);
+
+  const exiled = victory.exiled_houses || [];
+  const winners = victory.winners || [];
+  const note = $('game-status-note');
+  note.classList.toggle('status-final', final);
+
+  if (final) {
+    note.textContent = winners.length > 1
+      ? 'Совместная победа: ' + winners.join(', ') + '.'
+      : 'Победитель: ' + (winners[0] || 'не определён') + '.';
+  } else {
+    const parts = [
+      'По правилам победитель определяется после фазы Династии 6-го раунда.'
+    ];
+    if (exiled.length) {
+      parts.push(
+        exiled.length + ' Дом' +
+        (exiled.length === 1 ? '' : exiled.length < 5 ? 'а' : 'ов') +
+        ' сейчас в Изгнании. Потеря всех земель не означает уничтожение Дома.'
+      );
+    }
+    if (victory.scoring?.coverage === 'PARTIAL') {
+      parts.push(
+        'Текущий online-счёт неполный: сейчас подключены только первые военные ОП. ' +
+        'Власть, Династия, центральный остров и секретная Амбиция ещё не мигрированы.'
+      );
+    }
+    if (victory.online_adapter?.canonical_round_progression_connected === false) {
+      parts.push(
+        'Раундовый цикл persistent-режима ещё не подключён к каноническому финишу.'
+      );
+    }
+    note.textContent = parts.join(' ');
+  }
+
+  const rows = victory.standings || [];
+  $('standings').innerHTML = rows.map((item, index) => {
+    const exile = item.exiled
+      ? '<div class="standing-exile">Изгнание</div>'
+      : '';
+    return '<div class="standing-row">' +
+      '<div><span class="standing-house">' +
+      (index + 1) + '. ' + escapeHtml(item.house) +
+      '</span>' + exile + '</div>' +
+      '<div><b>' + Number(item.victory_points || 0) +
+      ' ОП</b><div class="standing-meta">' +
+      Number(item.influence || 0) + ' влияния</div></div>' +
+      '<div class="standing-meta">' +
+      Number(item.territories || 0) + ' терр.<br>' +
+      Number(item.gold || 0) + ' зол.</div>' +
+      '</div>';
+  }).join('');
+}
+
+function renderHouse() {
+  if (isSpectator || !house) return;
+  const state = snapshot.game.state.houses[house];
+  $('house-title').textContent = house;
+  $('gold').textContent = state.gold;
+  $('influence').textContent = state.influence;
+  $('vp').textContent = state.victory_points;
+}
+
+function mapLabel(t) {
+  if (!t.is_central_half) return t.name;
+  const side = t.id.endsWith('-A') ? 'A' : 'B';
+  const clean = t.name
+    .replace(/^Остров\s+/u, '')
+    .replace(/\s+[—-]\s+[AB]$/u, '');
+  return `${clean} ${side}`;
+}
+
+function routeEdgeKey(a, b) {
+  return [String(a), String(b)].sort().join('::');
+}
+
+function actionsForSelection() {
+  if (!origin || !target) return [];
+  return legal.filter(action =>
+    action.from === origin &&
+    action.to === target
+  );
+}
+
+function preferredActionForSelection() {
+  const actions = actionsForSelection();
+  if (!actions.length) return null;
+  const maxWarriors = Math.max(...actions.map(action => action.warriors));
+  return actions.find(action => action.warriors === maxWarriors) || actions[0];
+}
+
+function pendingOutgoingAt(id, owner) {
+  return (snapshot?.game?.orders || [])
+    .filter(order =>
+      order.status === 'PENDING' &&
+      order.action?.from === id &&
+      (!owner || order.action?.house === owner)
+    )
+    .reduce((sum,order) => sum + Number(order.action?.warriors || 0), 0);
+}
+
+function routeCoordinates() {
+  return {
+    ...(snapshot?.map?.coordinates || {}),
+    ...(snapshot?.map?.sea_waypoints || {})
+  };
+}
+
+function movingOrderPosition(order, nowMs = Date.now()) {
+  const path = order?.action?.path || [];
+  if (path.length < 2) return null;
+
+  const coords = routeCoordinates();
+  const segments = Array.isArray(order.action.route_segments) &&
+    order.action.route_segments.length
+      ? order.action.route_segments
+      : path.slice(0,-1).map((from,index) => ({
+          from,
+          to:path[index + 1],
+          duration_ms:
+            Number(order.duration_ms || 1) / Math.max(1,path.length - 1)
+        }));
+
+  const created = Date.parse(order.created_at);
+  const elapsed = Math.max(
+    0,
+    Math.min(Number(order.duration_ms || 0), nowMs - created)
+  );
+
+  let remaining = elapsed;
+  let chosen = segments[segments.length - 1];
+  let local = 1;
+
+  for (const segment of segments) {
+    const duration = Math.max(1,Number(segment.duration_ms || 1));
+    if (remaining <= duration) {
+      chosen = segment;
+      local = remaining / duration;
+      break;
+    }
+    remaining -= duration;
+  }
+
+  const a = coords[chosen.from];
+  const b = coords[chosen.to];
+  if (!a || !b) return null;
+
+  const x = Number(a.x) + (Number(b.x) - Number(a.x)) * local;
+  const y = Number(a.y) + (Number(b.y) - Number(a.y)) * local;
+  const angle = Math.atan2(
+    Number(b.y) - Number(a.y),
+    Number(b.x) - Number(a.x)
+  ) * 180 / Math.PI;
+
+  return {x,y,angle};
+}
+
+function updateMovingArmyPositions() {
+  if (!snapshot) return;
+  const svg = $('map');
+  for (const node of svg.querySelectorAll('.moving-army')) {
+    const order = (snapshot.game.orders || [])
+      .find(item => item.id === node.dataset.orderId);
+    if (!order || order.status !== 'PENDING') continue;
+    const pos = movingOrderPosition(order);
+    if (!pos) continue;
+    node.setAttribute(
+      'transform',
+      'translate(' + pos.x + ' ' + pos.y + ') rotate(' + pos.angle + ')'
+    );
+  }
+}
+
+function renderMap() {
+  const svg = $('map');
+  const state = snapshot.game.state;
+  const coords = snapshot.map.coordinates;
+  const legalTargets = new Set(
+    legal.filter(a => !origin || a.from === origin).map(a => a.to)
+  );
+
+  const activeAction = preferredActionForSelection();
+  const activePath = Array.isArray(activeAction?.path)
+    ? activeAction.path
+    : [];
+  const activeEdges = new Set();
+  for (let i = 0; i < activePath.length - 1; i += 1) {
+    activeEdges.add(routeEdgeKey(activePath[i], activePath[i + 1]));
+  }
+  const activeNodes = new Set(activePath);
+
+  const lines = [];
+  for (const [a,b] of snapshot.map.land_edges) {
+    const active = activeEdges.has(routeEdgeKey(a,b))
+      ? ' active-route'
+      : '';
+    lines.push(`<line class="land-edge${active}" x1="${coords[a].x}" y1="${coords[a].y}" x2="${coords[b].x}" y2="${coords[b].y}" />`);
+  }
+
+  const seaWaypoints = snapshot.map.sea_waypoints || {};
+  const routeCoords = { ...coords, ...seaWaypoints };
+  const laneEdges = snapshot.map.sea_lane_edges?.length
+    ? snapshot.map.sea_lane_edges
+    : snapshot.map.sea_edges;
+
+
+  for (const [a,b] of laneEdges) {
+    const from = routeCoords[a];
+    const to = routeCoords[b];
+    if (!from || !to) continue;
+    const baseClass = snapshot.map.sea_lane_edges?.length
+      ? 'sea-lane-edge'
+      : 'sea-edge';
+    const active = activeEdges.has(routeEdgeKey(a,b))
+      ? ' active-route'
+      : '';
+    lines.push(`<line class="${baseClass}${active}" x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" />`);
+  }
+
+  const waypointNodes = Object.entries(seaWaypoints).map(([id,point]) => {
+    const seaState = state.sea_nodes?.[id] || {owner:null, warriors:{}};
+    const owner = seaState.owner;
+    const rawTotal = Object.values(seaState.warriors || {})
+      .reduce((sum,value) => sum + Number(value || 0), 0);
+    const total = Math.max(0, rawTotal - pendingOutgoingAt(id, owner));
+    const classes = ['sea-node'];
+    const ownMovable = owner === house && warriorsAt(id, house) > 0;
+    if (!origin && ownMovable) classes.push('selectable');
+    if (id === origin) classes.push('origin');
+    if (origin && legalTargets.has(id)) classes.push('legal');
+    if (id === target) classes.push('target');
+    if (origin && id !== origin && !legalTargets.has(id) && id !== target) classes.push('dim');
+
+    const active = activeNodes.has(id) ? ' active-route' : '';
+    const fill = owner ? (colors[owner] || '#6f93a8') : '#6f93a8';
+    return `
+      <g class="${classes.join(' ')}" data-id="${id}" transform="translate(${point.x} ${point.y})">
+        <circle class="selection-ring" r="7"></circle>
+        <circle class="sea-waypoint-halo${active}" r="5"></circle>
+        <circle class="sea-waypoint${active}" r="${total ? 5 : 2.3}" fill="${fill}"></circle>
+        <text class="sea-count" y="2">${total || ''}</text>
+      </g>`;
+  });
+  const nodes = snapshot.map.territories.map(t => {
+    const s = state.territories[t.id];
+    const owner = s.owner;
+    const rawTotal = Object.values(s.warriors || {}).reduce((a,b) => a + Number(b || 0), 0);
+    const total = Math.max(0, rawTotal - pendingOutgoingAt(t.id, owner));
+    const c = coords[t.id];
+    const r = t.type === 'Столица' ? 16 : 12;
+    const classes = ['territory'];
+    if (t.is_central_half) classes.push('central');
+    const ownMovable = owner === house && warriorsAt(t.id, house) > 0;
+    if (!origin && ownMovable) classes.push('selectable');
+    if (t.id === origin) classes.push('origin');
+    if (origin && legalTargets.has(t.id)) classes.push('legal');
+    if (t.id === target) classes.push('target');
+    if (origin && t.id !== origin && !legalTargets.has(t.id) && t.id !== target) classes.push('dim');
+    const fill = owner ? (colors[owner] || '#59636a') : '#2c353b';
+    let badge = '';
+    if (t.id === origin) badge = '<rect class="badge-bg" x="-24" y="21" width="48" height="13" rx="5" fill="#ffd45c"></rect><text class="badge" y="30">ОТКУДА</text>';
+    if (t.id === target) badge = '<rect class="badge-bg" x="-21" y="21" width="42" height="13" rx="5" fill="#ffffff"></rect><text class="badge" y="30">ЦЕЛЬ</text>';
+    const labelY = t.is_central_half
+      ? (t.id.endsWith('-A') ? -18 : 27)
+      : -18;
+    return `
+      <g class="${classes.join(' ')}" data-id="${t.id}" transform="translate(${c.x} ${c.y})">
+        <circle class="selection-ring" r="${r + 5}"></circle>
+        <circle class="territory-body" r="${r}" fill="${fill}"></circle>
+        <text class="territory-label" y="${labelY}">${escapeHtml(mapLabel(t))}</text>
+        <text class="count" y="4">${total || ''}</text>
+        ${badge}
+      </g>`;
+  });
+
+  const movingArmies = (snapshot.game.orders || [])
+    .filter(order =>
+      order.status === 'PENDING' &&
+      Array.isArray(order.action?.path) &&
+      order.action.path.length > 1
+    )
+    .map(order => {
+      const pos = movingOrderPosition(order);
+      if (!pos) return '';
+      const fill = colors[order.action.house] || '#ffd45c';
+      return `
+        <g class="moving-army" data-order-id="${escapeHtml(order.id)}"
+          transform="translate(${pos.x} ${pos.y}) rotate(${pos.angle})">
+          <circle class="army-disc" r="7" fill="${fill}"></circle>
+          <path class="army-arrow" d="M 2 -3 L 7 0 L 2 3 Z"></path>
+          <text class="army-count" x="-1" y="0">${Number(order.action.warriors || 0)}</text>
+        </g>`;
+    });
+
+  svg.innerHTML =
+    lines.join('') +
+    waypointNodes.join('') +
+    nodes.join('') +
+    movingArmies.join('');
+  svg.querySelectorAll('.territory, .sea-node').forEach(node => {
+    node.addEventListener('click', () => selectTerritory(node.dataset.id));
+  });
+}
+
+async function loadLegal() {
+  if (isSpectator || !house) {
+    legal = [];
+    return;
+  }
+  const data = await api('/api/legal?house=' + encodeURIComponent(house));
+  legal = data.actions;
+}
+
+async function loadCharacters() {
+  if (isSpectator || !house) {
+    characterData = null;
+    return;
+  }
+  characterData = await api(
+    '/api/characters?house=' + encodeURIComponent(house)
+  );
+}
+
+async function loadEconomy() {
+  if (isSpectator || !house) {
+    economy = null;
+    managedTerritory = null;
+    return;
+  }
+  economy = await api('/api/economy?house=' + encodeURIComponent(house));
+  const owned = economy.territories || [];
+  if (!owned.some(t => t.id === managedTerritory)) {
+    managedTerritory = owned[0]?.id || null;
+  }
+}
+
+function secondsLeft(iso) {
+  return Math.max(0, Math.ceil((Date.parse(iso) - Date.now()) / 1000));
+}
+
+function renderEconomy() {
+  if (isSpectator || !economy) return;
+  const gain = economy.income;
+  const influence = gain.influence ? ` +${gain.influence} влияния` : '';
+  $('income-rate').textContent = `+${gain.gold} золота${influence}`;
+  $('income-countdown').textContent = `${secondsLeft(economy.next_income_at)} сек`;
+
+  const select = $('manage-territory');
+  const previous = managedTerritory;
+  select.innerHTML = '';
+  for (const territory of economy.territories) {
+    const option = document.createElement('option');
+    option.value = territory.id;
+    option.textContent = `${territory.name} · ${territory.warriors} воин.${territory.fort ? ' · крепость' : ''}`;
+    select.appendChild(option);
+  }
+  managedTerritory = economy.territories.some(t => t.id === previous)
+    ? previous
+    : (economy.territories[0]?.id || null);
+  if (managedTerritory) select.value = managedTerritory;
+
+  const selected = economy.territories.find(t => t.id === managedTerritory);
+  if (!selected) {
+    $('manage-info').textContent = 'Нет контролируемых территорий.';
+  } else {
+    $('manage-info').textContent = `${selected.name}: ${selected.warriors} воинов${selected.fort ? ', крепость построена' : ''}.`;
+  }
+
+  const jobs = economy.jobs || [];
+  if (!jobs.length) {
+    $('jobs').innerHTML = '<span class="muted">Нет строительства.</span>';
+  } else {
+    $('jobs').innerHTML = jobs.slice(0,8).map(job => {
+      const cls = job.status.toLowerCase();
+      const territory = territoryById(job.territory)?.name || job.territory;
+      const label = job.type === 'RECRUIT'
+        ? `Найм ${job.warriors} воин.`
+        : 'Крепость';
+      const status = job.status === 'PENDING' ? `${secondsLeft(job.due_at)} сек` : job.status;
+      const error = job.failure_reason ? `<div class="failed">${escapeHtml(job.failure_reason)}</div>` : '';
+      return `<div class="job"><b>${escapeHtml(label)}</b> · ${escapeHtml(territory)}<div class="${cls}">${escapeHtml(status)}</div>${error}</div>`;
+    }).join('');
+  }
+
+  const fortButton = $('build-fort');
+  fortButton.disabled = !selected || selected.isCapital || selected.fort;
+  fortButton.textContent = selected?.fort
+    ? 'Крепость уже построена'
+    : selected?.isCapital
+      ? 'В столице крепость запрещена'
+      : 'Построить крепость · 3 золота';
+}
+
+function availableCommandersAtOrigin() {
+  if (!origin || !house) return [];
+  const armies = snapshot?.game?.state?.armies || {};
+  const characters = snapshot?.game?.state?.characters || {};
+
+  return Object.values(armies)
+    .filter(army =>
+      army.house === house &&
+      army.territory === origin &&
+      !army.moving_order_id
+    )
+    .map(army => characters[army.commander_id])
+    .filter(character =>
+      character &&
+      character.mode === 'ARMY' &&
+      character.status === 'ACTIVE' &&
+      character.alive
+    );
+}
+
+function renderCommanderChoice() {
+  const row = $('commander-row');
+  const select = $('commander');
+  const commanders = availableCommandersAtOrigin();
+
+  if (!commanders.length) {
+    row.style.display = 'none';
+    select.innerHTML = '';
+    return;
+  }
+
+  const previous = select.value;
+  select.innerHTML = '<option value="">Без командира</option>';
+
+  for (const character of commanders) {
+    const option = document.createElement('option');
+    option.value = character.id;
+    option.textContent =
+      character.name +
+      ' · Атака ' + Number(character.stats?.attack || 0) +
+      ' · Защита ' + Number(character.stats?.defense || 0);
+    select.appendChild(option);
+  }
+
+  if (previous && commanders.some(item => item.id === previous)) {
+    select.value = previous;
+  } else if (commanders.length === 1) {
+    select.value = commanders[0].id;
+  }
+
+  row.style.display = 'block';
+}
+
+function renderSelection() {
+  const card = $('route-card');
+
+  if (isSpectator) {
+    origin = null;
+    target = null;
+    card.classList.remove('show');
+    $('commander-row').style.display = 'none';
+    $('selection').textContent = 'Наблюдение за партией без управления Домом.';
+    $('guide-title').textContent = 'РЕЖИМ НАБЛЮДАТЕЛЯ';
+    $('guide-sub').textContent = 'Карта обновляется автоматически. Ты не можешь отдавать приказы или менять состояние партии.';
+    return;
+  }
+
+  if (!origin) {
+    $('commander-row').style.display = 'none';
+    $('selection').textContent = '1. Выбери свою территорию с воинами.';
+    $('guide-title').textContent = '1. Выбери, ОТКУДА идти';
+    $('guide-sub').textContent = 'Голубой пунктирной обводкой отмечены твои территории с воинами.';
+    card.classList.remove('show');
+    return;
+  }
+
+  const o = mapNodeById(origin);
+  const own = warriorsAt(origin, house);
+  renderCommanderChoice();
+  $('selection').textContent = `ОТКУДА: ${o.name}. Доступно ${own} воинов.`;
+
+  if (!target) {
+    $('guide-title').textContent = `2. Выбери, КУДА идти из ${o.name}`;
+    $('guide-sub').textContent = 'Зелёной пунктирной обводкой отмечены допустимые цели.';
+    card.classList.remove('show');
+    return;
+  }
+
+  const t = mapNodeById(target);
+  const matching = actionsForSelection();
+  $('route-mode-row').style.display = 'none';
+
+  const preferred = preferredActionForSelection();
+  const max = Math.max(...matching.map(a => a.warriors));
+  const current = Number($('warriors').value || 1);
+
+  $('warriors').max = max;
+  $('warriors').value = Math.min(Math.max(current, 1), max);
+  $('from-name').textContent = o.name;
+  $('to-name').textContent = t.name;
+
+  const modeName =
+    preferred.mode === 'SEA'
+      ? 'море'
+      : preferred.mode === 'MIXED'
+        ? 'смешанный'
+        : 'суша';
+  const hops = Number(
+    preferred.route_hops || Math.max(0,(preferred.path || []).length - 1)
+  );
+  const seconds = Math.ceil(
+    Number(preferred.route_duration_ms || 0) / 1000
+  );
+  const routeNames = (preferred.path || [])
+    .map(id => mapNodeById(id)?.name || id)
+    .join(' → ');
+
+  $('route-meta').innerHTML =
+    'Отряд: до ' + max +
+    ' воинов · путь: ' + escapeHtml(modeName) +
+    ' · ' + hops + ' участк.' +
+    ' · ' + seconds + ' сек' +
+    (routeNames
+      ? '<br><span class="tiny">' + escapeHtml(routeNames) + '</span>'
+      : '');
+  $('guide-title').textContent = '3. Выбери, СКОЛЬКО воинов отправить';
+  $('guide-sub').textContent = 'Марш полностью выбран. Проверь маршрут внизу карты и отдай приказ.';
+  card.classList.add('show');
+}
+
+async function selectTerritory(id) {
+  if (isSpectator) return;
+
+  const owner = nodeOwner(id);
+  const movable = warriorsAt(id, house);
+
+  if (!origin) {
+    if (owner !== house || movable < 1) return;
+    origin = id;
+    target = null;
+    marchModePreference = null;
+    await loadLegal();
+  } else if (id === origin) {
+    origin = null;
+    target = null;
+    marchModePreference = null;
+  } else {
+    const valid = legal.some(a => a.from === origin && a.to === id);
+    if (!valid) {
+      if (owner === house && movable > 0) {
+        origin = id;
+        target = null;
+        marchModePreference = null;
+        await loadLegal();
+      }
+    } else {
+      target = id;
+    }
+  }
+
+  renderMap();
+  renderSelection();
+}
+
+async function sendOrder() {
+  if (!origin || !target) return;
+  const warriors = Number($('warriors').value);
+  const choices = legal.filter(a =>
+    a.from === origin &&
+    a.to === target &&
+    a.warriors === warriors
+  );
+  if (!choices.length) {
+    alert('Такой приказ больше не является легальным.');
+    await refresh();
+    return;
+  }
+
+  const action = choices[0];
+  const commanderId = $('commander').value || null;
+  await api('/api/orders', {
+    method: 'POST',
+    headers: {'content-type':'application/json'},
+    body: JSON.stringify({
+      ...action,
+      commander_id: commanderId
+    })
+  });
+
+  origin = null;
+  target = null;
+  await refresh();
+}
+
+function countdown(order) {
+  if (order.status !== 'PENDING') return order.status;
+  const left = Math.max(0, Date.parse(order.due_at) - Date.now());
+  return `${Math.ceil(left / 1000)} сек`;
+}
+
+function renderOrders() {
+  if (isSpectator || !house) {
+    $('orders').innerHTML = '<span class="muted">Приказы скрыты в режиме наблюдателя.</span>';
+    return;
+  }
+  const orders = snapshot.game.orders
+    .filter(order => order.action.house === house)
+    .slice()
+    .reverse();
+
+  if (!orders.length) {
+    $('orders').innerHTML = '<span class="muted">Нет приказов.</span>';
+    return;
+  }
+
+  $('orders').innerHTML = orders.slice(0, 12).map(order => {
+    const cls = order.status.toLowerCase();
+    const a = order.action;
+    const from = mapNodeById(a.from)?.name || a.from;
+    const to = mapNodeById(a.to)?.name || a.to;
+    const extra = order.failure_reason
+      ? `<div class="failed">${escapeHtml(order.failure_reason)}</div>`
+      : '';
+    return `
+      <div class="order">
+        <div><b>${escapeHtml(from)} -> ${escapeHtml(to)}</b></div>
+        <div>${a.warriors} воин(а) · ${Number(a.route_hops || Math.max(0,(a.path || []).length - 1))} участк. · ${Math.ceil(Number(order.duration_ms || 0) / 1000)} сек</div>
+        <div class="${cls}">${escapeHtml(countdown(order))}</div>
+        ${extra}
+      </div>`;
+  }).join('');
+}
+
+function renderJournal() {
+  const items = (snapshot.game.audit_log || []).slice(-18).reverse();
+  if (!items.length) {
+    $('journal').textContent = 'Пока пусто.';
+    return;
+  }
+  $('journal').innerHTML = items.map(item => {
+    const time = item.at ? new Date(item.at).toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit', second:'2-digit'}) : '';
+    return `<div style="margin-bottom:7px"><span class="tiny">${escapeHtml(time)}</span><br>${escapeHtml(item.message)}</div>`;
+  }).join('');
+}
+
+async function refresh() {
+  if (scopedGameId && !scopedToken) {
+    location.href = '/lobby.html?game=' + encodeURIComponent(scopedGameId);
+    return;
+  }
+
+  if (!bootstrap) {
+    bootstrap = await api('/api/bootstrap');
+  }
+
+  const live = await api('/api/state');
+  snapshot = {
+    ...bootstrap,
+    ...live
+  };
+
+  const select = $('house');
+  const playerBound = snapshot.game.lifecycle?.access_mode === 'PLAYER_BOUND';
+
+  if (playerBound) {
+    const me = snapshot.lobby?.current_player;
+    if (
+      snapshot.game.lifecycle?.status !== 'RUNNING' ||
+      !me
+    ) {
+      location.href = '/lobby.html?game=' + encodeURIComponent(scopedGameId);
+      return;
+    }
+
+    isSpectator = me.role === 'SPECTATOR';
+
+    if (isSpectator) {
+      house = null;
+      origin = null;
+      target = null;
+      legal = [];
+      economy = null;
+      managedTerritory = null;
+
+      select.innerHTML = '';
+      const option = document.createElement('option');
+      option.value = '';
+      option.textContent = 'Наблюдатель';
+      select.appendChild(option);
+      select.disabled = true;
+      select.closest('label').style.display = 'none';
+
+      $('spectator-badge').style.display = 'block';
+      $('save-game').style.display = 'none';
+      $('restore-game').style.display = 'none';
+      $('reset').style.display = 'none';
+      $('house-panel').style.display = 'none';
+      $('characters-panel').style.display = 'none';
+      $('economy-panel').style.display = 'none';
+      $('march-panel').style.display = 'none';
+      $('orders-panel').style.display = 'none';
+      $('route-card').classList.remove('show');
+    } else {
+      if (!me.house) {
+        location.href = '/lobby.html?game=' + encodeURIComponent(scopedGameId);
+        return;
+      }
+
+      house = me.house;
+      select.innerHTML = '';
+      const option = document.createElement('option');
+      option.value = house;
+      option.textContent = house;
+      select.appendChild(option);
+      select.value = house;
+      select.disabled = true;
+      select.closest('label').style.display = '';
+      $('spectator-badge').style.display = 'none';
+      $('house-panel').style.display = '';
+      $('characters-panel').style.display = '';
+      $('economy-panel').style.display = '';
+      $('march-panel').style.display = '';
+      $('orders-panel').style.display = '';
+
+      if (me.role !== 'ADMIN') {
+        $('save-game').style.display = 'none';
+        $('restore-game').style.display = 'none';
+      }
+      $('reset').style.display = 'none';
+    }
+  } else {
+    isSpectator = false;
+    $('spectator-badge').style.display = 'none';
+    $('house-panel').style.display = '';
+    $('characters-panel').style.display = '';
+    $('economy-panel').style.display = '';
+    $('march-panel').style.display = '';
+    $('orders-panel').style.display = '';
+    select.closest('label').style.display = '';
+    select.disabled = false;
+    if (!select.options.length) {
+      for (const h of snapshot.houses) {
+        const option = document.createElement('option');
+        option.value = h;
+        option.textContent = h;
+        select.appendChild(option);
+      }
+    }
+
+    house = house || select.value || snapshot.houses[0];
+    select.value = house;
+  }
+
+  if (isSpectator) {
+    legal = [];
+    economy = null;
+    characterData = null;
+  } else {
+    await Promise.all([
+      loadLegal(),
+      loadEconomy(),
+      loadCharacters()
+    ]);
+  }
+
+  if (origin) {
+    const stillOwned = nodeOwner(origin) === house && warriorsAt(origin, house) > 0;
+    if (!stillOwned) {
+      origin = null;
+      target = null;
+      marchModePreference = null;
+    }
+  }
+
+  renderVictory();
+  renderHouse();
+  renderCharacters();
+  renderEconomy();
+  renderMap();
+  renderSelection();
+  renderOrders();
+  renderJournal();
+  renderSaveStatus();
+}
+
+$('house').addEventListener('change', async event => {
+  if (snapshot?.game?.lifecycle?.access_mode === 'PLAYER_BOUND') return;
+  house = event.target.value;
+  origin = null;
+  target = null;
+  managedTerritory = null;
+  await refresh();
+});
+
+$('manage-territory').addEventListener('change', event => {
+  managedTerritory = event.target.value;
+  renderEconomy();
+});
+
+document.querySelectorAll('[data-recruit]').forEach(button => {
+  button.addEventListener('click', async () => {
+    if (!managedTerritory) return;
+    try {
+      await api('/api/recruit', {
+        method: 'POST',
+        headers: {'content-type':'application/json'},
+        body: JSON.stringify({
+          house,
+          territory: managedTerritory,
+          warriors: Number(button.dataset.recruit)
+        })
+      });
+      await refresh();
+    } catch (error) {
+      alert(error.message);
+    }
+  });
+});
+
+$('build-fort').addEventListener('click', async () => {
+  if (!managedTerritory) return;
+  try {
+    await api('/api/fort', {
+      method: 'POST',
+      headers: {'content-type':'application/json'},
+      body: JSON.stringify({ house, territory: managedTerritory })
+    });
+    await refresh();
+  } catch (error) {
+    alert(error.message);
+  }
+});
+
+$('back-menu').addEventListener('click', async () => {
+  if (isSpectator) {
+    location.href = '/lobby';
+    return;
+  }
+
+  const button = $('back-menu');
+  const original = button.textContent;
+  button.disabled = true;
+  button.textContent = 'Сохраняем...';
+
+  try {
+    const saved = await api('/api/save-exit', { method: 'POST' });
+    lastManualSnapshotAt = saved.saved_at || new Date().toISOString();
+    renderSaveStatus();
+    location.href = '/lobby';
+  } catch (error) {
+    button.disabled = false;
+    button.textContent = original;
+    alert('Не удалось сохранить игру перед выходом: ' + error.message);
+  }
+});
+
+$('save-game').addEventListener('click', async () => {
+  try {
+    const saved = await api('/api/snapshot', { method: 'POST' });
+    lastManualSnapshotAt = saved.saved_at;
+    renderSaveStatus();
+  } catch (error) {
+    alert('Не удалось сохранить: ' + error.message);
+  }
+});
+
+$('restore-game').addEventListener('click', async () => {
+  if (!confirm('Восстановить последний Firestore checkpoint? Текущее состояние партии будет заменено.')) return;
+  try {
+    const restored = await api('/api/snapshot/restore-latest', { method: 'POST' });
+    lastManualSnapshotAt = restored.snapshot_saved_at || null;
+    origin = null;
+    target = null;
+    managedTerritory = null;
+    await refresh();
+  } catch (error) {
+    alert('Не удалось восстановить: ' + error.message);
+  }
+});
+
+$('send').addEventListener('click', sendOrder);
+
+$('max-warriors').addEventListener('click', () => {
+  const max = Number($('warriors').max || 1);
+  $('warriors').value = max;
+});
+
+$('reset').addEventListener('click', async () => {
+  await api('/api/reset', { method: 'POST' });
+  origin = null;
+  target = null;
+  await refresh();
+});
+
+let refreshInFlight = false;
+let heartbeatInFlight = false;
+
+async function profileHeartbeat() {
+  if (!profileToken || !scopedGameId || document.visibilityState !== 'visible' || heartbeatInFlight) return;
+  heartbeatInFlight = true;
+  try {
+    await api('/api/profile-heartbeat', { method:'POST' });
+  } catch (error) {
+    console.warn('profile heartbeat failed', error);
+  } finally {
+    heartbeatInFlight = false;
+  }
+}
+
+async function backgroundRefresh() {
+  if (refreshInFlight) return;
+  refreshInFlight = true;
+  try {
+    await refresh();
+  } catch (error) {
+    console.error('background refresh failed', error);
+  } finally {
+    refreshInFlight = false;
+  }
+}
+
+function animateMap() {
+  updateMovingArmyPositions();
+  requestAnimationFrame(animateMap);
+}
+requestAnimationFrame(animateMap);
+
+refresh()
+  .then(() => profileHeartbeat())
+  .catch(error => {
+    console.error(error);
+    alert(error.message);
+  });
+
+setInterval(backgroundRefresh, 1500);
+setInterval(profileHeartbeat, 60000);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') profileHeartbeat();
+});
+</script>
+</body>
+</html>

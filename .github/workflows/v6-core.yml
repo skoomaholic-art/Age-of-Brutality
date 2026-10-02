@@ -24,3 +24,22 @@ jobs:
       - name: Validate V6 core
         working-directory: v6
         run: npm run check
+
+      - name: Validate online server syntax
+        working-directory: v6
+        run: |
+          node --check src/core/characters.mjs
+          node --check src/online/sea-navigation.mjs
+          node --check src/online/route-planner.mjs
+          node --check src/online/orders.mjs
+          node --check src/online/server.mjs
+          node --check src/online/firestore-store.mjs
+          node --check src/online/multiplayer.mjs
+          node --check src/online/profile.mjs
+          node --check src/online/commands.mjs
+          node --check src/online/stats.mjs
+          node --check src/online/snapshot.mjs
+
+      - name: Validate browser scripts
+        working-directory: v6
+        run: node tools/check-browser-html.mjs

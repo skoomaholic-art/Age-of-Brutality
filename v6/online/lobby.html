@@ -1,0 +1,1735 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Жестокий век - Игровой центр</title>
+<style>
+:root { color-scheme:dark; font-family:Inter,ui-sans-serif,system-ui,-apple-system,sans-serif; }
+* { box-sizing:border-box; }
+body { margin:0; background:#0d1114; color:#eee7d8; min-height:100vh; }
+main { width:min(980px,100%); margin:0 auto; padding:24px 16px 60px; }
+h1 { margin:0 0 6px; font-size:28px; letter-spacing:.06em; }
+h2 { margin:0 0 14px; font-size:19px; }
+h3 { margin:0 0 10px; font-size:15px; }
+.muted { color:#89969d; }
+.card { border:1px solid #313b42; border-radius:18px; padding:18px; background:#151b1f; }
+.grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+.create-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+.section { margin-top:22px; }
+label { display:block; font-size:12px; color:#9da8ae; margin:11px 0 5px; }
+input,select,button {
+  width:100%; border:1px solid #46545d; border-radius:12px; padding:12px;
+  background:#0e1418; color:#f4eee2; font:inherit;
+}
+button { cursor:pointer; font-weight:700; }
+button.primary { background:#eee7d8; color:#13181b; border-color:#eee7d8; }
+button:disabled { opacity:.42; cursor:not-allowed; }
+button.loading { opacity:.65; cursor:wait; }
+.profile-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:end; margin-top:18px; }
+.profile-row button { width:auto; min-width:130px; }
+.account-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.account-head { display:flex; justify-content:space-between; gap:14px; align-items:center; }
+.account-head button { width:auto; min-width:120px; }
+.account-name { font-size:18px; font-weight:850; }
+.account-handle { margin-top:3px; color:#89969d; font-size:12px; }
+.account-identity { display:flex; gap:12px; align-items:center; }
+.profile-avatar {
+  width:64px; height:64px; border-radius:18px; display:grid; place-items:center;
+  border:1px solid #53616a; background:#10161a; font-size:30px; font-weight:900;
+  cursor:pointer; padding:0; position:relative;
+}
+.profile-avatar::after {
+  content:'✎'; position:absolute; right:-5px; bottom:-5px; width:21px; height:21px;
+  border-radius:999px; display:grid; place-items:center; background:#eee7d8; color:#13181b;
+  border:2px solid #151b1f; font-size:10px; font-weight:900;
+}
+.profile-stats {
+  display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; margin-top:16px;
+}
+.profile-stat { border:1px solid #2f3940; border-radius:12px; padding:10px; background:#11171b; }
+.profile-stat span { display:block; font-size:10px; color:#89969d; text-transform:uppercase; letter-spacing:.05em; }
+.profile-stat b { display:block; margin-top:4px; font-size:18px; }
+.avatar-picker { display:grid; grid-template-columns:repeat(6,1fr); gap:8px; margin-top:10px; }
+.avatar-option { aspect-ratio:1; padding:0; font-size:22px; }
+.avatar-option.selected { border-color:#ffd45c; box-shadow:0 0 0 2px rgba(255,212,92,.25); }
+.avatar-modal {
+  position:fixed; inset:0; z-index:1000; display:none; align-items:center; justify-content:center;
+  padding:18px; background:rgba(0,0,0,.72); backdrop-filter:blur(6px);
+}
+.avatar-modal.open { display:flex; }
+.avatar-dialog {
+  width:min(460px,100%); border:1px solid #3b474f; border-radius:20px;
+  background:#151b1f; padding:18px; box-shadow:0 24px 80px rgba(0,0,0,.45);
+}
+.avatar-dialog-head { display:flex; justify-content:space-between; gap:12px; align-items:center; }
+.avatar-dialog-head button { width:auto; min-width:44px; padding:9px 12px; }
+.avatar-dialog-actions { display:flex; gap:8px; margin-top:16px; }
+.avatar-dialog-actions button { flex:1; }
+.achievement-box { margin-top:16px; border-top:1px solid #283138; padding-top:14px; }
+.achievement-list { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+.achievement-pill { border:1px solid #3d4850; border-radius:999px; padding:6px 10px; font-size:11px; }
+.social-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.social-list { display:grid; gap:8px; margin-top:10px; }
+.social-user {
+  border:1px solid #2f3940; border-radius:12px; padding:10px; background:#11171b;
+  display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:10px; align-items:center;
+}
+.social-avatar {
+  width:40px; height:40px; border-radius:12px; display:grid; place-items:center;
+  border:1px solid #45535b; background:#0e1418; font-size:19px; font-weight:800;
+}
+.social-name { font-weight:800; }
+.social-meta { margin-top:3px; color:#89969d; font-size:11px; }
+.presence { display:inline-flex; align-items:center; gap:5px; margin-left:6px; }
+.presence::before { content:''; width:7px; height:7px; border-radius:999px; background:#66737b; }
+.presence.online::before { background:#69d28f; }
+.presence.in-game::before { background:#e7bf5c; box-shadow:0 0 0 3px rgba(231,191,92,.12); }
+.profile-view-head { display:flex; gap:14px; align-items:center; margin-top:10px; }
+.profile-view-avatar {
+  width:82px; height:82px; flex:0 0 82px; border-radius:22px; display:grid; place-items:center;
+  border:1px solid #53616a; background:#10161a; font-size:38px; font-weight:900;
+}
+.profile-view-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; }
+.profile-view-actions button { width:auto; min-width:120px; }
+.social-name-button {
+  padding:0; border:0; background:transparent; width:auto; text-align:left; border-radius:0;
+  color:#f4eee2; font-weight:800;
+}
+.social-actions { display:flex; flex-wrap:wrap; gap:6px; justify-content:flex-end; }
+.social-actions button { width:auto; min-width:0; padding:8px 10px; font-size:12px; }
+.social-search { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; }
+.social-search button { width:auto; min-width:120px; }
+.unread-badge {
+  display:inline-grid; min-width:20px; height:20px; place-items:center; padding:0 6px;
+  border-radius:999px; background:#eee7d8; color:#13181b; font-size:10px; font-weight:900;
+}
+.social-modal {
+  position:fixed; inset:0; z-index:1100; display:none; align-items:center; justify-content:center;
+  padding:18px; background:rgba(0,0,0,.72); backdrop-filter:blur(6px);
+}
+.social-modal.open { display:flex; }
+.social-dialog {
+  width:min(620px,100%); max-height:min(760px,92vh); overflow:auto;
+  border:1px solid #3b474f; border-radius:20px; background:#151b1f; padding:18px;
+}
+.social-dialog-head { display:flex; justify-content:space-between; gap:12px; align-items:center; }
+.social-dialog-head button { width:auto; min-width:44px; padding:9px 12px; }
+.chat-log { display:grid; gap:8px; margin:14px 0; max-height:420px; overflow:auto; }
+.chat-message { max-width:82%; border:1px solid #334048; border-radius:12px; padding:9px 10px; background:#10161a; }
+.chat-message.mine { margin-left:auto; background:#20282d; }
+.chat-time { margin-top:4px; color:#78868e; font-size:10px; }
+.chat-compose { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; }
+.chat-compose button { width:auto; min-width:110px; }
+.invite-game-list { display:grid; gap:8px; margin-top:14px; }
+.game-list,.room-list { display:grid; gap:10px; }
+.game-card,.room-card {
+  border:1px solid #2f3940; border-radius:14px; padding:14px;
+  display:grid; grid-template-columns:minmax(0,1fr) auto; gap:14px; align-items:center;
+  background:#11171b;
+}
+.game-title { font-weight:850; font-size:15px; }
+.game-meta { margin-top:5px; color:#93a0a7; font-size:12px; line-height:1.45; }
+.game-actions { display:flex; gap:8px; }
+.game-actions button { width:auto; min-width:120px; }
+.empty { border:1px dashed #344047; border-radius:14px; padding:18px; color:#819098; text-align:center; }
+.code { font-size:32px; letter-spacing:.18em; font-weight:900; margin:8px 0 18px; }
+.house-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+.house { position:relative; min-height:60px; }
+.house.claimed { opacity:.5; }
+.house.mine { border-color:#ffd45c; box-shadow:0 0 0 2px rgba(255,212,92,.25); }
+.players { margin-top:14px; }
+.player { display:flex; justify-content:space-between; gap:12px; padding:9px 0; border-top:1px solid #283138; }
+.player:first-child { border-top:0; }
+.actions { display:flex; gap:8px; margin-top:16px; flex-wrap:wrap; }
+.actions button { flex:1; min-width:140px; }
+.room-topbar { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
+.room-topbar button { width:auto; min-width:150px; }
+.start-hint { margin-top:10px; font-size:12px; color:#9da8ae; }
+.error { color:#ff9b8a; margin-top:10px; white-space:pre-wrap; }
+.badge { display:inline-block; border:1px solid #43515a; border-radius:999px; padding:3px 7px; font-size:10px; color:#a9b4ba; margin-right:5px; }
+.badge.solo { border-color:#806e3a; color:#e9d685; }
+.badge.public { border-color:#3c6b55; color:#87d7ad; }
+.badge.private { border-color:#565b72; color:#b2b8df; }
+@media(max-width:780px) {
+  .grid,.create-grid,.account-grid,.social-grid { grid-template-columns:1fr; }
+  .social-search,.chat-compose { grid-template-columns:1fr; }
+  .social-search button,.chat-compose button { width:100%; }
+  .profile-stats { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .avatar-picker { grid-template-columns:repeat(4,1fr); }
+  .profile-row { grid-template-columns:1fr; }
+  .profile-row button { width:100%; }
+  .game-card,.room-card { grid-template-columns:1fr; }
+  .game-actions button { flex:1; width:100%; }
+  .house-grid { grid-template-columns:1fr 1fr; }
+  .actions { flex-direction:column; }
+  .room-topbar { flex-direction:column; }
+  .room-topbar button { width:100%; }
+}
+</style>
+</head>
+<body>
+<main>
+  <h1>ЖЕСТОКИЙ ВЕК</h1>
+  <div class="muted">Игровой центр</div>
+
+  <section id="hub">
+    <section class="section card" id="account-card">
+      <div id="account-signed-out">
+        <h2>Профиль игрока</h2>
+        <div class="muted" style="margin-bottom:12px">
+          Войди в профиль, чтобы видеть свои партии на любом устройстве.
+        </div>
+        <div class="account-grid">
+          <div>
+            <h3>Войти</h3>
+            <label>Логин</label>
+            <input id="login-handle" maxlength="24" autocomplete="username" placeholder="skoomaholic">
+            <label>Пароль</label>
+            <input id="login-password" type="password" maxlength="128" autocomplete="current-password">
+            <button id="login-profile" class="primary" style="margin-top:14px">Войти</button>
+          </div>
+          <div>
+            <h3>Создать профиль</h3>
+            <label>Логин</label>
+            <input id="register-handle" maxlength="24" autocomplete="username" placeholder="skoomaholic">
+            <label>Имя в игре</label>
+            <input id="register-name" maxlength="40" placeholder="Например, Александр">
+            <label>Пароль</label>
+            <input id="register-password" type="password" maxlength="128" autocomplete="new-password" placeholder="Минимум 8 символов">
+            <button id="register-profile" class="primary" style="margin-top:14px">Создать профиль</button>
+          </div>
+        </div>
+        <div id="profile-error" class="error"></div>
+      </div>
+
+      <div id="account-signed-in" style="display:none">
+        <div class="account-head">
+          <div class="account-identity">
+            <button id="account-avatar" class="profile-avatar" type="button" aria-label="Выбрать аватар" title="Выбрать аватар">✦</button>
+            <div>
+              <div id="account-name" class="account-name">Игрок</div>
+              <div id="account-handle" class="account-handle">@login</div>
+            </div>
+          </div>
+          <button id="logout-profile">Выйти</button>
+        </div>
+
+        <div class="profile-stats">
+          <div class="profile-stat"><span>MMR</span><b id="stat-mmr">1000</b></div>
+          <div class="profile-stat"><span>Сыграно</span><b id="stat-games">0</b></div>
+          <div class="profile-stat"><span>Победы</span><b id="stat-wins">0</b></div>
+          <div class="profile-stat"><span>Поражения</span><b id="stat-losses">0</b></div>
+          <div class="profile-stat"><span>В игре</span><b id="stat-time">0 мин</b></div>
+        </div>
+
+        <div class="achievement-box">
+          <h3>Достижения</h3>
+          <div id="achievement-list" class="achievement-list">
+            <span class="muted">Пока достижений нет.</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="social-card" class="section card" style="display:none">
+      <h2>Друзья и сообщения <span id="social-unread" class="unread-badge" style="display:none">0</span></h2>
+      <div class="social-search">
+        <input id="friend-search" maxlength="24" placeholder="Найти игрока по логину">
+        <button id="friend-search-button">Найти</button>
+      </div>
+      <div id="friend-search-result" class="social-list"></div>
+
+      <div class="social-grid" style="margin-top:16px">
+        <div>
+          <h3>Друзья</h3>
+          <div id="friends-list" class="social-list"><div class="empty">Пока друзей нет.</div></div>
+        </div>
+        <div>
+          <h3>Заявки</h3>
+          <div id="friend-requests" class="social-list"><div class="empty">Новых заявок нет.</div></div>
+        </div>
+        <div>
+          <h3>Приглашения в игры</h3>
+          <div id="game-invites-list" class="social-list"><div class="empty">Приглашений нет.</div></div>
+        </div>
+        <div>
+          <h3>Заблокированные</h3>
+          <div id="blocked-list" class="social-list"><div class="empty">Список пуст.</div></div>
+        </div>
+      </div>
+      <div id="social-error" class="error"></div>
+    </section>
+
+    <section class="section card">
+      <h2>Мои игры</h2>
+      <div id="my-games" class="game-list">
+        <div class="empty">Загружаем сохранённые партии...</div>
+      </div>
+    </section>
+
+    <section class="section card">
+      <h2>Открытые комнаты</h2>
+      <div class="muted" style="margin-bottom:12px">Публичные лобби, к которым можно подключиться без кода.</div>
+      <div id="open-rooms" class="room-list">
+        <div class="empty">Ищем открытые комнаты...</div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Новая игра</h2>
+      <div class="create-grid">
+        <div class="card">
+          <h3>Соло</h3>
+          <div class="muted">Отдельная сохраняемая партия для одного игрока.</div>
+          <label>Дом</label>
+          <select id="solo-house"></select>
+          <button id="create-solo" class="primary" style="margin-top:14px">Начать соло</button>
+          <div id="solo-error" class="error"></div>
+        </div>
+
+        <div class="card">
+          <h3>Открытая комната</h3>
+          <div class="muted">Появится в общем списке комнат.</div>
+          <label>Название комнаты</label>
+          <input id="public-room-name" maxlength="60" placeholder="Например, Комната 1">
+          <label>Твой Дом</label>
+          <select id="public-house">
+            <option value="">Выбрать позже</option>
+          </select>
+          <button id="create-public" class="primary" style="margin-top:14px">Создать открытую</button>
+          <div id="public-error" class="error"></div>
+        </div>
+
+        <div class="card">
+          <h3>Приватная комната</h3>
+          <div class="muted">Вход только по коду приглашения.</div>
+          <label>Название комнаты</label>
+          <input id="private-room-name" maxlength="60" placeholder="Например, Для друзей">
+          <label>Твой Дом</label>
+          <select id="private-house">
+            <option value="">Выбрать позже</option>
+          </select>
+          <button id="create-private" class="primary" style="margin-top:14px">Создать приватную</button>
+          <div id="private-error" class="error"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section card">
+      <h2>Войти по коду</h2>
+      <div class="grid">
+        <div>
+          <label>Код приглашения</label>
+          <input id="join-code" maxlength="6" placeholder="ABC234" style="text-transform:uppercase">
+        </div>
+        <div>
+          <label>&nbsp;</label>
+          <button id="join-private" class="primary">Подключиться</button>
+        </div>
+      </div>
+      <div id="join-error" class="error"></div>
+    </section>
+  </section>
+
+  <section id="room" class="card" style="display:none;margin-top:20px">
+    <div class="room-topbar">
+      <div>
+        <div id="room-kind" class="muted"></div>
+        <div id="invite" class="code">------</div>
+        <div id="status" class="muted"></div>
+      </div>
+      <button id="back-menu">В главное меню</button>
+    </div>
+
+    <h2 style="margin-top:22px">Дома</h2>
+    <div id="houses" class="house-grid"></div>
+
+    <h2 style="margin-top:22px">Игроки</h2>
+    <div id="players" class="players"></div>
+
+    <div class="actions">
+      <button id="release-house" style="display:none">Освободить Дом</button>
+      <button id="start" class="primary" style="display:none">Начать игру</button>
+      <button id="open-game" style="display:none">Открыть карту</button>
+      <button id="refresh">Обновить</button>
+    </div>
+    <div id="start-hint" class="start-hint"></div>
+    <div id="room-error" class="error"></div>
+  </section>
+</main>
+
+<div id="avatar-modal" class="avatar-modal" role="dialog" aria-modal="true" aria-labelledby="avatar-modal-title">
+  <div class="avatar-dialog">
+    <div class="avatar-dialog-head">
+      <div>
+        <h2 id="avatar-modal-title" style="margin:0">Выбрать аватар</h2>
+        <div class="muted" style="margin-top:4px">Выбери и сохрани новый аватар профиля.</div>
+      </div>
+      <button id="avatar-close" type="button" aria-label="Закрыть">✕</button>
+    </div>
+    <div id="avatar-picker" class="avatar-picker"></div>
+    <div class="avatar-dialog-actions">
+      <button id="avatar-cancel" type="button">Отмена</button>
+      <button id="avatar-save" type="button" class="primary">Сохранить</button>
+    </div>
+    <div id="avatar-error" class="error"></div>
+  </div>
+</div>
+
+<div id="player-profile-modal" class="social-modal" role="dialog" aria-modal="true" aria-labelledby="player-profile-name">
+  <div class="social-dialog">
+    <div class="social-dialog-head">
+      <div>
+        <h2 id="player-profile-name" style="margin:0">Профиль игрока</h2>
+        <div id="player-profile-handle" class="muted" style="margin-top:4px"></div>
+      </div>
+      <button id="player-profile-close" type="button">✕</button>
+    </div>
+
+    <div class="profile-view-head">
+      <div id="player-profile-avatar" class="profile-view-avatar">✦</div>
+      <div>
+        <div id="player-profile-presence"></div>
+        <div id="player-profile-game" class="muted" style="margin-top:6px"></div>
+      </div>
+    </div>
+
+    <div class="profile-stats">
+      <div class="profile-stat"><span>MMR</span><b id="view-stat-mmr">1000</b></div>
+      <div class="profile-stat"><span>Сыграно</span><b id="view-stat-games">0</b></div>
+      <div class="profile-stat"><span>Победы</span><b id="view-stat-wins">0</b></div>
+      <div class="profile-stat"><span>Поражения</span><b id="view-stat-losses">0</b></div>
+      <div class="profile-stat"><span>В игре</span><b id="view-stat-time">0 мин</b></div>
+    </div>
+
+    <div class="achievement-box">
+      <h3>Достижения</h3>
+      <div id="player-profile-achievements" class="achievement-list">
+        <span class="muted">Пока достижений нет.</span>
+      </div>
+    </div>
+
+    <div id="player-profile-actions" class="profile-view-actions"></div>
+    <div id="player-profile-error" class="error"></div>
+  </div>
+</div>
+
+<div id="chat-modal" class="social-modal" role="dialog" aria-modal="true" aria-labelledby="chat-title">
+  <div class="social-dialog">
+    <div class="social-dialog-head">
+      <div>
+        <h2 id="chat-title" style="margin:0">Сообщения</h2>
+        <div id="chat-subtitle" class="muted" style="margin-top:4px"></div>
+      </div>
+      <button id="chat-close" type="button">✕</button>
+    </div>
+    <div id="chat-log" class="chat-log"></div>
+    <div class="chat-compose">
+      <input id="chat-input" maxlength="1000" placeholder="Написать сообщение...">
+      <button id="chat-send" class="primary">Отправить</button>
+    </div>
+    <div id="chat-error" class="error"></div>
+  </div>
+</div>
+
+<div id="game-invite-modal" class="social-modal" role="dialog" aria-modal="true" aria-labelledby="game-invite-title">
+  <div class="social-dialog">
+    <div class="social-dialog-head">
+      <div>
+        <h2 id="game-invite-title" style="margin:0">Пригласить в игру</h2>
+        <div id="game-invite-subtitle" class="muted" style="margin-top:4px"></div>
+      </div>
+      <button id="game-invite-close" type="button">✕</button>
+    </div>
+    <div id="invite-game-list" class="invite-game-list"></div>
+    <div id="game-invite-error" class="error"></div>
+  </div>
+</div>
+
+<script>
+const houses = ['Варкайр','Сайрвен','Ортайн','Эркай','Тасвар','Айрель'];
+const profileAvatars = [
+  ['sigil-01','✦'],['sigil-02','♜'],['sigil-03','◆'],['sigil-04','▲'],
+  ['sigil-05','☾'],['sigil-06','☀'],['sigil-07','✚'],['sigil-08','♠'],
+  ['sigil-09','⬢'],['sigil-10','⚜'],['sigil-11','✧'],['sigil-12','◈']
+];
+const params = new URLSearchParams(location.search);
+let gameId = params.get('game');
+let profileToken = localStorage.getItem('aob-profile-token');
+let activeProfile = null;
+let token = gameId
+  ? (profileToken || localStorage.getItem('aob-token-' + gameId))
+  : null;
+let roomLoadInFlight = false;
+let hubLoadInFlight = false;
+let knownGameIds = new Set();
+let currentProfileGames = [];
+let currentSocial = null;
+let socialLoadInFlight = false;
+let activeChatProfile = null;
+let inviteTargetProfile = null;
+let viewedPlayerProfile = null;
+let pendingAvatarId = null;
+const $ = id => document.getElementById(id);
+
+for (const selectId of ['solo-house','public-house','private-house']) {
+  for (const house of houses) {
+    const option = document.createElement('option');
+    option.value = house;
+    option.textContent = house;
+    $(selectId).appendChild(option);
+  }
+}
+
+function displayName() {
+  return activeProfile?.display_name || localStorage.getItem('aob-display-name') || 'Игрок';
+}
+
+function profileAuth() {
+  return profileToken || null;
+}
+
+function avatarSymbol(id) {
+  return profileAvatars.find(item => item[0] === id)?.[1] || '✦';
+}
+
+function formatPlayTime(seconds) {
+  const total = Math.max(0, Number(seconds || 0));
+  if (total < 3600) return Math.floor(total / 60) + ' мин';
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  return minutes ? hours + ' ч ' + minutes + ' мин' : hours + ' ч';
+}
+
+function renderAvatarPicker() {
+  if (!activeProfile || !profileToken) return;
+  const current = pendingAvatarId || activeProfile.avatar_id || 'sigil-01';
+  $('avatar-picker').innerHTML = profileAvatars.map(([id,symbol]) =>
+    '<button class="avatar-option' + (id === current ? ' selected' : '') +
+    '" type="button" data-avatar="' + id + '" title="' + id + '">' + symbol + '</button>'
+  ).join('');
+
+  document.querySelectorAll('[data-avatar]').forEach(button => {
+    button.onclick = () => {
+      pendingAvatarId = button.dataset.avatar;
+      renderAvatarPicker();
+    };
+  });
+}
+
+function openAvatarModal() {
+  if (!activeProfile || !profileToken) return;
+  pendingAvatarId = activeProfile.avatar_id || 'sigil-01';
+  $('avatar-error').textContent = '';
+  renderAvatarPicker();
+  $('avatar-modal').classList.add('open');
+}
+
+function closeAvatarModal() {
+  $('avatar-modal').classList.remove('open');
+  $('avatar-error').textContent = '';
+  pendingAvatarId = null;
+}
+
+async function saveAvatarSelection() {
+  if (!pendingAvatarId || !activeProfile || !profileToken) return;
+  const button = $('avatar-save');
+
+  try {
+    await withBusy(button, 'Сохраняем...', async () => {
+      const data = await request('/api/profile/avatar', {
+        method:'POST',
+        headers:{'content-type':'application/json'},
+        body:JSON.stringify({ avatar_id:pendingAvatarId })
+      }, profileToken);
+
+      activeProfile = data.profile;
+      renderAccount();
+      closeAvatarModal();
+    });
+  } catch (error) {
+    $('avatar-error').textContent = friendlyError(error);
+  }
+}
+
+function renderAccount() {
+  const signedIn = Boolean(activeProfile && profileToken);
+  $('account-signed-out').style.display = signedIn ? 'none' : 'block';
+  $('account-signed-in').style.display = signedIn ? 'block' : 'none';
+  $('social-card').style.display = signedIn ? 'block' : 'none';
+
+  for (const id of ['create-solo','create-public','create-private','join-private']) {
+    $(id).disabled = !signedIn;
+    $(id).title = signedIn ? '' : 'Сначала войди в профиль';
+  }
+
+  if (signedIn) {
+    const stats = activeProfile.stats || {};
+    $('account-name').textContent = activeProfile.display_name;
+    $('account-handle').textContent = '@' + activeProfile.handle;
+    $('account-avatar').textContent = avatarSymbol(activeProfile.avatar_id);
+    $('stat-mmr').textContent = Number(stats.mmr || 1000);
+    $('stat-games').textContent = Number(stats.games_played || 0);
+    $('stat-wins').textContent = Number(stats.wins || 0);
+    $('stat-losses').textContent = Number(stats.losses || 0);
+    $('stat-time').textContent = formatPlayTime(stats.play_seconds || 0);
+
+    const achievements = Array.isArray(stats.achievements) ? stats.achievements : [];
+    $('achievement-list').innerHTML = achievements.length
+      ? achievements.map(item =>
+          '<span class="achievement-pill">' + escapeHtml(item) + '</span>'
+        ).join('')
+      : '<span class="muted">Пока достижений нет.</span>';
+
+    localStorage.setItem('aob-display-name', activeProfile.display_name);
+  }
+}
+
+async function migrateLocalGamesToProfile() {
+  if (!profileToken) return;
+  const local = savedGames();
+
+  for (const entry of local) {
+    try {
+      await request('/api/profile/link-game', {
+        method:'POST',
+        headers:{'content-type':'application/json'},
+        body:JSON.stringify({
+          game_id:entry.gameId,
+          game_token:entry.token
+        })
+      }, profileToken);
+    } catch (error) {
+      if (!/already linked|linked to another profile/i.test(String(error.message))) {
+        console.warn('Could not link local game', entry.gameId, error);
+      }
+    }
+  }
+}
+
+async function acceptProfileSession(data) {
+  profileToken = data.profile_token;
+  activeProfile = data.profile;
+  localStorage.setItem('aob-profile-token', profileToken);
+  localStorage.setItem('aob-display-name', activeProfile.display_name);
+  renderAccount();
+  await migrateLocalGamesToProfile();
+  await loadHub();
+}
+
+async function restoreProfileSession() {
+  if (!profileToken) {
+    activeProfile = null;
+    renderAccount();
+    return false;
+  }
+  try {
+    const data = await request('/api/profile', {}, profileToken);
+    activeProfile = data.profile;
+    renderAccount();
+    return true;
+  } catch {
+    localStorage.removeItem('aob-profile-token');
+    profileToken = null;
+    activeProfile = null;
+    token = gameId ? localStorage.getItem('aob-token-' + gameId) : null;
+    renderAccount();
+    return false;
+  }
+}
+
+function commandId() {
+  return globalThis.crypto?.randomUUID
+    ? globalThis.crypto.randomUUID()
+    : 'cmd-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function decodeResponse(res) {
+  const raw = await res.text();
+  if (!raw) return {};
+  try { return JSON.parse(raw); }
+  catch { return { error: raw.trim() || ('HTTP ' + res.status) }; }
+}
+
+async function request(url, options = {}, authToken = null) {
+  const next = { ...options };
+  const headers = new Headers(next.headers || {});
+  const method = String(next.method || 'GET').toUpperCase();
+
+  if (!['GET','HEAD'].includes(method) && !headers.has('Idempotency-Key')) {
+    headers.set('Idempotency-Key', commandId());
+  }
+  if (authToken) headers.set('Authorization', 'Bearer ' + authToken);
+  next.headers = headers;
+
+  const retryable = new Set([502,503,504]);
+  const delays = [0,600,1200,2400];
+  let lastError = null;
+
+  for (let attempt = 0; attempt < delays.length; attempt += 1) {
+    if (delays[attempt]) await sleep(delays[attempt]);
+    try {
+      const res = await fetch(url, next);
+      const data = await decodeResponse(res);
+      if (res.ok) return data;
+
+      if (retryable.has(res.status) && attempt < delays.length - 1) {
+        lastError = new Error('Сервер временно недоступен. Повторяем запрос...');
+        continue;
+      }
+      throw new Error(data.error || ('Ошибка сервера HTTP ' + res.status));
+    } catch (error) {
+      lastError = error;
+      if (error instanceof TypeError && attempt < delays.length - 1) continue;
+      throw error;
+    }
+  }
+  throw lastError || new Error('Сервер временно недоступен.');
+}
+
+async function withBusy(button, busyText, fn) {
+  const original = button.textContent;
+  const wasDisabled = button.disabled;
+  button.disabled = true;
+  button.classList.add('loading');
+  button.textContent = busyText;
+  try { return await fn(); }
+  finally {
+    button.classList.remove('loading');
+    button.textContent = original;
+    button.disabled = wasDisabled;
+  }
+}
+
+function friendlyError(error) {
+  const message = String(error?.message || error || '');
+  if (/Service Unavailable|Bad Gateway|Gateway Timeout|HTTP 50[234]/i.test(message)) {
+    return 'Сервер временно недоступен. Попробуй ещё раз через несколько секунд.';
+  }
+  return message;
+}
+
+function saveAccess(data) {
+  gameId = data.game_id;
+  const gameToken = data.access_token;
+  if (gameToken) localStorage.setItem('aob-token-' + gameId, gameToken);
+  token = profileToken || gameToken || token;
+  if (data.player?.display_name) {
+    localStorage.setItem('aob-display-name', data.player.display_name);
+  }
+  knownGameIds.add(gameId);
+}
+
+function savedGames() {
+  const result = [];
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const key = localStorage.key(i);
+    if (!key?.startsWith('aob-token-game-')) continue;
+    const id = key.slice('aob-token-'.length);
+    const accessToken = localStorage.getItem(key);
+    if (id && accessToken) result.push({ gameId:id, token:accessToken });
+  }
+  return result;
+}
+
+function badgeFor(life) {
+  if (life.game_mode === 'SOLO') return '<span class="badge solo">СОЛО</span>';
+  if (life.visibility === 'PUBLIC') return '<span class="badge public">ОТКРЫТАЯ</span>';
+  return '<span class="badge private">ПРИВАТНАЯ</span>';
+}
+
+function statusText(status) {
+  return {
+    LOBBY:'Лобби',
+    RUNNING:'Идёт игра',
+    FINISHED:'Завершена',
+    ARCHIVED:'Архив'
+  }[status] || status;
+}
+
+async function loadMyGames() {
+  let games = [];
+
+  if (profileToken && activeProfile) {
+    try {
+      const data = await request('/api/profile/games', {}, profileToken);
+      if (data.profile) {
+        activeProfile = data.profile;
+        renderAccount();
+      }
+      games = (data.games || [])
+        .filter(item => ['LOBBY','RUNNING'].includes(item.lifecycle?.status))
+        .map(item => ({
+          game_id:item.game_id,
+          lifecycle:item.lifecycle,
+          current_player:item.player
+        }));
+    } catch (error) {
+      $('my-games').innerHTML = '<div class="empty">' + escapeHtml(friendlyError(error)) + '</div>';
+      return [];
+    }
+  } else {
+    const entries = savedGames();
+    if (!entries.length) {
+      $('my-games').innerHTML = '<div class="empty">Войди в профиль или создай игру на этом устройстве.</div>';
+      knownGameIds = new Set();
+      return [];
+    }
+
+    const loaded = await Promise.all(entries.map(async entry => {
+      try {
+        const data = await request(
+          '/api/games/' + encodeURIComponent(entry.gameId) + '/lobby',
+          {},
+          entry.token
+        );
+        return { ...data, token:entry.token };
+      } catch (error) {
+        if (/invalid player token|authentication required|game not found/i.test(String(error.message))) {
+          localStorage.removeItem('aob-token-' + entry.gameId);
+        }
+        return null;
+      }
+    }));
+
+    games = loaded
+      .filter(Boolean)
+      .filter(item => ['LOBBY','RUNNING'].includes(item.lifecycle?.status));
+  }
+
+  games.sort((a,b) =>
+    String(b.lifecycle?.created_at || '').localeCompare(String(a.lifecycle?.created_at || ''))
+  );
+  currentProfileGames = games;
+  knownGameIds = new Set(games.map(item => item.game_id));
+
+  if (!games.length) {
+    $('my-games').innerHTML = '<div class="empty">Активных игр нет.</div>';
+    return [];
+  }
+
+  $('my-games').innerHTML = games.map(item => {
+    const life = item.lifecycle;
+    const me = item.current_player;
+    const target = life.status === 'RUNNING'
+      ? '/?game=' + encodeURIComponent(item.game_id)
+      : '/lobby.html?game=' + encodeURIComponent(item.game_id);
+    const action = life.status === 'RUNNING' ? 'Продолжить' : 'В лобби';
+    const house = me?.house ? ' · Дом: ' + escapeHtml(me.house) : '';
+    return `
+      <div class="game-card">
+        <div>
+          <div>${badgeFor(life)}</div>
+          <div class="game-title">${escapeHtml(life.room_name || 'Игра')}</div>
+          <div class="game-meta">
+            ${escapeHtml(statusText(life.status))}${house}
+            · Игроков: ${Number(life.player_count || 0)}/${Number(life.max_players || 6)}
+          </div>
+        </div>
+        <div class="game-actions">
+          <button class="primary" onclick="location.href='${target}'">${action}</button>
+        </div>
+      </div>`;
+  }).join('');
+
+  return games;
+}
+
+function presenceLabel(presence) {
+  if (presence?.status === 'IN_GAME') {
+    return '<span class="presence in-game">В игре</span>';
+  }
+  if (presence?.status === 'ONLINE') {
+    return '<span class="presence online">В сети</span>';
+  }
+  return '<span class="presence">Offline</span>';
+}
+
+function socialUserCard(player, actionsHtml = '', extra = '') {
+  const profileButton =
+    '<button class="social-name-button" data-view-profile="' + escapeHtml(player.id || '') + '">' +
+    escapeHtml(player.display_name || player.handle || 'Игрок') + '</button>';
+
+  return '<div class="social-user">' +
+    '<button class="social-avatar" data-view-profile="' + escapeHtml(player.id || '') + '">' +
+      escapeHtml(avatarSymbol(player.avatar_id)) + '</button>' +
+    '<div><div class="social-name">' + profileButton + '</div>' +
+    '<div class="social-meta">@' + escapeHtml(player.handle || '') +
+    (player.mmr != null ? ' · MMR ' + Number(player.mmr) : '') +
+    presenceLabel(player.presence) + extra + '</div></div>' +
+    '<div class="social-actions">' + actionsHtml + '</div></div>';
+}
+
+function conversationFor(profileId) {
+  return (currentSocial?.conversations || []).find(item => item.other?.id === profileId) || null;
+}
+
+function renderSocial() {
+  if (!activeProfile || !profileToken || !currentSocial) return;
+  const social = currentSocial;
+  const unread = Number(social.unread_messages || 0);
+  $('social-unread').style.display = unread ? 'inline-grid' : 'none';
+  $('social-unread').textContent = unread;
+
+  $('friends-list').innerHTML = social.friends?.length
+    ? social.friends.map(friend => {
+        const conversation = conversationFor(friend.id);
+        const unreadCount = Number(conversation?.unread_count || 0);
+        const actions =
+          '<button data-chat="' + friend.id + '">Сообщение' + (unreadCount ? ' (' + unreadCount + ')' : '') + '</button>' +
+          '<button data-invite-friend="' + friend.id + '">Пригласить</button>' +
+          '<button data-remove-friend="' + friend.id + '">Удалить</button>' +
+          '<button data-block-user="' + friend.id + '">Блок</button>';
+        return socialUserCard(friend, actions);
+      }).join('')
+    : '<div class="empty">Пока друзей нет.</div>';
+
+  const incoming = social.incoming_requests || [];
+  const outgoing = social.outgoing_requests || [];
+  const requestRows = [
+    ...incoming.map(player => socialUserCard(
+      player,
+      '<button class="primary" data-accept-friend="' + player.id + '">Принять</button>' +
+      '<button data-decline-friend="' + player.id + '">Отклонить</button>' +
+      '<button data-block-user="' + player.id + '">Блок</button>',
+      ' · входящая заявка'
+    )),
+    ...outgoing.map(player => socialUserCard(player, '', ' · заявка отправлена'))
+  ];
+  $('friend-requests').innerHTML = requestRows.length
+    ? requestRows.join('')
+    : '<div class="empty">Новых заявок нет.</div>';
+
+  const invites = social.game_invites || [];
+  $('game-invites-list').innerHTML = invites.length
+    ? invites.map(invite => {
+        const from = invite.from_profile || {};
+        const room = invite.game?.lifecycle?.room_name || 'Комната';
+        const actions =
+          '<button class="primary" data-accept-game-invite="' + invite.invite_id + '">Войти</button>' +
+          '<button data-decline-game-invite="' + invite.invite_id + '">Отклонить</button>';
+        return socialUserCard(from, actions, ' · ' + escapeHtml(room));
+      }).join('')
+    : '<div class="empty">Приглашений нет.</div>';
+
+  const blocked = social.blocked || [];
+  $('blocked-list').innerHTML = blocked.length
+    ? blocked.map(player => socialUserCard(
+        player,
+        '<button data-unblock-user="' + player.id + '">Разблокировать</button>'
+      )).join('')
+    : '<div class="empty">Список пуст.</div>';
+
+  bindSocialActions();
+}
+
+async function loadSocial() {
+  if (!profileToken || !activeProfile || socialLoadInFlight) return;
+  socialLoadInFlight = true;
+  try {
+    const data = await request('/api/social', {}, profileToken);
+    currentSocial = data.social;
+    renderSocial();
+  } catch (error) {
+    $('social-error').textContent = friendlyError(error);
+  } finally {
+    socialLoadInFlight = false;
+  }
+}
+
+async function socialPost(url, body) {
+  return request(url, {
+    method:'POST',
+    headers:{'content-type':'application/json'},
+    body:JSON.stringify(body || {})
+  }, profileToken);
+}
+
+function bindProfileViewActions() {
+  document.querySelectorAll('[data-view-profile]').forEach(button => {
+    button.onclick = () => openPlayerProfile(button.dataset.viewProfile);
+  });
+}
+
+function bindSocialActions() {
+  bindProfileViewActions();
+
+  document.querySelectorAll('[data-accept-friend]').forEach(button => {
+    button.onclick = async () => {
+      await socialPost('/api/social/friends/respond', {
+        profile_id:button.dataset.acceptFriend,
+        accept:true
+      });
+      await loadSocial();
+    };
+  });
+
+  document.querySelectorAll('[data-decline-friend]').forEach(button => {
+    button.onclick = async () => {
+      await socialPost('/api/social/friends/respond', {
+        profile_id:button.dataset.declineFriend,
+        accept:false
+      });
+      await loadSocial();
+    };
+  });
+
+  document.querySelectorAll('[data-remove-friend]').forEach(button => {
+    button.onclick = async () => {
+      if (!confirm('Удалить игрока из друзей?')) return;
+      await socialPost('/api/social/friends/remove', {
+        profile_id:button.dataset.removeFriend
+      });
+      await loadSocial();
+    };
+  });
+
+  document.querySelectorAll('[data-block-user]').forEach(button => {
+    button.onclick = async () => {
+      if (!confirm('Заблокировать игрока? Дружба и заявки будут удалены.')) return;
+      await socialPost('/api/social/block', { profile_id:button.dataset.blockUser });
+      await loadSocial();
+    };
+  });
+
+  document.querySelectorAll('[data-unblock-user]').forEach(button => {
+    button.onclick = async () => {
+      await socialPost('/api/social/unblock', { profile_id:button.dataset.unblockUser });
+      await loadSocial();
+    };
+  });
+
+  document.querySelectorAll('[data-chat]').forEach(button => {
+    button.onclick = () => openChat(button.dataset.chat);
+  });
+
+  document.querySelectorAll('[data-invite-friend]').forEach(button => {
+    button.onclick = () => openGameInviteModal(button.dataset.inviteFriend);
+  });
+
+  document.querySelectorAll('[data-accept-game-invite]').forEach(button => {
+    button.onclick = async () => {
+      const data = await socialPost('/api/social/game-invites/respond', {
+        invite_id:button.dataset.acceptGameInvite,
+        accept:true
+      });
+      if (data.game_id) {
+        location.href = '/lobby.html?game=' + encodeURIComponent(data.game_id);
+      } else {
+        await loadSocial();
+      }
+    };
+  });
+
+  document.querySelectorAll('[data-decline-game-invite]').forEach(button => {
+    button.onclick = async () => {
+      await socialPost('/api/social/game-invites/respond', {
+        invite_id:button.dataset.declineGameInvite,
+        accept:false
+      });
+      await loadSocial();
+    };
+  });
+}
+
+async function findFriend() {
+  $('social-error').textContent = '';
+  $('friend-search-result').innerHTML = '';
+  const handle = $('friend-search').value.trim();
+  if (!handle) return;
+
+  try {
+    const data = await request('/api/social/search?handle=' + encodeURIComponent(handle), {}, profileToken);
+    const player = data.player;
+    const actions = data.are_friends
+      ? '<span class="muted">Уже в друзьях</span>'
+      : '<button class="primary" id="send-friend-request">Добавить</button>' +
+        '<button id="block-search-result">Блок</button>';
+
+    $('friend-search-result').innerHTML = socialUserCard(player, actions);
+
+    if (!data.are_friends) {
+      $('send-friend-request').onclick = async () => {
+        await socialPost('/api/social/friends/request', { profile_id:player.id });
+        $('friend-search-result').innerHTML = '<div class="empty">Заявка отправлена.</div>';
+        await loadSocial();
+      };
+      $('block-search-result').onclick = async () => {
+        await socialPost('/api/social/block', { profile_id:player.id });
+        $('friend-search-result').innerHTML = '';
+        await loadSocial();
+      };
+    }
+  } catch (error) {
+    $('friend-search-result').innerHTML = '<div class="empty">' + escapeHtml(friendlyError(error)) + '</div>';
+  }
+}
+
+async function openPlayerProfile(profileId) {
+  if (!profileId || !profileToken) return;
+  $('player-profile-error').textContent = '';
+
+  try {
+    const data = await request(
+      '/api/social/profile?profile_id=' + encodeURIComponent(profileId),
+      {},
+      profileToken
+    );
+
+    viewedPlayerProfile = data;
+    const profile = data.profile;
+    const stats = profile.stats || {};
+    const presence = data.presence || {};
+
+    $('player-profile-name').textContent = profile.display_name || profile.handle || 'Игрок';
+    $('player-profile-handle').textContent = '@' + (profile.handle || '');
+    $('player-profile-avatar').textContent = avatarSymbol(profile.avatar_id);
+    $('player-profile-presence').innerHTML = presenceLabel(presence);
+    $('player-profile-game').textContent = presence.in_game && presence.game
+      ? 'Сейчас играет: ' + (presence.game.room_name || 'Игра')
+      : '';
+
+    $('view-stat-mmr').textContent = Number(stats.mmr || 1000);
+    $('view-stat-games').textContent = Number(stats.games_played || 0);
+    $('view-stat-wins').textContent = Number(stats.wins || 0);
+    $('view-stat-losses').textContent = Number(stats.losses || 0);
+    $('view-stat-time').textContent = formatPlayTime(stats.play_seconds || 0);
+
+    const achievements = Array.isArray(stats.achievements) ? stats.achievements : [];
+    $('player-profile-achievements').innerHTML = achievements.length
+      ? achievements.map(item =>
+          '<span class="achievement-pill">' + escapeHtml(item) + '</span>'
+        ).join('')
+      : '<span class="muted">Пока достижений нет.</span>';
+
+    const actions = [];
+    if (data.are_friends) {
+      actions.push('<button data-profile-message="' + profile.id + '">Сообщение</button>');
+      actions.push('<button data-profile-invite="' + profile.id + '">Пригласить в игру</button>');
+    } else if (profile.id !== activeProfile?.id) {
+      actions.push('<button class="primary" data-profile-add="' + profile.id + '">Добавить в друзья</button>');
+    }
+
+    if (presence.in_game && presence.game?.game_id) {
+      actions.push('<button class="primary" data-profile-watch="' + profile.id + '">Наблюдать</button>');
+    }
+
+    $('player-profile-actions').innerHTML = actions.join('');
+    bindViewedProfileActions();
+    $('player-profile-modal').classList.add('open');
+  } catch (error) {
+    $('player-profile-error').textContent = friendlyError(error);
+    $('player-profile-modal').classList.add('open');
+  }
+}
+
+function bindViewedProfileActions() {
+  const messageButton = document.querySelector('[data-profile-message]');
+  if (messageButton) {
+    messageButton.onclick = () => {
+      closePlayerProfile();
+      openChat(messageButton.dataset.profileMessage);
+    };
+  }
+
+  const inviteButton = document.querySelector('[data-profile-invite]');
+  if (inviteButton) {
+    inviteButton.onclick = () => {
+      closePlayerProfile();
+      openGameInviteModal(inviteButton.dataset.profileInvite);
+    };
+  }
+
+  const addButton = document.querySelector('[data-profile-add]');
+  if (addButton) {
+    addButton.onclick = async () => {
+      await socialPost('/api/social/friends/request', {
+        profile_id:addButton.dataset.profileAdd
+      });
+      addButton.disabled = true;
+      addButton.textContent = 'Заявка отправлена';
+      await loadSocial();
+    };
+  }
+
+  const watchButton = document.querySelector('[data-profile-watch]');
+  if (watchButton) {
+    watchButton.onclick = async () => {
+      try {
+        const data = await socialPost('/api/social/watch', {
+          profile_id:watchButton.dataset.profileWatch
+        });
+        if (data.game_id) {
+          location.href = '/?game=' + encodeURIComponent(data.game_id);
+        }
+      } catch (error) {
+        $('player-profile-error').textContent = friendlyError(error);
+      }
+    };
+  }
+}
+
+function closePlayerProfile() {
+  $('player-profile-modal').classList.remove('open');
+  $('player-profile-error').textContent = '';
+  viewedPlayerProfile = null;
+}
+
+async function profilePresenceHeartbeat() {
+  if (!profileToken || !activeProfile || document.visibilityState !== 'visible') return;
+  try {
+    await request('/api/profile/presence', { method:'POST' }, profileToken);
+  } catch (error) {
+    console.warn('profile presence heartbeat failed', error);
+  }
+}
+
+async function openChat(profileId) {
+  const friend = (currentSocial?.friends || []).find(item => item.id === profileId);
+  if (!friend) return;
+  activeChatProfile = friend;
+  $('chat-title').textContent = friend.display_name || friend.handle || 'Сообщения';
+  $('chat-subtitle').textContent = '@' + (friend.handle || '');
+  $('chat-input').value = '';
+  $('chat-error').textContent = '';
+  $('chat-modal').classList.add('open');
+  await refreshChat();
+}
+
+function closeChat() {
+  $('chat-modal').classList.remove('open');
+  activeChatProfile = null;
+  $('chat-error').textContent = '';
+}
+
+async function refreshChat() {
+  if (!activeChatProfile || !profileToken) return;
+  try {
+    const data = await request(
+      '/api/social/messages?profile_id=' + encodeURIComponent(activeChatProfile.id) + '&limit=100',
+      {},
+      profileToken
+    );
+    const messages = data.messages || [];
+    $('chat-log').innerHTML = messages.length
+      ? messages.map(message => {
+          const mine = message.from_profile_id === activeProfile.id;
+          const time = message.created_at
+            ? new Date(message.created_at).toLocaleString('ru-RU', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})
+            : '';
+          return '<div class="chat-message' + (mine ? ' mine' : '') + '">' +
+            '<div>' + escapeHtml(message.text) + '</div>' +
+            '<div class="chat-time">' + escapeHtml(time) + '</div></div>';
+        }).join('')
+      : '<div class="empty">Сообщений пока нет.</div>';
+    $('chat-log').scrollTop = $('chat-log').scrollHeight;
+    await loadSocial();
+  } catch (error) {
+    $('chat-error').textContent = friendlyError(error);
+  }
+}
+
+async function sendChatMessage() {
+  if (!activeChatProfile) return;
+  const text = $('chat-input').value.trim();
+  if (!text) return;
+  try {
+    await socialPost('/api/social/messages', {
+      profile_id:activeChatProfile.id,
+      text
+    });
+    $('chat-input').value = '';
+    await refreshChat();
+  } catch (error) {
+    $('chat-error').textContent = friendlyError(error);
+  }
+}
+
+function openGameInviteModal(profileId) {
+  const friend = (currentSocial?.friends || []).find(item => item.id === profileId);
+  if (!friend) return;
+  inviteTargetProfile = friend;
+  $('game-invite-subtitle').textContent = 'Для @' + (friend.handle || friend.display_name || 'игрока');
+  $('game-invite-error').textContent = '';
+
+  const games = currentProfileGames.filter(item =>
+    item.lifecycle?.status === 'LOBBY' &&
+    item.lifecycle?.game_mode === 'MULTIPLAYER'
+  );
+
+  $('invite-game-list').innerHTML = games.length
+    ? games.map(item =>
+        '<button data-send-game-invite="' + escapeHtml(item.game_id) + '">' +
+        escapeHtml(item.lifecycle?.room_name || 'Комната') +
+        ' · ' + Number(item.lifecycle?.player_count || 0) + '/' + Number(item.lifecycle?.max_players || 6) +
+        '</button>'
+      ).join('')
+    : '<div class="empty">Нет активных мультиплеерных комнат в лобби.</div>';
+
+  document.querySelectorAll('[data-send-game-invite]').forEach(button => {
+    button.onclick = async () => {
+      try {
+        await socialPost('/api/social/game-invites', {
+          profile_id:inviteTargetProfile.id,
+          game_id:button.dataset.sendGameInvite
+        });
+        closeGameInviteModal();
+      } catch (error) {
+        $('game-invite-error').textContent = friendlyError(error);
+      }
+    };
+  });
+
+  $('game-invite-modal').classList.add('open');
+}
+
+function closeGameInviteModal() {
+  $('game-invite-modal').classList.remove('open');
+  inviteTargetProfile = null;
+  $('game-invite-error').textContent = '';
+}
+
+async function loadOpenRooms() {
+  try {
+    const data = await request('/api/rooms/open');
+    const myIds = new Set(knownGameIds);
+    const rooms = data.rooms || [];
+
+    if (!rooms.length) {
+      $('open-rooms').innerHTML = '<div class="empty">Сейчас нет открытых комнат.</div>';
+      return;
+    }
+
+    $('open-rooms').innerHTML = rooms.map(room => {
+      const already = myIds.has(room.game_id);
+      const free = Number(room.max_players || 6) - Number(room.player_count || 0);
+      const claimed = (room.claimed_houses || []).join(', ') || 'пока никто';
+      return `
+        <div class="room-card">
+          <div>
+            <div><span class="badge public">ОТКРЫТАЯ</span></div>
+            <div class="game-title">${escapeHtml(room.room_name || 'Открытая комната')}</div>
+            <div class="game-meta">
+              Игроков: ${room.player_count}/${room.max_players} · Свободно мест: ${free}<br>
+              Заняты Дома: ${escapeHtml(claimed)}
+            </div>
+          </div>
+          <div class="game-actions">
+            <button class="primary" data-public-game="${escapeHtml(room.game_id)}">
+              ${already ? 'Вернуться' : 'Подключиться'}
+            </button>
+          </div>
+        </div>`;
+    }).join('');
+
+    document.querySelectorAll('[data-public-game]').forEach(button => {
+      button.onclick = async () => {
+        const id = button.dataset.publicGame;
+        const existingToken = localStorage.getItem('aob-token-' + id);
+        if (knownGameIds.has(id) && (profileToken || existingToken)) {
+          location.href = '/lobby.html?game=' + encodeURIComponent(id);
+          return;
+        }
+        if (!profileToken) {
+          alert('Сначала войди в профиль, чтобы подключиться к комнате.');
+          return;
+        }
+        try {
+          await withBusy(button, 'Подключаем...', async () => {
+            const joined = await request(
+              '/api/games/' + encodeURIComponent(id) + '/join-public',
+              {
+                method:'POST',
+                headers:{'content-type':'application/json'},
+                body:JSON.stringify({ display_name:displayName() })
+              },
+              profileAuth()
+            );
+            saveAccess(joined);
+            location.href = '/lobby.html?game=' + encodeURIComponent(joined.game_id);
+          });
+        } catch (error) {
+          alert(friendlyError(error));
+        }
+      };
+    });
+  } catch (error) {
+    $('open-rooms').innerHTML = '<div class="empty">' + escapeHtml(friendlyError(error)) + '</div>';
+  }
+}
+
+async function loadHub() {
+  if (hubLoadInFlight) return;
+  hubLoadInFlight = true;
+  try {
+    await loadMyGames();
+    await loadSocial();
+    await loadOpenRooms();
+  } finally {
+    hubLoadInFlight = false;
+  }
+}
+
+async function createMultiplayer(visibility, button, errorId, roomInputId, houseSelectId) {
+  $(errorId).textContent = '';
+  try {
+    await withBusy(button, 'Создаём...', async () => {
+      const data = await request('/api/games', {
+        method:'POST',
+        headers:{'content-type':'application/json'},
+        body:JSON.stringify({
+          display_name:displayName(),
+          room_name:$(roomInputId).value.trim(),
+          visibility,
+          house:$(houseSelectId).value || null
+        })
+      }, profileAuth());
+      saveAccess(data);
+      location.href = '/lobby.html?game=' + encodeURIComponent(data.game_id);
+    });
+  } catch (error) {
+    $(errorId).textContent = friendlyError(error);
+  }
+}
+
+$('friend-search-button').onclick = findFriend;
+$('friend-search').addEventListener('keydown', event => {
+  if (event.key === 'Enter') findFriend();
+});
+$('player-profile-close').onclick = closePlayerProfile;
+$('player-profile-modal').onclick = event => {
+  if (event.target === $('player-profile-modal')) closePlayerProfile();
+};
+$('chat-close').onclick = closeChat;
+$('chat-send').onclick = sendChatMessage;
+$('chat-input').addEventListener('keydown', event => {
+  if (event.key === 'Enter') sendChatMessage();
+});
+$('chat-modal').onclick = event => {
+  if (event.target === $('chat-modal')) closeChat();
+};
+$('game-invite-close').onclick = closeGameInviteModal;
+$('game-invite-modal').onclick = event => {
+  if (event.target === $('game-invite-modal')) closeGameInviteModal();
+};
+
+$('account-avatar').onclick = openAvatarModal;
+$('avatar-close').onclick = closeAvatarModal;
+$('avatar-cancel').onclick = closeAvatarModal;
+$('avatar-save').onclick = saveAvatarSelection;
+$('avatar-modal').onclick = event => {
+  if (event.target === $('avatar-modal')) closeAvatarModal();
+};
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && $('avatar-modal').classList.contains('open')) {
+    closeAvatarModal();
+  }
+  if (event.key === 'Escape' && $('player-profile-modal').classList.contains('open')) {
+    closePlayerProfile();
+  }
+  if (event.key === 'Escape' && $('chat-modal').classList.contains('open')) {
+    closeChat();
+  }
+  if (event.key === 'Escape' && $('game-invite-modal').classList.contains('open')) {
+    closeGameInviteModal();
+  }
+});
+
+$('register-profile').onclick = async () => {
+  $('profile-error').textContent = '';
+  const button = $('register-profile');
+  try {
+    await withBusy(button, 'Создаём...', async () => {
+      const data = await request('/api/profiles/register', {
+        method:'POST',
+        headers:{'content-type':'application/json'},
+        body:JSON.stringify({
+          handle:$('register-handle').value.trim(),
+          display_name:$('register-name').value.trim(),
+          password:$('register-password').value
+        })
+      });
+      await acceptProfileSession(data);
+    });
+  } catch (error) {
+    $('profile-error').textContent = friendlyError(error);
+  }
+};
+
+$('login-profile').onclick = async () => {
+  $('profile-error').textContent = '';
+  const button = $('login-profile');
+  try {
+    await withBusy(button, 'Входим...', async () => {
+      const data = await request('/api/profiles/login', {
+        method:'POST',
+        headers:{'content-type':'application/json'},
+        body:JSON.stringify({
+          handle:$('login-handle').value.trim(),
+          password:$('login-password').value
+        })
+      });
+      await acceptProfileSession(data);
+    });
+  } catch (error) {
+    $('profile-error').textContent = friendlyError(error);
+  }
+};
+
+$('logout-profile').onclick = async () => {
+  const current = profileToken;
+  localStorage.removeItem('aob-profile-token');
+  profileToken = null;
+  activeProfile = null;
+  currentSocial = null;
+  currentProfileGames = [];
+  token = gameId ? localStorage.getItem('aob-token-' + gameId) : null;
+  renderAccount();
+  if (current) {
+    request('/api/profile/logout', { method:'POST' }, current).catch(console.warn);
+  }
+  await loadHub();
+};
+
+$('create-solo').onclick = async () => {
+  $('solo-error').textContent = '';
+  const button = $('create-solo');
+  try {
+    await withBusy(button, 'Создаём...', async () => {
+      const data = await request('/api/games/solo', {
+        method:'POST',
+        headers:{'content-type':'application/json'},
+        body:JSON.stringify({
+          display_name:displayName(),
+          house:$('solo-house').value,
+          room_name:'Соло · ' + $('solo-house').value
+        })
+      }, profileAuth());
+      saveAccess(data);
+      location.href = '/?game=' + encodeURIComponent(data.game_id);
+    });
+  } catch (error) {
+    $('solo-error').textContent = friendlyError(error);
+  }
+};
+
+$('create-public').onclick = () =>
+  createMultiplayer('PUBLIC',$('create-public'),'public-error','public-room-name','public-house');
+
+$('create-private').onclick = () =>
+  createMultiplayer('PRIVATE',$('create-private'),'private-error','private-room-name','private-house');
+
+$('join-private').onclick = async () => {
+  $('join-error').textContent = '';
+  const button = $('join-private');
+  try {
+    await withBusy(button, 'Подключаем...', async () => {
+      const data = await request('/api/games/join', {
+        method:'POST',
+        headers:{'content-type':'application/json'},
+        body:JSON.stringify({
+          invite_code:$('join-code').value.trim().toUpperCase(),
+          display_name:displayName()
+        })
+      }, profileAuth());
+      saveAccess(data);
+      location.href = '/lobby.html?game=' + encodeURIComponent(data.game_id);
+    });
+  } catch (error) {
+    $('join-error').textContent = friendlyError(error);
+  }
+};
+
+async function claimHouse(house) {
+  $('room-error').textContent = '';
+  try {
+    await request('/api/games/' + encodeURIComponent(gameId) + '/claim-house', {
+      method:'POST',
+      headers:{'content-type':'application/json'},
+      body:JSON.stringify({house})
+    }, token);
+    await loadRoom();
+  } catch (error) {
+    $('room-error').textContent = friendlyError(error);
+  }
+}
+
+async function loadRoom() {
+  token = profileToken || localStorage.getItem('aob-token-' + gameId) || token;
+  if (!gameId || !token || roomLoadInFlight) return;
+  roomLoadInFlight = true;
+
+  try {
+    const data = await request(
+      '/api/games/' + encodeURIComponent(gameId) + '/lobby',
+      {},
+      token
+    );
+
+    $('hub').style.display = 'none';
+    $('room').style.display = 'block';
+
+    const life = data.lifecycle;
+    const me = data.current_player;
+    const publicRoom = life.visibility === 'PUBLIC';
+    const solo = life.game_mode === 'SOLO';
+
+    $('room-kind').textContent = solo
+      ? 'Соло-партия'
+      : publicRoom
+        ? 'Открытая комната'
+        : 'Приватная комната';
+
+    $('invite').textContent = solo
+      ? (life.room_name || 'СОЛО')
+      : (life.invite_code || 'ИГРА НАЧАТА');
+
+    $('status').textContent =
+      (life.room_name ? life.room_name + ' · ' : '') +
+      'Статус: ' + statusText(life.status) +
+      ' · правила: ' + (life.ruleset_version || 'V6');
+
+    const claims = life.house_claims || {};
+    $('houses').innerHTML = '';
+
+    for (const house of houses) {
+      const ownerId = claims[house];
+      const button = document.createElement('button');
+      button.className = 'house' + (ownerId ? ' claimed' : '') + (me?.house === house ? ' mine' : '');
+      button.textContent =
+        house +
+        (me?.house === house ? ' · ТВОЙ ДОМ' : ownerId ? ' · занят' : ' · свободен');
+
+      const canClaim =
+        life.status === 'LOBBY' &&
+        !solo &&
+        me?.role !== 'SPECTATOR' &&
+        !me?.house &&
+        !ownerId;
+
+      button.disabled = !canClaim;
+      if (canClaim) button.onclick = () => claimHouse(house);
+      $('houses').appendChild(button);
+    }
+
+    $('players').innerHTML = data.players.map(player => {
+      const role = player.role === 'ADMIN' ? 'хост' : player.role === 'SPECTATOR' ? 'наблюдатель' : 'игрок';
+      const house = player.house ? ' · ' + player.house : '';
+      return '<div class="player"><span>' + escapeHtml(player.display_name) +
+        '</span><span class="muted">' + escapeHtml(role + house) + '</span></div>';
+    }).join('');
+
+    const isAdmin = me?.role === 'ADMIN';
+    const claimedCount = houses.filter(house => Boolean(claims[house])).length;
+    const missingCount = houses.length - claimedCount;
+    const canStart = isAdmin && !solo && life.status === 'LOBBY' && missingCount === 0;
+
+    $('release-house').style.display =
+      !solo && life.status === 'LOBBY' && me?.house ? 'block' : 'none';
+
+    $('start').style.display =
+      isAdmin && !solo && life.status === 'LOBBY' ? 'block' : 'none';
+    $('start').disabled = !canStart;
+    $('start').textContent = canStart
+      ? 'Начать игру'
+      : 'Начать игру · ждём ' + missingCount;
+
+    $('start-hint').textContent =
+      !solo && life.status === 'LOBBY'
+        ? (missingCount === 0
+            ? 'Все 6 Домов заняты. Хост может начинать партию.'
+            : 'Для текущих правил V6 нужны все 6 Домов. Занято: ' + claimedCount + '/6.')
+        : '';
+
+    $('open-game').style.display = life.status === 'RUNNING' ? 'block' : 'none';
+    $('room-error').textContent = '';
+  } catch (error) {
+    $('room-error').textContent = friendlyError(error);
+    $('hub').style.display = 'none';
+    $('room').style.display = 'block';
+  } finally {
+    roomLoadInFlight = false;
+  }
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&','&amp;')
+    .replaceAll('<','&lt;')
+    .replaceAll('>','&gt;')
+    .replaceAll('"','&quot;')
+    .replaceAll("'",'&#039;');
+}
+
+$('release-house').onclick = async () => {
+  $('room-error').textContent = '';
+  const button = $('release-house');
+  try {
+    await withBusy(button,'Освобождаем...',async () => {
+      await request('/api/games/' + encodeURIComponent(gameId) + '/release-house',{method:'POST'},token);
+      await loadRoom();
+    });
+  } catch (error) {
+    $('room-error').textContent = friendlyError(error);
+  }
+};
+
+$('start').onclick = async () => {
+  if ($('start').disabled) return;
+  $('room-error').textContent = '';
+  const button = $('start');
+  try {
+    await withBusy(button,'Запускаем...',async () => {
+      await request('/api/games/' + encodeURIComponent(gameId) + '/start',{method:'POST'},token);
+      await loadRoom();
+    });
+  } catch (error) {
+    $('room-error').textContent = friendlyError(error);
+  }
+};
+
+$('open-game').onclick = () => {
+  location.href = '/?game=' + encodeURIComponent(gameId);
+};
+
+$('refresh').onclick = loadRoom;
+$('back-menu').onclick = () => { location.href = '/lobby'; };
+
+async function initialize() {
+  await restoreProfileSession();
+  await profilePresenceHeartbeat();
+  token = gameId
+    ? (profileToken || localStorage.getItem('aob-token-' + gameId))
+    : null;
+
+  if (gameId && token) {
+    $('hub').style.display = 'none';
+    await loadRoom();
+    setInterval(loadRoom,3000);
+  } else {
+    $('room').style.display = 'none';
+    await loadHub();
+    setInterval(loadHub,5000);
+    setInterval(() => {
+      if (activeChatProfile) refreshChat();
+    },3000);
+  }
+
+  setInterval(profilePresenceHeartbeat,60000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') profilePresenceHeartbeat();
+  });
+}
+
+initialize().catch(error => {
+  console.error(error);
+  $('profile-error').textContent = friendlyError(error);
+});
+</script>
+</body>
+</html>
