@@ -435,6 +435,8 @@ function publicBootstrap(ctx) {
       coordinates: map.coordinates,
       land_edges: map.land_edges,
       sea_edges: map.sea_edges,
+      sea_waypoints: map.sea_waypoints || {},
+      sea_lane_edges: map.sea_lane_edges || [],
       ports: map.ports,
       capitals: map.capitals
     },
