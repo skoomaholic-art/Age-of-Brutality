@@ -23,6 +23,7 @@ import {
   listQueueableMarches,
   processDueOrders
 } from './orders.mjs';
+import { normalizeOnlineSeaState } from './sea-navigation.mjs';
 import {
   ONLINE_ECONOMY_TIMING,
   economyView,
@@ -147,6 +148,7 @@ async function loadContext(gameId, {
       defaultAccessMode
     });
     game = normalizeAudit(normalizeOnlineEconomy(game));
+    game.state = normalizeOnlineSeaState(game.state, map);
     game.state = normalizeCharacterLayer(game.state, characterCatalog, map, constants);
 
     const ctx = {
@@ -186,6 +188,7 @@ async function refreshContext(ctx) {
     defaultAccessMode: ctx.game?.lifecycle?.access_mode || ACCESS_MODE.PLAYER_BOUND
   });
   reloaded = normalizeAudit(normalizeOnlineEconomy(reloaded));
+  reloaded.state = normalizeOnlineSeaState(reloaded.state, map);
   reloaded.state = normalizeCharacterLayer(
     reloaded.state,
     characterCatalog,
