@@ -457,10 +457,9 @@ export function resolveCommanderFate(
     if (fallback) {
       character.status = CHARACTER_STATUS.ACTIVE;
       character.fate_pending = null;
-      character.location = {
-        kind: 'TERRITORY',
-        territory: fallback
-      };
+      character.location = next.sea_nodes?.[fallback]
+        ? { kind: 'SEA_WAYPOINT', waypoint: fallback }
+        : { kind: 'TERRITORY', territory: fallback };
 
       if (character.army_id && next.armies?.[character.army_id]) {
         const army = next.armies[character.army_id];
@@ -567,7 +566,11 @@ export function markCommanderFatePending(state, characterId, details) {
   }
 
   character.location = details?.fallback_territory
-    ? { kind: 'TERRITORY', territory: details.fallback_territory }
+    ? (
+        next.sea_nodes?.[details.fallback_territory]
+          ? { kind: 'SEA_WAYPOINT', waypoint: details.fallback_territory }
+          : { kind: 'TERRITORY', territory: details.fallback_territory }
+      )
     : { kind: 'FATE_PENDING', territory: details?.battle_territory || null };
 
   next.journal.push({
