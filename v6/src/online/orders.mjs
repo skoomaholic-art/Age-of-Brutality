@@ -10,6 +10,7 @@ import {
   commandersAt,
   commanderStats,
   markCommanderFatePending,
+  resolveCommanderFate,
   settleCommander
 } from '../core/characters.mjs';
 
@@ -278,6 +279,19 @@ function resolveOrder(state, map, constants, gameId, order, nowMs) {
           created_at: new Date(nowMs).toISOString()
         }
       );
+      const fateDice = deterministicDice(
+        `${gameId}:${order.id}:fate:${defenderCommander.id}`
+      );
+      const fate = resolveCommanderFate(
+        resolved.state,
+        map,
+        constants,
+        defenderCommander.id,
+        fateDice,
+        { nowMs }
+      );
+      resolved.state = fate.state;
+      resolved.result.defender_commander_fate = fate.result;
     }
   } else {
     if (defenderCommander) {
@@ -305,6 +319,19 @@ function resolveOrder(state, map, constants, gameId, order, nowMs) {
           created_at: new Date(nowMs).toISOString()
         }
       );
+      const fateDice = deterministicDice(
+        `${gameId}:${order.id}:fate:${attackerCommander.id}`
+      );
+      const fate = resolveCommanderFate(
+        resolved.state,
+        map,
+        constants,
+        attackerCommander.id,
+        fateDice,
+        { nowMs }
+      );
+      resolved.state = fate.state;
+      resolved.result.attacker_commander_fate = fate.result;
     }
   }
 
