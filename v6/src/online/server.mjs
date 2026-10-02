@@ -6,6 +6,12 @@ import { fileURLToPath } from 'node:url';
 import { enumerateMarches } from '../core/legal-actions.mjs';
 import { loadJson } from '../core/map.mjs';
 import { validateState } from '../core/state.mjs';
+import {
+  assignCharacterToArmy,
+  charactersForHouse,
+  normalizeCharacterLayer,
+  returnCharacterToCourt
+} from '../core/characters.mjs';
 import { FirestoreGameStore } from './firestore-store.mjs';
 import { createOnlineGame } from './store.mjs';
 import {
@@ -66,6 +72,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const v6Root = path.resolve(here, '../..');
 const map = loadJson(path.join(v6Root, 'src/data/map.v6.json'));
 const constants = loadJson(path.join(v6Root, 'src/data/constants.v6.json'));
+const characterCatalog = loadJson(path.join(v6Root, 'src/data/characters.v6.json'));
 
 const defaultGameId = process.env.AOB_GAME_ID || 'prototype-1';
 const databaseId = process.env.AOB_FIRESTORE_DATABASE || '(default)';
@@ -75,7 +82,8 @@ const contextLoads = new Map();
 function createStore(gameId) {
   return new FirestoreGameStore({
     gameId,
-    databaseId
+    databaseId,
+    characterCatalog
   });
 }
 
@@ -122,7 +130,8 @@ async function loadContext(gameId, {
     if (!game && createIfMissing) {
       game = createOnlineGame(map, constants, {
         id: gameId,
-        accessMode: defaultAccessMode
+        accessMode: defaultAccessMode,
+        characterCatalog
       });
       await store.save(game);
       store.loadedExistingAtStartup = false;
@@ -134,6 +143,7 @@ async function loadContext(gameId, {
       defaultAccessMode
     });
     game = normalizeAudit(normalizeOnlineEconomy(game));
+    game.state = normalizeCharacterLayer(game.state, characterCatalog, map, constants);
 
     const ctx = {
       gameId,
@@ -172,6 +182,12 @@ async function refreshContext(ctx) {
     defaultAccessMode: ctx.game?.lifecycle?.access_mode || ACCESS_MODE.PLAYER_BOUND
   });
   reloaded = normalizeAudit(normalizeOnlineEconomy(reloaded));
+  reloaded.state = normalizeCharacterLayer(
+    reloaded.state,
+    characterCatalog,
+    map,
+    constants
+  );
   ctx.game = reloaded;
   return reloaded;
 }
@@ -507,7 +523,8 @@ async function createMultiplayerGame(body, profile = null) {
       gameMode: GAME_MODE.MULTIPLAYER,
       visibility,
       roomName
-    }
+    },
+    characterCatalog
   });
   game = normalizeAudit(normalizeOnlineEconomy(game));
 
@@ -561,7 +578,8 @@ async function createSoloGame(body, profile = null) {
       gameMode: GAME_MODE.SOLO,
       visibility: GAME_VISIBILITY.PRIVATE,
       roomName: safeRoomName(body.room_name, `Соло · ${house}`)
-    }
+    },
+    characterCatalog
   });
   game = normalizeAudit(normalizeOnlineEconomy(game));
 
