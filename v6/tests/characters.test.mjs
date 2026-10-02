@@ -84,7 +84,7 @@ test('one capital stack cannot silently receive two commanders', () => {
   assert.throws(() => assignCharacterToArmy(state, map, constants, {
     house: 'Варкайр',
     characterId: 'CH-ВАР-1'
-  }), /already has a commander/);
+  }), /уже имеет командира/i);
 });
 
 test('commander stats expose only the active army combat block', () => {
