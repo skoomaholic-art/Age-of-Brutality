@@ -9,7 +9,8 @@ export function createOnlineGame(map, constants, {
   id = 'prototype-1',
   nowMs = Date.now(),
   accessMode = ACCESS_MODE.ADMIN_SANDBOX,
-  inviteCode = null
+  inviteCode = null,
+  lifecycleOptions = {}
 } = {}) {
   const now = new Date(nowMs).toISOString();
   const state = createInitialState(map, constants);
@@ -32,7 +33,8 @@ export function createOnlineGame(map, constants, {
     base.lifecycle = createLobbyMetadata(constants, {
       inviteCode: inviteCode || undefined,
       nowMs,
-      accessMode
+      accessMode,
+      ...lifecycleOptions
     });
   }
 
