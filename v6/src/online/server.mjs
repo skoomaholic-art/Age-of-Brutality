@@ -480,6 +480,32 @@ async function handleGameApi(req, res, url, ctx, subpath) {
     });
   }
 
+  if (req.method === 'POST' && subpath === '/release-house') {
+    const player = await requirePlayer(ctx, req);
+    if (player.role === PLAYER_ROLE.SPECTATOR) {
+      throw new Error('spectator cannot release a house');
+    }
+
+    const payload = await serial(ctx, async () => {
+      const result = await ctx.store.releaseHouse(player.id);
+      await refreshContext(ctx);
+      if (result.released) {
+        ctx.game.state.journal.push({
+          kind: 'HOUSE_RELEASED',
+          at: new Date().toISOString(),
+          player_id: player.id,
+          house: result.released
+        });
+        await finalizeGame(ctx, ctx.game);
+      }
+      return {
+        ...result,
+        lifecycle: publicLifecycle(ctx.game.lifecycle)
+      };
+    });
+    return json(res, 200, payload);
+  }
+
   if (req.method === 'POST' && subpath === '/start') {
     const player = await requireAdmin(ctx, req);
     const payload = await serial(ctx, async () => {
