@@ -194,39 +194,114 @@ export function commanderStats(character) {
   };
 }
 
+export function characterArmyAssignmentEligibility(
+  state,
+  map,
+  constants,
+  { house, characterId }
+) {
+  const character = state.characters?.[characterId];
+  if (!character || character.house !== house) {
+    return { allowed:false, code:'WRONG_HOUSE', reason:'Персонаж не принадлежит этому Дому.' };
+  }
+  if (!character.alive) {
+    return { allowed:false, code:'DEAD', reason:'Мёртвый персонаж не может командовать армией.' };
+  }
+  if (character.age !== 'ADULT') {
+    return { allowed:false, code:'NOT_ADULT', reason:'Назначить командиром можно только взрослого персонажа.' };
+  }
+  if (character.health !== CHARACTER_HEALTH.HEALTHY) {
+    return { allowed:false, code:'WEAKENED', reason:'Ослабленного персонажа нельзя назначить командиром.' };
+  }
+  if (character.status !== CHARACTER_STATUS.ACTIVE) {
+    return { allowed:false, code:'UNAVAILABLE', reason:'Персонаж сейчас недоступен для назначения.' };
+  }
+  if (character.mode !== CHARACTER_MODE.COURT) {
+    return { allowed:false, code:'NOT_AT_COURT', reason:'Персонаж должен находиться при Дворе.' };
+  }
+
+  const capital = map.capitals[house];
+  const territory = state.territories?.[capital];
+  const capitalName =
+    map.territories?.find(item => item.id === capital)?.name || capital;
+  const warriors = Number(territory?.warriors?.[house] || 0);
+
+  if (territory?.owner !== house) {
+    return {
+      allowed:false,
+      code:'CAPITAL_NOT_CONTROLLED',
+      reason:`Нельзя назначить в армию: столица ${capitalName} не контролируется Домом.`,
+      capital,
+      capital_name:capitalName,
+      capital_owner:territory?.owner || null,
+      warriors
+    };
+  }
+
+  if (warriors < 1) {
+    return {
+      allowed:false,
+      code:'NO_ARMY_IN_CAPITAL',
+      reason:`Нельзя назначить в армию: в столице ${capitalName} нет воинов Дома.`,
+      capital,
+      capital_name:capitalName,
+      capital_owner:territory?.owner || null,
+      warriors
+    };
+  }
+
+  const activeArmyCharacters = charactersForHouse(state, house)
+    .filter(item =>
+      item.mode === CHARACTER_MODE.ARMY &&
+      item.status === CHARACTER_STATUS.ACTIVE
+    );
+  if (activeArmyCharacters.length >= 2) {
+    return {
+      allowed:false,
+      code:'HOUSE_ARMY_CHARACTER_LIMIT',
+      reason:'У Дома уже два персонажа одновременно находятся в АРМИИ.',
+      capital,
+      capital_name:capitalName,
+      warriors
+    };
+  }
+
+  if (commandersAt(state, house, capital).length > 0) {
+    return {
+      allowed:false,
+      code:'CAPITAL_ARMY_ALREADY_COMMANDED',
+      reason:`Армия в столице ${capitalName} уже имеет командира.`,
+      capital,
+      capital_name:capitalName,
+      warriors
+    };
+  }
+
+  return {
+    allowed:true,
+    code:'OK',
+    reason:null,
+    capital,
+    capital_name:capitalName,
+    warriors
+  };
+}
+
 export function assignCharacterToArmy(state, map, constants, {
   house,
   characterId
 }) {
   const next = structuredClone(state);
   const character = next.characters?.[characterId];
-  if (!character || character.house !== house) throw new Error('character does not belong to house');
-  if (!character.alive) throw new Error('dead character cannot command');
-  if (character.age !== 'ADULT') throw new Error('only adult character can command');
-  if (character.health !== CHARACTER_HEALTH.HEALTHY) throw new Error('weakened character cannot command');
-  if (character.status !== CHARACTER_STATUS.ACTIVE) throw new Error('character is not available');
-  if (character.mode !== CHARACTER_MODE.COURT) throw new Error('character is not at court');
+  const eligibility = characterArmyAssignmentEligibility(
+    next,
+    map,
+    constants,
+    { house, characterId }
+  );
+  if (!eligibility.allowed) throw new Error(eligibility.reason);
 
-  const capital = map.capitals[house];
-  const territory = next.territories?.[capital];
-  const warriors = Number(territory?.warriors?.[house] || 0);
-  if (territory?.owner !== house || warriors < 1) {
-    throw new Error('army must be in own capital');
-  }
-
-  const activeArmyCharacters = charactersForHouse(next, house)
-    .filter(item =>
-      item.mode === CHARACTER_MODE.ARMY &&
-      item.status === CHARACTER_STATUS.ACTIVE
-    );
-  if (activeArmyCharacters.length >= 2) {
-    throw new Error('house already has two army characters');
-  }
-
-  if (commandersAt(next, house, capital).length > 0) {
-    throw new Error('capital army already has a commander');
-  }
-
+  const capital = eligibility.capital;
   const id = armyId(characterId);
   next.armies[id] = {
     id,
