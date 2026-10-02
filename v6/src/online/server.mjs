@@ -1117,7 +1117,8 @@ async function handleGameApi(req, res, url, ctx, subpath) {
       house: body.house,
       from: body.from,
       to: body.to,
-      warriors: body.warriors
+      warriors: body.warriors,
+      commander_id: body.commander_id || null
     });
     await requireHouse(ctx, req, command.house);
 
