@@ -42,6 +42,7 @@ import {
   createProfileSessionCredentials,
   normalizeProfileHandle,
   publicProfile,
+  publicSocialProfile,
   verifyPassword
 } from './profile.mjs';
 import {
@@ -428,10 +429,10 @@ function newGameId() {
 function errorStatus(error) {
   const message = String(error?.message || error || '');
   if (/authentication required|invalid player token|invalid profile session/i.test(message)) return 401;
-  if (/admin role required|cannot control|spectator|ownership mismatch/i.test(message)) return 403;
-  if (/game not found|player not found|profile not found|no snapshot found/i.test(message)) return 404;
-  if (/already|claimed|full|closed|not joinable|not in lobby|require all six|missing:|only a running game|only a finished game|unique invite|not a public room|not multiplayer|profile login already exists|linked to another profile/i.test(message)) return 409;
-  if (/Idempotency-Key|unknown|invalid|must be|request body|not running|solo game requires|login must be|password must be|display name must be|invalid avatar|unknown winner house/i.test(message)) return 400;
+  if (/admin role required|cannot control|spectator|ownership mismatch|friend request blocked|messages are blocked|game invites are blocked|messages are allowed only between friends|game invites are allowed only between friends|sender is not a member/i.test(message)) return 403;
+  if (/game not found|player not found|profile not found|friend request not found|game invite not found|no snapshot found/i.test(message)) return 404;
+  if (/already|claimed|full|closed|not joinable|not in lobby|require all six|missing:|only a running game|only a finished game|unique invite|not a public room|not multiplayer|profile login already exists|linked to another profile|players are already friends|friend request already sent|friend is already in this game|game is not accepting invitations/i.test(message)) return 409;
+  if (/Idempotency-Key|unknown|invalid|must be|request body|not running|solo game requires|login must be|password must be|display name must be|invalid avatar|unknown winner house|message must be|conversation requires|profile id required|invite id required|cannot add this profile|cannot block this profile/i.test(message)) return 400;
   if (/stale game state|could not be committed/i.test(message)) return 409;
   return 500;
 }
@@ -583,6 +584,19 @@ async function joinGameById(gameId, body, { publicOnly = false, profile = null }
   if (lifecycle.game_mode !== GAME_MODE.MULTIPLAYER) throw new Error('game is not multiplayer');
   if (publicOnly && lifecycle.visibility !== GAME_VISIBILITY.PUBLIC) {
     throw new Error('game is not a public room');
+  }
+
+  if (profile) {
+    const existing = await ctx.store.findPlayerByProfileId(profile.id);
+    if (existing) {
+      return {
+        game_id: gameId,
+        player: publicPlayer(existing),
+        access_token: null,
+        lifecycle: publicLifecycle(ctx.game.lifecycle),
+        existing_membership: true
+      };
+    }
   }
 
   const role = body.spectator ? PLAYER_ROLE.SPECTATOR : PLAYER_ROLE.PLAYER;
@@ -1202,6 +1216,159 @@ const server = http.createServer(async (req, res) => {
         linked: true,
         game_id: gameId,
         player: publicPlayer(await ctx.store.getPlayer(player.id))
+      });
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/social/search') {
+      const profile = await requireProfile(req);
+      const handle = normalizeProfileHandle(url.searchParams.get('handle'));
+      const found = await defaultContext.store.getProfileByHandle(handle);
+      if (!found || found.id === profile.id) {
+        return json(res, 404, { error: 'player not found' });
+      }
+      if (await defaultContext.store.isBlockedBetween(profile.id, found.id)) {
+        return json(res, 404, { error: 'player not found' });
+      }
+      const areFriends = await defaultContext.store.areProfilesFriends(profile.id, found.id);
+      return json(res, 200, {
+        player: publicSocialProfile(found),
+        are_friends: areFriends
+      });
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/social') {
+      const profile = await requireProfile(req);
+      const social = await defaultContext.store.listSocialState(profile.id);
+      return json(res, 200, { social });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/social/friends/request') {
+      const profile = await requireProfile(req);
+      const body = await readBody(req);
+      let target = null;
+
+      if (body.profile_id) {
+        target = await defaultContext.store.getProfile(body.profile_id);
+      } else if (body.handle) {
+        target = await defaultContext.store.getProfileByHandle(body.handle);
+      }
+
+      if (!target) throw new Error('profile not found');
+      const result = await defaultContext.store.sendFriendRequest(profile.id, target.id);
+      return json(res, 201, {
+        ...result,
+        player: publicSocialProfile(target)
+      });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/social/friends/respond') {
+      const profile = await requireProfile(req);
+      const body = await readBody(req);
+      const fromProfileId = String(body.profile_id || '').trim();
+      if (!fromProfileId) throw new Error('profile id required');
+
+      const result = await defaultContext.store.respondFriendRequest(
+        profile.id,
+        fromProfileId,
+        { accept: Boolean(body.accept) }
+      );
+      return json(res, 200, result);
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/social/friends/remove') {
+      const profile = await requireProfile(req);
+      const body = await readBody(req);
+      const friendProfileId = String(body.profile_id || '').trim();
+      if (!friendProfileId) throw new Error('profile id required');
+      await defaultContext.store.removeFriend(profile.id, friendProfileId);
+      return json(res, 200, { removed: true });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/social/block') {
+      const profile = await requireProfile(req);
+      const body = await readBody(req);
+      const targetId = String(body.profile_id || '').trim();
+      if (!targetId) throw new Error('profile id required');
+      await defaultContext.store.blockProfile(profile.id, targetId);
+      return json(res, 200, { blocked: true });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/social/unblock') {
+      const profile = await requireProfile(req);
+      const body = await readBody(req);
+      const targetId = String(body.profile_id || '').trim();
+      if (!targetId) throw new Error('profile id required');
+      await defaultContext.store.unblockProfile(profile.id, targetId);
+      return json(res, 200, { unblocked: true });
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/social/messages') {
+      const profile = await requireProfile(req);
+      const otherProfileId = String(url.searchParams.get('profile_id') || '').trim();
+      if (!otherProfileId) throw new Error('profile id required');
+      const messages = await defaultContext.store.listDirectMessages(
+        profile.id,
+        otherProfileId,
+        Number(url.searchParams.get('limit') || 100)
+      );
+      return json(res, 200, messages);
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/social/messages') {
+      const profile = await requireProfile(req);
+      const body = await readBody(req);
+      const otherProfileId = String(body.profile_id || '').trim();
+      if (!otherProfileId) throw new Error('profile id required');
+      const message = await defaultContext.store.sendDirectMessage(
+        profile.id,
+        otherProfileId,
+        body.text
+      );
+      return json(res, 201, { message });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/social/game-invites') {
+      const profile = await requireProfile(req);
+      const body = await readBody(req);
+      const otherProfileId = String(body.profile_id || '').trim();
+      const gameId = String(body.game_id || '').trim();
+      if (!otherProfileId || !gameId) throw new Error('profile id and game id required');
+
+      const invite = await defaultContext.store.createGameInvite(
+        profile.id,
+        otherProfileId,
+        gameId
+      );
+      return json(res, 201, { invite });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/social/game-invites/respond') {
+      const profile = await requireProfile(req);
+      const body = await readBody(req);
+      const inviteId = String(body.invite_id || '').trim();
+      if (!inviteId) throw new Error('invite id required');
+
+      const invite = await defaultContext.store.getGameInvite(profile.id, inviteId);
+      if (!invite || invite.status !== 'PENDING') throw new Error('game invite not found');
+      if (invite.expires_at && Date.parse(invite.expires_at) <= Date.now()) {
+        throw new Error('game invite expired');
+      }
+
+      if (!body.accept) {
+        await defaultContext.store.resolveGameInvite(profile.id, inviteId, 'DECLINED');
+        return json(res, 200, { accepted: false });
+      }
+
+      const joined = await joinGameById(
+        invite.game_id,
+        { display_name: profile.display_name },
+        { profile }
+      );
+      await defaultContext.store.resolveGameInvite(profile.id, inviteId, 'ACCEPTED');
+
+      return json(res, 200, {
+        accepted: true,
+        ...joined
       });
     }
 
