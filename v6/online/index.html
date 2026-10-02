@@ -1220,26 +1220,10 @@ function renderSelection() {
 
   const t = mapNodeById(target);
   const matching = actionsForSelection();
-  const modes = [...new Set(matching.map(action => action.mode))];
-  const modeRow = $('route-mode-row');
-  const modeSelect = $('march-mode');
-
-  if (modes.length > 1) {
-    modeRow.style.display = 'block';
-    if (!marchModePreference || !modes.includes(marchModePreference)) {
-      marchModePreference = modes.includes('LAND') ? 'LAND' : modes[0];
-    }
-    modeSelect.value = marchModePreference;
-  } else {
-    modeRow.style.display = 'none';
-    marchModePreference = modes[0] || null;
-  }
+  $('route-mode-row').style.display = 'none';
 
   const preferred = preferredActionForSelection();
-  const preferredChoices = matching.filter(action =>
-    !preferred || action.mode === preferred.mode
-  );
-  const max = Math.max(...preferredChoices.map(a => a.warriors));
+  const max = Math.max(...matching.map(a => a.warriors));
   const current = Number($('warriors').value || 1);
 
   $('warriors').max = max;
@@ -1247,19 +1231,30 @@ function renderSelection() {
   $('from-name').textContent = o.name;
   $('to-name').textContent = t.name;
 
-  const modeName = preferred.mode === 'SEA' ? 'море' : 'суша';
-  const seaSegments = Number(preferred.sea_segments || 0);
-  const seaPoints = Array.isArray(preferred.path)
-    ? preferred.path.filter(id => id.startsWith('M-')).length
-    : 0;
-  const secondsText = preferred.mode === 'SEA'
-    ? `${seaSegments * snapshot.timing.seaSegmentMs / 1000} сек`
-    : `${snapshot.timing.landSegmentMs / 1000}-${snapshot.timing.landMaxMs / 1000} сек`;
-  const seaDetail = preferred.mode === 'SEA'
-    ? ` · ${seaSegments} сегм. · ${seaPoints} морск. точ.`
-    : '';
-  $('route-meta').textContent =
-    `Отряд: до ${max} воинов · путь: ${modeName}${seaDetail} · тестовое время: ${secondsText}.`;
+  const modeName =
+    preferred.mode === 'SEA'
+      ? 'море'
+      : preferred.mode === 'MIXED'
+        ? 'смешанный'
+        : 'суша';
+  const hops = Number(
+    preferred.route_hops || Math.max(0,(preferred.path || []).length - 1)
+  );
+  const seconds = Math.ceil(
+    Number(preferred.route_duration_ms || 0) / 1000
+  );
+  const routeNames = (preferred.path || [])
+    .map(id => mapNodeById(id)?.name || id)
+    .join(' → ');
+
+  $('route-meta').innerHTML =
+    'Отряд: до ' + max +
+    ' воинов · путь: ' + escapeHtml(modeName) +
+    ' · ' + hops + ' участк.' +
+    ' · ' + seconds + ' сек' +
+    (routeNames
+      ? '<br><span class="tiny">' + escapeHtml(routeNames) + '</span>'
+      : '');
   $('guide-title').textContent = '3. Выбери, СКОЛЬКО воинов отправить';
   $('guide-sub').textContent = 'Марш полностью выбран. Проверь маршрут внизу карты и отдай приказ.';
   card.classList.add('show');
@@ -1302,12 +1297,10 @@ async function selectTerritory(id) {
 async function sendOrder() {
   if (!origin || !target) return;
   const warriors = Number($('warriors').value);
-  const preferred = preferredActionForSelection();
   const choices = legal.filter(a =>
     a.from === origin &&
     a.to === target &&
-    a.warriors === warriors &&
-    (!preferred || a.mode === preferred.mode)
+    a.warriors === warriors
   );
   if (!choices.length) {
     alert('Такой приказ больше не является легальным.');
@@ -1363,7 +1356,7 @@ function renderOrders() {
     return `
       <div class="order">
         <div><b>${escapeHtml(from)} -> ${escapeHtml(to)}</b></div>
-        <div>${a.warriors} воин(а), ${a.mode}</div>
+        <div>${a.warriors} воин(а) · ${Number(a.route_hops || Math.max(0,(a.path || []).length - 1))} участк. · ${Math.ceil(Number(order.duration_ms || 0) / 1000)} сек</div>
         <div class="${cls}">${escapeHtml(countdown(order))}</div>
         ${extra}
       </div>`;
@@ -1618,11 +1611,6 @@ $('restore-game').addEventListener('click', async () => {
 });
 
 $('send').addEventListener('click', sendOrder);
-$('march-mode').addEventListener('change', event => {
-  marchModePreference = event.target.value;
-  renderMap();
-  renderSelection();
-});
 
 $('max-warriors').addEventListener('click', () => {
   const max = Number($('warriors').max || 1);
@@ -1662,6 +1650,12 @@ async function backgroundRefresh() {
     refreshInFlight = false;
   }
 }
+
+function animateMap() {
+  updateMovingArmyPositions();
+  requestAnimationFrame(animateMap);
+}
+requestAnimationFrame(animateMap);
 
 refresh()
   .then(() => profileHeartbeat())
