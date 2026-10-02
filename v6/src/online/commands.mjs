@@ -23,17 +23,23 @@ export function normalizeCommand(input) {
   const type = requiredString(input?.type, 'command type').toUpperCase();
 
   if (type === COMMAND_TYPE.MARCH) {
-    return {
+    const command = {
       type,
       house: requiredString(input.house, 'house'),
       mode: String(input.mode || 'LAND').toUpperCase(),
       from: requiredString(input.from, 'from'),
       to: requiredString(input.to, 'to'),
-      warriors: positiveInt(input.warriors, 'warriors'),
-      commander_id: input.commander_id
-        ? requiredString(input.commander_id, 'commander_id')
-        : null
+      warriors: positiveInt(input.warriors, 'warriors')
     };
+
+    if (input.commander_id) {
+      command.commander_id = requiredString(
+        input.commander_id,
+        'commander_id'
+      );
+    }
+
+    return command;
   }
 
   if (type === COMMAND_TYPE.RECRUIT) {
