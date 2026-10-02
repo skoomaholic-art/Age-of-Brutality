@@ -15,8 +15,13 @@ import {
 } from '../core/characters.mjs';
 import {
   coreSeaAction,
+  createSeaLandingBridge,
   enumerateOnlineSeaMarches,
   findSeaLaneRoute,
+  finishSeaLandingBridge,
+  isSeaWaypoint,
+  onlineWarriorsAt,
+  resolveSeaWaypointMove,
   seaRouteMap,
   validateOnlineSeaMarch
 } from './sea-navigation.mjs';
@@ -105,7 +110,7 @@ export function enumerateOnlineMarches(state, map, constants, house) {
 export function listQueueableMarches(game, map, constants, house) {
   const legal = enumerateOnlineMarches(game.state, map, constants, house);
   return legal.filter(action => {
-    const available = warriorsAt(game.state, action.from, house);
+    const available = onlineWarriorsAt(game.state, action.from, house);
     const reserved = reservedWarriors(game, house, action.from);
     return action.warriors <= available - reserved;
   });
@@ -155,7 +160,7 @@ export function queueTimedOrder(
   const id = `O${String(next.next_order_id).padStart(6, '0')}`;
   const durationMs = travelDurationMs(next.state, map, constants, action, timing);
   const availableWarriors =
-    warriorsAt(game.state, action.from, action.house) -
+    onlineWarriorsAt(game.state, action.from, action.house) -
     reservedWarriors(game, action.house, action.from);
   const originCommanders = commandersAt(
     game.state,
@@ -234,30 +239,81 @@ function resolveOrder(state, map, constants, gameId, order, nowMs) {
   );
   assertOnlineLegalAction(action, legal);
 
-  const destination = classifyDestination(
-    state,
-    action.house,
-    action.to
-  );
-  const resolutionMap = action.mode === 'SEA'
-    ? seaRouteMap(map, action)
-    : map;
-  const resolutionAction = action.mode === 'SEA'
-    ? coreSeaAction(action)
-    : action;
-
-  if (destination === 'FRIENDLY') {
-    let moved = applyFriendlyMarch(state, resolutionMap, constants, resolutionAction);
+  if (action.mode === 'SEA' && isSeaWaypoint(map, action.to)) {
+    let moved = resolveSeaWaypointMove(
+      state,
+      map,
+      constants,
+      action
+    );
     moved = settleCommander(
       moved,
       order.commander_id,
-      resolutionAction.to
+      action.to
     );
     return {
-      state: moved,
-      result: {
-        kind: 'FRIENDLY_MARCH',
-        commander_id: order.commander_id || null
+      state:moved,
+      result:{
+        kind:'SEA_WAYPOINT_MARCH',
+        waypoint:action.to,
+        commander_id:order.commander_id || null
+      }
+    };
+  }
+
+  let resolutionState = state;
+  let resolutionMap = map;
+  let resolutionAction = action;
+  let seaLanding = false;
+
+  if (action.mode === 'SEA' && isSeaWaypoint(map, action.from)) {
+    const bridge = createSeaLandingBridge(
+      state,
+      map,
+      action
+    );
+    if (!bridge) throw new Error('sea landing bridge could not be created');
+    resolutionState = bridge.state;
+    resolutionMap = bridge.map;
+    resolutionAction = coreSeaAction(action);
+    seaLanding = true;
+  } else if (action.mode === 'SEA') {
+    resolutionMap = seaRouteMap(map, action);
+    resolutionAction = coreSeaAction(action);
+  }
+
+  const finalizeSeaState = resolvedState => (
+    seaLanding
+      ? finishSeaLandingBridge(state, resolvedState, action)
+      : resolvedState
+  );
+
+  const destination = classifyDestination(
+    resolutionState,
+    action.house,
+    action.to
+  );
+
+  if (destination === 'FRIENDLY') {
+    let moved = applyFriendlyMarch(
+      resolutionState,
+      resolutionMap,
+      constants,
+      resolutionAction
+    );
+    moved = finalizeSeaState(moved);
+    moved = settleCommander(
+      moved,
+      order.commander_id,
+      action.to
+    );
+    return {
+      state:moved,
+      result:{
+        kind: action.mode === 'SEA'
+          ? 'SEA_LANDING_FRIENDLY'
+          : 'FRIENDLY_MARCH',
+        commander_id:order.commander_id || null
       }
     };
   }
@@ -265,35 +321,41 @@ function resolveOrder(state, map, constants, gameId, order, nowMs) {
   if (destination === 'NEUTRAL') {
     const dice = deterministicDice(`${gameId}:${order.id}:neutral`);
     let resolved = resolveNeutralCapture(
-      state,
+      resolutionState,
       resolutionMap,
       constants,
       resolutionAction,
       dice
     );
+    resolved.state = finalizeSeaState(resolved.state);
     resolved.state = settleCommander(
       resolved.state,
       order.commander_id,
-      resolved.result.success ? resolutionAction.to : resolutionAction.from
+      resolved.result.success ? action.to : action.from
     );
     resolved.result.commander_id = order.commander_id || null;
     return resolved;
   }
 
-  const defenderHouse = state.territories[resolutionAction.to].owner;
-  const defenders = warriorsAt(state, resolutionAction.to, defenderHouse);
+  const defenderHouse = resolutionState.territories[action.to].owner;
+  const defenders = warriorsAt(
+    resolutionState,
+    action.to,
+    defenderHouse
+  );
 
   if (defenders === 0) {
     let resolved = resolveEmptyEnemyOccupation(
-      state,
+      resolutionState,
       resolutionMap,
       constants,
       resolutionAction
     );
+    resolved.state = finalizeSeaState(resolved.state);
     resolved.state = settleCommander(
       resolved.state,
       order.commander_id,
-      resolutionAction.to
+      action.to
     );
     resolved.result.commander_id = order.commander_id || null;
     return resolved;
@@ -305,7 +367,7 @@ function resolveOrder(state, map, constants, gameId, order, nowMs) {
   const defenderCommander = commanderAt(
     state,
     defenderHouse,
-    resolutionAction.to
+    action.to
   );
 
   const [attackerDie, defenderDie] = deterministicDice(
@@ -313,18 +375,19 @@ function resolveOrder(state, map, constants, gameId, order, nowMs) {
   );
 
   let resolved = resolveBattle(
-    state,
+    resolutionState,
     resolutionMap,
     constants,
     resolutionAction,
     {
       attackerDie,
       defenderDie,
-      attackerCommander: commanderStats(attackerCommander),
-      defenderCommander: commanderStats(defenderCommander)
+      attackerCommander:commanderStats(attackerCommander),
+      defenderCommander:commanderStats(defenderCommander)
     }
   );
 
+  resolved.state = finalizeSeaState(resolved.state);
   resolved.result.attacker_commander_id = attackerCommander?.id || null;
   resolved.result.defender_commander_id = defenderCommander?.id || null;
 
@@ -332,7 +395,7 @@ function resolveOrder(state, map, constants, gameId, order, nowMs) {
     resolved.state = settleCommander(
       resolved.state,
       attackerCommander?.id,
-      resolutionAction.to
+      action.to
     );
 
     if (defenderCommander) {
@@ -340,14 +403,14 @@ function resolveOrder(state, map, constants, gameId, order, nowMs) {
         resolved.state,
         defenderCommander.id,
         {
-          battle_territory: resolutionAction.to,
-          opponent_house: resolutionAction.house,
-          side: 'DEFENDER',
+          battle_territory:action.to,
+          opponent_house:action.house,
+          side:'DEFENDER',
           army_destroyed:
             Number(resolved.result.defenderSurvivors || 0) === 0,
           fallback_territory:
             resolved.result.defenderRetreatTo || null,
-          created_at: new Date(nowMs).toISOString()
+          created_at:new Date(nowMs).toISOString()
         }
       );
       const fateDice = deterministicDice(
@@ -359,7 +422,7 @@ function resolveOrder(state, map, constants, gameId, order, nowMs) {
         constants,
         defenderCommander.id,
         fateDice,
-        { nowMs }
+        {nowMs}
       );
       resolved.state = fate.state;
       resolved.result.defender_commander_fate = fate.result;
@@ -369,7 +432,7 @@ function resolveOrder(state, map, constants, gameId, order, nowMs) {
       resolved.state = settleCommander(
         resolved.state,
         defenderCommander.id,
-        resolutionAction.to
+        action.to
       );
     }
 
@@ -378,16 +441,16 @@ function resolveOrder(state, map, constants, gameId, order, nowMs) {
         resolved.state,
         attackerCommander.id,
         {
-          battle_territory: resolutionAction.to,
-          opponent_house: defenderHouse,
-          side: 'ATTACKER',
+          battle_territory:action.to,
+          opponent_house:defenderHouse,
+          side:'ATTACKER',
           army_destroyed:
             Number(resolved.result.attackerSurvivors || 0) === 0,
           fallback_territory:
             Number(resolved.result.attackerSurvivors || 0) > 0
-              ? resolutionAction.from
+              ? action.from
               : null,
-          created_at: new Date(nowMs).toISOString()
+          created_at:new Date(nowMs).toISOString()
         }
       );
       const fateDice = deterministicDice(
@@ -399,7 +462,7 @@ function resolveOrder(state, map, constants, gameId, order, nowMs) {
         constants,
         attackerCommander.id,
         fateDice,
-        { nowMs }
+        {nowMs}
       );
       resolved.state = fate.state;
       resolved.result.attacker_commander_fate = fate.result;
