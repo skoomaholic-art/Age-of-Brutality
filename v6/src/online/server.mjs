@@ -339,10 +339,12 @@ function redactGameForPlayer(game, player) {
   const clientGame = structuredClone(game);
   clientGame.lifecycle = publicLifecycle(clientGame.lifecycle);
 
-  clientGame.orders = [
-    ...(clientGame.orders || []).filter(item => item.status === 'PENDING'),
-    ...(clientGame.orders || []).filter(item => item.status !== 'PENDING').slice(-30)
-  ];
+  clientGame.orders = player?.role === PLAYER_ROLE.SPECTATOR
+    ? (clientGame.orders || []).filter(item => item.status !== 'PENDING').slice(-30)
+    : [
+        ...(clientGame.orders || []).filter(item => item.status === 'PENDING'),
+        ...(clientGame.orders || []).filter(item => item.status !== 'PENDING').slice(-30)
+      ];
   clientGame.jobs = [];
   clientGame.audit_log = (clientGame.audit_log || []).slice(-40);
   if (clientGame.state) clientGame.state.journal = [];
@@ -802,12 +804,22 @@ async function handleGameApi(req, res, url, ctx, subpath) {
       return json(res, 200, { tracked: false });
     }
 
+    if (player.role === PLAYER_ROLE.SPECTATOR) {
+      const presence = await defaultContext.store.heartbeatProfilePresence(profile.id);
+      return json(res, 200, {
+        tracked: true,
+        spectator: true,
+        ...presence
+      });
+    }
+
     const activity = await defaultContext.store.heartbeatProfileActivity(
       profile.id,
       { gameId: ctx.game.id }
     );
     return json(res, 200, {
       tracked: true,
+      spectator: false,
       ...activity
     });
   }
@@ -1030,17 +1042,25 @@ async function handleGameApi(req, res, url, ctx, subpath) {
   }
 
   if (req.method === 'GET' && subpath === '/audit') {
-    await requirePlayer(ctx, req);
+    const player = await requirePlayer(ctx, req);
     const requested = Number(url.searchParams.get('limit') || 200);
     const limit = Math.max(1, Math.min(2000, Number.isFinite(requested) ? requested : 200));
     const payload = await serial(ctx, async () => {
       await tickUnlocked(ctx);
+
+      const visibleEntries = (ctx.game.audit_log || []).filter(item => {
+        if (ctx.game.lifecycle?.access_mode !== ACCESS_MODE.PLAYER_BOUND) return true;
+        if (item.visibility !== 'PRIVATE') return true;
+        if (!player || player.role === PLAYER_ROLE.SPECTATOR) return false;
+        return item.details?.house === player.house;
+      });
+
       return {
         game_id: ctx.game.id,
         session_id: ctx.game.session_id,
         session: sessionSummary(ctx.game),
-        count: Math.min(limit, ctx.game.audit_log.length),
-        entries: ctx.game.audit_log.slice(-limit)
+        count: Math.min(limit, visibleEntries.length),
+        entries: visibleEntries.slice(-limit)
       };
     });
     return json(res, 200, payload);
