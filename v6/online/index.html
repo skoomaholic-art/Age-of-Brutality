@@ -311,6 +311,12 @@ let economy = null;
 let managedTerritory = null;
 let lastManualSnapshotAt = null;
 
+const pageParams = new URLSearchParams(location.search);
+const scopedGameId = pageParams.get('game');
+const scopedToken = scopedGameId
+  ? localStorage.getItem('aob-token-' + scopedGameId)
+  : null;
+
 const $ = id => document.getElementById(id);
 
 function commandId() {
@@ -318,19 +324,27 @@ function commandId() {
   return `cmd-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+function scopedApiUrl(url) {
+  if (!scopedGameId) return url;
+  if (!url.startsWith('/api/')) return url;
+  return '/api/games/' + encodeURIComponent(scopedGameId) + url.slice('/api'.length);
+}
+
 async function api(url, options = {}) {
   const next = { ...options };
   const method = String(next.method || 'GET').toUpperCase();
+  const headers = new Headers(next.headers || {});
 
-  if (!['GET', 'HEAD'].includes(method)) {
-    const headers = new Headers(next.headers || {});
-    if (!headers.has('Idempotency-Key')) {
-      headers.set('Idempotency-Key', commandId());
-    }
-    next.headers = headers;
+  if (!['GET', 'HEAD'].includes(method) && !headers.has('Idempotency-Key')) {
+    headers.set('Idempotency-Key', commandId());
   }
 
-  const res = await fetch(url, next);
+  if (scopedGameId && scopedToken) {
+    headers.set('Authorization', 'Bearer ' + scopedToken);
+  }
+
+  next.headers = headers;
+  const res = await fetch(scopedApiUrl(url), next);
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'request failed');
   return data;
@@ -659,20 +673,56 @@ function renderJournal() {
 }
 
 async function refresh() {
+  if (scopedGameId && !scopedToken) {
+    location.href = '/lobby.html?game=' + encodeURIComponent(scopedGameId);
+    return;
+  }
+
   snapshot = await api('/api/state');
 
   const select = $('house');
-  if (!select.options.length) {
-    for (const h of snapshot.houses) {
-      const option = document.createElement('option');
-      option.value = h;
-      option.textContent = h;
-      select.appendChild(option);
+  const playerBound = snapshot.game.lifecycle?.access_mode === 'PLAYER_BOUND';
+
+  if (playerBound) {
+    const me = snapshot.lobby?.current_player;
+    if (
+      snapshot.game.lifecycle?.status !== 'RUNNING' ||
+      !me ||
+      !me.house
+    ) {
+      location.href = '/lobby.html?game=' + encodeURIComponent(scopedGameId);
+      return;
     }
+
+    house = me.house;
+    select.innerHTML = '';
+    const option = document.createElement('option');
+    option.value = house;
+    option.textContent = house;
+    select.appendChild(option);
+    select.value = house;
+    select.disabled = true;
+
+    if (me.role !== 'ADMIN') {
+      $('save-game').style.display = 'none';
+      $('restore-game').style.display = 'none';
+    }
+    $('reset').style.display = 'none';
+  } else {
+    select.disabled = false;
+    if (!select.options.length) {
+      for (const h of snapshot.houses) {
+        const option = document.createElement('option');
+        option.value = h;
+        option.textContent = h;
+        select.appendChild(option);
+      }
+    }
+
+    house = house || select.value || snapshot.houses[0];
+    select.value = house;
   }
 
-  house = house || select.value || snapshot.houses[0];
-  select.value = house;
   await Promise.all([loadLegal(), loadEconomy()]);
 
   if (origin) {
@@ -693,6 +743,7 @@ async function refresh() {
 }
 
 $('house').addEventListener('change', async event => {
+  if (snapshot?.game?.lifecycle?.access_mode === 'PLAYER_BOUND') return;
   house = event.target.value;
   origin = null;
   target = null;
