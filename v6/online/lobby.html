@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Жестокий век - Лобби</title>
+<style>
+:root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif; }
+* { box-sizing:border-box; }
+body { margin:0; background:#0d1114; color:#eee7d8; min-height:100vh; }
+main { width:min(880px,100%); margin:0 auto; padding:24px 16px 60px; }
+h1 { margin:0 0 6px; font-size:28px; letter-spacing:.06em; }
+h2 { margin:0 0 14px; font-size:18px; }
+.muted { color:#89969d; }
+.grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:20px; }
+.card { border:1px solid #313b42; border-radius:18px; padding:18px; background:#151b1f; }
+label { display:block; font-size:12px; color:#9da8ae; margin:12px 0 5px; }
+input,select,button { width:100%; border:1px solid #46545d; border-radius:12px; padding:12px; background:#0e1418; color:#f4eee2; font:inherit; }
+button { cursor:pointer; font-weight:700; }
+button.primary { background:#eee7d8; color:#13181b; border-color:#eee7d8; }
+button:disabled { opacity:.42; cursor:not-allowed; }
+.code { font-size:32px; letter-spacing:.18em; font-weight:900; margin:8px 0 18px; }
+.house-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+.house { position:relative; min-height:60px; }
+.house.claimed { opacity:.5; }
+.house.mine { border-color:#ffd45c; box-shadow:0 0 0 2px rgba(255,212,92,.25); }
+.players { margin-top:14px; }
+.player { display:flex; justify-content:space-between; gap:12px; padding:9px 0; border-top:1px solid #283138; }
+.player:first-child { border-top:0; }
+.actions { display:flex; gap:8px; margin-top:16px; }
+.actions button { flex:1; }
+.error { color:#ff9b8a; margin-top:10px; white-space:pre-wrap; }
+.ok { color:#80e6a3; }
+@media(max-width:700px) {
+  .grid { grid-template-columns:1fr; }
+  .house-grid { grid-template-columns:1fr 1fr; }
+  .actions { flex-direction:column; }
+}
+</style>
+</head>
+<body>
+<main>
+  <h1>ЖЕСТОКИЙ ВЕК</h1>
+  <div class="muted">Мультиплеерное лобби</div>
+
+  <section id="entry" class="grid">
+    <div class="card">
+      <h2>Создать игру</h2>
+      <label>Твоё имя</label>
+      <input id="create-name" maxlength="40" placeholder="Например, Александр">
+      <label>Дом сразу</label>
+      <select id="create-house">
+        <option value="">Выбрать позже</option>
+      </select>
+      <button id="create" class="primary" style="margin-top:14px">Создать партию</button>
+      <div id="create-error" class="error"></div>
+    </div>
+
+    <div class="card">
+      <h2>Войти по коду</h2>
+      <label>Код приглашения</label>
+      <input id="join-code" maxlength="6" placeholder="ABC234" style="text-transform:uppercase">
+      <label>Твоё имя</label>
+      <input id="join-name" maxlength="40" placeholder="Имя игрока">
+      <label style="display:flex;gap:8px;align-items:center;margin-top:14px">
+        <input id="spectator" type="checkbox" style="width:auto">
+        Войти наблюдателем
+      </label>
+      <button id="join" class="primary" style="margin-top:14px">Подключиться</button>
+      <div id="join-error" class="error"></div>
+    </div>
+  </section>
+
+  <section id="room" class="card" style="display:none;margin-top:20px">
+    <div class="muted">Код приглашения</div>
+    <div id="invite" class="code">------</div>
+    <div id="status" class="muted"></div>
+
+    <h2 style="margin-top:22px">Дома</h2>
+    <div id="houses" class="house-grid"></div>
+
+    <h2 style="margin-top:22px">Игроки</h2>
+    <div id="players" class="players"></div>
+
+    <div class="actions">
+      <button id="start" class="primary" style="display:none">Начать игру</button>
+      <button id="open-game" style="display:none">Открыть карту</button>
+      <button id="refresh">Обновить</button>
+    </div>
+    <div id="room-error" class="error"></div>
+  </section>
+</main>
+<script>
+const houses = ['Варкайр','Сайрвен','Ортайн','Эркай','Тасвар','Айрель'];
+const params = new URLSearchParams(location.search);
+let gameId = params.get('game');
+let token = gameId ? localStorage.getItem('aob-token-' + gameId) : null;
+const $ = id => document.getElementById(id);
+
+for (const house of houses) {
+  const option = document.createElement('option');
+  option.value = house;
+  option.textContent = house;
+  $('create-house').appendChild(option);
+}
+
+function commandId() {
+  return globalThis.crypto?.randomUUID
+    ? globalThis.crypto.randomUUID()
+    : 'cmd-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+}
+
+async function request(url, options = {}, authToken = null) {
+  const next = { ...options };
+  const headers = new Headers(next.headers || {});
+  const method = String(next.method || 'GET').toUpperCase();
+  if (!['GET','HEAD'].includes(method) && !headers.has('Idempotency-Key')) {
+    headers.set('Idempotency-Key', commandId());
+  }
+  if (authToken) headers.set('Authorization', 'Bearer ' + authToken);
+  next.headers = headers;
+  const res = await fetch(url, next);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'request failed');
+  return data;
+}
+
+function saveAccess(data) {
+  gameId = data.game_id;
+  token = data.access_token;
+  localStorage.setItem('aob-token-' + gameId, token);
+  history.replaceState(null, '', '/lobby.html?game=' + encodeURIComponent(gameId));
+}
+
+$('create').onclick = async () => {
+  $('create-error').textContent = '';
+  try {
+    const data = await request('/api/games', {
+      method:'POST',
+      headers:{'content-type':'application/json'},
+      body:JSON.stringify({
+        display_name:$('create-name').value.trim(),
+        house:$('create-house').value || null
+      })
+    });
+    saveAccess(data);
+    await loadRoom();
+  } catch (error) {
+    $('create-error').textContent = error.message;
+  }
+};
+
+$('join').onclick = async () => {
+  $('join-error').textContent = '';
+  try {
+    const data = await request('/api/games/join', {
+      method:'POST',
+      headers:{'content-type':'application/json'},
+      body:JSON.stringify({
+        invite_code:$('join-code').value.trim().toUpperCase(),
+        display_name:$('join-name').value.trim(),
+        spectator:$('spectator').checked
+      })
+    });
+    saveAccess(data);
+    await loadRoom();
+  } catch (error) {
+    $('join-error').textContent = error.message;
+  }
+};
+
+async function claimHouse(house) {
+  $('room-error').textContent = '';
+  try {
+    await request('/api/games/' + encodeURIComponent(gameId) + '/claim-house', {
+      method:'POST',
+      headers:{'content-type':'application/json'},
+      body:JSON.stringify({house})
+    }, token);
+    await loadRoom();
+  } catch (error) {
+    $('room-error').textContent = error.message;
+  }
+}
+
+async function loadRoom() {
+  if (!gameId || !token) return;
+
+  try {
+    const data = await request(
+      '/api/games/' + encodeURIComponent(gameId) + '/lobby',
+      {},
+      token
+    );
+
+    $('entry').style.display = 'none';
+    $('room').style.display = 'block';
+
+    const life = data.lifecycle;
+    const me = data.current_player;
+    $('invite').textContent = life.invite_code || 'ИГРА НАЧАТА';
+    $('status').textContent =
+      'Статус: ' + life.status +
+      ' · правила: ' + (life.ruleset_version || 'V6');
+
+    const claims = life.house_claims || {};
+    $('houses').innerHTML = '';
+
+    for (const house of houses) {
+      const ownerId = claims[house];
+      const button = document.createElement('button');
+      button.className = 'house' + (ownerId ? ' claimed' : '') + (me?.house === house ? ' mine' : '');
+      button.textContent =
+        house +
+        (me?.house === house ? ' · ТВОЙ ДОМ' : ownerId ? ' · занят' : ' · свободен');
+
+      const canClaim =
+        life.status === 'LOBBY' &&
+        me?.role !== 'SPECTATOR' &&
+        !me?.house &&
+        !ownerId;
+
+      button.disabled = !canClaim;
+      if (canClaim) button.onclick = () => claimHouse(house);
+      $('houses').appendChild(button);
+    }
+
+    $('players').innerHTML = data.players.map(player => {
+      const role = player.role === 'ADMIN' ? 'хост' : player.role === 'SPECTATOR' ? 'наблюдатель' : 'игрок';
+      const house = player.house ? ' · ' + player.house : '';
+      return '<div class="player"><span>' + escapeHtml(player.display_name) + '</span><span class="muted">' +
+        escapeHtml(role + house) + '</span></div>';
+    }).join('');
+
+    const isAdmin = me?.role === 'ADMIN';
+    $('start').style.display = isAdmin && life.status === 'LOBBY' ? 'block' : 'none';
+    $('open-game').style.display = life.status === 'RUNNING' ? 'block' : 'none';
+    $('room-error').textContent = '';
+  } catch (error) {
+    $('room-error').textContent = error.message;
+    $('entry').style.display = 'none';
+    $('room').style.display = 'block';
+  }
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&','&amp;')
+    .replaceAll('<','&lt;')
+    .replaceAll('>','&gt;')
+    .replaceAll('"','&quot;');
+}
+
+$('start').onclick = async () => {
+  $('room-error').textContent = '';
+  try {
+    await request('/api/games/' + encodeURIComponent(gameId) + '/start', {
+      method:'POST'
+    }, token);
+    await loadRoom();
+  } catch (error) {
+    $('room-error').textContent = error.message;
+  }
+};
+
+$('open-game').onclick = () => {
+  location.href = '/?game=' + encodeURIComponent(gameId);
+};
+
+$('refresh').onclick = loadRoom;
+
+if (gameId && token) loadRoom();
+</script>
+</body>
+</html>
