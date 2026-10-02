@@ -112,7 +112,7 @@ test('a stale timed order fails atomically if its origin changes owner before ar
 });
 
 
-test('accelerated test movement stays within 3-5 seconds', () => {
+test('accelerated test movement uses one timer per sea segment', () => {
   const game = createOnlineGame(map, constants, { nowMs: 5_000 });
   const oneHop = {
     type: 'MARCH',
@@ -122,41 +122,44 @@ test('accelerated test movement stays within 3-5 seconds', () => {
     to: 'W02',
     warriors: 1
   };
-  assert.equal(travelDurationMs(game.state, map, constants, oneHop, ONLINE_TIMING), 3000);
+  assert.equal(
+    travelDurationMs(game.state, map, constants, oneHop, ONLINE_TIMING),
+    3000
+  );
 
-  const seaFrom = map.ports.find(id => map.territories.find(t => t.id === id)?.house_sector === 'Варкайр');
-  if (seaFrom) {
-    game.state.territories[seaFrom].owner = 'Варкайр';
-    game.state.territories[seaFrom].warriors['Варкайр'] = 1;
-    const seaTo = map.sea_edges.find(([a,b]) => a === seaFrom || b === seaFrom);
-    if (seaTo) {
-      const to = seaTo[0] === seaFrom ? seaTo[1] : seaTo[0];
-      const seaAction = { type:'MARCH', mode:'SEA', house:'Варкайр', from:seaFrom, to, warriors:1 };
-      const route = findSeaLaneRoute(map, seaFrom, to);
-      if (route) {
-        assert.equal(
-          travelDurationMs(game.state, map, constants, seaAction, ONLINE_TIMING),
-          route.segments * ONLINE_TIMING.seaSegmentMs
-        );
-      }
-    }
-  }
+  game.state.territories.W07.owner = 'Варкайр';
+  game.state.territories.W07.warriors = {'Варкайр':1};
+
+  const seaAction = {
+    type:'MARCH',
+    mode:'SEA',
+    house:'Варкайр',
+    from:'W07',
+    to:'M-WN',
+    warriors:1
+  };
+  const route = findSeaLaneRoute(map, 'W07', 'M-WN');
+  assert.equal(route.segments, 1);
+  assert.equal(
+    travelDurationMs(game.state, map, constants, seaAction, ONLINE_TIMING),
+    ONLINE_TIMING.seaSegmentMs
+  );
 });
 
 
-test('timed sea March stores its waypoint path and resolves at the destination', () => {
+test('timed sea March stops at waypoint, then can continue to island', () => {
   let game = createOnlineGame(map, constants, { nowMs: 10_000 });
   game.state.territories.W07.owner = 'Варкайр';
   game.state.territories.W07.warriors = {'Варкайр':2};
   game.state.territories['S01-A'].owner = 'Варкайр';
   game.state.territories['S01-A'].warriors = {};
 
-  const queued = queueTimedOrder(game, map, constants, {
+  let queued = queueTimedOrder(game, map, constants, {
     type:'MARCH',
     mode:'SEA',
     house:'Варкайр',
     from:'W07',
-    to:'S01-A',
+    to:'M-WN',
     warriors:1
   }, {
     nowMs:10_000,
@@ -166,13 +169,36 @@ test('timed sea March stores its waypoint path and resolves at the destination',
   game = queued.game;
   assert.deepEqual(
     game.orders[0].action.path,
-    ['W07','M-WN','S01-A']
+    ['W07','M-WN']
   );
-  assert.equal(game.orders[0].action.sea_segments, 2);
-  assert.equal(game.orders[0].duration_ms, 30);
+  assert.equal(game.orders[0].action.sea_segments, 1);
+  assert.equal(game.orders[0].duration_ms, 15);
 
-  game = processDueOrders(game, map, constants, 10_031);
+  game = processDueOrders(game, map, constants, 10_016);
   assert.equal(game.orders[0].status, 'RESOLVED');
   assert.equal(game.state.territories.W07.warriors['Варкайр'], 1);
+  assert.equal(game.state.sea_nodes['M-WN'].warriors['Варкайр'], 1);
+
+  queued = queueTimedOrder(game, map, constants, {
+    type:'MARCH',
+    mode:'SEA',
+    house:'Варкайр',
+    from:'M-WN',
+    to:'S01-A',
+    warriors:1
+  }, {
+    nowMs:10_020,
+    timing:{landSegmentMs:10,landMaxMs:20,seaSegmentMs:15}
+  });
+
+  game = queued.game;
+  assert.deepEqual(
+    game.orders[1].action.path,
+    ['M-WN','S01-A']
+  );
+
+  game = processDueOrders(game, map, constants, 10_036);
+  assert.equal(game.orders[1].status, 'RESOLVED');
+  assert.equal(game.state.sea_nodes['M-WN'].owner, null);
   assert.equal(game.state.territories['S01-A'].warriors['Варкайр'], 1);
 });
