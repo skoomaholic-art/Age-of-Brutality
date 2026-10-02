@@ -450,7 +450,7 @@ function errorStatus(error) {
   if (/admin role required|cannot control|spectator|ownership mismatch|friend request blocked|messages are blocked|game invites are blocked|messages are allowed only between friends|game invites are allowed only between friends|sender is not a member|spectating this private game requires friendship/i.test(message)) return 403;
   if (/game not found|player not found|profile not found|friend request not found|game invite not found|no snapshot found/i.test(message)) return 404;
   if (/already|claimed|full|closed|not joinable|not in lobby|require all six|missing:|only a running game|only a finished game|unique invite|not a public room|not multiplayer|profile login already exists|linked to another profile|players are already friends|friend request already sent|friend is already in this game|game is not accepting invitations|game invite already sent|player is not in game|game is not watchable/i.test(message)) return 409;
-  if (/Idempotency-Key|unknown|invalid|must be|request body|not running|solo game requires|login must be|password must be|display name must be|invalid avatar|unknown winner house|message must be|conversation requires|profile id required|invite id required|cannot add this profile|cannot block this profile|invalid watch target/i.test(message)) return 400;
+  if (/Idempotency-Key|unknown|invalid|must be|request body|not running|solo game requires|login must be|password must be|display name must be|invalid avatar|unknown winner house|message must be|conversation requires|profile id required|invite id required|cannot add this profile|cannot block this profile|invalid watch target|character does not belong|only adult|dead character|weakened character|character is not|army must be|capital army already|two army characters/i.test(message)) return 400;
   if (/stale game state|could not be committed/i.test(message)) return 409;
   return 500;
 }
@@ -967,6 +967,77 @@ async function handleGameApi(req, res, url, ctx, subpath) {
       };
     });
     return json(res, 200, result);
+  }
+
+  if (req.method === 'GET' && subpath === '/characters') {
+    const house = String(url.searchParams.get('house') || '').trim();
+    await requireHouse(ctx, req, house, { running: false });
+    const characters = charactersForHouse(ctx.game.state, house);
+    const armies = Object.values(ctx.game.state.armies || {})
+      .filter(army => army.house === house);
+
+    return json(res, 200, {
+      house,
+      characters,
+      armies
+    });
+  }
+
+  if (req.method === 'POST' && subpath === '/characters/assign-army') {
+    const body = await readBody(req);
+    const house = String(body.house || '').trim();
+    await requireHouse(ctx, req, house);
+
+    const payload = await serial(ctx, async () => {
+      await tickUnlocked(ctx);
+      ctx.game.state = assignCharacterToArmy(
+        ctx.game.state,
+        map,
+        constants,
+        {
+          house,
+          characterId: String(body.character_id || '').trim()
+        }
+      );
+      ctx.game.updated_at = new Date().toISOString();
+      await finalizeGame(ctx, ctx.game);
+      return {
+        house,
+        characters: charactersForHouse(ctx.game.state, house),
+        armies: Object.values(ctx.game.state.armies || {})
+          .filter(army => army.house === house)
+      };
+    });
+
+    return json(res, 200, payload);
+  }
+
+  if (req.method === 'POST' && subpath === '/characters/return-court') {
+    const body = await readBody(req);
+    const house = String(body.house || '').trim();
+    await requireHouse(ctx, req, house);
+
+    const payload = await serial(ctx, async () => {
+      await tickUnlocked(ctx);
+      ctx.game.state = returnCharacterToCourt(
+        ctx.game.state,
+        map,
+        {
+          house,
+          characterId: String(body.character_id || '').trim()
+        }
+      );
+      ctx.game.updated_at = new Date().toISOString();
+      await finalizeGame(ctx, ctx.game);
+      return {
+        house,
+        characters: charactersForHouse(ctx.game.state, house),
+        armies: Object.values(ctx.game.state.armies || {})
+          .filter(army => army.house === house)
+      };
+    });
+
+    return json(res, 200, payload);
   }
 
   if (req.method === 'GET' && subpath === '/legal') {
