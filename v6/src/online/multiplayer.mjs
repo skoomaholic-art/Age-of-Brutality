@@ -18,6 +18,16 @@ export const PLAYER_ROLE = Object.freeze({
   SPECTATOR: 'SPECTATOR'
 });
 
+export const GAME_MODE = Object.freeze({
+  SOLO: 'SOLO',
+  MULTIPLAYER: 'MULTIPLAYER'
+});
+
+export const GAME_VISIBILITY = Object.freeze({
+  PRIVATE: 'PRIVATE',
+  PUBLIC: 'PUBLIC'
+});
+
 const INVITE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 export function createInviteCode(length = 6) {
@@ -59,11 +69,18 @@ export function safeTokenHashEqual(expected, actual) {
 export function createLobbyMetadata(constants, {
   inviteCode = createInviteCode(),
   nowMs = Date.now(),
-  accessMode = ACCESS_MODE.PLAYER_BOUND
+  accessMode = ACCESS_MODE.PLAYER_BOUND,
+  gameMode = GAME_MODE.MULTIPLAYER,
+  visibility = GAME_VISIBILITY.PRIVATE,
+  roomName = null
 } = {}) {
+  const solo = gameMode === GAME_MODE.SOLO;
   return {
     status: GAME_STATUS.LOBBY,
     access_mode: accessMode,
+    game_mode: gameMode,
+    visibility,
+    room_name: String(roomName || (solo ? 'Соло' : 'Новая комната')).trim().slice(0, 60),
     ruleset_version: constants.version,
     invite_code: inviteCode,
     created_at: new Date(nowMs).toISOString(),
@@ -73,8 +90,8 @@ export function createLobbyMetadata(constants, {
     house_claims: {},
     player_count: 0,
     spectator_count: 0,
-    max_players: constants.houses.length,
-    start_requirement: 'ALL_SIX_HOUSES_FOR_V6_REFERENCE'
+    max_players: solo ? 1 : constants.houses.length,
+    start_requirement: solo ? 'ONE_HOUSE_FOR_SOLO' : 'ALL_SIX_HOUSES_FOR_V6_REFERENCE'
   };
 }
 
@@ -90,6 +107,9 @@ export function normalizeGameMetadata(game, constants, {
         ? GAME_STATUS.RUNNING
         : GAME_STATUS.LOBBY,
       access_mode: defaultAccessMode,
+      game_mode: GAME_MODE.MULTIPLAYER,
+      visibility: GAME_VISIBILITY.PRIVATE,
+      room_name: 'Prototype',
       ruleset_version: next.ruleset_version,
       invite_code: null,
       created_at: next.created_at || new Date(nowMs).toISOString(),
@@ -106,6 +126,11 @@ export function normalizeGameMetadata(game, constants, {
     };
   }
   if (!next.lifecycle.house_claims) next.lifecycle.house_claims = {};
+  if (!next.lifecycle.game_mode) next.lifecycle.game_mode = GAME_MODE.MULTIPLAYER;
+  if (!next.lifecycle.visibility) next.lifecycle.visibility = GAME_VISIBILITY.PRIVATE;
+  if (!next.lifecycle.room_name) {
+    next.lifecycle.room_name = next.lifecycle.game_mode === GAME_MODE.SOLO ? 'Соло' : 'Комната';
+  }
   return next;
 }
 
@@ -174,6 +199,15 @@ export function canAdminister(player) {
 export function validateStart(game, constants) {
   if (game.lifecycle?.status !== GAME_STATUS.LOBBY) throw new Error('game is not in lobby');
   const claims = game.lifecycle?.house_claims || {};
+
+  if (game.lifecycle?.game_mode === GAME_MODE.SOLO) {
+    const claimed = constants.houses.filter(house => Boolean(claims[house]));
+    if (claimed.length !== 1) {
+      throw new Error('solo game requires exactly one claimed House');
+    }
+    return true;
+  }
+
   const missing = constants.houses.filter(house => !claims[house]);
   if (missing.length) {
     throw new Error(
