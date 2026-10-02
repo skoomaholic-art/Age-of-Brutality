@@ -389,9 +389,35 @@ export class FirestoreGameStore {
       })
     );
 
+    const visibleSocialProfile = (id, canSeeGameDetails = false) => {
+      const base = profileMap.get(id) || { id };
+      const presence = structuredClone(base.presence || {
+        status: 'OFFLINE',
+        online: false,
+        in_game: false,
+        game: null
+      });
+
+      if (
+        presence.game &&
+        presence.game.visibility === GAME_VISIBILITY.PRIVATE &&
+        !canSeeGameDetails
+      ) {
+        presence.game = {
+          game_id: null,
+          room_name: null,
+          visibility: presence.game.visibility,
+          game_mode: presence.game.game_mode,
+          status: presence.game.status
+        };
+      }
+
+      return { ...base, presence };
+    };
+
     const friends = friendsSnap.docs
       .map(doc => ({
-        ...(profileMap.get(doc.id) || { id: doc.id }),
+        ...visibleSocialProfile(doc.id, true),
         friends_since: doc.data()?.friends_since || null
       }))
       .sort((a, b) => String(a.display_name || a.handle || '').localeCompare(String(b.display_name || b.handle || ''), 'ru'));
@@ -399,7 +425,7 @@ export class FirestoreGameStore {
     const incoming = incomingSnap.docs.map(doc => {
       const fromId = doc.data()?.from_profile_id || doc.id;
       return {
-        ...(profileMap.get(fromId) || { id: fromId }),
+        ...visibleSocialProfile(fromId, false),
         created_at: doc.data()?.created_at || null
       };
     });
@@ -407,7 +433,7 @@ export class FirestoreGameStore {
     const outgoing = outgoingSnap.docs.map(doc => {
       const toId = doc.data()?.to_profile_id || doc.id;
       return {
-        ...(profileMap.get(toId) || { id: toId }),
+        ...visibleSocialProfile(toId, false),
         created_at: doc.data()?.created_at || null
       };
     });
@@ -415,7 +441,7 @@ export class FirestoreGameStore {
     const conversations = conversationsSnap.docs
       .map(doc => {
         const data = doc.data() || {};
-        const other = profileMap.get(data.other_profile_id) || { id: data.other_profile_id };
+        const other = visibleSocialProfile(data.other_profile_id, true);
         return {
           conversation_id: doc.id,
           other,
@@ -438,7 +464,7 @@ export class FirestoreGameStore {
       invites.push({
         invite_id: doc.id,
         ...data,
-        from_profile: profileMap.get(data.from_profile_id) || { id: data.from_profile_id },
+        from_profile: visibleSocialProfile(data.from_profile_id, true),
         game: gameDoc?.exists ? {
           game_id: gameDoc.id,
           lifecycle: gameDoc.data()?.lifecycle || null
@@ -447,7 +473,7 @@ export class FirestoreGameStore {
     }
 
     const blocked = blockedSnap.docs.map(doc => ({
-      ...(profileMap.get(doc.id) || { id: doc.id }),
+      ...visibleSocialProfile(doc.id, false),
       blocked_at: doc.data()?.blocked_at || null
     }));
 
