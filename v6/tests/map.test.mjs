@@ -31,12 +31,17 @@ test('approved west-center sea routes use the corrected mainland endpoints', () 
     ['S03-A','W18'],
     ['S03-A','W14'],
     ['S03-A','W07'],
-    ['S03-A','S03-B'],
     ['S03-A','S01-B'],
     ['S03-A','S04-B']
   ]) {
-    assert.ok(edges.has(edgeKey(a,b)), `missing corrected route ${a}-${b}`);
+    assert.ok(edges.has(edgeKey(a,b)), `missing corrected sea route ${a}-${b}`);
   }
+
+  const land = new Set(map.land_edges.map(([a,b]) => edgeKey(a,b)));
+  assert.ok(
+    land.has(edgeKey('S03-A','S03-B')),
+    'missing Короны A-Короны B land connection'
+  );
 
   for (const [a,b] of [
     ['S04-A','W12'],
