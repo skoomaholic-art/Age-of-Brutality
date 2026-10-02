@@ -1,0 +1,823 @@
+{
+  "version": "V6.0.0-CHARACTERS-MIGRATION",
+  "source": "cards/canonical_registry_v5.7.2.json#Characters",
+  "migration_policy": "V5.7.2 character data is a mechanic migration candidate under v6/docs/SOURCE_PROVENANCE.md; map facts remain V6 canonical.",
+  "characters": [
+    {
+      "id": "RUL-ВАР",
+      "type": "Правитель",
+      "house_pool": "Варкайр",
+      "name": "Торкай I",
+      "stats": {
+        "attack": 2,
+        "defense": 0,
+        "survival": 1,
+        "diplomacy": 0,
+        "intrigue": 0,
+        "stewardship": 1
+      },
+      "rarity": "Уникальная",
+      "start_status": "Правитель",
+      "special_rule": "СТАРТ: АРМИЯ в столице. Торкай: Атака 2, Защита 0. Когда лично командует атакой: +1 к Боевой силе; 1 раз/раунд после бросков ещё +1 к Боевой силе этой атаки."
+    },
+    {
+      "id": "RUL-САЙ",
+      "type": "Правитель",
+      "house_pool": "Сайрвен",
+      "name": "Элсайр II",
+      "stats": {
+        "attack": 0,
+        "defense": 0,
+        "survival": 1,
+        "diplomacy": 1,
+        "intrigue": 0,
+        "stewardship": 2
+      },
+      "rarity": "Уникальная",
+      "start_status": "Правитель",
+      "special_rule": "СТАРТ: ДВОР. ДВОР: Управление 2. Первый платный найм/покупка ценой 3+ в раунде дополнительно дешевле на 1 золото; не складывается с обычной скидкой Управления."
+    },
+    {
+      "id": "RUL-ОРТ",
+      "type": "Правитель",
+      "house_pool": "Ортайн",
+      "name": "Майвен I",
+      "stats": {
+        "attack": 0,
+        "defense": 0,
+        "survival": 1,
+        "diplomacy": 2,
+        "intrigue": 1,
+        "stewardship": 0
+      },
+      "rarity": "Уникальная",
+      "start_status": "Правитель",
+      "special_rule": "СТАРТ: ДВОР. ДВОР: Дипломатия 2. Первый Официальный Пакт Майвен за всю игру стоит ей 0 Влияния."
+    },
+    {
+      "id": "RUL-ЭРК",
+      "type": "Правитель",
+      "house_pool": "Эркай",
+      "name": "Рейтар III",
+      "stats": {
+        "attack": 1,
+        "defense": 2,
+        "survival": 2,
+        "diplomacy": 0,
+        "intrigue": 0,
+        "stewardship": 0
+      },
+      "rarity": "Уникальная",
+      "start_status": "Правитель",
+      "special_rule": "СТАРТ: АРМИЯ в столице. Рейтар: Атака 1, Защита 2, Выживание 2. Если лично защищает столицу или территорию с Крепостью, 1 раз/раунд +1 Защита на этот бой."
+    },
+    {
+      "id": "RUL-ТАС",
+      "type": "Правитель",
+      "house_pool": "Тасвар",
+      "name": "Кайсар I",
+      "stats": {
+        "attack": 1,
+        "defense": 0,
+        "survival": 1,
+        "diplomacy": 1,
+        "intrigue": 2,
+        "stewardship": 0
+      },
+      "rarity": "Уникальная",
+      "start_status": "Правитель",
+      "special_rule": "СТАРТ: ДВОР. ДВОР: Интрига 2. Первая платная Интрига в раунде дешевле на 1 золото; 1 раз за игру после нового Официального Пакта +1 Влияние."
+    },
+    {
+      "id": "RUL-АЙР",
+      "type": "Правитель",
+      "house_pool": "Айрель",
+      "name": "Элияр II",
+      "stats": {
+        "attack": 0,
+        "defense": 0,
+        "survival": 0,
+        "diplomacy": 2,
+        "intrigue": 0,
+        "stewardship": 1
+      },
+      "rarity": "Уникальная",
+      "start_status": "Правитель",
+      "special_rule": "СТАРТ: ДВОР. ДВОР: раз/раунд династическое действие с ценой Влияния -1, минимум 1."
+    },
+    {
+      "id": "CH-ВАР-1",
+      "type": "Законный ребёнок",
+      "house_pool": "Варкайр",
+      "name": "Роварк",
+      "stats": {
+        "attack": 2,
+        "defense": 1,
+        "survival": 1,
+        "diplomacy": 0,
+        "intrigue": 0,
+        "stewardship": 1
+      },
+      "rarity": "Уникальная",
+      "start_status": "Взрослый наследник",
+      "special_rule": "—"
+    },
+    {
+      "id": "CH-ВАР-2",
+      "type": "Законный ребёнок",
+      "house_pool": "Варкайр",
+      "name": "Торвек",
+      "stats": {
+        "attack": 0,
+        "defense": 1,
+        "survival": 1,
+        "diplomacy": 0,
+        "intrigue": 0,
+        "stewardship": 2
+      },
+      "rarity": "Уникальная",
+      "start_status": "Резерв",
+      "special_rule": "—"
+    },
+    {
+      "id": "CH-ВАР-3",
+      "type": "Законный ребёнок",
+      "house_pool": "Варкайр",
+      "name": "Астрэна",
+      "stats": {
+        "attack": 0,
+        "defense": 0,
+        "survival": 1,
+        "diplomacy": 1,
+        "intrigue": 2,
+        "stewardship": 0
+      },
+      "rarity": "Уникальная",
+      "start_status": "Резерв",
+      "special_rule": "—"
+    },
+    {
+      "id": "CH-САЙ-1",
+      "type": "Законный ребёнок",
+      "house_pool": "Сайрвен",
+      "name": "Элвен",
+      "stats": {
+        "attack": 0,
+        "defense": 0,
+        "survival": 1,
+        "diplomacy": 1,
+        "intrigue": 0,
+        "stewardship": 2
+      },
+      "rarity": "Уникальная",
+      "start_status": "Взрослый наследник",
+      "special_rule": "—"
+    },
+    {
+      "id": "CH-САЙ-2",
+      "type": "Законный ребёнок",
+      "house_pool": "Сайрвен",
+      "name": "Сайра",
+      "stats": {
+        "attack": 0,
+        "defense": 0,
+        "survival": 1,
+        "diplomacy": 0,
+        "intrigue": 1,
+        "stewardship": 2
+      },
+      "rarity": "Уникальная",
+      "start_status": "Резерв",
+      "special_rule": "—"
+    },
+    {
+      "id": "CH-САЙ-3",
+      "type": "Законный ребёнок",
+      "house_pool": "Сайрвен",
+      "name": "Марсел",
+      "stats": {
+        "attack": 1,
+        "defense": 0,
+        "survival": 1,
+        "diplomacy": 1,
+        "intrigue": 0,
+        "stewardship": 1
+      },
+      "rarity": "Уникальная",
+      "start_status": "Резерв",
+      "special_rule": "—"
+    },
+    {
+      "id": "CH-ОРТ-1",
+      "type": "Законный ребёнок",
+      "house_pool": "Ортайн",
+      "name": "Кайвен",
+      "stats": {
+        "attack": 1,
+        "defense": 0,
+        "survival": 1,
+        "diplomacy": 2,
+        "intrigue": 0,
+        "stewardship": 0
+      },
+      "rarity": "Уникальная",
+      "start_status": "Взрослый наследник",
+      "special_rule": "—"
+    },
+    {
+      "id": "CH-ОРТ-2",
+      "type": "Законный ребёнок",
+      "house_pool": "Ортайн",
+      "name": "Мейра",
+      "stats": {
+        "attack": 0,
+        "defense": 0,
+        "survival": 1,
+        "diplomacy": 1,
+        "intrigue": 1,
+        "stewardship": 1
+      },
+      "rarity": "Уникальная",
+      "start_status": "Резерв",
+      "special_rule": "—"
+    },
+    {
+      "id": "CH-ОРТ-3",
+      "type": "Законный ребёнок",
+      "house_pool": "Ортайн",
+      "name": "Эрвен",
+      "stats": {
+        "attack": 0,
+        "defense": 1,
+        "survival": 1,
+        "diplomacy": 1,
+        "intrigue": 0,
+        "stewardship": 1
+      },
+      "rarity": "Уникальная",
+      "start_status": "Резерв",
+      "special_rule": "—"
+    },
+    {
+      "id": "CH-ЭРК-1",
+      "type": "Законный ребёнок",
+      "house_pool": "Эркай",
+      "name": "Тайрек",
+      "stats": {
+        "attack": 1,
+        "defense": 2,
+        "survival": 2,
+        "diplomacy": 0,
+        "intrigue": 0,
+        "stewardship": 0
+      },
+      "rarity": "Уникальная",
+      "start_status": "Взрослый наследник",
+      "special_rule": "—"
+    },
+    {
+      "id": "CH-ЭРК-2",
+      "type": "Законный ребёнок",
+      "house_pool": "Эркай",
+      "name": "Рейна",
+      "stats": {
+        "attack": 0,
+        "defense": 1,
+        "survival": 1,
+        "diplomacy": 1,
+        "intrigue": 0,
+        "stewardship": 1
+      },
+      "rarity": "Уникальная",
+      "start_status": "Резерв",
+      "special_rule": "—"
+    },
+    {
+      "id": "CH-ЭРК-3",
+      "type": "Законный ребёнок",
+      "house_pool": "Эркай",
+      "name": "Кайр",
+      "stats": {
+        "attack": 2,
+        "defense": 0,
+        "survival": 1,
+        "diplomacy": 0,
+        "intrigue": 1,
+        "stewardship": 0
+      },
+      "rarity": "Уникальная",
+      "start_status": "Резерв",
+      "special_rule": "—"
+    },
+    {
+      "id": "CH-ТАС-1",
+      "type": "Законный ребёнок",
+      "house_pool": "Тасвар",
+      "name": "Рейсар",
+      "stats": {
+        "attack": 0,
+        "defense": 0,
+        "survival": 1,
+        "diplomacy": 1,
+        "intrigue": 2,
+        "stewardship": 0
+      },
+      "rarity": "Уникальная",
+      "start_status": "Взрослый наследник",
+      "special_rule": "—"
+    },
+    {
+      "id": "CH-ТАС-2",
+      "type": "Законный ребёнок",
+      "house_pool": "Тасвар",
+      "name": "Кайна",
+      "stats": {
+        "attack": 1,
+        "defense": 0,
+        "survival": 1,
+        "diplomacy": 1,
+        "intrigue": 1,
+        "stewardship": 0
+      },
+      "rarity": "Уникальная",
+      "start_status": "Резерв",
+      "special_rule": "—"
+    },
+    {
+      "id": "CH-ТАС-3",
+      "type": "Законный ребёнок",
+      "house_pool": "Тасвар",
+      "name": "Тасар",
+      "stats": {
+        "attack": 1,
+        "defense": 1,
+        "survival": 1,
+        "diplomacy": 0,
+        "intrigue": 1,
+        "stewardship": 0
+      },
+      "rarity": "Уникальная",
+      "start_status": "Резерв",
+      "special_rule": "—"
+    },
+    {
+      "id": "CH-АЙР-1",
+      "type": "Законный ребёнок",
+      "house_pool": "Айрель",
+      "name": "Эллир",
+      "stats": {
+        "attack": 0,
+        "defense": 0,
+        "survival": 1,
+        "diplomacy": 2,
+        "intrigue": 0,
+        "stewardship": 1
+      },
+      "rarity": "Уникальная",
+      "start_status": "Взрослый наследник",
+      "special_rule": "—"
+    },
+    {
+      "id": "CH-АЙР-2",
+      "type": "Законный ребёнок",
+      "house_pool": "Айрель",
+      "name": "Мира",
+      "stats": {
+        "attack": 0,
+        "defense": 0,
+        "survival": 1,
+        "diplomacy": 1,
+        "intrigue": 1,
+        "stewardship": 1
+      },
+      "rarity": "Уникальная",
+      "start_status": "Резерв",
+      "special_rule": "—"
+    },
+    {
+      "id": "CH-АЙР-3",
+      "type": "Законный ребёнок",
+      "house_pool": "Айрель",
+      "name": "Кайел",
+      "stats": {
+        "attack": 1,
+        "defense": 0,
+        "survival": 1,
+        "diplomacy": 1,
+        "intrigue": 0,
+        "stewardship": 1
+      },
+      "rarity": "Уникальная",
+      "start_status": "Резерв",
+      "special_rule": "—"
+    },
+    {
+      "id": "SP-01",
+      "type": "Нейтральный супруг",
+      "house_pool": "Нейтральный пул",
+      "name": "Лиора",
+      "stats": {
+        "attack": 0,
+        "defense": 0,
+        "survival": 1,
+        "diplomacy": 2,
+        "intrigue": 0,
+        "stewardship": 1
+      },
+      "rarity": "Необычная",
+      "start_status": "ДВОР",
+      "special_rule": "Нет"
+    },
+    {
+      "id": "SP-02",
+      "type": "Нейтральный супруг",
+      "house_pool": "Нейтральный пул",
+      "name": "Торен",
+      "stats": {
+        "attack": 1,
+        "defense": 1,
+        "survival": 1,
+        "diplomacy": 0,
+        "intrigue": 0,
+        "stewardship": 1
+      },
+      "rarity": "Необычная",
+      "start_status": "ДВОР",
+      "special_rule": "Нет"
+    },
+    {
+      "id": "SP-03",
+      "type": "Нейтральный супруг",
+      "house_pool": "Нейтральный пул",
+      "name": "Мейра",
+      "stats": {
+        "attack": 0,
+        "defense": 0,
+        "survival": 1,
+        "diplomacy": 1,
+        "intrigue": 1,
+        "stewardship": 1
+      },
+      "rarity": "Необычная",
+      "start_status": "ДВОР",
+      "special_rule": "Нет"
+    },
+    {
+      "id": "SP-04",
+      "type": "Нейтральный супруг",
+      "house_pool": "Нейтральный пул",
+      "name": "Эрвин",
+      "stats": {
+        "attack": 1,
+        "defense": 0,
+        "survival": 1,
+        "diplomacy": 1,
+        "intrigue": 0,
+        "stewardship": 1
+      },
+      "rarity": "Необычная",
+      "start_status": "ДВОР",
+      "special_rule": "Нет"
+    },
+    {
+      "id": "SP-05",
+      "type": "Нейтральный супруг",
+      "house_pool": "Нейтральный пул",
+      "name": "Сайла",
+      "stats": {
+        "attack": 0,
+        "defense": 1,
+        "survival": 1,
+        "diplomacy": 1,
+        "intrigue": 0,
+        "stewardship": 1
+      },
+      "rarity": "Необычная",
+      "start_status": "ДВОР",
+      "special_rule": "Нет"
+    },
+    {
+      "id": "SP-06",
+      "type": "Нейтральный супруг",
+      "house_pool": "Нейтральный пул",
+      "name": "Рейна",
+      "stats": {
+        "attack": 0,
+        "defense": 0,
+        "survival": 1,
+        "diplomacy": 1,
+        "intrigue": 0,
+        "stewardship": 2
+      },
+      "rarity": "Необычная",
+      "start_status": "ДВОР",
+      "special_rule": "Нет"
+    },
+    {
+      "id": "SP-07",
+      "type": "Нейтральный супруг",
+      "house_pool": "Нейтральный пул",
+      "name": "Кайра",
+      "stats": {
+        "attack": 0,
+        "defense": 0,
+        "survival": 1,
+        "diplomacy": 1,
+        "intrigue": 1,
+        "stewardship": 1
+      },
+      "rarity": "Необычная",
+      "start_status": "ДВОР",
+      "special_rule": "Нет"
+    },
+    {
+      "id": "SP-08",
+      "type": "Нейтральный супруг",
+      "house_pool": "Нейтральный пул",
+      "name": "Астрид",
+      "stats": {
+        "attack": 1,
+        "defense": 1,
+        "survival": 1,
+        "diplomacy": 0,
+        "intrigue": 0,
+        "stewardship": 1
+      },
+      "rarity": "Необычная",
+      "start_status": "ДВОР",
+      "special_rule": "Нет"
+    },
+    {
+      "id": "SP-09",
+      "type": "Нейтральный супруг",
+      "house_pool": "Нейтральный пул",
+      "name": "Вейна",
+      "stats": {
+        "attack": 0,
+        "defense": 0,
+        "survival": 1,
+        "diplomacy": 2,
+        "intrigue": 0,
+        "stewardship": 1
+      },
+      "rarity": "Необычная",
+      "start_status": "ДВОР",
+      "special_rule": "Нет"
+    },
+    {
+      "id": "SP-10",
+      "type": "Нейтральный супруг",
+      "house_pool": "Нейтральный пул",
+      "name": "Мара",
+      "stats": {
+        "attack": 0,
+        "defense": 1,
+        "survival": 1,
+        "diplomacy": 0,
+        "intrigue": 1,
+        "stewardship": 2
+      },
+      "rarity": "Необычная",
+      "start_status": "ДВОР",
+      "special_rule": "Нет"
+    },
+    {
+      "id": "SP-11",
+      "type": "Нейтральный супруг",
+      "house_pool": "Нейтральный пул",
+      "name": "Элиан",
+      "stats": {
+        "attack": 1,
+        "defense": 0,
+        "survival": 1,
+        "diplomacy": 1,
+        "intrigue": 1,
+        "stewardship": 0
+      },
+      "rarity": "Необычная",
+      "start_status": "ДВОР",
+      "special_rule": "Нет"
+    },
+    {
+      "id": "SP-12",
+      "type": "Нейтральный супруг",
+      "house_pool": "Нейтральный пул",
+      "name": "Тайра",
+      "stats": {
+        "attack": 0,
+        "defense": 0,
+        "survival": 1,
+        "diplomacy": 1,
+        "intrigue": 0,
+        "stewardship": 2
+      },
+      "rarity": "Необычная",
+      "start_status": "ДВОР",
+      "special_rule": "Нет"
+    },
+    {
+      "id": "BST-01",
+      "type": "Бастард",
+      "house_pool": "Общий резерв",
+      "name": "Чёрный Лев",
+      "stats": {
+        "attack": 2,
+        "defense": 0,
+        "survival": 1,
+        "diplomacy": 0,
+        "intrigue": 1,
+        "stewardship": 0
+      },
+      "rarity": "Редкая",
+      "start_status": "Скрытый",
+      "special_rule": "Происхождение «Бастард». После раскрытия: ДВОР — Дипломатия, Интрига, Управление -1; АРМИЯ — Атака, Защита -1; все значения минимум 0; Выживание без штрафа. Легитимизация не снимает Клеймо."
+    },
+    {
+      "id": "BST-02",
+      "type": "Бастард",
+      "house_pool": "Общий резерв",
+      "name": "Серый Ворон",
+      "stats": {
+        "attack": 1,
+        "defense": 0,
+        "survival": 1,
+        "diplomacy": 0,
+        "intrigue": 2,
+        "stewardship": 0
+      },
+      "rarity": "Редкая",
+      "start_status": "Скрытый",
+      "special_rule": "Происхождение «Бастард». После раскрытия: ДВОР — Дипломатия, Интрига, Управление -1; АРМИЯ — Атака, Защита -1; все значения минимум 0; Выживание без штрафа. Легитимизация не снимает Клеймо."
+    },
+    {
+      "id": "BST-03",
+      "type": "Бастард",
+      "house_pool": "Общий резерв",
+      "name": "Белая Змея",
+      "stats": {
+        "attack": 0,
+        "defense": 1,
+        "survival": 1,
+        "diplomacy": 1,
+        "intrigue": 1,
+        "stewardship": 0
+      },
+      "rarity": "Редкая",
+      "start_status": "Скрытый",
+      "special_rule": "Происхождение «Бастард». После раскрытия: ДВОР — Дипломатия, Интрига, Управление -1; АРМИЯ — Атака, Защита -1; все значения минимум 0; Выживание без штрафа. Легитимизация не снимает Клеймо."
+    },
+    {
+      "id": "BST-04",
+      "type": "Бастард",
+      "house_pool": "Общий резерв",
+      "name": "Кровавый Олень",
+      "stats": {
+        "attack": 2,
+        "defense": 1,
+        "survival": 1,
+        "diplomacy": 0,
+        "intrigue": 0,
+        "stewardship": 0
+      },
+      "rarity": "Редкая",
+      "start_status": "Скрытый",
+      "special_rule": "Происхождение «Бастард». После раскрытия: ДВОР — Дипломатия, Интрига, Управление -1; АРМИЯ — Атака, Защита -1; все значения минимум 0; Выживание без штрафа. Легитимизация не снимает Клеймо."
+    },
+    {
+      "id": "BST-05",
+      "type": "Бастард",
+      "house_pool": "Общий резерв",
+      "name": "Пепельный Сын",
+      "stats": {
+        "attack": 1,
+        "defense": 0,
+        "survival": 1,
+        "diplomacy": 0,
+        "intrigue": 1,
+        "stewardship": 1
+      },
+      "rarity": "Редкая",
+      "start_status": "Скрытый",
+      "special_rule": "Происхождение «Бастард». После раскрытия: ДВОР — Дипломатия, Интрига, Управление -1; АРМИЯ — Атака, Защита -1; все значения минимум 0; Выживание без штрафа. Легитимизация не снимает Клеймо."
+    },
+    {
+      "id": "BST-06",
+      "type": "Бастард",
+      "house_pool": "Общий резерв",
+      "name": "Младший Волк",
+      "stats": {
+        "attack": 1,
+        "defense": 1,
+        "survival": 1,
+        "diplomacy": 0,
+        "intrigue": 0,
+        "stewardship": 1
+      },
+      "rarity": "Редкая",
+      "start_status": "Скрытый",
+      "special_rule": "Происхождение «Бастард». После раскрытия: ДВОР — Дипломатия, Интрига, Управление -1; АРМИЯ — Атака, Защита -1; все значения минимум 0; Выживание без штрафа. Легитимизация не снимает Клеймо."
+    },
+    {
+      "id": "BST-07",
+      "type": "Бастард",
+      "house_pool": "Общий резерв",
+      "name": "Морской Бастард",
+      "stats": {
+        "attack": 0,
+        "defense": 0,
+        "survival": 2,
+        "diplomacy": 1,
+        "intrigue": 1,
+        "stewardship": 0
+      },
+      "rarity": "Редкая",
+      "start_status": "Скрытый",
+      "special_rule": "Происхождение «Бастард». После раскрытия: ДВОР — Дипломатия, Интрига, Управление -1; АРМИЯ — Атака, Защита -1; все значения минимум 0; Выживание без штрафа. Легитимизация не снимает Клеймо."
+    },
+    {
+      "id": "BST-08",
+      "type": "Бастард",
+      "house_pool": "Общий резерв",
+      "name": "Безымянный Наследник",
+      "stats": {
+        "attack": 0,
+        "defense": 1,
+        "survival": 1,
+        "diplomacy": 0,
+        "intrigue": 1,
+        "stewardship": 1
+      },
+      "rarity": "Редкая",
+      "start_status": "Скрытый",
+      "special_rule": "Происхождение «Бастард». После раскрытия: ДВОР — Дипломатия, Интрига, Управление -1; АРМИЯ — Атака, Защита -1; все значения минимум 0; Выживание без штрафа. Легитимизация не снимает Клеймо."
+    },
+    {
+      "id": "BST-09",
+      "type": "Бастард",
+      "house_pool": "Общий резерв",
+      "name": "Лунная Дочь",
+      "stats": {
+        "attack": 0,
+        "defense": 0,
+        "survival": 1,
+        "diplomacy": 1,
+        "intrigue": 2,
+        "stewardship": 0
+      },
+      "rarity": "Редкая",
+      "start_status": "Скрытый",
+      "special_rule": "Происхождение «Бастард». После раскрытия: ДВОР — Дипломатия, Интрига, Управление -1; АРМИЯ — Атака, Защита -1; все значения минимум 0; Выживание без штрафа. Легитимизация не снимает Клеймо."
+    },
+    {
+      "id": "BST-10",
+      "type": "Бастард",
+      "house_pool": "Общий резерв",
+      "name": "Рождённый в Буре",
+      "stats": {
+        "attack": 2,
+        "defense": 0,
+        "survival": 2,
+        "diplomacy": 0,
+        "intrigue": 0,
+        "stewardship": 0
+      },
+      "rarity": "Редкая",
+      "start_status": "Скрытый",
+      "special_rule": "Происхождение «Бастард». После раскрытия: ДВОР — Дипломатия, Интрига, Управление -1; АРМИЯ — Атака, Защита -1; все значения минимум 0; Выживание без штрафа. Легитимизация не снимает Клеймо."
+    },
+    {
+      "id": "BST-11",
+      "type": "Бастард",
+      "house_pool": "Общий резерв",
+      "name": "Тихий Клинок",
+      "stats": {
+        "attack": 1,
+        "defense": 0,
+        "survival": 1,
+        "diplomacy": 0,
+        "intrigue": 2,
+        "stewardship": 0
+      },
+      "rarity": "Редкая",
+      "start_status": "Скрытый",
+      "special_rule": "Происхождение «Бастард». После раскрытия: ДВОР — Дипломатия, Интрига, Управление -1; АРМИЯ — Атака, Защита -1; все значения минимум 0; Выживание без штрафа. Легитимизация не снимает Клеймо."
+    },
+    {
+      "id": "BST-12",
+      "type": "Бастард",
+      "house_pool": "Общий резерв",
+      "name": "Золотой Бастард",
+      "stats": {
+        "attack": 0,
+        "defense": 0,
+        "survival": 1,
+        "diplomacy": 1,
+        "intrigue": 0,
+        "stewardship": 2
+      },
+      "rarity": "Редкая",
+      "start_status": "Скрытый",
+      "special_rule": "Происхождение «Бастард». После раскрытия: ДВОР — Дипломатия, Интрига, Управление -1; АРМИЯ — Атака, Защита -1; все значения минимум 0; Выживание без штрафа. Легитимизация не снимает Клеймо."
+    }
+  ]
+}
