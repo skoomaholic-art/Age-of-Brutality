@@ -1,10 +1,12 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { enumerateMarches } from '../core/legal-actions.mjs';
 import { loadJson } from '../core/map.mjs';
 import { FirestoreGameStore } from './firestore-store.mjs';
+import { createOnlineGame } from './store.mjs';
 import {
   ONLINE_TIMING,
   listQueueableMarches,
@@ -29,35 +31,114 @@ import {
   createSnapshotEnvelope,
   restoreGameFromSnapshot
 } from './snapshot.mjs';
+import {
+  ACCESS_MODE,
+  GAME_STATUS,
+  PLAYER_ROLE,
+  assertGameRunning,
+  assertHouseAccess,
+  canAdminister,
+  createInviteCode,
+  createPlayerCredentials,
+  createPlayerRecord,
+  normalizeGameMetadata,
+  publicLifecycle,
+  publicPlayer
+} from './multiplayer.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const v6Root = path.resolve(here, '../..');
 const map = loadJson(path.join(v6Root, 'src/data/map.v6.json'));
 const constants = loadJson(path.join(v6Root, 'src/data/constants.v6.json'));
 
-const store = new FirestoreGameStore({
-  gameId: process.env.AOB_GAME_ID || 'prototype-1',
-  databaseId: process.env.AOB_FIRESTORE_DATABASE || '(default)'
-});
+const defaultGameId = process.env.AOB_GAME_ID || 'prototype-1';
+const databaseId = process.env.AOB_FIRESTORE_DATABASE || '(default)';
+const contexts = new Map();
+const contextLoads = new Map();
 
-async function finalizeGame(next, nowMs = Date.now()) {
+function createStore(gameId) {
+  return new FirestoreGameStore({
+    gameId,
+    databaseId
+  });
+}
+
+async function finalizeGame(ctx, next, nowMs = Date.now()) {
   const audited = syncAuditFromJournal(next, map, {
     nowMs,
     emit: emitCloudAudit
   });
-  await store.save(audited);
+  await ctx.store.save(audited);
+  ctx.game = audited;
   return audited;
 }
 
-let game = normalizeAudit(normalizeOnlineEconomy(await store.loadOrCreate(map, constants)));
-game = await finalizeGame(game);
+async function loadContext(gameId, {
+  createIfMissing = false,
+  defaultAccessMode = ACCESS_MODE.PLAYER_BOUND
+} = {}) {
+  if (contexts.has(gameId)) return contexts.get(gameId);
+  if (contextLoads.has(gameId)) return contextLoads.get(gameId);
 
-let operationChain = Promise.resolve();
+  const pending = (async () => {
+    const store = createStore(gameId);
+    let game = await store.load();
 
-function serial(fn) {
-  const run = operationChain.then(fn, fn);
-  operationChain = run.catch(() => {});
+    if (!game && createIfMissing) {
+      game = createOnlineGame(map, constants, {
+        id: gameId,
+        accessMode: defaultAccessMode
+      });
+      await store.save(game);
+      store.loadedExistingAtStartup = false;
+    }
+
+    if (!game) throw new Error('game not found');
+
+    game = normalizeGameMetadata(game, constants, {
+      defaultAccessMode
+    });
+    game = normalizeAudit(normalizeOnlineEconomy(game));
+
+    const ctx = {
+      gameId,
+      store,
+      game,
+      chain: Promise.resolve()
+    };
+    contexts.set(gameId, ctx);
+    await finalizeGame(ctx, game);
+    return ctx;
+  })();
+
+  contextLoads.set(gameId, pending);
+  try {
+    return await pending;
+  } finally {
+    contextLoads.delete(gameId);
+  }
+}
+
+const defaultContext = await loadContext(defaultGameId, {
+  createIfMissing: true,
+  defaultAccessMode: ACCESS_MODE.ADMIN_SANDBOX
+});
+
+function serial(ctx, fn) {
+  const run = ctx.chain.then(fn, fn);
+  ctx.chain = run.catch(() => {});
   return run;
+}
+
+async function refreshContext(ctx) {
+  let reloaded = await ctx.store.load();
+  if (!reloaded) throw new Error('game not found');
+  reloaded = normalizeGameMetadata(reloaded, constants, {
+    defaultAccessMode: ctx.game?.lifecycle?.access_mode || ACCESS_MODE.PLAYER_BOUND
+  });
+  reloaded = normalizeAudit(normalizeOnlineEconomy(reloaded));
+  ctx.game = reloaded;
+  return reloaded;
 }
 
 function json(res, status, payload) {
@@ -89,22 +170,66 @@ async function readBody(req) {
   return JSON.parse(body);
 }
 
-async function tickUnlocked() {
+function bearerToken(req) {
+  const header = String(req.headers.authorization || '');
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1].trim() : null;
+}
+
+async function requirePlayer(ctx, req) {
+  if (ctx.game.lifecycle?.access_mode === ACCESS_MODE.ADMIN_SANDBOX) return null;
+  const token = bearerToken(req);
+  if (!token) throw new Error('authentication required');
+  const player = await ctx.store.authenticateToken(token);
+  if (!player) throw new Error('invalid player token');
+  return player;
+}
+
+async function requireAdmin(ctx, req) {
+  if (ctx.game.lifecycle?.access_mode === ACCESS_MODE.ADMIN_SANDBOX) return null;
+  const player = await requirePlayer(ctx, req);
+  if (!canAdminister(player)) throw new Error('admin role required');
+  return player;
+}
+
+async function requireHouse(ctx, req, house, { running = true } = {}) {
+  if (running) assertGameRunning(ctx.game);
+  const player = await requirePlayer(ctx, req);
+  assertHouseAccess(ctx.game, player, house, constants);
+  return player;
+}
+
+async function tickUnlocked(ctx) {
+  if (ctx.game.lifecycle?.status !== GAME_STATUS.RUNNING) return;
+
   const nowMs = Date.now();
-  let processed = processDueOrders(game, map, constants, nowMs);
+  let processed = processDueOrders(ctx.game, map, constants, nowMs);
   processed = processEconomy(processed, map, constants, nowMs);
   if (
-    processed.updated_at !== game.updated_at ||
-    processed.state.journal.length !== game.state.journal.length
+    processed.updated_at !== ctx.game.updated_at ||
+    processed.state.journal.length !== ctx.game.state.journal.length
   ) {
-    game = await finalizeGame(processed, nowMs);
+    await finalizeGame(ctx, processed, nowMs);
   }
 }
 
-function publicState() {
+async function publicState(ctx, player = null) {
+  const clientGame = structuredClone(ctx.game);
+  clientGame.lifecycle = publicLifecycle(clientGame.lifecycle);
+
+  let lobby = null;
+  if (ctx.game.lifecycle?.access_mode === ACCESS_MODE.PLAYER_BOUND) {
+    const players = await ctx.store.listPlayers();
+    lobby = {
+      players: players.map(publicPlayer),
+      current_player: publicPlayer(player)
+    };
+  }
+
   return {
-    game,
-    storage: store.status(),
+    game: clientGame,
+    lobby,
+    storage: ctx.store.status(),
     map: {
       territories: map.territories,
       coordinates: map.coordinates,
@@ -132,6 +257,347 @@ function preserveAuditHistory(restored, current) {
   return restored;
 }
 
+function gamePath(pathname) {
+  const match = pathname.match(/^\/api\/games\/([^/]+)(\/.*)?$/);
+  if (!match) return null;
+  return {
+    gameId: decodeURIComponent(match[1]),
+    subpath: match[2] || '/'
+  };
+}
+
+function newGameId() {
+  return `game-${crypto.randomUUID()}`;
+}
+
+function errorStatus(error) {
+  const message = String(error?.message || error || '');
+  if (/authentication required|invalid player token/i.test(message)) return 401;
+  if (/admin role required|cannot control|spectator|ownership mismatch/i.test(message)) return 403;
+  if (/game not found|player not found|no snapshot found/i.test(message)) return 404;
+  if (/already|claimed|full|closed|not joinable|not in lobby|require all six|missing:/i.test(message)) return 409;
+  if (/unknown|invalid|must be|request body|not running/i.test(message)) return 400;
+  return 500;
+}
+
+async function createMultiplayerGame(body) {
+  const gameId = newGameId();
+  const inviteCode = createInviteCode();
+  const credentials = createPlayerCredentials();
+  const host = createPlayerRecord({
+    playerId: credentials.player_id,
+    tokenHash: credentials.token_hash,
+    displayName: body.display_name || 'Host',
+    role: PLAYER_ROLE.ADMIN
+  });
+
+  const store = createStore(gameId);
+  let game = createOnlineGame(map, constants, {
+    id: gameId,
+    accessMode: ACCESS_MODE.PLAYER_BOUND,
+    inviteCode
+  });
+  game = normalizeAudit(normalizeOnlineEconomy(game));
+
+  const ctx = {
+    gameId,
+    store,
+    game,
+    chain: Promise.resolve()
+  };
+  contexts.set(gameId, ctx);
+
+  await finalizeGame(ctx, game);
+  await store.addPlayer(host);
+  await refreshContext(ctx);
+
+  if (body.house) {
+    await store.claimHouse(host.id, body.house, constants);
+    await refreshContext(ctx);
+  }
+
+  return {
+    game_id: gameId,
+    invite_code: inviteCode,
+    player: publicPlayer(await store.getPlayer(host.id)),
+    access_token: credentials.token,
+    lifecycle: publicLifecycle(ctx.game.lifecycle)
+  };
+}
+
+async function joinMultiplayerGame(body) {
+  const inviteCode = String(body.invite_code || '').trim().toUpperCase();
+  const gameId = await defaultContext.store.findGameIdByInviteCode(inviteCode);
+  if (!gameId) throw new Error('game not found');
+
+  const ctx = await loadContext(gameId);
+  if (ctx.game.lifecycle?.status !== GAME_STATUS.LOBBY) throw new Error('game is not joinable');
+
+  const role = body.spectator ? PLAYER_ROLE.SPECTATOR : PLAYER_ROLE.PLAYER;
+  const credentials = createPlayerCredentials();
+  const player = createPlayerRecord({
+    playerId: credentials.player_id,
+    tokenHash: credentials.token_hash,
+    displayName: body.display_name || 'Player',
+    role
+  });
+
+  await ctx.store.addPlayer(player);
+  await refreshContext(ctx);
+
+  return {
+    game_id: gameId,
+    player: publicPlayer(player),
+    access_token: credentials.token,
+    lifecycle: publicLifecycle(ctx.game.lifecycle)
+  };
+}
+
+async function handleGameApi(req, res, url, ctx, subpath) {
+  if (req.method === 'GET' && subpath === '/lobby') {
+    const player = await requirePlayer(ctx, req);
+    const players = await ctx.store.listPlayers();
+    return json(res, 200, {
+      game_id: ctx.game.id,
+      lifecycle: publicLifecycle(ctx.game.lifecycle),
+      players: players.map(publicPlayer),
+      current_player: publicPlayer(player)
+    });
+  }
+
+  if (req.method === 'POST' && subpath === '/claim-house') {
+    const body = await readBody(req);
+    const player = await requirePlayer(ctx, req);
+    const claimed = await serial(ctx, async () => {
+      const result = await ctx.store.claimHouse(player.id, body.house, constants);
+      await refreshContext(ctx);
+      return result;
+    });
+    return json(res, 200, {
+      ...claimed,
+      lifecycle: publicLifecycle(ctx.game.lifecycle)
+    });
+  }
+
+  if (req.method === 'POST' && subpath === '/start') {
+    const player = await requireAdmin(ctx, req);
+    const payload = await serial(ctx, async () => {
+      const nowMs = Date.now();
+      const lifecycle = await ctx.store.startGame(player.id, constants, nowMs);
+      await refreshContext(ctx);
+      ctx.game.lifecycle = lifecycle;
+      ctx.game.next_income_at = new Date(nowMs + ONLINE_ECONOMY_TIMING.incomeIntervalMs).toISOString();
+      ctx.game.updated_at = new Date(nowMs).toISOString();
+      ctx.game.state.journal.push({
+        kind: 'GAME_STARTED',
+        at: ctx.game.updated_at,
+        game_id: ctx.game.id,
+        ruleset_version: ctx.game.ruleset_version
+      });
+      await finalizeGame(ctx, ctx.game, nowMs);
+      return {
+        game_id: ctx.game.id,
+        lifecycle: publicLifecycle(ctx.game.lifecycle)
+      };
+    });
+    return json(res, 200, payload);
+  }
+
+  if (req.method === 'GET' && subpath === '/storage') {
+    await requirePlayer(ctx, req);
+    return json(res, 200, ctx.store.status());
+  }
+
+  if (req.method === 'GET' && subpath === '/state') {
+    const player = await requirePlayer(ctx, req);
+    const payload = await serial(ctx, async () => {
+      await tickUnlocked(ctx);
+      return publicState(ctx, player);
+    });
+    return json(res, 200, payload);
+  }
+
+  if (req.method === 'GET' && subpath === '/snapshot') {
+    await requireAdmin(ctx, req);
+    const payload = await serial(ctx, async () => {
+      await tickUnlocked(ctx);
+      return createSnapshotEnvelope(ctx.game);
+    });
+    return json(res, 200, payload);
+  }
+
+  if (req.method === 'POST' && subpath === '/snapshot') {
+    await requireAdmin(ctx, req);
+    const saved = await serial(ctx, async () => {
+      await tickUnlocked(ctx);
+      const envelope = createSnapshotEnvelope(ctx.game);
+      return ctx.store.saveCheckpoint(envelope);
+    });
+    return json(res, 201, { saved: true, ...saved });
+  }
+
+  if (req.method === 'GET' && subpath === '/snapshot/latest') {
+    await requireAdmin(ctx, req);
+    const snapshot = await ctx.store.latestCheckpoint();
+    if (!snapshot) throw new Error('no snapshot found');
+    return json(res, 200, snapshot);
+  }
+
+  if (req.method === 'POST' && subpath === '/snapshot/restore-latest') {
+    await requireAdmin(ctx, req);
+    const result = await serial(ctx, async () => {
+      const snapshot = await ctx.store.latestCheckpoint();
+      if (!snapshot) throw new Error('no snapshot found');
+
+      let restored = restoreGameFromSnapshot(snapshot, map, constants);
+      restored = preserveAuditHistory(restored, ctx.game);
+      await finalizeGame(ctx, restored);
+
+      return {
+        restored: true,
+        game_id: ctx.game.id,
+        session_id: ctx.game.session_id,
+        restored_at: ctx.game.last_restored_at,
+        snapshot_saved_at: ctx.game.last_snapshot_saved_at
+      };
+    });
+    return json(res, 200, result);
+  }
+
+  if (req.method === 'POST' && subpath === '/snapshot/restore') {
+    await requireAdmin(ctx, req);
+    const body = await readBody(req);
+    const result = await serial(ctx, async () => {
+      const restored = restoreGameFromSnapshot(body, map, constants);
+      await finalizeGame(ctx, restored);
+      return {
+        restored: true,
+        game_id: ctx.game.id,
+        session_id: ctx.game.session_id,
+        restored_at: ctx.game.last_restored_at,
+        snapshot_saved_at: ctx.game.last_snapshot_saved_at
+      };
+    });
+    return json(res, 200, result);
+  }
+
+  if (req.method === 'GET' && subpath === '/legal') {
+    const house = url.searchParams.get('house');
+    await requireHouse(ctx, req, house);
+    const legal = await serial(ctx, async () => {
+      await tickUnlocked(ctx);
+      return listQueueableMarches(ctx.game, map, constants, house);
+    });
+    return json(res, 200, { house, actions: legal });
+  }
+
+  if (req.method === 'GET' && subpath === '/economy') {
+    const house = url.searchParams.get('house');
+    await requireHouse(ctx, req, house);
+    const data = await serial(ctx, async () => {
+      await tickUnlocked(ctx);
+      return economyView(ctx.game, map, constants, house);
+    });
+    return json(res, 200, data);
+  }
+
+  if (req.method === 'POST' && subpath === '/recruit') {
+    const body = await readBody(req);
+    await requireHouse(ctx, req, body.house);
+    const payload = await serial(ctx, async () => {
+      await tickUnlocked(ctx);
+      const queued = queueRecruitJob(ctx.game, constants, {
+        house: body.house,
+        territory: body.territory,
+        warriors: Number(body.warriors)
+      });
+      await finalizeGame(ctx, queued.game);
+      return { job: queued.job, game: ctx.game };
+    });
+    return json(res, 201, payload);
+  }
+
+  if (req.method === 'POST' && subpath === '/fort') {
+    const body = await readBody(req);
+    await requireHouse(ctx, req, body.house);
+    const payload = await serial(ctx, async () => {
+      await tickUnlocked(ctx);
+      const queued = queueFortJob(ctx.game, map, constants, {
+        house: body.house,
+        territory: body.territory
+      });
+      await finalizeGame(ctx, queued.game);
+      return { job: queued.job, game: ctx.game };
+    });
+    return json(res, 201, payload);
+  }
+
+  if (req.method === 'POST' && subpath === '/orders') {
+    const body = await readBody(req);
+    await requireHouse(ctx, req, body.house);
+    const payload = await serial(ctx, async () => {
+      await tickUnlocked(ctx);
+      const action = {
+        type: 'MARCH',
+        mode: body.mode || 'LAND',
+        house: body.house,
+        from: body.from,
+        to: body.to,
+        warriors: Number(body.warriors)
+      };
+
+      const queued = queueTimedOrder(ctx.game, map, constants, action);
+      await finalizeGame(ctx, queued.game);
+      return { order: queued.order, game: ctx.game };
+    });
+    return json(res, 201, payload);
+  }
+
+  if (req.method === 'POST' && subpath === '/reset') {
+    await requireAdmin(ctx, req);
+    const payload = await serial(ctx, async () => {
+      const accessMode = ctx.game.lifecycle?.access_mode || ACCESS_MODE.PLAYER_BOUND;
+      if (accessMode !== ACCESS_MODE.ADMIN_SANDBOX) {
+        throw new Error('reset is disabled for multiplayer games');
+      }
+      ctx.game = normalizeAudit(normalizeOnlineEconomy(await ctx.store.reset(map, constants)));
+      await finalizeGame(ctx, ctx.game);
+      return publicState(ctx);
+    });
+    return json(res, 200, payload);
+  }
+
+  if (req.method === 'GET' && subpath === '/audit') {
+    await requirePlayer(ctx, req);
+    const requested = Number(url.searchParams.get('limit') || 200);
+    const limit = Math.max(1, Math.min(2000, Number.isFinite(requested) ? requested : 200));
+    const payload = await serial(ctx, async () => {
+      await tickUnlocked(ctx);
+      return {
+        game_id: ctx.game.id,
+        session_id: ctx.game.session_id,
+        session: sessionSummary(ctx.game),
+        count: Math.min(limit, ctx.game.audit_log.length),
+        entries: ctx.game.audit_log.slice(-limit)
+      };
+    });
+    return json(res, 200, payload);
+  }
+
+  if (req.method === 'GET' && subpath === '/debug/all-legal') {
+    await requireAdmin(ctx, req);
+    const byHouse = await serial(ctx, async () => {
+      await tickUnlocked(ctx);
+      return Object.fromEntries(
+        constants.houses.map(house => [house, enumerateMarches(ctx.game.state, map, constants, house)])
+      );
+    });
+    return json(res, 200, byHouse);
+  }
+
+  return json(res, 404, { error: 'not found' });
+}
+
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://localhost');
@@ -141,202 +607,47 @@ const server = http.createServer(async (req, res) => {
       return text(res, 200, html, 'text/html; charset=utf-8');
     }
 
-    if (req.method === 'GET' && url.pathname === '/api/storage') {
-      return json(res, 200, store.status());
-    }
-
-    if (req.method === 'GET' && url.pathname === '/api/state') {
-      const payload = await serial(async () => {
-        await tickUnlocked();
-        return publicState();
-      });
-      return json(res, 200, payload);
-    }
-
-    if (req.method === 'GET' && url.pathname === '/api/snapshot') {
-      const payload = await serial(async () => {
-        await tickUnlocked();
-        return createSnapshotEnvelope(game);
-      });
-      return json(res, 200, payload);
-    }
-
-    if (req.method === 'POST' && url.pathname === '/api/snapshot') {
-      const saved = await serial(async () => {
-        await tickUnlocked();
-        const envelope = createSnapshotEnvelope(game);
-        return store.saveCheckpoint(envelope);
-      });
-      return json(res, 201, { saved: true, ...saved });
-    }
-
-    if (req.method === 'GET' && url.pathname === '/api/snapshot/latest') {
-      const snapshot = await store.latestCheckpoint();
-      if (!snapshot) return json(res, 404, { error: 'no snapshot found' });
-      return json(res, 200, snapshot);
-    }
-
-    if (req.method === 'POST' && url.pathname === '/api/snapshot/restore-latest') {
-      const result = await serial(async () => {
-        const snapshot = await store.latestCheckpoint();
-        if (!snapshot) throw new Error('no snapshot found');
-
-        let restored = restoreGameFromSnapshot(snapshot, map, constants);
-        restored = preserveAuditHistory(restored, game);
-        game = await finalizeGame(restored);
-
-        return {
-          restored: true,
-          game_id: game.id,
-          session_id: game.session_id,
-          restored_at: game.last_restored_at,
-          snapshot_saved_at: game.last_snapshot_saved_at
-        };
-      });
-      return json(res, 200, result);
-    }
-
-    if (req.method === 'POST' && url.pathname === '/api/snapshot/restore') {
+    if (req.method === 'POST' && url.pathname === '/api/games') {
       const body = await readBody(req);
-      const result = await serial(async () => {
-        game = restoreGameFromSnapshot(body, map, constants);
-        game = await finalizeGame(game);
-        return {
-          restored: true,
-          game_id: game.id,
-          session_id: game.session_id,
-          restored_at: game.last_restored_at,
-          snapshot_saved_at: game.last_snapshot_saved_at
-        };
-      });
-      return json(res, 200, result);
+      return json(res, 201, await createMultiplayerGame(body));
     }
 
-    if (req.method === 'GET' && url.pathname === '/api/legal') {
-      const house = url.searchParams.get('house');
-      if (!constants.houses.includes(house)) {
-        return json(res, 400, { error: 'unknown house' });
-      }
-      const legal = await serial(async () => {
-        await tickUnlocked();
-        return listQueueableMarches(game, map, constants, house);
-      });
-      return json(res, 200, { house, actions: legal });
-    }
-
-    if (req.method === 'GET' && url.pathname === '/api/economy') {
-      const house = url.searchParams.get('house');
-      if (!constants.houses.includes(house)) {
-        return json(res, 400, { error: 'unknown house' });
-      }
-      const data = await serial(async () => {
-        await tickUnlocked();
-        return economyView(game, map, constants, house);
-      });
-      return json(res, 200, data);
-    }
-
-    if (req.method === 'POST' && url.pathname === '/api/recruit') {
+    if (req.method === 'POST' && url.pathname === '/api/games/join') {
       const body = await readBody(req);
-      const payload = await serial(async () => {
-        await tickUnlocked();
-        const queued = queueRecruitJob(game, constants, {
-          house: body.house,
-          territory: body.territory,
-          warriors: Number(body.warriors)
-        });
-        game = await finalizeGame(queued.game);
-        return { job: queued.job, game };
-      });
-      return json(res, 201, payload);
+      return json(res, 201, await joinMultiplayerGame(body));
     }
 
-    if (req.method === 'POST' && url.pathname === '/api/fort') {
-      const body = await readBody(req);
-      const payload = await serial(async () => {
-        await tickUnlocked();
-        const queued = queueFortJob(game, map, constants, {
-          house: body.house,
-          territory: body.territory
-        });
-        game = await finalizeGame(queued.game);
-        return { job: queued.job, game };
-      });
-      return json(res, 201, payload);
+    const scoped = gamePath(url.pathname);
+    if (scoped && scoped.gameId !== 'join') {
+      const ctx = await loadContext(scoped.gameId);
+      return handleGameApi(req, res, url, ctx, scoped.subpath);
     }
 
-    if (req.method === 'POST' && url.pathname === '/api/orders') {
-      const body = await readBody(req);
-      const payload = await serial(async () => {
-        await tickUnlocked();
-        const action = {
-          type: 'MARCH',
-          mode: body.mode || 'LAND',
-          house: body.house,
-          from: body.from,
-          to: body.to,
-          warriors: Number(body.warriors)
-        };
-
-        const queued = queueTimedOrder(game, map, constants, action);
-        game = await finalizeGame(queued.game);
-        return { order: queued.order, game };
-      });
-      return json(res, 201, payload);
-    }
-
-    if (req.method === 'POST' && url.pathname === '/api/reset') {
-      const payload = await serial(async () => {
-        game = normalizeAudit(normalizeOnlineEconomy(await store.reset(map, constants)));
-        game = await finalizeGame(game);
-        return publicState();
-      });
-      return json(res, 200, payload);
-    }
-
-    if (req.method === 'GET' && url.pathname === '/api/audit') {
-      const requested = Number(url.searchParams.get('limit') || 200);
-      const limit = Math.max(1, Math.min(2000, Number.isFinite(requested) ? requested : 200));
-      const payload = await serial(async () => {
-        await tickUnlocked();
-        return {
-          game_id: game.id,
-          session_id: game.session_id,
-          session: sessionSummary(game),
-          count: Math.min(limit, game.audit_log.length),
-          entries: game.audit_log.slice(-limit)
-        };
-      });
-      return json(res, 200, payload);
-    }
-
-    if (req.method === 'GET' && url.pathname === '/api/debug/all-legal') {
-      const byHouse = await serial(async () => {
-        await tickUnlocked();
-        return Object.fromEntries(
-          constants.houses.map(house => [house, enumerateMarches(game.state, map, constants, house)])
-        );
-      });
-      return json(res, 200, byHouse);
+    if (url.pathname.startsWith('/api/')) {
+      const subpath = url.pathname.slice('/api'.length);
+      return handleGameApi(req, res, url, defaultContext, subpath);
     }
 
     return json(res, 404, { error: 'not found' });
   } catch (error) {
     console.error('request failed', error);
-    return json(res, 500, {
+    return json(res, errorStatus(error), {
       error: error instanceof Error ? error.message : String(error)
     });
   }
 });
 
 setInterval(() => {
-  serial(tickUnlocked).catch(error => {
-    console.error('background tick failed', error);
-  });
+  for (const ctx of contexts.values()) {
+    serial(ctx, () => tickUnlocked(ctx)).catch(error => {
+      console.error(`background tick failed for ${ctx.gameId}`, error);
+    });
+  }
 }, 1_000).unref();
 
 const port = Number(process.env.PORT || 8787);
 server.listen(port, '0.0.0.0', () => {
   console.log(`Age of Brutality persistent prototype: http://localhost:${port}`);
-  console.log(`Storage backend: Firestore ${store.status().database_id}`);
+  console.log(`Storage backend: Firestore ${defaultContext.store.status().database_id}`);
+  console.log(`Default sandbox game: ${defaultGameId}`);
 });
