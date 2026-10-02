@@ -303,6 +303,7 @@ const colors = {
 };
 
 let snapshot = null;
+let bootstrap = null;
 let house = null;
 let origin = null;
 let target = null;
@@ -678,7 +679,15 @@ async function refresh() {
     return;
   }
 
-  snapshot = await api('/api/state');
+  if (!bootstrap) {
+    bootstrap = await api('/api/bootstrap');
+  }
+
+  const live = await api('/api/state');
+  snapshot = {
+    ...bootstrap,
+    ...live
+  };
 
   const select = $('house');
   const playerBound = snapshot.game.lifecycle?.access_mode === 'PLAYER_BOUND';
