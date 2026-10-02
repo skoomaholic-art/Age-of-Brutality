@@ -5,9 +5,9 @@ import { resolveBattle } from '../core/combat.mjs';
 import { resolveEmptyEnemyOccupation } from '../core/occupation.mjs';
 import { validateState, warriorsAt } from '../core/state.mjs';
 import {
-  autoCommanderForMarch,
   beginCommanderMarch,
   commanderAt,
+  commandersAt,
   commanderStats,
   markCommanderFatePending,
   settleCommander
@@ -99,11 +99,31 @@ export function queueTimedOrder(
   const availableWarriors =
     warriorsAt(game.state, action.from, action.house) -
     reservedWarriors(game, action.house, action.from);
-  const commander = autoCommanderForMarch(
+  const originCommanders = commandersAt(
     game.state,
-    action,
-    availableWarriors
+    action.house,
+    action.from
   );
+  const requestedCommanderId = action.commander_id
+    ? String(action.commander_id)
+    : null;
+  const commander = requestedCommanderId
+    ? originCommanders.find(item => item.id === requestedCommanderId) || null
+    : null;
+
+  if (requestedCommanderId && !commander) {
+    throw new Error('selected commander is not available at march origin');
+  }
+
+  const remainingWarriors = availableWarriors - Number(action.warriors);
+  const commandersLeftBehind = originCommanders.filter(
+    item => item.id !== requestedCommanderId
+  ).length;
+
+  if (remainingWarriors < commandersLeftBehind) {
+    throw new Error('march would leave a commander without an army');
+  }
+
   const order = {
     id,
     status: 'PENDING',
