@@ -5,22 +5,25 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { enumerateMarches } from '../core/legal-actions.mjs';
 import { loadJson } from '../core/map.mjs';
+import { validateState } from '../core/state.mjs';
 import { FirestoreGameStore } from './firestore-store.mjs';
 import { createOnlineGame } from './store.mjs';
 import {
   ONLINE_TIMING,
   listQueueableMarches,
-  processDueOrders,
-  queueTimedOrder
+  processDueOrders
 } from './orders.mjs';
 import {
   ONLINE_ECONOMY_TIMING,
   economyView,
   normalizeOnlineEconomy,
-  processEconomy,
-  queueFortJob,
-  queueRecruitJob
+  processEconomy
 } from './economy.mjs';
+import {
+  commandHouse,
+  executeCommand,
+  normalizeCommand
+} from './commands.mjs';
 import {
   emitCloudAudit,
   normalizeAudit,
@@ -68,6 +71,11 @@ async function finalizeGame(ctx, next, nowMs = Date.now(), saveOptions = {}) {
     nowMs,
     emit: emitCloudAudit
   });
+
+  const validationErrors = validateState(audited.state, map, constants);
+  if (validationErrors.length) {
+    throw new Error(`invalid game state: ${validationErrors.join('; ')}`);
+  }
 
   const persisted = await ctx.store.save(audited, saveOptions);
   if (persisted?.duplicate) {
@@ -584,69 +592,71 @@ async function handleGameApi(req, res, url, ctx, subpath) {
     return json(res, 200, data);
   }
 
+  if (req.method === 'POST' && subpath === '/commands') {
+    const body = await readBody(req);
+    const command = normalizeCommand(body.command || body);
+    await requireHouse(ctx, req, commandHouse(command));
+
+    const result = await serial(ctx, () => runGameCommand(ctx, req, {
+      kind: command.type,
+      status: 201,
+      mutate: async game => executeCommand(game, map, constants, command)
+    }));
+
+    return json(res, result.status, result.response);
+  }
+
   if (req.method === 'POST' && subpath === '/recruit') {
     const body = await readBody(req);
-    await requireHouse(ctx, req, body.house);
+    const command = normalizeCommand({
+      type: 'RECRUIT',
+      house: body.house,
+      territory: body.territory,
+      warriors: body.warriors
+    });
+    await requireHouse(ctx, req, command.house);
+
     const result = await serial(ctx, () => runGameCommand(ctx, req, {
-      kind: 'RECRUIT',
+      kind: command.type,
       status: 201,
-      mutate: async game => {
-        const queued = queueRecruitJob(game, constants, {
-          house: body.house,
-          territory: body.territory,
-          warriors: Number(body.warriors)
-        });
-        return {
-          game: queued.game,
-          response: { job: queued.job }
-        };
-      }
+      mutate: async game => executeCommand(game, map, constants, command)
     }));
     return json(res, result.status, result.response);
   }
 
   if (req.method === 'POST' && subpath === '/fort') {
     const body = await readBody(req);
-    await requireHouse(ctx, req, body.house);
+    const command = normalizeCommand({
+      type: 'BUILD_FORT',
+      house: body.house,
+      territory: body.territory
+    });
+    await requireHouse(ctx, req, command.house);
+
     const result = await serial(ctx, () => runGameCommand(ctx, req, {
-      kind: 'FORT',
+      kind: command.type,
       status: 201,
-      mutate: async game => {
-        const queued = queueFortJob(game, map, constants, {
-          house: body.house,
-          territory: body.territory
-        });
-        return {
-          game: queued.game,
-          response: { job: queued.job }
-        };
-      }
+      mutate: async game => executeCommand(game, map, constants, command)
     }));
     return json(res, result.status, result.response);
   }
 
   if (req.method === 'POST' && subpath === '/orders') {
     const body = await readBody(req);
-    await requireHouse(ctx, req, body.house);
-    const result = await serial(ctx, () => runGameCommand(ctx, req, {
-      kind: 'MARCH',
-      status: 201,
-      mutate: async game => {
-        const action = {
-          type: 'MARCH',
-          mode: body.mode || 'LAND',
-          house: body.house,
-          from: body.from,
-          to: body.to,
-          warriors: Number(body.warriors)
-        };
+    const command = normalizeCommand({
+      type: 'MARCH',
+      mode: body.mode || 'LAND',
+      house: body.house,
+      from: body.from,
+      to: body.to,
+      warriors: body.warriors
+    });
+    await requireHouse(ctx, req, command.house);
 
-        const queued = queueTimedOrder(game, map, constants, action);
-        return {
-          game: queued.game,
-          response: { order: queued.order }
-        };
-      }
+    const result = await serial(ctx, () => runGameCommand(ctx, req, {
+      kind: command.type,
+      status: 201,
+      mutate: async game => executeCommand(game, map, constants, command)
     }));
     return json(res, result.status, result.response);
   }
