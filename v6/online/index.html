@@ -162,6 +162,23 @@
       background: #13191e;
     }
     .panel h2 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: #bfc7cb; }
+    .character-list { display:grid; gap:8px; }
+    .character-card { border:1px solid #2e3940; border-radius:10px; padding:10px; background:#0f1519; }
+    .character-top { display:flex; justify-content:space-between; gap:8px; align-items:flex-start; }
+    .character-name { font-weight:850; font-size:13px; }
+    .character-role { color:#87939a; font-size:10px; margin-top:2px; }
+    .character-mode { border:1px solid #47545c; border-radius:999px; padding:3px 7px; font-size:9px; white-space:nowrap; }
+    .character-mode.army { border-color:#806e3a; color:#e9d685; }
+    .character-mode.court { border-color:#3f6572; color:#8bc7dc; }
+    .character-mode.pending { border-color:#784d4d; color:#ef9f94; }
+    .character-stats { display:grid; grid-template-columns:repeat(6,1fr); gap:4px; margin-top:8px; }
+    .character-stat { background:#171e23; border-radius:6px; padding:5px 3px; text-align:center; }
+    .character-stat span { display:block; color:#77858d; font-size:8px; }
+    .character-stat b { display:block; margin-top:1px; font-size:12px; }
+    .character-location { color:#89969d; font-size:10px; margin-top:7px; }
+    .character-rule { color:#7d898f; font-size:9px; line-height:1.35; margin-top:7px; }
+    .character-actions { display:flex; gap:6px; margin-top:8px; }
+    .character-actions button { flex:1; padding:7px 8px; font-size:10px; }
     .stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
     .stat { background: #0e1317; border-radius: 8px; padding: 9px; }
     .stat b { display: block; font-size: 18px; margin-top: 2px; }
@@ -259,6 +276,11 @@
         <div class="stat"><span class="muted">Влияние</span><b id="influence">0</b></div>
         <div class="stat"><span class="muted">ОП</span><b id="vp">0</b></div>
       </div>
+    </div>
+
+    <div id="characters-panel" class="panel">
+      <h2>Персонажи</h2>
+      <div id="characters" class="character-list muted">Загружаем персонажей...</div>
     </div>
 
     <div id="economy-panel" class="panel">
@@ -433,6 +455,145 @@ function escapeHtml(value) {
     .replaceAll('<','&lt;')
     .replaceAll('>','&gt;')
     .replaceAll('"','&quot;');
+}
+
+function characterModeLabel(character) {
+  if (character.status === 'FATE_PENDING') return 'СУДЬБА';
+  if (character.mode === 'ARMY') return 'АРМИЯ';
+  if (character.mode === 'COURT') return 'ДВОР';
+  if (character.mode === 'CAPTIVE') return 'ПЛЕН';
+  if (character.mode === 'DEAD') return 'МЁРТВ';
+  return character.mode || '—';
+}
+
+function characterModeClass(character) {
+  if (character.status === 'FATE_PENDING') return 'pending';
+  if (character.mode === 'ARMY') return 'army';
+  return 'court';
+}
+
+function characterRoleLabel(role) {
+  if (role === 'RULER') return 'Правитель';
+  if (role === 'HEIR') return 'Взрослый наследник';
+  return role || 'Персонаж';
+}
+
+function renderCharacters() {
+  const box = $('characters');
+  if (isSpectator || !house) {
+    box.innerHTML = '<span class="muted">Недоступно наблюдателю.</span>';
+    return;
+  }
+
+  const characters = Object.values(snapshot?.game?.state?.characters || {})
+    .filter(character => character.house === house)
+    .sort((a,b) => {
+      const rank = role => role === 'RULER' ? 0 : role === 'HEIR' ? 1 : 9;
+      return rank(a.role) - rank(b.role) ||
+        String(a.name).localeCompare(String(b.name), 'ru');
+    });
+
+  const armies = snapshot?.game?.state?.armies || {};
+  const capital = snapshot?.map?.capitals?.[house];
+
+  if (!characters.length) {
+    box.innerHTML = '<span class="muted">Персонажи ещё не мигрированы.</span>';
+    return;
+  }
+
+  box.innerHTML = characters.map(character => {
+    const army = character.army_id ? armies[character.army_id] : null;
+    const stats = character.stats || {};
+    const location = character.status === 'FATE_PENDING'
+      ? 'Ожидает проверки Судьбы после боя'
+      : character.mode === 'ARMY'
+        ? army?.moving_order_id
+          ? 'В марше · приказ ' + army.moving_order_id
+          : 'Армия · ' + (territoryById(army?.territory)?.name || army?.territory || 'не определено')
+        : 'При Дворе';
+
+    const canAssign =
+      character.mode === 'COURT' &&
+      character.status === 'ACTIVE' &&
+      character.health === 'HEALTHY';
+
+    const canReturn =
+      character.mode === 'ARMY' &&
+      character.status === 'ACTIVE' &&
+      army &&
+      !army.moving_order_id &&
+      army.territory === capital;
+
+    const actions = character.status === 'FATE_PENDING'
+      ? '<div class="tiny failed">Следующий этап: разрешение Судьбы командира.</div>'
+      : canAssign
+        ? '<div class="character-actions"><button data-char-army="' +
+          escapeHtml(character.id) + '">Назначить в армию</button></div>'
+        : canReturn
+          ? '<div class="character-actions"><button data-char-court="' +
+            escapeHtml(character.id) + '">Вернуть во Двор</button></div>'
+          : '';
+
+    const special = character.special_rule && character.special_rule !== '—'
+      ? '<div class="character-rule">Особое правило: ' +
+        escapeHtml(character.special_rule) +
+        '<br><span class="tiny">Спецэффект будет подключён отдельным этапом.</span></div>'
+      : '';
+
+    return '<div class="character-card">' +
+      '<div class="character-top"><div><div class="character-name">' +
+      escapeHtml(character.name) + '</div><div class="character-role">' +
+      escapeHtml(characterRoleLabel(character.role)) +
+      (character.health === 'WEAKENED' ? ' · Ослаблен' : '') +
+      '</div></div><span class="character-mode ' +
+      characterModeClass(character) + '">' +
+      escapeHtml(characterModeLabel(character)) + '</span></div>' +
+      '<div class="character-stats">' +
+      '<div class="character-stat"><span>АТК</span><b>' + Number(stats.attack || 0) + '</b></div>' +
+      '<div class="character-stat"><span>ЗАЩ</span><b>' + Number(stats.defense || 0) + '</b></div>' +
+      '<div class="character-stat"><span>ВЫЖ</span><b>' + Number(stats.survival || 0) + '</b></div>' +
+      '<div class="character-stat"><span>ДИП</span><b>' + Number(stats.diplomacy || 0) + '</b></div>' +
+      '<div class="character-stat"><span>ИНТ</span><b>' + Number(stats.intrigue || 0) + '</b></div>' +
+      '<div class="character-stat"><span>УПР</span><b>' + Number(stats.stewardship || 0) + '</b></div>' +
+      '</div><div class="character-location">' + escapeHtml(location) + '</div>' +
+      special + actions + '</div>';
+  }).join('');
+
+  document.querySelectorAll('[data-char-army]').forEach(button => {
+    button.onclick = async () => {
+      try {
+        await api('/api/characters/assign-army', {
+          method:'POST',
+          headers:{'content-type':'application/json'},
+          body:JSON.stringify({
+            house,
+            character_id:button.dataset.charArmy
+          })
+        });
+        await refresh();
+      } catch (error) {
+        alert(error.message);
+      }
+    };
+  });
+
+  document.querySelectorAll('[data-char-court]').forEach(button => {
+    button.onclick = async () => {
+      try {
+        await api('/api/characters/return-court', {
+          method:'POST',
+          headers:{'content-type':'application/json'},
+          body:JSON.stringify({
+            house,
+            character_id:button.dataset.charCourt
+          })
+        });
+        await refresh();
+      } catch (error) {
+        alert(error.message);
+      }
+    };
+  });
 }
 
 function renderHouse() {
@@ -796,6 +957,7 @@ async function refresh() {
       $('restore-game').style.display = 'none';
       $('reset').style.display = 'none';
       $('house-panel').style.display = 'none';
+      $('characters-panel').style.display = 'none';
       $('economy-panel').style.display = 'none';
       $('march-panel').style.display = 'none';
       $('orders-panel').style.display = 'none';
@@ -817,6 +979,7 @@ async function refresh() {
       select.closest('label').style.display = '';
       $('spectator-badge').style.display = 'none';
       $('house-panel').style.display = '';
+      $('characters-panel').style.display = '';
       $('economy-panel').style.display = '';
       $('march-panel').style.display = '';
       $('orders-panel').style.display = '';
@@ -831,6 +994,7 @@ async function refresh() {
     isSpectator = false;
     $('spectator-badge').style.display = 'none';
     $('house-panel').style.display = '';
+    $('characters-panel').style.display = '';
     $('economy-panel').style.display = '';
     $('march-panel').style.display = '';
     $('orders-panel').style.display = '';
@@ -865,6 +1029,7 @@ async function refresh() {
   }
 
   renderHouse();
+  renderCharacters();
   renderEconomy();
   renderMap();
   renderSelection();
