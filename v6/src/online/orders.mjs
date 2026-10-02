@@ -51,6 +51,18 @@ function hydrateSeaAction(map, action) {
   if (action.mode !== 'SEA') return structuredClone(action);
   const route = findSeaLaneRoute(map, action.from, action.to);
   if (!route) throw new Error(`no sea-lane route from ${action.from} to ${action.to}`);
+
+  if (Array.isArray(action.path) && action.path.length) {
+    const same =
+      action.path.length === route.path.length &&
+      route.path.every((id, index) => id === action.path[index]);
+    if (!same) {
+      throw new Error(
+        `stored sea path is no longer legal: ${action.path.join(' -> ')}`
+      );
+    }
+  }
+
   return {
     ...structuredClone(action),
     path: [...route.path],
