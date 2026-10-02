@@ -62,6 +62,11 @@
     }
     svg { width: 100%; height: 100%; display: block; }
     .land-edge { stroke: #39444c; stroke-width: 1.4; opacity: .8; }
+    .land-edge.active-route { stroke:#ffd45c; stroke-width:2.4; opacity:1; }
+    .moving-army { pointer-events:none; filter:drop-shadow(0 0 5px rgba(0,0,0,.75)); }
+    .moving-army .army-disc { stroke:#fff3cf; stroke-width:1.4; }
+    .moving-army .army-arrow { fill:#11161a; }
+    .moving-army .army-count { fill:#11161a; font-size:7px; font-weight:900; text-anchor:middle; dominant-baseline:central; }
     .sea-edge { stroke: #557389; stroke-width: 1.2; stroke-dasharray: 6 5; opacity: .7; }
     .sea-lane-edge { stroke:#4f6e80; stroke-width:1.15; opacity:.78; }
     .sea-waypoint { fill:#6f93a8; stroke:#b8ccd7; stroke-width:.7; opacity:.88; pointer-events:none; }
@@ -817,24 +822,94 @@ function actionsForSelection() {
 }
 
 function preferredActionForSelection() {
-  let actions = actionsForSelection();
+  const actions = actionsForSelection();
   if (!actions.length) return null;
-
-  const modes = [...new Set(actions.map(action => action.mode))];
-  if (modes.length === 1) {
-    marchModePreference = modes[0];
-  } else if (!marchModePreference || !modes.includes(marchModePreference)) {
-    marchModePreference = modes.includes('LAND') ? 'LAND' : modes[0];
-  }
-
-  if (marchModePreference) {
-    const filtered = actions.filter(action => action.mode === marchModePreference);
-    if (filtered.length) actions = filtered;
-  }
-
   const maxWarriors = Math.max(...actions.map(action => action.warriors));
   return actions.find(action => action.warriors === maxWarriors) || actions[0];
 }
+
+function pendingOutgoingAt(id, owner) {
+  return (snapshot?.game?.orders || [])
+    .filter(order =>
+      order.status === 'PENDING' &&
+      order.action?.from === id &&
+      (!owner || order.action?.house === owner)
+    )
+    .reduce((sum,order) => sum + Number(order.action?.warriors || 0), 0);
+}
+
+function routeCoordinates() {
+  return {
+    ...(snapshot?.map?.coordinates || {}),
+    ...(snapshot?.map?.sea_waypoints || {})
+  };
+}
+
+function movingOrderPosition(order, nowMs = Date.now()) {
+  const path = order?.action?.path || [];
+  if (path.length < 2) return null;
+
+  const coords = routeCoordinates();
+  const segments = Array.isArray(order.action.route_segments) &&
+    order.action.route_segments.length
+      ? order.action.route_segments
+      : path.slice(0,-1).map((from,index) => ({
+          from,
+          to:path[index + 1],
+          duration_ms:
+            Number(order.duration_ms || 1) / Math.max(1,path.length - 1)
+        }));
+
+  const created = Date.parse(order.created_at);
+  const elapsed = Math.max(
+    0,
+    Math.min(Number(order.duration_ms || 0), nowMs - created)
+  );
+
+  let remaining = elapsed;
+  let chosen = segments[segments.length - 1];
+  let local = 1;
+
+  for (const segment of segments) {
+    const duration = Math.max(1,Number(segment.duration_ms || 1));
+    if (remaining <= duration) {
+      chosen = segment;
+      local = remaining / duration;
+      break;
+    }
+    remaining -= duration;
+  }
+
+  const a = coords[chosen.from];
+  const b = coords[chosen.to];
+  if (!a || !b) return null;
+
+  const x = Number(a.x) + (Number(b.x) - Number(a.x)) * local;
+  const y = Number(a.y) + (Number(b.y) - Number(a.y)) * local;
+  const angle = Math.atan2(
+    Number(b.y) - Number(a.y),
+    Number(b.x) - Number(a.x)
+  ) * 180 / Math.PI;
+
+  return {x,y,angle};
+}
+
+function updateMovingArmyPositions() {
+  if (!snapshot) return;
+  const svg = $('map');
+  for (const node of svg.querySelectorAll('.moving-army')) {
+    const order = (snapshot.game.orders || [])
+      .find(item => item.id === node.dataset.orderId);
+    if (!order || order.status !== 'PENDING') continue;
+    const pos = movingOrderPosition(order);
+    if (!pos) continue;
+    node.setAttribute(
+      'transform',
+      'translate(' + pos.x + ' ' + pos.y + ') rotate(' + pos.angle + ')'
+    );
+  }
+}
+
 function renderMap() {
   const svg = $('map');
   const state = snapshot.game.state;
