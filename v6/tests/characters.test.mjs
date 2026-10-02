@@ -112,7 +112,8 @@ test('full timed March carries the starting commander and applies Attack stat', 
     house:'Варкайр',
     from:'W01',
     to:'W02',
-    warriors:4
+    warriors:4,
+    commander_id:'RUL-ВАР'
   }, {
     nowMs:10_000,
     timing:{ landSegmentMs:10, landMaxMs:20, seaSegmentMs:20 }
@@ -124,11 +125,10 @@ test('full timed March carries the starting commander and applies Attack stat', 
   const result = game.orders[0].result;
 
   assert.equal(result.attacker_commander_id, 'RUL-ВАР');
-  assert.equal(result.attackerStrength, 4 + result.attackerStrength - 4);
   assert.equal(
-    result.attackerStrength >= 7,
+    result.attackerStrength >= 7 && result.attackerStrength <= 12,
     true,
-    '4 warriors + d6 + Attack 2 must be at least 7'
+    '4 warriors + d6 + Attack 2 must be within 7..12'
   );
 });
 
@@ -148,7 +148,8 @@ test('losing commander enters explicit Fate pending state instead of inventing a
     house:'Варкайр',
     from:'W01',
     to:'W02',
-    warriors:1
+    warriors:1,
+    commander_id:'RUL-ВАР'
   }, {
     nowMs:20_000,
     timing:{ landSegmentMs:10, landMaxMs:20, seaSegmentMs:20 }
@@ -164,5 +165,54 @@ test('losing commander enters explicit Fate pending state instead of inventing a
   assert.equal(
     game.state.characters['RUL-ВАР'].fate_pending.side,
     'ATTACKER'
+  );
+});
+
+
+test('full March cannot leave a commander behind with zero warriors', () => {
+  const game = createOnlineGame(map, constants, {
+    nowMs:30_000,
+    characterCatalog:catalog
+  });
+  game.state.territories.W02.owner = 'Варкайр';
+
+  assert.throws(() => queueTimedOrder(game, map, constants, {
+    type:'MARCH',
+    mode:'LAND',
+    house:'Варкайр',
+    from:'W01',
+    to:'W02',
+    warriors:4,
+    commander_id:null
+  }, {
+    nowMs:30_000,
+    timing:{ landSegmentMs:10, landMaxMs:20, seaSegmentMs:20 }
+  }), /leave a commander without an army/);
+});
+
+test('partial March may leave commander with remaining army', () => {
+  let game = createOnlineGame(map, constants, {
+    nowMs:40_000,
+    characterCatalog:catalog
+  });
+  game.state.territories.W02.owner = 'Варкайр';
+
+  game = queueTimedOrder(game, map, constants, {
+    type:'MARCH',
+    mode:'LAND',
+    house:'Варкайр',
+    from:'W01',
+    to:'W02',
+    warriors:2,
+    commander_id:null
+  }, {
+    nowMs:40_000,
+    timing:{ landSegmentMs:10, landMaxMs:20, seaSegmentMs:20 }
+  }).game;
+
+  assert.equal(game.orders[0].commander_id, null);
+  assert.equal(
+    game.state.armies['ARM-RUL-ВАР'].territory,
+    'W01'
   );
 });
