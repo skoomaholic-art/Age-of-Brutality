@@ -4,6 +4,14 @@ import { resolveNeutralCapture } from '../core/neutral.mjs';
 import { resolveBattle } from '../core/combat.mjs';
 import { resolveEmptyEnemyOccupation } from '../core/occupation.mjs';
 import { validateState, warriorsAt } from '../core/state.mjs';
+import {
+  autoCommanderForMarch,
+  beginCommanderMarch,
+  commanderAt,
+  commanderStats,
+  markCommanderFatePending,
+  settleCommander
+} from '../core/characters.mjs';
 
 export const ONLINE_TIMING = Object.freeze({
   landSegmentMs: 3_000,
@@ -85,9 +93,17 @@ export function queueTimedOrder(
   const legal = listQueueableMarches(game, map, constants, action.house);
   assertLegalAction(action, legal);
 
-  const next = structuredClone(game);
+  let next = structuredClone(game);
   const id = `O${String(next.next_order_id).padStart(6, '0')}`;
   const durationMs = travelDurationMs(next.state, map, constants, action, timing);
+  const availableWarriors =
+    warriorsAt(game.state, action.from, action.house) -
+    reservedWarriors(game, action.house, action.from);
+  const commander = autoCommanderForMarch(
+    game.state,
+    action,
+    availableWarriors
+  );
   const order = {
     id,
     status: 'PENDING',
@@ -95,9 +111,18 @@ export function queueTimedOrder(
     due_at: new Date(nowMs + durationMs).toISOString(),
     duration_ms: durationMs,
     action: structuredClone(action),
+    commander_id: commander?.id || null,
     result: null,
     failure_reason: null
   };
+
+  if (order.commander_id) {
+    next.state = beginCommanderMarch(
+      next.state,
+      order.commander_id,
+      order
+    );
+  }
 
   next.next_order_id += 1;
   next.orders.push(order);
@@ -109,6 +134,8 @@ export function queueTimedOrder(
     to: action.to,
     warriors: action.warriors,
     mode: action.mode,
+    commander_id: order.commander_id,
+    commander_name: commander?.name || null,
     started_at: order.created_at,
     due_at: order.due_at,
     planned_duration_ms: durationMs
@@ -117,35 +144,151 @@ export function queueTimedOrder(
   return { game: next, order };
 }
 
-function resolveOrder(state, map, constants, gameId, order) {
+function resolveOrder(state, map, constants, gameId, order, nowMs) {
   const legal = enumerateMarches(state, map, constants, order.action.house);
   assertLegalAction(order.action, legal);
 
-  const destination = classifyDestination(state, order.action.house, order.action.to);
+  const destination = classifyDestination(
+    state,
+    order.action.house,
+    order.action.to
+  );
 
   if (destination === 'FRIENDLY') {
+    let moved = applyFriendlyMarch(state, map, constants, order.action);
+    moved = settleCommander(
+      moved,
+      order.commander_id,
+      order.action.to
+    );
     return {
-      state: applyFriendlyMarch(state, map, constants, order.action),
-      result: { kind: 'FRIENDLY_MARCH' }
+      state: moved,
+      result: {
+        kind: 'FRIENDLY_MARCH',
+        commander_id: order.commander_id || null
+      }
     };
   }
 
   if (destination === 'NEUTRAL') {
     const dice = deterministicDice(`${gameId}:${order.id}:neutral`);
-    return resolveNeutralCapture(state, map, constants, order.action, dice);
+    let resolved = resolveNeutralCapture(
+      state,
+      map,
+      constants,
+      order.action,
+      dice
+    );
+    resolved.state = settleCommander(
+      resolved.state,
+      order.commander_id,
+      resolved.result.success ? order.action.to : order.action.from
+    );
+    resolved.result.commander_id = order.commander_id || null;
+    return resolved;
   }
 
   const defenderHouse = state.territories[order.action.to].owner;
   const defenders = warriorsAt(state, order.action.to, defenderHouse);
+
   if (defenders === 0) {
-    return resolveEmptyEnemyOccupation(state, map, constants, order.action);
+    let resolved = resolveEmptyEnemyOccupation(
+      state,
+      map,
+      constants,
+      order.action
+    );
+    resolved.state = settleCommander(
+      resolved.state,
+      order.commander_id,
+      order.action.to
+    );
+    resolved.result.commander_id = order.commander_id || null;
+    return resolved;
   }
 
-  const [attackerDie, defenderDie] = deterministicDice(`${gameId}:${order.id}:battle`);
-  return resolveBattle(state, map, constants, order.action, {
-    attackerDie,
-    defenderDie
-  });
+  const attackerCommander = order.commander_id
+    ? state.characters?.[order.commander_id] || null
+    : null;
+  const defenderCommander = commanderAt(
+    state,
+    defenderHouse,
+    order.action.to
+  );
+
+  const [attackerDie, defenderDie] = deterministicDice(
+    `${gameId}:${order.id}:battle`
+  );
+
+  let resolved = resolveBattle(
+    state,
+    map,
+    constants,
+    order.action,
+    {
+      attackerDie,
+      defenderDie,
+      attackerCommander: commanderStats(attackerCommander),
+      defenderCommander: commanderStats(defenderCommander)
+    }
+  );
+
+  resolved.result.attacker_commander_id = attackerCommander?.id || null;
+  resolved.result.defender_commander_id = defenderCommander?.id || null;
+
+  if (resolved.result.attackerWins) {
+    resolved.state = settleCommander(
+      resolved.state,
+      attackerCommander?.id,
+      order.action.to
+    );
+
+    if (defenderCommander) {
+      resolved.state = markCommanderFatePending(
+        resolved.state,
+        defenderCommander.id,
+        {
+          battle_territory: order.action.to,
+          opponent_house: order.action.house,
+          side: 'DEFENDER',
+          army_destroyed:
+            Number(resolved.result.defenderSurvivors || 0) === 0,
+          fallback_territory:
+            resolved.result.defenderRetreatTo || null,
+          created_at: new Date(nowMs).toISOString()
+        }
+      );
+    }
+  } else {
+    if (defenderCommander) {
+      resolved.state = settleCommander(
+        resolved.state,
+        defenderCommander.id,
+        order.action.to
+      );
+    }
+
+    if (attackerCommander) {
+      resolved.state = markCommanderFatePending(
+        resolved.state,
+        attackerCommander.id,
+        {
+          battle_territory: order.action.to,
+          opponent_house: defenderHouse,
+          side: 'ATTACKER',
+          army_destroyed:
+            Number(resolved.result.attackerSurvivors || 0) === 0,
+          fallback_territory:
+            Number(resolved.result.attackerSurvivors || 0) > 0
+              ? order.action.from
+              : null,
+          created_at: new Date(nowMs).toISOString()
+        }
+      );
+    }
+  }
+
+  return resolved;
 }
 
 export function processDueOrders(game, map, constants, nowMs = Date.now()) {
@@ -162,7 +305,14 @@ export function processDueOrders(game, map, constants, nowMs = Date.now()) {
     const liveOrder = next.orders.find(order => order.id === dueOrder.id);
     try {
       const journalStart = next.state.journal.length;
-      const resolved = resolveOrder(next.state, map, constants, next.id, liveOrder);
+      const resolved = resolveOrder(
+        next.state,
+        map,
+        constants,
+        next.id,
+        liveOrder,
+        nowMs
+      );
       const errors = validateState(resolved.state, map, constants);
       if (errors.length) throw new Error(`post-order state invalid: ${errors.join('; ')}`);
 
@@ -182,6 +332,13 @@ export function processDueOrders(game, map, constants, nowMs = Date.now()) {
         });
       }
     } catch (error) {
+      if (liveOrder.commander_id) {
+        next.state = settleCommander(
+          next.state,
+          liveOrder.commander_id,
+          liveOrder.action.from
+        );
+      }
       liveOrder.status = 'FAILED';
       liveOrder.resolved_at = new Date(nowMs).toISOString();
       liveOrder.failure_reason = error instanceof Error ? error.message : String(error);
@@ -193,6 +350,7 @@ export function processDueOrders(game, map, constants, nowMs = Date.now()) {
         to: liveOrder.action.to,
         warriors: liveOrder.action.warriors,
         mode: liveOrder.action.mode,
+        commander_id: liveOrder.commander_id || null,
         reason: liveOrder.failure_reason,
         started_at: liveOrder.created_at,
         completed_at: liveOrder.resolved_at,
