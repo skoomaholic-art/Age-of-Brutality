@@ -510,13 +510,31 @@ function renderCharacters() {
   box.innerHTML = characters.map(character => {
     const army = character.army_id ? armies[character.army_id] : null;
     const stats = character.stats || {};
-    const location = character.status === 'FATE_PENDING'
-      ? 'Ожидает проверки Судьбы после боя'
-      : character.mode === 'ARMY'
-        ? army?.moving_order_id
-          ? 'В марше · приказ ' + army.moving_order_id
-          : 'Армия · ' + (territoryById(army?.territory)?.name || army?.territory || 'не определено')
-        : 'При Дворе';
+    const location =
+      character.status === 'FATE_PENDING'
+        ? 'Ожидает проверки Судьбы после боя'
+        : character.status === 'FATE_LOCATION_PENDING'
+          ? 'Судьба: ' +
+            (character.fate_pending?.fate_outcome === 'WEAKENED' ? 'Ослаблен' : 'Спасён') +
+            ' · требуется правило местонахождения'
+          : character.mode === 'CAPTIVE'
+            ? 'В плену у Дома ' +
+              (character.captivity?.held_by || 'не определено') +
+              (character.captivity?.detention_location
+                ? ' · ' +
+                  (territoryById(character.captivity.detention_location)?.name ||
+                    character.captivity.detention_location)
+                : '')
+            : character.mode === 'DEAD'
+              ? 'Мёртв'
+              : character.mode === 'ARMY'
+                ? army?.moving_order_id
+                  ? 'В марше · приказ ' + army.moving_order_id
+                  : 'Армия · ' +
+                    (territoryById(army?.territory)?.name ||
+                      army?.territory ||
+                      'не определено')
+                : 'При Дворе';
 
     const canAssign =
       character.mode === 'COURT' &&
@@ -530,9 +548,16 @@ function renderCharacters() {
       !army.moving_order_id &&
       army.territory === capital;
 
-    const actions = character.status === 'FATE_PENDING'
-      ? '<div class="tiny failed">Следующий этап: разрешение Судьбы командира.</div>'
-      : canAssign
+    const actions =
+      character.status === 'FATE_PENDING'
+        ? '<div class="tiny failed">Ожидается разрешение Судьбы командира.</div>'
+        : character.status === 'FATE_LOCATION_PENDING'
+          ? '<div class="tiny failed">Исход Судьбы определён, но правило местонахождения после уничтожения армии не задано.</div>'
+          : character.mode === 'CAPTIVE'
+            ? '<div class="tiny failed">Персонаж не может действовать, пока находится в плену.</div>'
+            : character.mode === 'DEAD'
+              ? '<div class="tiny failed">Персонаж погиб.</div>'
+              : canAssign
         ? '<div class="character-actions"><button data-char-army="' +
           escapeHtml(character.id) + '">Назначить в армию</button></div>'
         : canReturn
