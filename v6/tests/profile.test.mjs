@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import {
   PROFILE_AVATARS,
   PROFILE_MMR,
+  SOCIAL_LIMITS,
   applyRankedResult,
+  conversationIdFor,
   createPasswordRecord,
   createProfileRecord,
   createProfileSessionCredentials,
@@ -13,7 +15,9 @@ import {
   normalizeProfileStats,
   parseProfileToken,
   publicProfile,
+  publicSocialProfile,
   safeHashEqual,
+  validateChatMessage,
   verifyPassword
 } from '../src/online/profile.mjs';
 
@@ -109,4 +113,37 @@ test('ranked results update games wins losses and provisional MMR', () => {
   assert.equal(stats.wins, 1);
   assert.equal(stats.losses, 1);
   assert.equal(stats.mmr, PROFILE_MMR.initial);
+});
+
+
+test('direct messages are trimmed and length limited', () => {
+  assert.equal(validateChatMessage('  Привет  '), 'Привет');
+  assert.throws(() => validateChatMessage('   '), /message must be/);
+  assert.throws(
+    () => validateChatMessage('x'.repeat(SOCIAL_LIMITS.messageMax + 1)),
+    /message must be/
+  );
+});
+
+test('conversation id is deterministic for the same two profiles', () => {
+  const a = conversationIdFor('profile-a', 'profile-b');
+  const b = conversationIdFor('profile-b', 'profile-a');
+  assert.equal(a, b);
+  assert.equal(a.length, 32);
+  assert.throws(() => conversationIdFor('profile-a', 'profile-a'), /two different profiles/);
+});
+
+test('social profile exposes only public identity and MMR', () => {
+  const profile = createProfileRecord({
+    profileId: 'profile-social',
+    handle: 'Friend_1',
+    displayName: 'Friend',
+    password: 'password123',
+    nowMs: 1000
+  });
+  const safe = publicSocialProfile(profile);
+  assert.deepEqual(Object.keys(safe).sort(), [
+    'avatar_id','display_name','handle','id','mmr'
+  ]);
+  assert.equal(safe.mmr, PROFILE_MMR.initial);
 });
