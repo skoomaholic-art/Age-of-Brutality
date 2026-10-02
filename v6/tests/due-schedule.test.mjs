@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { calculateNextDueAt } from '../src/online/firestore-store.mjs';
+import { calculateNextDueAt } from '../src/online/scheduling.mjs';
 
 test('next due picks earliest pending timer', () => {
   const game = {
