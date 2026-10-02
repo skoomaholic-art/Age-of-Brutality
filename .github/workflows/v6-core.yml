@@ -34,3 +34,7 @@ jobs:
           node --check src/online/commands.mjs
           node --check src/online/stats.mjs
           node --check src/online/snapshot.mjs
+
+      - name: Validate browser scripts
+        working-directory: v6
+        run: node tools/check-browser-html.mjs
