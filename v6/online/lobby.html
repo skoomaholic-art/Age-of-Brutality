@@ -37,6 +37,12 @@ button.loading { opacity:.65; cursor:wait; }
 .profile-avatar {
   width:64px; height:64px; border-radius:18px; display:grid; place-items:center;
   border:1px solid #53616a; background:#10161a; font-size:30px; font-weight:900;
+  cursor:pointer; padding:0; position:relative;
+}
+.profile-avatar::after {
+  content:'✎'; position:absolute; right:-5px; bottom:-5px; width:21px; height:21px;
+  border-radius:999px; display:grid; place-items:center; background:#eee7d8; color:#13181b;
+  border:2px solid #151b1f; font-size:10px; font-weight:900;
 }
 .profile-stats {
   display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; margin-top:16px;
@@ -47,6 +53,19 @@ button.loading { opacity:.65; cursor:wait; }
 .avatar-picker { display:grid; grid-template-columns:repeat(6,1fr); gap:8px; margin-top:10px; }
 .avatar-option { aspect-ratio:1; padding:0; font-size:22px; }
 .avatar-option.selected { border-color:#ffd45c; box-shadow:0 0 0 2px rgba(255,212,92,.25); }
+.avatar-modal {
+  position:fixed; inset:0; z-index:1000; display:none; align-items:center; justify-content:center;
+  padding:18px; background:rgba(0,0,0,.72); backdrop-filter:blur(6px);
+}
+.avatar-modal.open { display:flex; }
+.avatar-dialog {
+  width:min(460px,100%); border:1px solid #3b474f; border-radius:20px;
+  background:#151b1f; padding:18px; box-shadow:0 24px 80px rgba(0,0,0,.45);
+}
+.avatar-dialog-head { display:flex; justify-content:space-between; gap:12px; align-items:center; }
+.avatar-dialog-head button { width:auto; min-width:44px; padding:9px 12px; }
+.avatar-dialog-actions { display:flex; gap:8px; margin-top:16px; }
+.avatar-dialog-actions button { flex:1; }
 .achievement-box { margin-top:16px; border-top:1px solid #283138; padding-top:14px; }
 .achievement-list { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
 .achievement-pill { border:1px solid #3d4850; border-radius:999px; padding:6px 10px; font-size:11px; }
@@ -132,7 +151,7 @@ button.loading { opacity:.65; cursor:wait; }
       <div id="account-signed-in" style="display:none">
         <div class="account-head">
           <div class="account-identity">
-            <div id="account-avatar" class="profile-avatar">✦</div>
+            <button id="account-avatar" class="profile-avatar" type="button" aria-label="Выбрать аватар" title="Выбрать аватар">✦</button>
             <div>
               <div id="account-name" class="account-name">Игрок</div>
               <div id="account-handle" class="account-handle">@login</div>
@@ -147,11 +166,6 @@ button.loading { opacity:.65; cursor:wait; }
           <div class="profile-stat"><span>Победы</span><b id="stat-wins">0</b></div>
           <div class="profile-stat"><span>Поражения</span><b id="stat-losses">0</b></div>
           <div class="profile-stat"><span>В игре</span><b id="stat-time">0 мин</b></div>
-        </div>
-
-        <div style="margin-top:16px">
-          <div class="muted">Аватар</div>
-          <div id="avatar-picker" class="avatar-picker"></div>
         </div>
 
         <div class="achievement-box">
@@ -261,6 +275,24 @@ button.loading { opacity:.65; cursor:wait; }
   </section>
 </main>
 
+<div id="avatar-modal" class="avatar-modal" role="dialog" aria-modal="true" aria-labelledby="avatar-modal-title">
+  <div class="avatar-dialog">
+    <div class="avatar-dialog-head">
+      <div>
+        <h2 id="avatar-modal-title" style="margin:0">Выбрать аватар</h2>
+        <div class="muted" style="margin-top:4px">Выбери и сохрани новый аватар профиля.</div>
+      </div>
+      <button id="avatar-close" type="button" aria-label="Закрыть">✕</button>
+    </div>
+    <div id="avatar-picker" class="avatar-picker"></div>
+    <div class="avatar-dialog-actions">
+      <button id="avatar-cancel" type="button">Отмена</button>
+      <button id="avatar-save" type="button" class="primary">Сохранить</button>
+    </div>
+    <div id="avatar-error" class="error"></div>
+  </div>
+</div>
+
 <script>
 const houses = ['Варкайр','Сайрвен','Ортайн','Эркай','Тасвар','Айрель'];
 const profileAvatars = [
@@ -278,6 +310,7 @@ let token = gameId
 let roomLoadInFlight = false;
 let hubLoadInFlight = false;
 let knownGameIds = new Set();
+let pendingAvatarId = null;
 const $ = id => document.getElementById(id);
 
 for (const selectId of ['solo-house','public-house','private-house']) {
@@ -311,28 +344,53 @@ function formatPlayTime(seconds) {
 
 function renderAvatarPicker() {
   if (!activeProfile || !profileToken) return;
-  const current = activeProfile.avatar_id || 'sigil-01';
+  const current = pendingAvatarId || activeProfile.avatar_id || 'sigil-01';
   $('avatar-picker').innerHTML = profileAvatars.map(([id,symbol]) =>
     '<button class="avatar-option' + (id === current ? ' selected' : '') +
-    '" data-avatar="' + id + '" title="' + id + '">' + symbol + '</button>'
+    '" type="button" data-avatar="' + id + '" title="' + id + '">' + symbol + '</button>'
   ).join('');
 
   document.querySelectorAll('[data-avatar]').forEach(button => {
-    button.onclick = async () => {
-      if (button.dataset.avatar === current) return;
-      try {
-        const data = await request('/api/profile/avatar', {
-          method:'POST',
-          headers:{'content-type':'application/json'},
-          body:JSON.stringify({ avatar_id:button.dataset.avatar })
-        }, profileToken);
-        activeProfile = data.profile;
-        renderAccount();
-      } catch (error) {
-        alert(friendlyError(error));
-      }
+    button.onclick = () => {
+      pendingAvatarId = button.dataset.avatar;
+      renderAvatarPicker();
     };
   });
+}
+
+function openAvatarModal() {
+  if (!activeProfile || !profileToken) return;
+  pendingAvatarId = activeProfile.avatar_id || 'sigil-01';
+  $('avatar-error').textContent = '';
+  renderAvatarPicker();
+  $('avatar-modal').classList.add('open');
+}
+
+function closeAvatarModal() {
+  $('avatar-modal').classList.remove('open');
+  $('avatar-error').textContent = '';
+  pendingAvatarId = null;
+}
+
+async function saveAvatarSelection() {
+  if (!pendingAvatarId || !activeProfile || !profileToken) return;
+  const button = $('avatar-save');
+
+  try {
+    await withBusy(button, 'Сохраняем...', async () => {
+      const data = await request('/api/profile/avatar', {
+        method:'POST',
+        headers:{'content-type':'application/json'},
+        body:JSON.stringify({ avatar_id:pendingAvatarId })
+      }, profileToken);
+
+      activeProfile = data.profile;
+      renderAccount();
+      closeAvatarModal();
+    });
+  } catch (error) {
+    $('avatar-error').textContent = friendlyError(error);
+  }
 }
 
 function renderAccount() {
@@ -364,7 +422,6 @@ function renderAccount() {
       : '<span class="muted">Пока достижений нет.</span>';
 
     localStorage.setItem('aob-display-name', activeProfile.display_name);
-    renderAvatarPicker();
   }
 }
 
@@ -722,6 +779,19 @@ async function createMultiplayer(visibility, button, errorId, roomInputId, house
     $(errorId).textContent = friendlyError(error);
   }
 }
+
+$('account-avatar').onclick = openAvatarModal;
+$('avatar-close').onclick = closeAvatarModal;
+$('avatar-cancel').onclick = closeAvatarModal;
+$('avatar-save').onclick = saveAvatarSelection;
+$('avatar-modal').onclick = event => {
+  if (event.target === $('avatar-modal')) closeAvatarModal();
+};
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && $('avatar-modal').classList.contains('open')) {
+    closeAvatarModal();
+  }
+});
 
 $('register-profile').onclick = async () => {
   $('profile-error').textContent = '';
