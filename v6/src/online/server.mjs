@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { enumerateMarches } from '../core/legal-actions.mjs';
 import { loadJson } from '../core/map.mjs';
 import { validateState } from '../core/state.mjs';
+import { resolvePendingCapitalHold } from '../core/scoring.mjs';
+import { buildVictoryStatus } from '../core/victory.mjs';
 import {
   assignCharacterToArmy,
   charactersForHouse,
@@ -253,6 +255,7 @@ async function priorCommandResponse(ctx, key) {
 async function runGameCommand(ctx, req, {
   kind,
   status = 201,
+  house = null,
   mutate
 }) {
   const key = commandKey(req, ctx, kind);
@@ -265,7 +268,30 @@ async function runGameCommand(ctx, req, {
       if (attempt > 0) await refreshContext(ctx);
       await tickUnlocked(ctx);
 
-      const result = await mutate(ctx.game);
+      let commandGame = ctx.game;
+      let capitalHold = null;
+      if (house) {
+        const resolvedHold = resolvePendingCapitalHold(
+          commandGame.state,
+          map,
+          constants,
+          house
+        );
+        if (resolvedHold.result) {
+          commandGame = structuredClone(commandGame);
+          commandGame.state = resolvedHold.state;
+          commandGame.updated_at = new Date().toISOString();
+          capitalHold = resolvedHold.result;
+        }
+      }
+
+      const result = await mutate(commandGame);
+      if (capitalHold) {
+        result.response = {
+          ...(result.response || {}),
+          capital_hold: capitalHold
+        };
+      }
       const response = result.response || {};
       const persisted = await finalizeGame(
         ctx,
@@ -395,7 +421,8 @@ async function publicState(ctx, player = null) {
 
   return {
     game: redactGameForPlayer(ctx.game, player),
-    lobby
+    lobby,
+    victory: buildVictoryStatus(ctx.game, map, constants)
   };
 }
 
@@ -1068,6 +1095,7 @@ async function handleGameApi(req, res, url, ctx, subpath) {
     const result = await serial(ctx, () => runGameCommand(ctx, req, {
       kind: command.type,
       status: 201,
+      house: command.house,
       mutate: async game => executeCommand(game, map, constants, command)
     }));
 
@@ -1087,6 +1115,7 @@ async function handleGameApi(req, res, url, ctx, subpath) {
     const result = await serial(ctx, () => runGameCommand(ctx, req, {
       kind: command.type,
       status: 201,
+      house: command.house,
       mutate: async game => executeCommand(game, map, constants, command)
     }));
     return json(res, result.status, result.response);
@@ -1104,6 +1133,7 @@ async function handleGameApi(req, res, url, ctx, subpath) {
     const result = await serial(ctx, () => runGameCommand(ctx, req, {
       kind: command.type,
       status: 201,
+      house: command.house,
       mutate: async game => executeCommand(game, map, constants, command)
     }));
     return json(res, result.status, result.response);
@@ -1125,6 +1155,7 @@ async function handleGameApi(req, res, url, ctx, subpath) {
     const result = await serial(ctx, () => runGameCommand(ctx, req, {
       kind: command.type,
       status: 201,
+      house: command.house,
       mutate: async game => executeCommand(game, map, constants, command)
     }));
     return json(res, result.status, result.response);
