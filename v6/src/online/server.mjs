@@ -24,6 +24,7 @@ import {
   executeCommand,
   normalizeCommand
 } from './commands.mjs';
+import { buildGameStats } from './stats.mjs';
 import {
   emitCloudAudit,
   normalizeAudit,
@@ -807,6 +808,15 @@ async function handleGameApi(req, res, url, ctx, subpath) {
         ...publicBootstrap(ctx),
         ...(await publicState(ctx))
       };
+    });
+    return json(res, 200, payload);
+  }
+
+  if (req.method === 'GET' && subpath === '/stats') {
+    await requirePlayer(ctx, req);
+    const payload = await serial(ctx, async () => {
+      await tickUnlocked(ctx);
+      return buildGameStats(ctx.game, map, constants);
     });
     return json(res, 200, payload);
   }
