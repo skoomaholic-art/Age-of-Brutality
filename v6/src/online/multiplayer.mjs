@@ -139,6 +139,7 @@ export function createPlayerRecord({
   tokenHash,
   displayName,
   role = PLAYER_ROLE.PLAYER,
+  profileId = null,
   nowMs = Date.now()
 }) {
   if (!playerId || !tokenHash) throw new Error('player credentials required');
@@ -151,6 +152,7 @@ export function createPlayerRecord({
     display_name: name,
     role,
     house: null,
+    profile_id: profileId || null,
     token_hash: tokenHash,
     joined_at: new Date(nowMs).toISOString(),
     last_seen_at: new Date(nowMs).toISOString()
