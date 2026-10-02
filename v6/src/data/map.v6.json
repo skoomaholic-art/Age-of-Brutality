@@ -1,1 +1,1368 @@
-{"game":"Жестокий Век","version":"V6.0.0-REBUILD","status":"PROVENANCE_LOCKED_BASELINE","provenance":{"territories":"Library: Zhestokiy_Vek_Step9_52_Territories.json (V5.4.3 Step 9)","graph_and_coordinates":"Library: Zhestokiy_Vek_Arena_V5.4.3.html ARENA_DATA.map","visual_sanity_check":"Library: 8F2B852A-F164-4440-92C8-786F230C65A0.jpeg","policy":"No V5.7.2 topology normalization is inherited without explicit re-approval."},"counts":{"territories":52,"land_edges":96,"sea_edges":20,"ports":16},"territories":[{"id":"W01","name":"Торкайр","house_sector":"Варкайр","type":"Столица","gold_income":4,"is_central_half":false,"island":null,"island_bonus":null,"icon":"★"},{"id":"W02","name":"Хольмвейн","house_sector":"Варкайр","type":"Дикая земля","gold_income":0,"is_central_half":false,"island":null,"island_bonus":null,"icon":"○"},{"id":"W03","name":"Рунваль","house_sector":"Варкайр","type":"Деревня","gold_income":1,"is_central_half":false,"island":null,"island_bonus":null,"icon":"●"},{"id":"W04","name":"Каравейн","house_sector":"Варкайр","type":"Деревня","gold_income":1,"is_central_half":false,"island":null,"island_bonus":null,"icon":"●"},{"id":"W05","name":"Скархольм","house_sector":"Варкайр","type":"Город","gold_income":2,"is_central_half":false,"island":null,"island_bonus":null,"icon":"◆"},{"id":"W06","name":"Вейрдал","house_sector":"Варкайр","type":"Деревня","gold_income":1,"is_central_half":false,"island":null,"island_bonus":null,"icon":"●"},{"id":"W07","name":"Нордмар","house_sector":"Варкайр","type":"Дикая земля","gold_income":0,"is_central_half":false,"island":null,"island_bonus":null,"icon":"○"},{"id":"W08","name":"Элсайр","house_sector":"Сайрвен","type":"Столица","gold_income":4,"is_central_half":false,"island":null,"island_bonus":null,"icon":"★"},{"id":"W09","name":"Морвейн","house_sector":"Сайрвен","type":"Дикая земля","gold_income":0,"is_central_half":false,"island":null,"island_bonus":null,"icon":"○"},{"id":"W10","name":"Сайрхольм","house_sector":"Сайрвен","type":"Деревня","gold_income":1,"is_central_half":false,"island":null,"island_bonus":null,"icon":"●"},{"id":"W11","name":"Таскель","house_sector":"Сайрвен","type":"Деревня","gold_income":1,"is_central_half":false,"island":null,"island_bonus":null,"icon":"●"},{"id":"W12","name":"Вельмар","house_sector":"Сайрвен","type":"Город","gold_income":2,"is_central_half":false,"island":null,"island_bonus":null,"icon":"◆"},{"id":"W13","name":"Рейндал","house_sector":"Сайрвен","type":"Деревня","gold_income":1,"is_central_half":false,"island":null,"island_bonus":null,"icon":"●"},{"id":"W14","name":"Келвар","house_sector":"Сайрвен","type":"Дикая земля","gold_income":0,"is_central_half":false,"island":null,"island_bonus":null,"icon":"○"},{"id":"W15","name":"Майвен","house_sector":"Ортайн","type":"Столица","gold_income":4,"is_central_half":false,"island":null,"island_bonus":null,"icon":"★"},{"id":"W16","name":"Ортайр","house_sector":"Ортайн","type":"Дикая земля","gold_income":0,"is_central_half":false,"island":null,"island_bonus":null,"icon":"○"},{"id":"W17","name":"Талмар","house_sector":"Ортайн","type":"Деревня","gold_income":1,"is_central_half":false,"island":null,"island_bonus":null,"icon":"●"},{"id":"W18","name":"Эйрвик","house_sector":"Ортайн","type":"Деревня","gold_income":1,"is_central_half":false,"island":null,"island_bonus":null,"icon":"●"},{"id":"W19","name":"Селвар","house_sector":"Ортайн","type":"Город","gold_income":2,"is_central_half":false,"island":null,"island_bonus":null,"icon":"◆"},{"id":"W20","name":"Рундель","house_sector":"Ортайн","type":"Деревня","gold_income":1,"is_central_half":false,"island":null,"island_bonus":null,"icon":"●"},{"id":"W21","name":"Альтарейн","house_sector":"Ортайн","type":"Дикая земля","gold_income":0,"is_central_half":false,"island":null,"island_bonus":null,"icon":"○"},{"id":"E01","name":"Рейтар","house_sector":"Эркай","type":"Столица","gold_income":4,"is_central_half":false,"island":null,"island_bonus":null,"icon":"★"},{"id":"E02","name":"Коквар","house_sector":"Эркай","type":"Дикая земля","gold_income":0,"is_central_half":false,"island":null,"island_bonus":null,"icon":"○"},{"id":"E03","name":"Эрсайр","house_sector":"Эркай","type":"Деревня","gold_income":1,"is_central_half":false,"island":null,"island_bonus":null,"icon":"●"},{"id":"E04","name":"Мирваль","house_sector":"Эркай","type":"Деревня","gold_income":1,"is_central_half":false,"island":null,"island_bonus":null,"icon":"●"},{"id":"E05","name":"Аркен","house_sector":"Эркай","type":"Город","gold_income":2,"is_central_half":false,"island":null,"island_bonus":null,"icon":"◆"},{"id":"E06","name":"Корвейн","house_sector":"Эркай","type":"Деревня","gold_income":1,"is_central_half":false,"island":null,"island_bonus":null,"icon":"●"},{"id":"E07","name":"Торнель","house_sector":"Эркай","type":"Дикая земля","gold_income":0,"is_central_half":false,"island":null,"island_bonus":null,"icon":"○"},{"id":"E08","name":"Кайсар","house_sector":"Тасвар","type":"Столица","gold_income":4,"is_central_half":false,"island":null,"island_bonus":null,"icon":"★"},{"id":"E09","name":"Караскар","house_sector":"Тасвар","type":"Дикая земля","gold_income":0,"is_central_half":false,"island":null,"island_bonus":null,"icon":"○"},{"id":"E10","name":"Желгард","house_sector":"Тасвар","type":"Деревня","gold_income":1,"is_central_half":false,"island":null,"island_bonus":null,"icon":"●"},{"id":"E11","name":"Велтайр","house_sector":"Тасвар","type":"Деревня","gold_income":1,"is_central_half":false,"island":null,"island_bonus":null,"icon":"●"},{"id":"E12","name":"Дайрвен","house_sector":"Тасвар","type":"Город","gold_income":2,"is_central_half":false,"island":null,"island_bonus":null,"icon":"◆"},{"id":"E13","name":"Кирмар","house_sector":"Тасвар","type":"Деревня","gold_income":1,"is_central_half":false,"island":null,"island_bonus":null,"icon":"●"},{"id":"E14","name":"Тасхольм","house_sector":"Тасвар","type":"Дикая земля","gold_income":0,"is_central_half":false,"island":null,"island_bonus":null,"icon":"○"},{"id":"E15","name":"Элияр","house_sector":"Айрель","type":"Столица","gold_income":4,"is_central_half":false,"island":null,"island_bonus":null,"icon":"★"},{"id":"E16","name":"Айкелир","house_sector":"Айрель","type":"Дикая земля","gold_income":0,"is_central_half":false,"island":null,"island_bonus":null,"icon":"○"},{"id":"E17","name":"Тасвейн","house_sector":"Айрель","type":"Деревня","gold_income":1,"is_central_half":false,"island":null,"island_bonus":null,"icon":"●"},{"id":"E18","name":"Сейраль","house_sector":"Айрель","type":"Деревня","gold_income":1,"is_central_half":false,"island":null,"island_bonus":null,"icon":"●"},{"id":"E19","name":"Найвар","house_sector":"Айрель","type":"Город","gold_income":2,"is_central_half":false,"island":null,"island_bonus":null,"icon":"◆"},{"id":"E20","name":"Лиарен","house_sector":"Айрель","type":"Деревня","gold_income":1,"is_central_half":false,"island":null,"island_bonus":null,"icon":"●"},{"id":"E21","name":"Альвейн","house_sector":"Айрель","type":"Дикая земля","gold_income":0,"is_central_half":false,"island":null,"island_bonus":null,"icon":"○"},{"id":"S01-A","name":"Остров Вейр — A","house_sector":"Центр","type":"Половина острова","gold_income":0,"is_central_half":true,"island":"S01","island_bonus":"+1 золото в фазу дохода","icon":"◇","resistance":1},{"id":"S01-B","name":"Остров Вейр — B","house_sector":"Центр","type":"Половина острова","gold_income":0,"is_central_half":true,"island":"S01","island_bonus":"+1 золото в фазу дохода","icon":"◇","resistance":1},{"id":"S02-A","name":"Остров Рун — A","house_sector":"Центр","type":"Половина острова","gold_income":0,"is_central_half":true,"island":"S02","island_bonus":"+1 Влияние в фазу дохода","icon":"◇","resistance":1},{"id":"S02-B","name":"Остров Рун — B","house_sector":"Центр","type":"Половина острова","gold_income":0,"is_central_half":true,"island":"S02","island_bonus":"+1 Влияние в фазу дохода","icon":"◇","resistance":1},{"id":"S03-A","name":"Остров Короны — A","house_sector":"Центр","type":"Половина острова","gold_income":0,"is_central_half":true,"island":"S03","island_bonus":"+1 золото +1 Влияние в фазу дохода","icon":"◇","resistance":1},{"id":"S03-B","name":"Остров Короны — B","house_sector":"Центр","type":"Половина острова","gold_income":0,"is_central_half":true,"island":"S03","island_bonus":"+1 золото +1 Влияние в фазу дохода","icon":"◇","resistance":1},{"id":"S04-A","name":"Остров Туман — A","house_sector":"Центр","type":"Половина острова","gold_income":0,"is_central_half":true,"island":"S04","island_bonus":"+1 золото в фазу дохода","icon":"◇","resistance":1},{"id":"S04-B","name":"Остров Туман — B","house_sector":"Центр","type":"Половина острова","gold_income":0,"is_central_half":true,"island":"S04","island_bonus":"+1 золото в фазу дохода","icon":"◇","resistance":1},{"id":"S05-A","name":"Остров Клятвы — A","house_sector":"Центр","type":"Половина острова","gold_income":0,"is_central_half":true,"island":"S05","island_bonus":"+1 Влияние в фазу дохода","icon":"◇","resistance":1},{"id":"S05-B","name":"Остров Клятвы — B","house_sector":"Центр","type":"Половина острова","gold_income":0,"is_central_half":true,"island":"S05","island_bonus":"+1 Влияние в фазу дохода","icon":"◇","resistance":1}],"coordinates":{"W01":{"x":170.0,"y":108.0},"W02":{"x":110.0,"y":105.0},"W03":{"x":170.0,"y":70.0},"W04":{"x":230.0,"y":110.0},"W05":{"x":100.0,"y":162.0},"W06":{"x":170.0,"y":170.0},"W07":{"x":238.0,"y":160.0},"W08":{"x":170.0,"y":278.0},"W09":{"x":105.0,"y":270.0},"W10":{"x":170.0,"y":232.0},"W11":{"x":235.0,"y":270.0},"W12":{"x":95.0,"y":333.0},"W13":{"x":170.0,"y":340.0},"W14":{"x":242.0,"y":328.0},"W15":{"x":170.0,"y":438.0},"W16":{"x":105.0,"y":425.0},"W17":{"x":170.0,"y":388.0},"W18":{"x":238.0,"y":420.0},"W19":{"x":98.0,"y":478.0},"W20":{"x":170.0,"y":488.0},"W21":{"x":238.0,"y":475.0},"E01":{"x":670.0,"y":108.0},"E02":{"x":610.0,"y":105.0},"E03":{"x":670.0,"y":70.0},"E04":{"x":730.0,"y":110.0},"E05":{"x":600.0,"y":162.0},"E06":{"x":670.0,"y":170.0},"E07":{"x":738.0,"y":160.0},"E08":{"x":670.0,"y":278.0},"E09":{"x":605.0,"y":270.0},"E10":{"x":670.0,"y":232.0},"E11":{"x":735.0,"y":270.0},"E12":{"x":595.0,"y":333.0},"E13":{"x":670.0,"y":340.0},"E14":{"x":742.0,"y":328.0},"E15":{"x":670.0,"y":438.0},"E16":{"x":605.0,"y":425.0},"E17":{"x":670.0,"y":388.0},"E18":{"x":738.0,"y":420.0},"E19":{"x":598.0,"y":478.0},"E20":{"x":670.0,"y":488.0},"E21":{"x":742.0,"y":474.0},"S01-A":{"x":363.5,"y":150.0},"S01-B":{"x":394.5,"y":150.0},"S02-A":{"x":445.5,"y":150.0},"S02-B":{"x":476.5,"y":150.0},"S03-A":{"x":404.0,"y":283.0},"S03-B":{"x":436.0,"y":283.0},"S04-A":{"x":363.5,"y":415.0},"S04-B":{"x":394.5,"y":415.0},"S05-A":{"x":445.5,"y":415.0},"S05-B":{"x":476.5,"y":415.0}},"land_edges":[["W01","W02"],["W01","W03"],["W01","W04"],["W01","W06"],["W02","W03"],["W02","W05"],["W03","W04"],["W04","W06"],["W04","W07"],["W05","W06"],["W05","W09"],["W05","W10"],["W06","W07"],["W06","W10"],["W07","W10"],["W07","W11"],["W08","W09"],["W08","W10"],["W08","W11"],["W08","W12"],["W08","W13"],["W08","W14"],["W09","W10"],["W09","W12"],["W10","W11"],["W10","W12"],["W11","W14"],["W12","W13"],["W12","W16"],["W12","W17"],["W13","W14"],["W13","W17"],["W14","W17"],["W14","W18"],["W15","W16"],["W15","W17"],["W15","W18"],["W15","W19"],["W15","W20"],["W15","W21"],["W16","W19"],["W17","W18"],["W17","W16"],["W18","W21"],["W19","W20"],["W20","W21"],["E01","E02"],["E01","E03"],["E01","E04"],["E01","E06"],["E02","E03"],["E02","E05"],["E03","E04"],["E04","E06"],["E04","E07"],["E05","E06"],["E05","E09"],["E05","E10"],["E06","E07"],["E06","E10"],["E07","E10"],["E07","E11"],["E08","E09"],["E08","E10"],["E08","E11"],["E08","E12"],["E08","E13"],["E08","E14"],["E09","E10"],["E09","E12"],["E10","E11"],["E10","E12"],["E11","E14"],["E12","E13"],["E12","E16"],["E12","E17"],["E13","E14"],["E13","E17"],["E14","E17"],["E14","E18"],["E15","E16"],["E15","E17"],["E15","E18"],["E15","E19"],["E15","E20"],["E15","E21"],["E16","E19"],["E17","E18"],["E18","E21"],["E19","E20"],["E20","E21"],["S01-A","S01-B"],["S02-A","S02-B"],["S03-A","S03-B"],["S04-A","S04-B"],["S05-A","S05-B"]],"sea_edges":[["W05","S01-A"],["W05","S03-A"],["W12","S01-A"],["W12","S03-A"],["W12","S04-A"],["W19","S03-A"],["W19","S04-A"],["E05","S02-B"],["E05","S03-B"],["E12","S02-B"],["E12","S03-B"],["E12","S05-B"],["E19","S03-B"],["E19","S05-B"],["S01-B","S02-A"],["S01-B","S03-A"],["S02-A","S03-B"],["S03-A","S04-B"],["S03-B","S05-A"],["S04-B","S05-A"]],"ports":["W05","W12","W19","E05","E12","E19","S01-A","S01-B","S02-A","S02-B","S03-A","S03-B","S04-A","S04-B","S05-A","S05-B"],"capitals":{"Варкайр":"W01","Сайрвен":"W08","Ортайн":"W15","Эркай":"E01","Тасвар":"E08","Айрель":"E15"},"islands":{"S01":["S01-A","S01-B"],"S02":["S02-A","S02-B"],"S03":["S03-A","S03-B"],"S04":["S04-A","S04-B"],"S05":["S05-A","S05-B"]},"island_bonus":{"S01":[1,0],"S02":[0,1],"S03":[1,1],"S04":[1,0],"S05":[0,1]},"rules":{"edges_bidirectional":true,"visual_proximity_creates_no_edge":true,"sea_requires_port_endpoints":true,"island_pair_edge_is_land":true}}
+{
+  "game": "Жестокий Век",
+  "version": "V6.0.0-REBUILD",
+  "status": "PROVENANCE_LOCKED_BASELINE",
+  "provenance": {
+    "territories": "Library: Zhestokiy_Vek_Step9_52_Territories.json (V5.4.3 Step 9)",
+    "graph_and_coordinates": "Library: Zhestokiy_Vek_Arena_V5.4.3.html ARENA_DATA.map",
+    "visual_sanity_check": "Library: 8F2B852A-F164-4440-92C8-786F230C65A0.jpeg",
+    "policy": "No V5.7.2 topology normalization is inherited without explicit re-approval.",
+    "topology_corrections": [
+      {
+        "date": "2026-10-02",
+        "source": "Explicit project-owner correction from live V6 map review",
+        "changes": [
+          "S04-A (Туман A): W12/W19 replaced by W18/W14",
+          "S03-A (Короны A): W05/W12/W19 replaced by W18/W14/W07",
+          "Existing S03-A links to S03-B, S01-B and S04-B retained"
+        ]
+      }
+    ]
+  },
+  "counts": {
+    "territories": 52,
+    "land_edges": 96,
+    "sea_edges": 20,
+    "ports": 18
+  },
+  "territories": [
+    {
+      "id": "W01",
+      "name": "Торкайр",
+      "house_sector": "Варкайр",
+      "type": "Столица",
+      "gold_income": 4,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "★"
+    },
+    {
+      "id": "W02",
+      "name": "Хольмвейн",
+      "house_sector": "Варкайр",
+      "type": "Дикая земля",
+      "gold_income": 0,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "○"
+    },
+    {
+      "id": "W03",
+      "name": "Рунваль",
+      "house_sector": "Варкайр",
+      "type": "Деревня",
+      "gold_income": 1,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "●"
+    },
+    {
+      "id": "W04",
+      "name": "Каравейн",
+      "house_sector": "Варкайр",
+      "type": "Деревня",
+      "gold_income": 1,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "●"
+    },
+    {
+      "id": "W05",
+      "name": "Скархольм",
+      "house_sector": "Варкайр",
+      "type": "Город",
+      "gold_income": 2,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "◆"
+    },
+    {
+      "id": "W06",
+      "name": "Вейрдал",
+      "house_sector": "Варкайр",
+      "type": "Деревня",
+      "gold_income": 1,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "●"
+    },
+    {
+      "id": "W07",
+      "name": "Нордмар",
+      "house_sector": "Варкайр",
+      "type": "Дикая земля",
+      "gold_income": 0,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "○"
+    },
+    {
+      "id": "W08",
+      "name": "Элсайр",
+      "house_sector": "Сайрвен",
+      "type": "Столица",
+      "gold_income": 4,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "★"
+    },
+    {
+      "id": "W09",
+      "name": "Морвейн",
+      "house_sector": "Сайрвен",
+      "type": "Дикая земля",
+      "gold_income": 0,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "○"
+    },
+    {
+      "id": "W10",
+      "name": "Сайрхольм",
+      "house_sector": "Сайрвен",
+      "type": "Деревня",
+      "gold_income": 1,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "●"
+    },
+    {
+      "id": "W11",
+      "name": "Таскель",
+      "house_sector": "Сайрвен",
+      "type": "Деревня",
+      "gold_income": 1,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "●"
+    },
+    {
+      "id": "W12",
+      "name": "Вельмар",
+      "house_sector": "Сайрвен",
+      "type": "Город",
+      "gold_income": 2,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "◆"
+    },
+    {
+      "id": "W13",
+      "name": "Рейндал",
+      "house_sector": "Сайрвен",
+      "type": "Деревня",
+      "gold_income": 1,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "●"
+    },
+    {
+      "id": "W14",
+      "name": "Келвар",
+      "house_sector": "Сайрвен",
+      "type": "Дикая земля",
+      "gold_income": 0,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "○"
+    },
+    {
+      "id": "W15",
+      "name": "Майвен",
+      "house_sector": "Ортайн",
+      "type": "Столица",
+      "gold_income": 4,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "★"
+    },
+    {
+      "id": "W16",
+      "name": "Ортайр",
+      "house_sector": "Ортайн",
+      "type": "Дикая земля",
+      "gold_income": 0,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "○"
+    },
+    {
+      "id": "W17",
+      "name": "Талмар",
+      "house_sector": "Ортайн",
+      "type": "Деревня",
+      "gold_income": 1,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "●"
+    },
+    {
+      "id": "W18",
+      "name": "Эйрвик",
+      "house_sector": "Ортайн",
+      "type": "Деревня",
+      "gold_income": 1,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "●"
+    },
+    {
+      "id": "W19",
+      "name": "Селвар",
+      "house_sector": "Ортайн",
+      "type": "Город",
+      "gold_income": 2,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "◆"
+    },
+    {
+      "id": "W20",
+      "name": "Рундель",
+      "house_sector": "Ортайн",
+      "type": "Деревня",
+      "gold_income": 1,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "●"
+    },
+    {
+      "id": "W21",
+      "name": "Альтарейн",
+      "house_sector": "Ортайн",
+      "type": "Дикая земля",
+      "gold_income": 0,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "○"
+    },
+    {
+      "id": "E01",
+      "name": "Рейтар",
+      "house_sector": "Эркай",
+      "type": "Столица",
+      "gold_income": 4,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "★"
+    },
+    {
+      "id": "E02",
+      "name": "Коквар",
+      "house_sector": "Эркай",
+      "type": "Дикая земля",
+      "gold_income": 0,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "○"
+    },
+    {
+      "id": "E03",
+      "name": "Эрсайр",
+      "house_sector": "Эркай",
+      "type": "Деревня",
+      "gold_income": 1,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "●"
+    },
+    {
+      "id": "E04",
+      "name": "Мирваль",
+      "house_sector": "Эркай",
+      "type": "Деревня",
+      "gold_income": 1,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "●"
+    },
+    {
+      "id": "E05",
+      "name": "Аркен",
+      "house_sector": "Эркай",
+      "type": "Город",
+      "gold_income": 2,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "◆"
+    },
+    {
+      "id": "E06",
+      "name": "Корвейн",
+      "house_sector": "Эркай",
+      "type": "Деревня",
+      "gold_income": 1,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "●"
+    },
+    {
+      "id": "E07",
+      "name": "Торнель",
+      "house_sector": "Эркай",
+      "type": "Дикая земля",
+      "gold_income": 0,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "○"
+    },
+    {
+      "id": "E08",
+      "name": "Кайсар",
+      "house_sector": "Тасвар",
+      "type": "Столица",
+      "gold_income": 4,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "★"
+    },
+    {
+      "id": "E09",
+      "name": "Караскар",
+      "house_sector": "Тасвар",
+      "type": "Дикая земля",
+      "gold_income": 0,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "○"
+    },
+    {
+      "id": "E10",
+      "name": "Желгард",
+      "house_sector": "Тасвар",
+      "type": "Деревня",
+      "gold_income": 1,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "●"
+    },
+    {
+      "id": "E11",
+      "name": "Велтайр",
+      "house_sector": "Тасвар",
+      "type": "Деревня",
+      "gold_income": 1,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "●"
+    },
+    {
+      "id": "E12",
+      "name": "Дайрвен",
+      "house_sector": "Тасвар",
+      "type": "Город",
+      "gold_income": 2,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "◆"
+    },
+    {
+      "id": "E13",
+      "name": "Кирмар",
+      "house_sector": "Тасвар",
+      "type": "Деревня",
+      "gold_income": 1,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "●"
+    },
+    {
+      "id": "E14",
+      "name": "Тасхольм",
+      "house_sector": "Тасвар",
+      "type": "Дикая земля",
+      "gold_income": 0,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "○"
+    },
+    {
+      "id": "E15",
+      "name": "Элияр",
+      "house_sector": "Айрель",
+      "type": "Столица",
+      "gold_income": 4,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "★"
+    },
+    {
+      "id": "E16",
+      "name": "Айкелир",
+      "house_sector": "Айрель",
+      "type": "Дикая земля",
+      "gold_income": 0,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "○"
+    },
+    {
+      "id": "E17",
+      "name": "Тасвейн",
+      "house_sector": "Айрель",
+      "type": "Деревня",
+      "gold_income": 1,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "●"
+    },
+    {
+      "id": "E18",
+      "name": "Сейраль",
+      "house_sector": "Айрель",
+      "type": "Деревня",
+      "gold_income": 1,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "●"
+    },
+    {
+      "id": "E19",
+      "name": "Найвар",
+      "house_sector": "Айрель",
+      "type": "Город",
+      "gold_income": 2,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "◆"
+    },
+    {
+      "id": "E20",
+      "name": "Лиарен",
+      "house_sector": "Айрель",
+      "type": "Деревня",
+      "gold_income": 1,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "●"
+    },
+    {
+      "id": "E21",
+      "name": "Альвейн",
+      "house_sector": "Айрель",
+      "type": "Дикая земля",
+      "gold_income": 0,
+      "is_central_half": false,
+      "island": null,
+      "island_bonus": null,
+      "icon": "○"
+    },
+    {
+      "id": "S01-A",
+      "name": "Остров Вейр — A",
+      "house_sector": "Центр",
+      "type": "Половина острова",
+      "gold_income": 0,
+      "is_central_half": true,
+      "island": "S01",
+      "island_bonus": "+1 золото в фазу дохода",
+      "icon": "◇",
+      "resistance": 1
+    },
+    {
+      "id": "S01-B",
+      "name": "Остров Вейр — B",
+      "house_sector": "Центр",
+      "type": "Половина острова",
+      "gold_income": 0,
+      "is_central_half": true,
+      "island": "S01",
+      "island_bonus": "+1 золото в фазу дохода",
+      "icon": "◇",
+      "resistance": 1
+    },
+    {
+      "id": "S02-A",
+      "name": "Остров Рун — A",
+      "house_sector": "Центр",
+      "type": "Половина острова",
+      "gold_income": 0,
+      "is_central_half": true,
+      "island": "S02",
+      "island_bonus": "+1 Влияние в фазу дохода",
+      "icon": "◇",
+      "resistance": 1
+    },
+    {
+      "id": "S02-B",
+      "name": "Остров Рун — B",
+      "house_sector": "Центр",
+      "type": "Половина острова",
+      "gold_income": 0,
+      "is_central_half": true,
+      "island": "S02",
+      "island_bonus": "+1 Влияние в фазу дохода",
+      "icon": "◇",
+      "resistance": 1
+    },
+    {
+      "id": "S03-A",
+      "name": "Остров Короны — A",
+      "house_sector": "Центр",
+      "type": "Половина острова",
+      "gold_income": 0,
+      "is_central_half": true,
+      "island": "S03",
+      "island_bonus": "+1 золото +1 Влияние в фазу дохода",
+      "icon": "◇",
+      "resistance": 1
+    },
+    {
+      "id": "S03-B",
+      "name": "Остров Короны — B",
+      "house_sector": "Центр",
+      "type": "Половина острова",
+      "gold_income": 0,
+      "is_central_half": true,
+      "island": "S03",
+      "island_bonus": "+1 золото +1 Влияние в фазу дохода",
+      "icon": "◇",
+      "resistance": 1
+    },
+    {
+      "id": "S04-A",
+      "name": "Остров Туман — A",
+      "house_sector": "Центр",
+      "type": "Половина острова",
+      "gold_income": 0,
+      "is_central_half": true,
+      "island": "S04",
+      "island_bonus": "+1 золото в фазу дохода",
+      "icon": "◇",
+      "resistance": 1
+    },
+    {
+      "id": "S04-B",
+      "name": "Остров Туман — B",
+      "house_sector": "Центр",
+      "type": "Половина острова",
+      "gold_income": 0,
+      "is_central_half": true,
+      "island": "S04",
+      "island_bonus": "+1 золото в фазу дохода",
+      "icon": "◇",
+      "resistance": 1
+    },
+    {
+      "id": "S05-A",
+      "name": "Остров Клятвы — A",
+      "house_sector": "Центр",
+      "type": "Половина острова",
+      "gold_income": 0,
+      "is_central_half": true,
+      "island": "S05",
+      "island_bonus": "+1 Влияние в фазу дохода",
+      "icon": "◇",
+      "resistance": 1
+    },
+    {
+      "id": "S05-B",
+      "name": "Остров Клятвы — B",
+      "house_sector": "Центр",
+      "type": "Половина острова",
+      "gold_income": 0,
+      "is_central_half": true,
+      "island": "S05",
+      "island_bonus": "+1 Влияние в фазу дохода",
+      "icon": "◇",
+      "resistance": 1
+    }
+  ],
+  "coordinates": {
+    "W01": {
+      "x": 170,
+      "y": 108
+    },
+    "W02": {
+      "x": 110,
+      "y": 105
+    },
+    "W03": {
+      "x": 170,
+      "y": 70
+    },
+    "W04": {
+      "x": 230,
+      "y": 110
+    },
+    "W05": {
+      "x": 100,
+      "y": 162
+    },
+    "W06": {
+      "x": 170,
+      "y": 170
+    },
+    "W07": {
+      "x": 238,
+      "y": 160
+    },
+    "W08": {
+      "x": 170,
+      "y": 278
+    },
+    "W09": {
+      "x": 105,
+      "y": 270
+    },
+    "W10": {
+      "x": 170,
+      "y": 232
+    },
+    "W11": {
+      "x": 235,
+      "y": 270
+    },
+    "W12": {
+      "x": 95,
+      "y": 333
+    },
+    "W13": {
+      "x": 170,
+      "y": 340
+    },
+    "W14": {
+      "x": 242,
+      "y": 328
+    },
+    "W15": {
+      "x": 170,
+      "y": 438
+    },
+    "W16": {
+      "x": 105,
+      "y": 425
+    },
+    "W17": {
+      "x": 170,
+      "y": 388
+    },
+    "W18": {
+      "x": 238,
+      "y": 420
+    },
+    "W19": {
+      "x": 98,
+      "y": 478
+    },
+    "W20": {
+      "x": 170,
+      "y": 488
+    },
+    "W21": {
+      "x": 238,
+      "y": 475
+    },
+    "E01": {
+      "x": 670,
+      "y": 108
+    },
+    "E02": {
+      "x": 610,
+      "y": 105
+    },
+    "E03": {
+      "x": 670,
+      "y": 70
+    },
+    "E04": {
+      "x": 730,
+      "y": 110
+    },
+    "E05": {
+      "x": 600,
+      "y": 162
+    },
+    "E06": {
+      "x": 670,
+      "y": 170
+    },
+    "E07": {
+      "x": 738,
+      "y": 160
+    },
+    "E08": {
+      "x": 670,
+      "y": 278
+    },
+    "E09": {
+      "x": 605,
+      "y": 270
+    },
+    "E10": {
+      "x": 670,
+      "y": 232
+    },
+    "E11": {
+      "x": 735,
+      "y": 270
+    },
+    "E12": {
+      "x": 595,
+      "y": 333
+    },
+    "E13": {
+      "x": 670,
+      "y": 340
+    },
+    "E14": {
+      "x": 742,
+      "y": 328
+    },
+    "E15": {
+      "x": 670,
+      "y": 438
+    },
+    "E16": {
+      "x": 605,
+      "y": 425
+    },
+    "E17": {
+      "x": 670,
+      "y": 388
+    },
+    "E18": {
+      "x": 738,
+      "y": 420
+    },
+    "E19": {
+      "x": 598,
+      "y": 478
+    },
+    "E20": {
+      "x": 670,
+      "y": 488
+    },
+    "E21": {
+      "x": 742,
+      "y": 474
+    },
+    "S01-A": {
+      "x": 363.5,
+      "y": 150
+    },
+    "S01-B": {
+      "x": 394.5,
+      "y": 150
+    },
+    "S02-A": {
+      "x": 445.5,
+      "y": 150
+    },
+    "S02-B": {
+      "x": 476.5,
+      "y": 150
+    },
+    "S03-A": {
+      "x": 404,
+      "y": 283
+    },
+    "S03-B": {
+      "x": 436,
+      "y": 283
+    },
+    "S04-A": {
+      "x": 363.5,
+      "y": 415
+    },
+    "S04-B": {
+      "x": 394.5,
+      "y": 415
+    },
+    "S05-A": {
+      "x": 445.5,
+      "y": 415
+    },
+    "S05-B": {
+      "x": 476.5,
+      "y": 415
+    }
+  },
+  "land_edges": [
+    [
+      "W01",
+      "W02"
+    ],
+    [
+      "W01",
+      "W03"
+    ],
+    [
+      "W01",
+      "W04"
+    ],
+    [
+      "W01",
+      "W06"
+    ],
+    [
+      "W02",
+      "W03"
+    ],
+    [
+      "W02",
+      "W05"
+    ],
+    [
+      "W03",
+      "W04"
+    ],
+    [
+      "W04",
+      "W06"
+    ],
+    [
+      "W04",
+      "W07"
+    ],
+    [
+      "W05",
+      "W06"
+    ],
+    [
+      "W05",
+      "W09"
+    ],
+    [
+      "W05",
+      "W10"
+    ],
+    [
+      "W06",
+      "W07"
+    ],
+    [
+      "W06",
+      "W10"
+    ],
+    [
+      "W07",
+      "W10"
+    ],
+    [
+      "W07",
+      "W11"
+    ],
+    [
+      "W08",
+      "W09"
+    ],
+    [
+      "W08",
+      "W10"
+    ],
+    [
+      "W08",
+      "W11"
+    ],
+    [
+      "W08",
+      "W12"
+    ],
+    [
+      "W08",
+      "W13"
+    ],
+    [
+      "W08",
+      "W14"
+    ],
+    [
+      "W09",
+      "W10"
+    ],
+    [
+      "W09",
+      "W12"
+    ],
+    [
+      "W10",
+      "W11"
+    ],
+    [
+      "W10",
+      "W12"
+    ],
+    [
+      "W11",
+      "W14"
+    ],
+    [
+      "W12",
+      "W13"
+    ],
+    [
+      "W12",
+      "W16"
+    ],
+    [
+      "W12",
+      "W17"
+    ],
+    [
+      "W13",
+      "W14"
+    ],
+    [
+      "W13",
+      "W17"
+    ],
+    [
+      "W14",
+      "W17"
+    ],
+    [
+      "W14",
+      "W18"
+    ],
+    [
+      "W15",
+      "W16"
+    ],
+    [
+      "W15",
+      "W17"
+    ],
+    [
+      "W15",
+      "W18"
+    ],
+    [
+      "W15",
+      "W19"
+    ],
+    [
+      "W15",
+      "W20"
+    ],
+    [
+      "W15",
+      "W21"
+    ],
+    [
+      "W16",
+      "W19"
+    ],
+    [
+      "W17",
+      "W18"
+    ],
+    [
+      "W17",
+      "W16"
+    ],
+    [
+      "W18",
+      "W21"
+    ],
+    [
+      "W19",
+      "W20"
+    ],
+    [
+      "W20",
+      "W21"
+    ],
+    [
+      "E01",
+      "E02"
+    ],
+    [
+      "E01",
+      "E03"
+    ],
+    [
+      "E01",
+      "E04"
+    ],
+    [
+      "E01",
+      "E06"
+    ],
+    [
+      "E02",
+      "E03"
+    ],
+    [
+      "E02",
+      "E05"
+    ],
+    [
+      "E03",
+      "E04"
+    ],
+    [
+      "E04",
+      "E06"
+    ],
+    [
+      "E04",
+      "E07"
+    ],
+    [
+      "E05",
+      "E06"
+    ],
+    [
+      "E05",
+      "E09"
+    ],
+    [
+      "E05",
+      "E10"
+    ],
+    [
+      "E06",
+      "E07"
+    ],
+    [
+      "E06",
+      "E10"
+    ],
+    [
+      "E07",
+      "E10"
+    ],
+    [
+      "E07",
+      "E11"
+    ],
+    [
+      "E08",
+      "E09"
+    ],
+    [
+      "E08",
+      "E10"
+    ],
+    [
+      "E08",
+      "E11"
+    ],
+    [
+      "E08",
+      "E12"
+    ],
+    [
+      "E08",
+      "E13"
+    ],
+    [
+      "E08",
+      "E14"
+    ],
+    [
+      "E09",
+      "E10"
+    ],
+    [
+      "E09",
+      "E12"
+    ],
+    [
+      "E10",
+      "E11"
+    ],
+    [
+      "E10",
+      "E12"
+    ],
+    [
+      "E11",
+      "E14"
+    ],
+    [
+      "E12",
+      "E13"
+    ],
+    [
+      "E12",
+      "E16"
+    ],
+    [
+      "E12",
+      "E17"
+    ],
+    [
+      "E13",
+      "E14"
+    ],
+    [
+      "E13",
+      "E17"
+    ],
+    [
+      "E14",
+      "E17"
+    ],
+    [
+      "E14",
+      "E18"
+    ],
+    [
+      "E15",
+      "E16"
+    ],
+    [
+      "E15",
+      "E17"
+    ],
+    [
+      "E15",
+      "E18"
+    ],
+    [
+      "E15",
+      "E19"
+    ],
+    [
+      "E15",
+      "E20"
+    ],
+    [
+      "E15",
+      "E21"
+    ],
+    [
+      "E16",
+      "E19"
+    ],
+    [
+      "E17",
+      "E18"
+    ],
+    [
+      "E18",
+      "E21"
+    ],
+    [
+      "E19",
+      "E20"
+    ],
+    [
+      "E20",
+      "E21"
+    ],
+    [
+      "S01-A",
+      "S01-B"
+    ],
+    [
+      "S02-A",
+      "S02-B"
+    ],
+    [
+      "S03-A",
+      "S03-B"
+    ],
+    [
+      "S04-A",
+      "S04-B"
+    ],
+    [
+      "S05-A",
+      "S05-B"
+    ]
+  ],
+  "sea_edges": [
+    [
+      "W05",
+      "S01-A"
+    ],
+    [
+      "W12",
+      "S01-A"
+    ],
+    [
+      "E05",
+      "S02-B"
+    ],
+    [
+      "E05",
+      "S03-B"
+    ],
+    [
+      "E12",
+      "S02-B"
+    ],
+    [
+      "E12",
+      "S03-B"
+    ],
+    [
+      "E12",
+      "S05-B"
+    ],
+    [
+      "E19",
+      "S03-B"
+    ],
+    [
+      "E19",
+      "S05-B"
+    ],
+    [
+      "S01-B",
+      "S02-A"
+    ],
+    [
+      "S01-B",
+      "S03-A"
+    ],
+    [
+      "S02-A",
+      "S03-B"
+    ],
+    [
+      "S03-A",
+      "S04-B"
+    ],
+    [
+      "S03-B",
+      "S05-A"
+    ],
+    [
+      "S04-B",
+      "S05-A"
+    ],
+    [
+      "W18",
+      "S04-A"
+    ],
+    [
+      "W14",
+      "S04-A"
+    ],
+    [
+      "W18",
+      "S03-A"
+    ],
+    [
+      "W14",
+      "S03-A"
+    ],
+    [
+      "W07",
+      "S03-A"
+    ]
+  ],
+  "ports": [
+    "W05",
+    "S01-A",
+    "W12",
+    "E05",
+    "S02-B",
+    "S03-B",
+    "E12",
+    "S05-B",
+    "E19",
+    "S01-B",
+    "S02-A",
+    "S03-A",
+    "S04-B",
+    "S05-A",
+    "W18",
+    "S04-A",
+    "W14",
+    "W07"
+  ],
+  "capitals": {
+    "Варкайр": "W01",
+    "Сайрвен": "W08",
+    "Ортайн": "W15",
+    "Эркай": "E01",
+    "Тасвар": "E08",
+    "Айрель": "E15"
+  },
+  "islands": {
+    "S01": [
+      "S01-A",
+      "S01-B"
+    ],
+    "S02": [
+      "S02-A",
+      "S02-B"
+    ],
+    "S03": [
+      "S03-A",
+      "S03-B"
+    ],
+    "S04": [
+      "S04-A",
+      "S04-B"
+    ],
+    "S05": [
+      "S05-A",
+      "S05-B"
+    ]
+  },
+  "island_bonus": {
+    "S01": [
+      1,
+      0
+    ],
+    "S02": [
+      0,
+      1
+    ],
+    "S03": [
+      1,
+      1
+    ],
+    "S04": [
+      1,
+      0
+    ],
+    "S05": [
+      0,
+      1
+    ]
+  },
+  "rules": {
+    "edges_bidirectional": true,
+    "visual_proximity_creates_no_edge": true,
+    "sea_requires_port_endpoints": true,
+    "island_pair_edge_is_land": true
+  }
+}
