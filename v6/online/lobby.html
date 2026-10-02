@@ -33,6 +33,23 @@ button.loading { opacity:.65; cursor:wait; }
 .account-head button { width:auto; min-width:120px; }
 .account-name { font-size:18px; font-weight:850; }
 .account-handle { margin-top:3px; color:#89969d; font-size:12px; }
+.account-identity { display:flex; gap:12px; align-items:center; }
+.profile-avatar {
+  width:64px; height:64px; border-radius:18px; display:grid; place-items:center;
+  border:1px solid #53616a; background:#10161a; font-size:30px; font-weight:900;
+}
+.profile-stats {
+  display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; margin-top:16px;
+}
+.profile-stat { border:1px solid #2f3940; border-radius:12px; padding:10px; background:#11171b; }
+.profile-stat span { display:block; font-size:10px; color:#89969d; text-transform:uppercase; letter-spacing:.05em; }
+.profile-stat b { display:block; margin-top:4px; font-size:18px; }
+.avatar-picker { display:grid; grid-template-columns:repeat(6,1fr); gap:8px; margin-top:10px; }
+.avatar-option { aspect-ratio:1; padding:0; font-size:22px; }
+.avatar-option.selected { border-color:#ffd45c; box-shadow:0 0 0 2px rgba(255,212,92,.25); }
+.achievement-box { margin-top:16px; border-top:1px solid #283138; padding-top:14px; }
+.achievement-list { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+.achievement-pill { border:1px solid #3d4850; border-radius:999px; padding:6px 10px; font-size:11px; }
 .game-list,.room-list { display:grid; gap:10px; }
 .game-card,.room-card {
   border:1px solid #2f3940; border-radius:14px; padding:14px;
@@ -64,6 +81,8 @@ button.loading { opacity:.65; cursor:wait; }
 .badge.private { border-color:#565b72; color:#b2b8df; }
 @media(max-width:780px) {
   .grid,.create-grid,.account-grid { grid-template-columns:1fr; }
+  .profile-stats { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .avatar-picker { grid-template-columns:repeat(4,1fr); }
   .profile-row { grid-template-columns:1fr; }
   .profile-row button { width:100%; }
   .game-card,.room-card { grid-template-columns:1fr; }
@@ -112,14 +131,34 @@ button.loading { opacity:.65; cursor:wait; }
 
       <div id="account-signed-in" style="display:none">
         <div class="account-head">
-          <div>
-            <div id="account-name" class="account-name">Игрок</div>
-            <div id="account-handle" class="account-handle">@login</div>
+          <div class="account-identity">
+            <div id="account-avatar" class="profile-avatar">✦</div>
+            <div>
+              <div id="account-name" class="account-name">Игрок</div>
+              <div id="account-handle" class="account-handle">@login</div>
+            </div>
           </div>
           <button id="logout-profile">Выйти</button>
         </div>
-        <div class="muted" style="margin-top:10px">
-          Профиль синхронизирует список игр между устройствами.
+
+        <div class="profile-stats">
+          <div class="profile-stat"><span>MMR</span><b id="stat-mmr">1000</b></div>
+          <div class="profile-stat"><span>Сыграно</span><b id="stat-games">0</b></div>
+          <div class="profile-stat"><span>Победы</span><b id="stat-wins">0</b></div>
+          <div class="profile-stat"><span>Поражения</span><b id="stat-losses">0</b></div>
+          <div class="profile-stat"><span>В игре</span><b id="stat-time">0 мин</b></div>
+        </div>
+
+        <div style="margin-top:16px">
+          <div class="muted">Аватар</div>
+          <div id="avatar-picker" class="avatar-picker"></div>
+        </div>
+
+        <div class="achievement-box">
+          <h3>Достижения</h3>
+          <div id="achievement-list" class="achievement-list">
+            <span class="muted">Пока достижений нет.</span>
+          </div>
         </div>
       </div>
     </section>
@@ -224,6 +263,11 @@ button.loading { opacity:.65; cursor:wait; }
 
 <script>
 const houses = ['Варкайр','Сайрвен','Ортайн','Эркай','Тасвар','Айрель'];
+const profileAvatars = [
+  ['sigil-01','✦'],['sigil-02','♜'],['sigil-03','◆'],['sigil-04','▲'],
+  ['sigil-05','☾'],['sigil-06','☀'],['sigil-07','✚'],['sigil-08','♠'],
+  ['sigil-09','⬢'],['sigil-10','⚜'],['sigil-11','✧'],['sigil-12','◈']
+];
 const params = new URLSearchParams(location.search);
 let gameId = params.get('game');
 let profileToken = localStorage.getItem('aob-profile-token');
@@ -253,6 +297,44 @@ function profileAuth() {
   return profileToken || null;
 }
 
+function avatarSymbol(id) {
+  return profileAvatars.find(item => item[0] === id)?.[1] || '✦';
+}
+
+function formatPlayTime(seconds) {
+  const total = Math.max(0, Number(seconds || 0));
+  if (total < 3600) return Math.floor(total / 60) + ' мин';
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  return minutes ? hours + ' ч ' + minutes + ' мин' : hours + ' ч';
+}
+
+function renderAvatarPicker() {
+  if (!activeProfile || !profileToken) return;
+  const current = activeProfile.avatar_id || 'sigil-01';
+  $('avatar-picker').innerHTML = profileAvatars.map(([id,symbol]) =>
+    '<button class="avatar-option' + (id === current ? ' selected' : '') +
+    '" data-avatar="' + id + '" title="' + id + '">' + symbol + '</button>'
+  ).join('');
+
+  document.querySelectorAll('[data-avatar]').forEach(button => {
+    button.onclick = async () => {
+      if (button.dataset.avatar === current) return;
+      try {
+        const data = await request('/api/profile/avatar', {
+          method:'POST',
+          headers:{'content-type':'application/json'},
+          body:JSON.stringify({ avatar_id:button.dataset.avatar })
+        }, profileToken);
+        activeProfile = data.profile;
+        renderAccount();
+      } catch (error) {
+        alert(friendlyError(error));
+      }
+    };
+  });
+}
+
 function renderAccount() {
   const signedIn = Boolean(activeProfile && profileToken);
   $('account-signed-out').style.display = signedIn ? 'none' : 'block';
@@ -264,9 +346,25 @@ function renderAccount() {
   }
 
   if (signedIn) {
+    const stats = activeProfile.stats || {};
     $('account-name').textContent = activeProfile.display_name;
     $('account-handle').textContent = '@' + activeProfile.handle;
+    $('account-avatar').textContent = avatarSymbol(activeProfile.avatar_id);
+    $('stat-mmr').textContent = Number(stats.mmr || 1000);
+    $('stat-games').textContent = Number(stats.games_played || 0);
+    $('stat-wins').textContent = Number(stats.wins || 0);
+    $('stat-losses').textContent = Number(stats.losses || 0);
+    $('stat-time').textContent = formatPlayTime(stats.play_seconds || 0);
+
+    const achievements = Array.isArray(stats.achievements) ? stats.achievements : [];
+    $('achievement-list').innerHTML = achievements.length
+      ? achievements.map(item =>
+          '<span class="achievement-pill">' + escapeHtml(item) + '</span>'
+        ).join('')
+      : '<span class="muted">Пока достижений нет.</span>';
+
     localStorage.setItem('aob-display-name', activeProfile.display_name);
+    renderAvatarPicker();
   }
 }
 
@@ -442,6 +540,10 @@ async function loadMyGames() {
   if (profileToken && activeProfile) {
     try {
       const data = await request('/api/profile/games', {}, profileToken);
+      if (data.profile) {
+        activeProfile = data.profile;
+        renderAccount();
+      }
       games = (data.games || [])
         .filter(item => ['LOBBY','RUNNING'].includes(item.lifecycle?.status))
         .map(item => ({
