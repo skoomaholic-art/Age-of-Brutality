@@ -21,3 +21,5 @@ Deploy trigger: resilient multiplayer lobby, transient 503 retries, start gating
 Deploy trigger: game hub with solo mode, public rooms, private rooms, and saved active games.
 
 Deploy trigger: autosave before returning from game screen to game hub.
+
+Deploy trigger: permanent player profiles, secure sessions, cross-device game library.
