@@ -213,6 +213,82 @@ export class FirestoreGameStore {
     });
   }
 
+  async finishGame(playerId, {
+    nowMs = Date.now(),
+    reason = null
+  } = {}) {
+    const gameRef = this.gameRef();
+    const playerRef = this.playerRef(playerId);
+
+    return this.db.runTransaction(async tx => {
+      const [gameDoc, playerDoc] = await Promise.all([
+        tx.get(gameRef),
+        tx.get(playerRef)
+      ]);
+
+      if (!gameDoc.exists) throw new Error('game not found');
+      if (!playerDoc.exists) throw new Error('player not found');
+
+      const game = gameDoc.data();
+      const player = playerDoc.data();
+      if (!canAdminister(player)) throw new Error('admin role required');
+
+      const lifecycle = structuredClone(game.lifecycle || {});
+      if (lifecycle.status !== GAME_STATUS.RUNNING) {
+        throw new Error('only a running game can be finished');
+      }
+
+      lifecycle.status = GAME_STATUS.FINISHED;
+      lifecycle.finished_at = new Date(nowMs).toISOString();
+      lifecycle.finish_reason = reason ? String(reason).slice(0, 200) : null;
+
+      const nextRevision = Number(game.state_revision || 0) + 1;
+      tx.update(gameRef, {
+        lifecycle,
+        updated_at: lifecycle.finished_at,
+        state_revision: nextRevision
+      });
+
+      return lifecycle;
+    });
+  }
+
+  async archiveGame(playerId, nowMs = Date.now()) {
+    const gameRef = this.gameRef();
+    const playerRef = this.playerRef(playerId);
+
+    return this.db.runTransaction(async tx => {
+      const [gameDoc, playerDoc] = await Promise.all([
+        tx.get(gameRef),
+        tx.get(playerRef)
+      ]);
+
+      if (!gameDoc.exists) throw new Error('game not found');
+      if (!playerDoc.exists) throw new Error('player not found');
+
+      const game = gameDoc.data();
+      const player = playerDoc.data();
+      if (!canAdminister(player)) throw new Error('admin role required');
+
+      const lifecycle = structuredClone(game.lifecycle || {});
+      if (lifecycle.status !== GAME_STATUS.FINISHED) {
+        throw new Error('only a finished game can be archived');
+      }
+
+      lifecycle.status = GAME_STATUS.ARCHIVED;
+      lifecycle.archived_at = new Date(nowMs).toISOString();
+
+      const nextRevision = Number(game.state_revision || 0) + 1;
+      tx.update(gameRef, {
+        lifecycle,
+        updated_at: lifecycle.archived_at,
+        state_revision: nextRevision
+      });
+
+      return lifecycle;
+    });
+  }
+
   async findGameIdByInviteCode(inviteCode) {
     const code = String(inviteCode || '').trim().toUpperCase();
     if (!code) return null;
