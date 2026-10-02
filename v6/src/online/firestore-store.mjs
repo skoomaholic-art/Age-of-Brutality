@@ -1,5 +1,14 @@
 import { Firestore } from '@google-cloud/firestore';
 import { createOnlineGame } from './store.mjs';
+import {
+  GAME_STATUS,
+  PLAYER_ROLE,
+  canAdminister,
+  playerIdFromToken,
+  hashAccessToken,
+  safeTokenHashEqual,
+  validateStart
+} from './multiplayer.mjs';
 
 function plain(value) {
   return JSON.parse(JSON.stringify(value));
@@ -62,6 +71,151 @@ export class FirestoreGameStore {
 
   sessionRef(sessionId) {
     return this.gameRef().collection('sessions').doc(sessionId);
+  }
+
+  playersRef() {
+    return this.gameRef().collection('players');
+  }
+
+  playerRef(playerId) {
+    return this.playersRef().doc(String(playerId));
+  }
+
+  async getPlayer(playerId) {
+    if (!playerId) return null;
+    const doc = await this.playerRef(playerId).get();
+    return doc.exists ? doc.data() : null;
+  }
+
+  async listPlayers() {
+    const snap = await this.playersRef().orderBy('joined_at', 'asc').get();
+    return snap.docs.map(doc => doc.data());
+  }
+
+  async authenticateToken(token) {
+    const playerId = playerIdFromToken(token);
+    if (!playerId) return null;
+    const player = await this.getPlayer(playerId);
+    if (!player) return null;
+    const actual = hashAccessToken(token);
+    if (!safeTokenHashEqual(player.token_hash, actual)) return null;
+    return player;
+  }
+
+  async addPlayer(player) {
+    const gameRef = this.gameRef();
+    const playerRef = this.playerRef(player.id);
+
+    await this.db.runTransaction(async tx => {
+      const [gameDoc, existingPlayer] = await Promise.all([
+        tx.get(gameRef),
+        tx.get(playerRef)
+      ]);
+
+      if (!gameDoc.exists) throw new Error('game not found');
+      if (existingPlayer.exists) throw new Error('player already joined');
+
+      const game = gameDoc.data();
+      const lifecycle = structuredClone(game.lifecycle || {});
+      if (lifecycle.status !== GAME_STATUS.LOBBY) throw new Error('game is not joinable');
+
+      if (player.role === PLAYER_ROLE.SPECTATOR) {
+        lifecycle.spectator_count = Number(lifecycle.spectator_count || 0) + 1;
+      } else {
+        const current = Number(lifecycle.player_count || 0);
+        const max = Number(lifecycle.max_players || 6);
+        if (current >= max) throw new Error('game is full');
+        lifecycle.player_count = current + 1;
+      }
+
+      tx.set(playerRef, plain(player), { merge: false });
+      tx.update(gameRef, { lifecycle });
+    });
+
+    return player;
+  }
+
+  async claimHouse(playerId, house, constants) {
+    const gameRef = this.gameRef();
+    const playerRef = this.playerRef(playerId);
+
+    return this.db.runTransaction(async tx => {
+      const [gameDoc, playerDoc] = await Promise.all([
+        tx.get(gameRef),
+        tx.get(playerRef)
+      ]);
+
+      if (!gameDoc.exists) throw new Error('game not found');
+      if (!playerDoc.exists) throw new Error('player not found');
+      if (!constants.houses.includes(house)) throw new Error('unknown house');
+
+      const game = gameDoc.data();
+      const player = playerDoc.data();
+      const lifecycle = structuredClone(game.lifecycle || {});
+
+      if (lifecycle.status !== GAME_STATUS.LOBBY) throw new Error('house selection is closed');
+      if (player.role === PLAYER_ROLE.SPECTATOR) throw new Error('spectator cannot claim a house');
+
+      const claims = structuredClone(lifecycle.house_claims || {});
+      const occupiedBy = claims[house];
+      if (occupiedBy && occupiedBy !== playerId) throw new Error('house already claimed');
+
+      if (player.house && player.house !== house) {
+        throw new Error('player already controls another house');
+      }
+
+      claims[house] = playerId;
+      lifecycle.house_claims = claims;
+      player.house = house;
+
+      tx.update(gameRef, { lifecycle });
+      tx.update(playerRef, { house });
+
+      return { house, player_id: playerId };
+    });
+  }
+
+  async startGame(playerId, constants, nowMs = Date.now()) {
+    const gameRef = this.gameRef();
+    const playerRef = this.playerRef(playerId);
+
+    return this.db.runTransaction(async tx => {
+      const [gameDoc, playerDoc] = await Promise.all([
+        tx.get(gameRef),
+        tx.get(playerRef)
+      ]);
+
+      if (!gameDoc.exists) throw new Error('game not found');
+      if (!playerDoc.exists) throw new Error('player not found');
+
+      const game = gameDoc.data();
+      const player = playerDoc.data();
+      if (!canAdminister(player)) throw new Error('admin role required');
+
+      validateStart(game, constants);
+
+      const lifecycle = structuredClone(game.lifecycle);
+      lifecycle.status = GAME_STATUS.RUNNING;
+      lifecycle.started_at = new Date(nowMs).toISOString();
+      lifecycle.invite_code = null;
+
+      tx.update(gameRef, { lifecycle, updated_at: lifecycle.started_at });
+      return lifecycle;
+    });
+  }
+
+  async findGameIdByInviteCode(inviteCode) {
+    const code = String(inviteCode || '').trim().toUpperCase();
+    if (!code) return null;
+
+    const snap = await this.db.collection('games')
+      .where('lifecycle.invite_code', '==', code)
+      .limit(2)
+      .get();
+
+    if (snap.empty) return null;
+    const live = snap.docs.find(doc => doc.data()?.lifecycle?.status === GAME_STATUS.LOBBY);
+    return live?.id || null;
   }
 
   async load() {
@@ -181,14 +335,14 @@ export class FirestoreGameStore {
       this.loadedExistingAtStartup = true;
       return existing;
     }
-    const created = createOnlineGame(map, constants);
+    const created = createOnlineGame(map, constants, { id: this.gameId });
     await this.save(created);
     this.loadedExistingAtStartup = false;
     return created;
   }
 
   async reset(map, constants) {
-    const created = createOnlineGame(map, constants);
+    const created = createOnlineGame(map, constants, { id: this.gameId });
     this.orderCache = new Map();
     this.jobCache = new Map();
     this.eventMaxSeq = 0;
