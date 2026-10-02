@@ -10,6 +10,7 @@ import { resolvePendingCapitalHold } from '../core/scoring.mjs';
 import { buildVictoryStatus } from '../core/victory.mjs';
 import {
   assignCharacterToArmy,
+  characterArmyAssignmentEligibility,
   charactersForHouse,
   normalizeCharacterLayer,
   returnCharacterToCourt
@@ -1005,7 +1006,18 @@ async function handleGameApi(req, res, url, ctx, subpath) {
 
     return json(res, 200, {
       house,
-      characters,
+      characters: characters.map(character => ({
+        ...character,
+        assignment: characterArmyAssignmentEligibility(
+          ctx.game.state,
+          map,
+          constants,
+          {
+            house,
+            characterId: character.id
+          }
+        )
+      })),
       armies
     });
   }
