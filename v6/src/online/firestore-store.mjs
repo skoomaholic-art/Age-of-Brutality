@@ -572,13 +572,26 @@ export class FirestoreGameStore {
       .get();
     if (!existingPlayer.empty) throw new Error('friend is already in this game');
 
-    const inviteId = crypto.randomUUID();
+    const inviteId = crypto.createHash('sha256')
+      .update(`${fromProfileId}:${toProfileId}:${gameId}`)
+      .digest('hex')
+      .slice(0, 32);
+    const inviteRef = this.profileGameInviteRef(toProfileId, inviteId);
+    const existingInvite = await inviteRef.get();
+    if (
+      existingInvite.exists &&
+      existingInvite.data()?.status === 'PENDING' &&
+      (!existingInvite.data()?.expires_at || Date.parse(existingInvite.data().expires_at) > nowMs)
+    ) {
+      throw new Error('game invite already sent');
+    }
+
     const createdAt = new Date(nowMs).toISOString();
     const expiresAt = new Date(
       nowMs + SOCIAL_LIMITS.inviteLifetimeDays * 24 * 60 * 60 * 1000
     ).toISOString();
 
-    await this.profileGameInviteRef(toProfileId, inviteId).set({
+    await inviteRef.set({
       invite_id: inviteId,
       from_profile_id: fromProfileId,
       to_profile_id: toProfileId,
