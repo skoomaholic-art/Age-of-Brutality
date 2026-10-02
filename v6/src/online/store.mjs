@@ -1,4 +1,5 @@
 import { createInitialState } from '../core/state.mjs';
+import { normalizeOnlineSeaState } from './sea-navigation.mjs';
 import {
   ACCESS_MODE,
   createLobbyMetadata,
@@ -14,7 +15,10 @@ export function createOnlineGame(map, constants, {
   characterCatalog = null
 } = {}) {
   const now = new Date(nowMs).toISOString();
-  const state = createInitialState(map, constants, characterCatalog);
+  const state = normalizeOnlineSeaState(
+    createInitialState(map, constants, characterCatalog),
+    map
+  );
   const sessionId = `S${nowMs}`;
   state.journal.push({ kind: 'SESSION_START', session_id: sessionId, at: now });
 
