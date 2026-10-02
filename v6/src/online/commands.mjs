@@ -29,7 +29,10 @@ export function normalizeCommand(input) {
       mode: String(input.mode || 'LAND').toUpperCase(),
       from: requiredString(input.from, 'from'),
       to: requiredString(input.to, 'to'),
-      warriors: positiveInt(input.warriors, 'warriors')
+      warriors: positiveInt(input.warriors, 'warriors'),
+      commander_id: input.commander_id
+        ? requiredString(input.commander_id, 'commander_id')
+        : null
     };
   }
 
@@ -73,7 +76,8 @@ export function executeCommand(game, map, constants, rawCommand, {
         house: command.house,
         from: command.from,
         to: command.to,
-        warriors: command.warriors
+        warriors: command.warriors,
+        commander_id: command.commander_id
       },
       { nowMs }
     );
