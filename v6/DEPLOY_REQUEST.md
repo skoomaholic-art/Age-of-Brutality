@@ -27,3 +27,5 @@ Deploy trigger: permanent player profiles, secure sessions, cross-device game li
 Deploy trigger: profile avatars, stats, MMR, active playtime, achievements placeholder.
 
 Deploy trigger: social profiles, friends, messaging, presence, invites and spectator mode.
+
+Deploy trigger: corrected Tuman A and Korony A routes, victory status UI, standings and capital-hold VP.
