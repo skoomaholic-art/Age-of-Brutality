@@ -66,6 +66,9 @@
     .sea-lane-edge { stroke:#4f6e80; stroke-width:1.15; opacity:.78; }
     .sea-waypoint { fill:#6f93a8; stroke:#b8ccd7; stroke-width:.7; opacity:.88; pointer-events:none; }
     .sea-waypoint-halo { fill:none; stroke:#4f6e80; stroke-width:.8; opacity:.32; pointer-events:none; }
+    .sea-lane-edge.active-route { stroke:#ffd45c; stroke-width:2.2; opacity:1; }
+    .sea-waypoint.active-route { fill:#ffd45c; stroke:#fff2b2; opacity:1; }
+    .sea-waypoint-halo.active-route { stroke:#ffd45c; stroke-width:1.5; opacity:.55; }
     .territory { cursor: pointer; transition: .15s ease; }
     .territory .territory-body { stroke: #e6ddcb; stroke-width: 1.2; }
     .territory:hover .territory-body { stroke-width: 2; }
@@ -271,6 +274,15 @@
           <span id="to-name" class="route-place to">...</span>
         </div>
         <div id="route-meta" class="route-meta"></div>
+        <div id="route-mode-row" style="display:none;margin-bottom:10px">
+          <label>
+            <span class="muted">Маршрут</span>
+            <select id="march-mode" style="width:100%;margin-top:4px">
+              <option value="LAND">По суше</option>
+              <option value="SEA">По морю</option>
+            </select>
+          </label>
+        </div>
         <div id="commander-row" style="display:none;margin-bottom:10px">
           <label>
             <span class="muted">Командир этой группы</span>
@@ -368,6 +380,7 @@ let house = null;
 let origin = null;
 let target = null;
 let legal = [];
+let marchModePreference = null;
 let economy = null;
 let characterData = null;
 let managedTerritory = null;
@@ -746,6 +759,37 @@ function mapLabel(t) {
   return `${clean} ${side}`;
 }
 
+function routeEdgeKey(a, b) {
+  return [String(a), String(b)].sort().join('::');
+}
+
+function actionsForSelection() {
+  if (!origin || !target) return [];
+  return legal.filter(action =>
+    action.from === origin &&
+    action.to === target
+  );
+}
+
+function preferredActionForSelection() {
+  let actions = actionsForSelection();
+  if (!actions.length) return null;
+
+  const modes = [...new Set(actions.map(action => action.mode))];
+  if (modes.length === 1) {
+    marchModePreference = modes[0];
+  } else if (!marchModePreference || !modes.includes(marchModePreference)) {
+    marchModePreference = modes.includes('LAND') ? 'LAND' : modes[0];
+  }
+
+  if (marchModePreference) {
+    const filtered = actions.filter(action => action.mode === marchModePreference);
+    if (filtered.length) actions = filtered;
+  }
+
+  const maxWarriors = Math.max(...actions.map(action => action.warriors));
+  return actions.find(action => action.warriors === maxWarriors) || actions[0];
+}
 function renderMap() {
   const svg = $('map');
   const state = snapshot.game.state;
@@ -765,17 +809,34 @@ function renderMap() {
     ? snapshot.map.sea_lane_edges
     : snapshot.map.sea_edges;
 
+  const activeAction = preferredActionForSelection();
+  const activeSeaPath =
+    activeAction?.mode === 'SEA' && Array.isArray(activeAction.path)
+      ? activeAction.path
+      : [];
+  const activeSeaEdges = new Set();
+  for (let i = 0; i < activeSeaPath.length - 1; i += 1) {
+    activeSeaEdges.add(routeEdgeKey(activeSeaPath[i], activeSeaPath[i + 1]));
+  }
+  const activeSeaNodes = new Set(activeSeaPath);
+
   for (const [a,b] of laneEdges) {
     const from = routeCoords[a];
     const to = routeCoords[b];
     if (!from || !to) continue;
-    lines.push(`<line class="${snapshot.map.sea_lane_edges?.length ? 'sea-lane-edge' : 'sea-edge'}" x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" />`);
+    const baseClass = snapshot.map.sea_lane_edges?.length
+      ? 'sea-lane-edge'
+      : 'sea-edge';
+    const active = activeSeaEdges.has(routeEdgeKey(a,b))
+      ? ' active-route'
+      : '';
+    lines.push(`<line class="${baseClass}${active}" x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" />`);
   }
 
-  const waypointNodes = Object.entries(seaWaypoints).map(([id,point]) =>
-    `<g transform="translate(${point.x} ${point.y})"><circle class="sea-waypoint-halo" r="5"></circle><circle class="sea-waypoint" r="2.3"></circle></g>`
-  );
-
+  const waypointNodes = Object.entries(seaWaypoints).map(([id,point]) => {
+    const active = activeSeaNodes.has(id) ? ' active-route' : '';
+    return `<g transform="translate(${point.x} ${point.y})"><circle class="sea-waypoint-halo${active}" r="5"></circle><circle class="sea-waypoint${active}" r="2.3"></circle></g>`;
+  });
   const nodes = snapshot.map.territories.map(t => {
     const s = state.territories[t.id];
     const owner = s.owner;
@@ -991,9 +1052,27 @@ function renderSelection() {
   }
 
   const t = territoryById(target);
-  const matching = legal.filter(a => a.from === origin && a.to === target);
-  const max = Math.max(...matching.map(a => a.warriors));
-  const preferred = matching.find(a => a.warriors === max) || matching[0];
+  const matching = actionsForSelection();
+  const modes = [...new Set(matching.map(action => action.mode))];
+  const modeRow = $('route-mode-row');
+  const modeSelect = $('march-mode');
+
+  if (modes.length > 1) {
+    modeRow.style.display = 'block';
+    if (!marchModePreference || !modes.includes(marchModePreference)) {
+      marchModePreference = modes.includes('LAND') ? 'LAND' : modes[0];
+    }
+    modeSelect.value = marchModePreference;
+  } else {
+    modeRow.style.display = 'none';
+    marchModePreference = modes[0] || null;
+  }
+
+  const preferred = preferredActionForSelection();
+  const preferredChoices = matching.filter(action =>
+    !preferred || action.mode === preferred.mode
+  );
+  const max = Math.max(...preferredChoices.map(a => a.warriors));
   const current = Number($('warriors').value || 1);
 
   $('warriors').max = max;
@@ -1002,10 +1081,18 @@ function renderSelection() {
   $('to-name').textContent = t.name;
 
   const modeName = preferred.mode === 'SEA' ? 'море' : 'суша';
+  const seaSegments = Number(preferred.sea_segments || 0);
+  const seaPoints = Array.isArray(preferred.path)
+    ? preferred.path.filter(id => id.startsWith('M-')).length
+    : 0;
   const secondsText = preferred.mode === 'SEA'
-    ? `${snapshot.timing.seaSegmentMs / 1000} сек`
+    ? `${seaSegments * snapshot.timing.seaSegmentMs / 1000} сек`
     : `${snapshot.timing.landSegmentMs / 1000}-${snapshot.timing.landMaxMs / 1000} сек`;
-  $('route-meta').textContent = `Отряд: до ${max} воинов · путь: ${modeName} · тестовое время: ${secondsText}.`;
+  const seaDetail = preferred.mode === 'SEA'
+    ? ` · ${seaSegments} сегм. · ${seaPoints} морск. точ.`
+    : '';
+  $('route-meta').textContent =
+    `Отряд: до ${max} воинов · путь: ${modeName}${seaDetail} · тестовое время: ${secondsText}.`;
   $('guide-title').textContent = '3. Выбери, СКОЛЬКО воинов отправить';
   $('guide-sub').textContent = 'Марш полностью выбран. Проверь маршрут внизу карты и отдай приказ.';
   card.classList.add('show');
@@ -1019,10 +1106,12 @@ async function selectTerritory(id) {
     if (s.owner !== house || warriorsAt(id, house) < 1) return;
     origin = id;
     target = null;
+    marchModePreference = null;
     await loadLegal();
   } else if (id === origin) {
     origin = null;
     target = null;
+    marchModePreference = null;
   } else {
     const valid = legal.some(a => a.from === origin && a.to === id);
     if (!valid) {
@@ -1043,10 +1132,12 @@ async function selectTerritory(id) {
 async function sendOrder() {
   if (!origin || !target) return;
   const warriors = Number($('warriors').value);
+  const preferred = preferredActionForSelection();
   const choices = legal.filter(a =>
     a.from === origin &&
     a.to === target &&
-    a.warriors === warriors
+    a.warriors === warriors &&
+    (!preferred || a.mode === preferred.mode)
   );
   if (!choices.length) {
     alert('Такой приказ больше не является легальным.');
@@ -1356,6 +1447,12 @@ $('restore-game').addEventListener('click', async () => {
 });
 
 $('send').addEventListener('click', sendOrder);
+$('march-mode').addEventListener('change', event => {
+  marchModePreference = event.target.value;
+  renderMap();
+  renderSelection();
+});
+
 $('max-warriors').addEventListener('click', () => {
   const max = Number($('warriors').max || 1);
   $('warriors').value = max;
