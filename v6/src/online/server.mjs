@@ -303,10 +303,37 @@ async function tickUnlocked(ctx) {
   }
 }
 
-async function publicState(ctx, player = null) {
-  const clientGame = structuredClone(ctx.game);
+function redactGameForPlayer(game, player) {
+  const clientGame = structuredClone(game);
   clientGame.lifecycle = publicLifecycle(clientGame.lifecycle);
 
+  clientGame.orders = [
+    ...(clientGame.orders || []).filter(item => item.status === 'PENDING'),
+    ...(clientGame.orders || []).filter(item => item.status !== 'PENDING').slice(-30)
+  ];
+  clientGame.jobs = [];
+  clientGame.audit_log = (clientGame.audit_log || []).slice(-40);
+  if (clientGame.state) clientGame.state.journal = [];
+
+  if (clientGame.lifecycle?.access_mode === ACCESS_MODE.PLAYER_BOUND) {
+    const ownHouse = player?.house || null;
+
+    for (const [house, houseState] of Object.entries(clientGame.state?.houses || {})) {
+      const hand = Array.isArray(houseState.intrigue_hand) ? houseState.intrigue_hand : [];
+      houseState.intrigue_hand_count = hand.length;
+      if (house !== ownHouse) houseState.intrigue_hand = [];
+    }
+
+    clientGame.audit_log = clientGame.audit_log.filter(item => {
+      if (item.visibility !== 'PRIVATE') return true;
+      return item.details?.house === ownHouse;
+    });
+  }
+
+  return clientGame;
+}
+
+async function publicState(ctx, player = null) {
   let lobby = null;
   if (ctx.game.lifecycle?.access_mode === ACCESS_MODE.PLAYER_BOUND) {
     const players = await ctx.store.listPlayers();
@@ -317,8 +344,13 @@ async function publicState(ctx, player = null) {
   }
 
   return {
-    game: clientGame,
-    lobby,
+    game: redactGameForPlayer(ctx.game, player),
+    lobby
+  };
+}
+
+function publicBootstrap(ctx) {
+  return {
     storage: ctx.store.status(),
     map: {
       territories: map.territories,
@@ -329,6 +361,7 @@ async function publicState(ctx, player = null) {
       capitals: map.capitals
     },
     houses: constants.houses,
+    ruleset_version: constants.version,
     timing: {
       ...ONLINE_TIMING,
       ...ONLINE_ECONOMY_TIMING
@@ -590,6 +623,14 @@ async function handleGameApi(req, res, url, ctx, subpath) {
     return json(res, 200, ctx.store.status());
   }
 
+  if (req.method === 'GET' && subpath === '/bootstrap') {
+    const player = await requirePlayer(ctx, req);
+    return json(res, 200, {
+      ...publicBootstrap(ctx),
+      current_player: publicPlayer(player)
+    });
+  }
+
   if (req.method === 'GET' && subpath === '/state') {
     const player = await requirePlayer(ctx, req);
     const payload = await serial(ctx, async () => {
@@ -762,7 +803,10 @@ async function handleGameApi(req, res, url, ctx, subpath) {
       }
       ctx.game = normalizeAudit(normalizeOnlineEconomy(await ctx.store.reset(map, constants)));
       await finalizeGame(ctx, ctx.game);
-      return publicState(ctx);
+      return {
+        ...publicBootstrap(ctx),
+        ...(await publicState(ctx))
+      };
     });
     return json(res, 200, payload);
   }
