@@ -29,6 +29,7 @@ jobs:
         working-directory: v6
         run: |
           node --check src/core/characters.mjs
+          node --check src/online/sea-navigation.mjs
           node --check src/online/orders.mjs
           node --check src/online/server.mjs
           node --check src/online/firestore-store.mjs
