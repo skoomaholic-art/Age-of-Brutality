@@ -36,6 +36,13 @@ import {
   restoreGameFromSnapshot
 } from './snapshot.mjs';
 import {
+  createProfileRecord,
+  createProfileSessionCredentials,
+  normalizeProfileHandle,
+  publicProfile,
+  verifyPassword
+} from './profile.mjs';
+import {
   ACCESS_MODE,
   GAME_STATUS,
   GAME_MODE,
@@ -269,12 +276,31 @@ async function runGameCommand(ctx, req, {
   throw new Error('command could not be committed after retries');
 }
 
+async function optionalProfile(req) {
+  const token = bearerToken(req);
+  if (!token) return null;
+  return defaultContext.store.authenticateProfileSession(token);
+}
+
+async function requireProfile(req) {
+  const profile = await optionalProfile(req);
+  if (!profile) throw new Error('invalid profile session');
+  return profile;
+}
+
 async function requirePlayer(ctx, req) {
   if (ctx.game.lifecycle?.access_mode === ACCESS_MODE.ADMIN_SANDBOX) return null;
   const token = bearerToken(req);
   if (!token) throw new Error('authentication required');
-  const player = await ctx.store.authenticateToken(token);
-  if (!player) throw new Error('invalid player token');
+
+  const legacyPlayer = await ctx.store.authenticateToken(token);
+  if (legacyPlayer) return legacyPlayer;
+
+  const profile = await defaultContext.store.authenticateProfileSession(token);
+  if (!profile) throw new Error('invalid player token');
+
+  const player = await ctx.store.findPlayerByProfileId(profile.id);
+  if (!player) throw new Error('profile is not a member of this game');
   return player;
 }
 
@@ -399,11 +425,11 @@ function newGameId() {
 
 function errorStatus(error) {
   const message = String(error?.message || error || '');
-  if (/authentication required|invalid player token/i.test(message)) return 401;
+  if (/authentication required|invalid player token|invalid profile session/i.test(message)) return 401;
   if (/admin role required|cannot control|spectator|ownership mismatch/i.test(message)) return 403;
-  if (/game not found|player not found|no snapshot found/i.test(message)) return 404;
-  if (/already|claimed|full|closed|not joinable|not in lobby|require all six|missing:|only a running game|only a finished game|unique invite|not a public room|not multiplayer/i.test(message)) return 409;
-  if (/Idempotency-Key|unknown|invalid|must be|request body|not running|solo game requires/i.test(message)) return 400;
+  if (/game not found|player not found|profile not found|no snapshot found/i.test(message)) return 404;
+  if (/already|claimed|full|closed|not joinable|not in lobby|require all six|missing:|only a running game|only a finished game|unique invite|not a public room|not multiplayer|profile login already exists|linked to another profile/i.test(message)) return 409;
+  if (/Idempotency-Key|unknown|invalid|must be|request body|not running|solo game requires|login must be|password must be|display name must be/i.test(message)) return 400;
   if (/stale game state|could not be committed/i.test(message)) return 409;
   return 500;
 }
@@ -422,7 +448,7 @@ function safeRoomName(value, fallback) {
   return (name || fallback).slice(0, 60);
 }
 
-async function createMultiplayerGame(body) {
+async function createMultiplayerGame(body, profile = null) {
   const gameId = newGameId();
   const inviteCode = await uniqueInviteCode();
   const visibility = body.visibility === GAME_VISIBILITY.PUBLIC
@@ -437,8 +463,9 @@ async function createMultiplayerGame(body) {
   const host = createPlayerRecord({
     playerId: credentials.player_id,
     tokenHash: credentials.token_hash,
-    displayName: body.display_name || 'Host',
-    role: PLAYER_ROLE.ADMIN
+    displayName: profile?.display_name || body.display_name || 'Host',
+    role: PLAYER_ROLE.ADMIN,
+    profileId: profile?.id || null
   });
 
   const store = createStore(gameId);
@@ -464,6 +491,7 @@ async function createMultiplayerGame(body) {
 
   await finalizeGame(ctx, game);
   await store.addPlayer(host);
+  if (profile) await store.linkPlayerToProfile(host.id, profile.id);
   await refreshContext(ctx);
 
   if (body.house) {
@@ -480,7 +508,7 @@ async function createMultiplayerGame(body) {
   };
 }
 
-async function createSoloGame(body) {
+async function createSoloGame(body, profile = null) {
   const house = String(body.house || '').trim();
   if (!constants.houses.includes(house)) throw new Error('solo game requires a valid house');
 
@@ -489,8 +517,9 @@ async function createSoloGame(body) {
   const player = createPlayerRecord({
     playerId: credentials.player_id,
     tokenHash: credentials.token_hash,
-    displayName: body.display_name || 'Player',
-    role: PLAYER_ROLE.ADMIN
+    displayName: profile?.display_name || body.display_name || 'Player',
+    role: PLAYER_ROLE.ADMIN,
+    profileId: profile?.id || null
   });
 
   const store = createStore(gameId);
@@ -516,6 +545,7 @@ async function createSoloGame(body) {
 
   await finalizeGame(ctx, game);
   await store.addPlayer(player);
+  if (profile) await store.linkPlayerToProfile(player.id, profile.id);
   await refreshContext(ctx);
   await store.claimHouse(player.id, house, constants);
   await refreshContext(ctx);
@@ -543,7 +573,7 @@ async function createSoloGame(body) {
   };
 }
 
-async function joinGameById(gameId, body, { publicOnly = false } = {}) {
+async function joinGameById(gameId, body, { publicOnly = false, profile = null } = {}) {
   const ctx = await loadContext(gameId);
   const lifecycle = ctx.game.lifecycle || {};
 
@@ -558,11 +588,13 @@ async function joinGameById(gameId, body, { publicOnly = false } = {}) {
   const player = createPlayerRecord({
     playerId: credentials.player_id,
     tokenHash: credentials.token_hash,
-    displayName: body.display_name || 'Player',
-    role
+    displayName: profile?.display_name || body.display_name || 'Player',
+    role,
+    profileId: profile?.id || null
   });
 
   await ctx.store.addPlayer(player);
+  if (profile) await ctx.store.linkPlayerToProfile(player.id, profile.id);
   await refreshContext(ctx);
 
   return {
@@ -573,15 +605,15 @@ async function joinGameById(gameId, body, { publicOnly = false } = {}) {
   };
 }
 
-async function joinMultiplayerGame(body) {
+async function joinMultiplayerGame(body, profile = null) {
   const inviteCode = String(body.invite_code || '').trim().toUpperCase();
   const gameId = await defaultContext.store.findGameIdByInviteCode(inviteCode);
   if (!gameId) throw new Error('game not found');
-  return joinGameById(gameId, body);
+  return joinGameById(gameId, body, { profile });
 }
 
-async function joinPublicGame(gameId, body) {
-  return joinGameById(gameId, body, { publicOnly: true });
+async function joinPublicGame(gameId, body, profile = null) {
+  return joinGameById(gameId, body, { publicOnly: true, profile });
 }
 
 async function handleGameApi(req, res, url, ctx, subpath) {
@@ -1033,6 +1065,81 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, result);
     }
 
+    if (req.method === 'POST' && url.pathname === '/api/profiles/register') {
+      const body = await readBody(req);
+      const profile = createProfileRecord({
+        handle: body.handle,
+        displayName: body.display_name,
+        password: body.password
+      });
+      const session = createProfileSessionCredentials({ profileId: profile.id });
+      await defaultContext.store.createProfile(profile, session);
+      return json(res, 201, {
+        profile: publicProfile(profile),
+        profile_token: session.token,
+        expires_at: session.expires_at
+      });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/profiles/login') {
+      const body = await readBody(req);
+      const handle = normalizeProfileHandle(body.handle);
+      const profile = await defaultContext.store.getProfileByHandle(handle);
+      if (!profile || !verifyPassword(body.password, profile)) {
+        return json(res, 401, { error: 'invalid login or password' });
+      }
+      const session = createProfileSessionCredentials({ profileId: profile.id });
+      await defaultContext.store.addProfileSession(profile.id, session);
+      return json(res, 200, {
+        profile: publicProfile(profile),
+        profile_token: session.token,
+        expires_at: session.expires_at
+      });
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/profile') {
+      const profile = await requireProfile(req);
+      return json(res, 200, { profile: publicProfile(profile) });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/profile/logout') {
+      const profile = await requireProfile(req);
+      const token = bearerToken(req);
+      await defaultContext.store.revokeProfileSession(token);
+      return json(res, 200, { logged_out: true, profile_id: profile.id });
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/profile/games') {
+      const profile = await requireProfile(req);
+      const memberships = await defaultContext.store.listProfileGames(profile.id);
+      const games = memberships.map(item => ({
+        game_id: item.game_id,
+        lifecycle: publicLifecycle(item.game?.lifecycle),
+        player: publicPlayer(item.player),
+        linked_at: item.linked_at
+      }));
+      return json(res, 200, { profile: publicProfile(profile), games });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/profile/link-game') {
+      const profile = await requireProfile(req);
+      const body = await readBody(req);
+      const gameId = String(body.game_id || '').trim();
+      const gameToken = String(body.game_token || '').trim();
+      if (!gameId || !gameToken) throw new Error('game id and game token required');
+
+      const ctx = await loadContext(gameId);
+      const player = await ctx.store.authenticateToken(gameToken);
+      if (!player) throw new Error('invalid player token');
+      await ctx.store.linkPlayerToProfile(player.id, profile.id);
+
+      return json(res, 200, {
+        linked: true,
+        game_id: gameId,
+        player: publicPlayer(await ctx.store.getPlayer(player.id))
+      });
+    }
+
     if (req.method === 'GET' && url.pathname === '/api/rooms/open') {
       const rooms = await defaultContext.store.listOpenPublicGames(50);
       return json(res, 200, { rooms });
@@ -1040,17 +1147,20 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'POST' && url.pathname === '/api/games/solo') {
       const body = await readBody(req);
-      return json(res, 201, await createSoloGame(body));
+      const profile = await optionalProfile(req);
+      return json(res, 201, await createSoloGame(body, profile));
     }
 
     if (req.method === 'POST' && url.pathname === '/api/games') {
       const body = await readBody(req);
-      return json(res, 201, await createMultiplayerGame(body));
+      const profile = await optionalProfile(req);
+      return json(res, 201, await createMultiplayerGame(body, profile));
     }
 
     if (req.method === 'POST' && url.pathname === '/api/games/join') {
       const body = await readBody(req);
-      return json(res, 201, await joinMultiplayerGame(body));
+      const profile = await optionalProfile(req);
+      return json(res, 201, await joinMultiplayerGame(body, profile));
     }
 
     const publicJoin = url.pathname.match(/^\/api\/games\/([^/]+)\/join-public$/);
@@ -1059,7 +1169,11 @@ const server = http.createServer(async (req, res) => {
       return json(
         res,
         201,
-        await joinPublicGame(decodeURIComponent(publicJoin[1]), body)
+        await joinPublicGame(
+          decodeURIComponent(publicJoin[1]),
+          body,
+          await optionalProfile(req)
+        )
       );
     }
 
