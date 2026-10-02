@@ -380,7 +380,12 @@ export class FirestoreGameStore {
     await Promise.all(
       [...profileIds].filter(Boolean).map(async id => {
         const profile = await this.getProfile(id);
-        if (profile) profileMap.set(id, publicSocialProfile(profile));
+        if (!profile) return;
+        const presence = await this.profilePresence(profile);
+        profileMap.set(id, {
+          ...publicSocialProfile(profile),
+          presence
+        });
       })
     );
 
@@ -641,7 +646,7 @@ export class FirestoreGameStore {
     return this.getProfile(profileId);
   }
 
-  async heartbeatProfileActivity(profileId, nowMs = Date.now()) {
+  async heartbeatProfileActivity(profileId, { gameId = null } = {}, nowMs = Date.now()) {
     const ref = this.profileRef(profileId);
     const nowIso = new Date(nowMs).toISOString();
 
@@ -655,29 +660,106 @@ export class FirestoreGameStore {
       const lastMs = lastIso ? Date.parse(lastIso) : NaN;
       let addedSeconds = 0;
 
-      if (Number.isFinite(lastMs)) {
+      if (gameId && Number.isFinite(lastMs)) {
+        const sameGame = profile.activity?.current_game_id === String(gameId);
         const deltaSeconds = Math.floor((nowMs - lastMs) / 1000);
-        if (deltaSeconds > 0 && deltaSeconds <= 120) {
+        if (sameGame && deltaSeconds > 0 && deltaSeconds <= 120) {
           addedSeconds = deltaSeconds;
           stats.play_seconds += deltaSeconds;
         }
       }
 
+      const activity = {
+        ...(profile.activity || {}),
+        last_seen_at: nowIso,
+        ...(gameId ? {
+          current_game_id: String(gameId),
+          last_game_heartbeat_at: nowIso
+        } : {})
+      };
+
       tx.update(ref, {
         stats,
-        activity: {
-          ...(profile.activity || {}),
-          last_game_heartbeat_at: nowIso
-        },
+        activity,
         updated_at: nowIso
       });
 
       return {
         added_seconds: addedSeconds,
         play_seconds: stats.play_seconds,
-        heartbeat_at: nowIso
+        heartbeat_at: nowIso,
+        game_id: gameId ? String(gameId) : null
       };
     });
+  }
+
+  async heartbeatProfilePresence(profileId, nowMs = Date.now()) {
+    const ref = this.profileRef(profileId);
+    const doc = await ref.get();
+    if (!doc.exists) throw new Error('profile not found');
+    const profile = doc.data();
+    const nowIso = new Date(nowMs).toISOString();
+    await ref.update({
+      activity: {
+        ...(profile.activity || {}),
+        last_seen_at: nowIso
+      },
+      updated_at: nowIso
+    });
+    return { last_seen_at: nowIso };
+  }
+
+  async profilePresence(profile, nowMs = Date.now()) {
+    if (!profile) return { status: 'OFFLINE', online: false, in_game: false, game: null };
+
+    const lastSeenMs = profile.activity?.last_seen_at
+      ? Date.parse(profile.activity.last_seen_at)
+      : NaN;
+    const gameHeartbeatMs = profile.activity?.last_game_heartbeat_at
+      ? Date.parse(profile.activity.last_game_heartbeat_at)
+      : NaN;
+
+    const online = Number.isFinite(lastSeenMs) && (nowMs - lastSeenMs) <= 120_000;
+    const gameFresh = Number.isFinite(gameHeartbeatMs) && (nowMs - gameHeartbeatMs) <= 120_000;
+    const gameId = gameFresh ? profile.activity?.current_game_id : null;
+
+    if (!gameId) {
+      return {
+        status: online ? 'ONLINE' : 'OFFLINE',
+        online,
+        in_game: false,
+        game: null,
+        last_seen_at: profile.activity?.last_seen_at || null
+      };
+    }
+
+    const gameDoc = await this.db.collection('games').doc(String(gameId)).get();
+    const lifecycle = gameDoc.exists ? gameDoc.data()?.lifecycle || null : null;
+    const inGame = lifecycle?.status === GAME_STATUS.RUNNING;
+
+    return {
+      status: inGame ? 'IN_GAME' : (online ? 'ONLINE' : 'OFFLINE'),
+      online: online || inGame,
+      in_game: inGame,
+      game: inGame ? {
+        game_id: String(gameId),
+        room_name: lifecycle?.room_name || 'Игра',
+        visibility: lifecycle?.visibility || GAME_VISIBILITY.PRIVATE,
+        game_mode: lifecycle?.game_mode || GAME_MODE.MULTIPLAYER,
+        status: lifecycle?.status || null
+      } : null,
+      last_seen_at: profile.activity?.last_seen_at || null
+    };
+  }
+
+  async publicProfileView(profileId) {
+    const profile = await this.getProfile(profileId);
+    if (!profile) return null;
+    const presence = await this.profilePresence(profile);
+    return {
+      profile,
+      presence
+    };
   }
 
   async recordProfileRankedResult(profileId, gameId, { won }, nowMs = Date.now()) {
@@ -873,6 +955,39 @@ export class FirestoreGameStore {
         lifecycle.player_count = current + 1;
       }
 
+      const nextRevision = Number(game.state_revision || 0) + 1;
+      tx.set(playerRef, plain(player), { merge: false });
+      tx.update(gameRef, { lifecycle, state_revision: nextRevision });
+    });
+
+    return player;
+  }
+
+  async addSpectator(player) {
+    if (player.role !== PLAYER_ROLE.SPECTATOR) throw new Error('spectator role required');
+
+    const gameRef = this.gameRef();
+    const playerRef = this.playerRef(player.id);
+
+    await this.db.runTransaction(async tx => {
+      const [gameDoc, existingPlayer] = await Promise.all([
+        tx.get(gameRef),
+        tx.get(playerRef)
+      ]);
+
+      if (!gameDoc.exists) throw new Error('game not found');
+      if (existingPlayer.exists) throw new Error('player already joined');
+
+      const game = gameDoc.data();
+      const lifecycle = structuredClone(game.lifecycle || {});
+      if (lifecycle.game_mode !== GAME_MODE.MULTIPLAYER) {
+        throw new Error('spectating solo games is disabled');
+      }
+      if (![GAME_STATUS.LOBBY, GAME_STATUS.RUNNING].includes(lifecycle.status)) {
+        throw new Error('game is not watchable');
+      }
+
+      lifecycle.spectator_count = Number(lifecycle.spectator_count || 0) + 1;
       const nextRevision = Number(game.state_revision || 0) + 1;
       tx.set(playerRef, plain(player), { merge: false });
       tx.update(gameRef, { lifecycle, state_revision: nextRevision });
