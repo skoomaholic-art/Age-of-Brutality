@@ -337,6 +337,7 @@ async function publicState(ctx, player = null) {
 }
 
 function preserveAuditHistory(restored, current) {
+  restored.state_revision = Number(current.state_revision || 0);
   restored.audit_log = structuredClone(current.audit_log || []);
   restored.audit_seq = Math.max(
     Number(restored.audit_seq || 1),
@@ -623,7 +624,8 @@ async function handleGameApi(req, res, url, ctx, subpath) {
     await requireAdmin(ctx, req);
     const body = await readBody(req);
     const result = await serial(ctx, async () => {
-      const restored = restoreGameFromSnapshot(body, map, constants);
+      let restored = restoreGameFromSnapshot(body, map, constants);
+      restored = preserveAuditHistory(restored, ctx.game);
       await finalizeGame(ctx, restored);
       return {
         restored: true,
