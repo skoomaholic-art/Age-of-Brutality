@@ -215,7 +215,10 @@ export function assignCharacterToArmy(state, map, constants, {
   }
 
   const activeArmyCharacters = charactersForHouse(next, house)
-    .filter(item => item.mode === CHARACTER_MODE.ARMY);
+    .filter(item =>
+      item.mode === CHARACTER_MODE.ARMY &&
+      item.status === CHARACTER_STATUS.ACTIVE
+    );
   if (activeArmyCharacters.length >= 2) {
     throw new Error('house already has two army characters');
   }
@@ -519,13 +522,22 @@ export function validateCharacterLayer(state, map, constants) {
     }
 
     if (character.mode === CHARACTER_MODE.ARMY) {
-      if (!character.army_id || !state.armies?.[character.army_id]) {
+      const locationPending =
+        character.status === CHARACTER_STATUS.FATE_LOCATION_PENDING;
+
+      if (
+        !locationPending &&
+        (!character.army_id || !state.armies?.[character.army_id])
+      ) {
         errors.push('army character ' + character.id + ' has no army');
       }
-      armyCountByHouse.set(
-        character.house,
-        Number(armyCountByHouse.get(character.house) || 0) + 1
-      );
+
+      if (character.status === CHARACTER_STATUS.ACTIVE) {
+        armyCountByHouse.set(
+          character.house,
+          Number(armyCountByHouse.get(character.house) || 0) + 1
+        );
+      }
     }
   }
 
