@@ -1041,7 +1041,8 @@ async function handleGameApi(req, res, url, ctx, subpath) {
         constants,
         {
           house,
-          characterId: String(body.character_id || '').trim()
+          characterId: String(body.character_id || '').trim(),
+          position: String(body.position || '').trim() || null
         }
       );
       ctx.game.updated_at = new Date().toISOString();
