@@ -179,6 +179,42 @@ export class FirestoreGameStore {
     });
   }
 
+  async releaseHouse(playerId) {
+    const gameRef = this.gameRef();
+    const playerRef = this.playerRef(playerId);
+
+    return this.db.runTransaction(async tx => {
+      const [gameDoc, playerDoc] = await Promise.all([
+        tx.get(gameRef),
+        tx.get(playerRef)
+      ]);
+
+      if (!gameDoc.exists) throw new Error('game not found');
+      if (!playerDoc.exists) throw new Error('player not found');
+
+      const game = gameDoc.data();
+      const player = playerDoc.data();
+      const lifecycle = structuredClone(game.lifecycle || {});
+
+      if (lifecycle.status !== GAME_STATUS.LOBBY) {
+        throw new Error('house selection is closed');
+      }
+      if (!player.house) return { released: null, player_id: playerId };
+
+      const house = player.house;
+      const claims = structuredClone(lifecycle.house_claims || {});
+      if (claims[house] === playerId) delete claims[house];
+
+      lifecycle.house_claims = claims;
+      const nextRevision = Number(game.state_revision || 0) + 1;
+
+      tx.update(gameRef, { lifecycle, state_revision: nextRevision });
+      tx.update(playerRef, { house: null });
+
+      return { released: house, player_id: playerId };
+    });
+  }
+
   async startGame(playerId, constants, nowMs = Date.now()) {
     const gameRef = this.gameRef();
     const playerRef = this.playerRef(playerId);
