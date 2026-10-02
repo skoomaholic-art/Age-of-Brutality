@@ -366,6 +366,7 @@ let origin = null;
 let target = null;
 let legal = [];
 let economy = null;
+let characterData = null;
 let managedTerritory = null;
 let lastManualSnapshotAt = null;
 let isSpectator = false;
@@ -513,8 +514,9 @@ function renderCharacters() {
     return;
   }
 
-  const characters = Object.values(snapshot?.game?.state?.characters || {})
-    .filter(character => character.house === house)
+  const characters = (characterData?.characters ||
+    Object.values(snapshot?.game?.state?.characters || {})
+      .filter(character => character.house === house))
     .sort((a,b) => {
       const rank = role => role === 'RULER' ? 0 : role === 'HEIR' ? 1 : 9;
       return rank(a.role) - rank(b.role) ||
@@ -558,10 +560,15 @@ function renderCharacters() {
                       'не определено')
                 : 'При Дворе';
 
+    const assignment = character.assignment || null;
     const canAssign =
-      character.mode === 'COURT' &&
-      character.status === 'ACTIVE' &&
-      character.health === 'HEALTHY';
+      assignment
+        ? assignment.allowed
+        : (
+            character.mode === 'COURT' &&
+            character.status === 'ACTIVE' &&
+            character.health === 'HEALTHY'
+          );
 
     const canReturn =
       character.mode === 'ARMY' &&
@@ -582,10 +589,17 @@ function renderCharacters() {
               : canAssign
         ? '<div class="character-actions"><button data-char-army="' +
           escapeHtml(character.id) + '">Назначить в армию</button></div>'
-        : canReturn
-          ? '<div class="character-actions"><button data-char-court="' +
-            escapeHtml(character.id) + '">Вернуть во Двор</button></div>'
-          : '';
+        : character.mode === 'COURT' && assignment && !assignment.allowed
+          ? '<div class="character-actions"><button disabled title="' +
+            escapeHtml(assignment.reason || '') +
+            '">Назначить в армию</button></div>' +
+            '<div class="tiny failed" style="margin-top:6px">' +
+            escapeHtml(assignment.reason || 'Назначение сейчас недоступно.') +
+            '</div>'
+          : canReturn
+            ? '<div class="character-actions"><button data-char-court="' +
+              escapeHtml(character.id) + '">Вернуть во Двор</button></div>'
+            : '';
 
     const special = character.special_rule && character.special_rule !== '—'
       ? '<div class="character-rule">Особое правило: ' +
@@ -789,6 +803,16 @@ async function loadLegal() {
   }
   const data = await api('/api/legal?house=' + encodeURIComponent(house));
   legal = data.actions;
+}
+
+async function loadCharacters() {
+  if (isSpectator || !house) {
+    characterData = null;
+    return;
+  }
+  characterData = await api(
+    '/api/characters?house=' + encodeURIComponent(house)
+  );
 }
 
 async function loadEconomy() {
@@ -1191,8 +1215,13 @@ async function refresh() {
   if (isSpectator) {
     legal = [];
     economy = null;
+    characterData = null;
   } else {
-    await Promise.all([loadLegal(), loadEconomy()]);
+    await Promise.all([
+      loadLegal(),
+      loadEconomy(),
+      loadCharacters()
+    ]);
   }
 
   if (origin) {
