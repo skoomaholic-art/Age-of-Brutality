@@ -98,6 +98,7 @@ const PRIVATE_EVENTS = new Set([
   'FORT_FAILED',
   'RECRUIT_CANCELLED',
   'FORT_CANCELLED',
+  'COMMANDER_RECOVERED',
   'ROUND_ACTION_REFUNDED'
 ]);
 
@@ -125,6 +126,8 @@ export function applyFog(clientGame, map, house) {
   // Characters and armies of other Houses are known only where they can be seen.
   for (const [id, character] of Object.entries(state.characters || {})) {
     if (character.house === house) continue;
+    // A prisoner in our hands is ours to see.
+    if (character.captivity?.held_by === house) continue;
     if (character.location && seen.has(character.location)) continue;
     delete state.characters[id];
   }

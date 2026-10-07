@@ -59,7 +59,9 @@ function canPassThrough(state,map,house,node,destination) {
     return owner === null || owner === house;
   }
 
-  return onlinePositionOwner(state,node) === house;
+  const owner = onlinePositionOwner(state,node);
+  // Our own land, or the land of a House that gave us right of passage.
+  return owner === house || Boolean(owner && state.passage?.[owner]?.includes(house));
 }
 
 function destinationAllowed(state,map,house,to) {

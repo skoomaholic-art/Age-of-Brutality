@@ -50,6 +50,22 @@ export function alliesOf(game, house) {
   return out;
 }
 
+// Right of passage: the host lets the guest's armies cross his lands. It is
+// kept with the board state (state.passage[host] = [guests]) because the road
+// finder reads it. A guest may march through, not stop: ending a march on the
+// host's land is still an attack.
+export function hasPassage(state, host, guest) {
+  return Boolean(host && guest && state?.passage?.[host]?.includes(guest));
+}
+
+function setPassage(game, host, guest, on) {
+  game.state.passage ||= {};
+  const list = new Set(game.state.passage[host] || []);
+  if (on) list.add(guest); else list.delete(guest);
+  if (list.size) game.state.passage[host] = [...list].sort();
+  else delete game.state.passage[host];
+}
+
 function abandoned(game, house) {
   return Boolean(game?.lifecycle?.abandoned_houses?.[house]);
 }
@@ -69,6 +85,12 @@ export function declareWarInPlace(game, a, b, { nowMs = Date.now(), cause = 'ATT
   diplomacy.relations[key] = RELATION.WAR;
   delete diplomacy.offers[offerKey(a, b)];
   delete diplomacy.offers[offerKey(b, a)];
+  // War closes the roads both ways.
+  setPassage(game, a, b, false);
+  setPassage(game, b, a, false);
+  diplomacy.passage_requests ||= {};
+  delete diplomacy.passage_requests[offerKey(a, b)];
+  delete diplomacy.passage_requests[offerKey(b, a)];
   game.state.journal.push({
     kind: 'WAR_DECLARED',
     aggressor: a,
@@ -178,12 +200,55 @@ export function declareWar(game, constants, house, target, { nowMs = Date.now() 
   return next;
 }
 
-// Houses led by the AI answer offers at once: they take an ally when free.
+export function requestPassage(game, constants, guest, host, { nowMs = Date.now() } = {}) {
+  assertHouses(game, constants, guest, host);
+  if (relationOf(game, guest, host) === RELATION.WAR) throw new Error('с этим Домом идёт война');
+  if (hasPassage(game.state, host, guest)) throw new Error('право прохода уже дано');
+  const next = structuredClone(game);
+  const diplomacy = ensure(next);
+  diplomacy.passage_requests ||= {};
+  diplomacy.passage_requests[offerKey(guest, host)] = new Date(nowMs).toISOString();
+  stamp(next, nowMs);
+  return next;
+}
+
+// The host's answer to a request, or the withdrawal of a right already given.
+export function answerPassage(game, constants, host, guest, grant, { nowMs = Date.now() } = {}) {
+  assertHouses(game, constants, host, guest);
+  const next = structuredClone(game);
+  const diplomacy = ensure(next);
+  diplomacy.passage_requests ||= {};
+  const asked = Boolean(diplomacy.passage_requests[offerKey(guest, host)]);
+  const held = hasPassage(next.state, host, guest);
+  if (!asked && !held) throw new Error('этот Дом не просил прохода');
+  delete diplomacy.passage_requests[offerKey(guest, host)];
+  if (grant && relationOf(next, host, guest) === RELATION.WAR) throw new Error('с этим Домом идёт война');
+  setPassage(next, host, guest, Boolean(grant));
+  next.state.journal.push({
+    kind: grant ? 'PASSAGE_GRANTED' : held ? 'PASSAGE_REVOKED' : 'PASSAGE_DENIED',
+    host,
+    guest,
+    houses: [host, guest],
+    at: new Date(nowMs).toISOString()
+  });
+  stamp(next, nowMs);
+  return next;
+}
+
+// Houses led by the AI answer offers at once: they take an ally when free and
+// open their roads to anyone they are not at war with.
 export function answerAiOffers(game, aiHouses, { nowMs = Date.now() } = {}) {
   const offers = Object.keys(game?.diplomacy?.offers || {});
-  if (!offers.length || !aiHouses?.length) return game;
+  const asks = Object.keys(game?.diplomacy?.passage_requests || {});
+  if ((!offers.length && !asks.length) || !aiHouses?.length) return game;
 
   let next = null;
+  for (const key of asks) {
+    const [guest, host] = key.split('>');
+    if (!aiHouses.includes(host)) continue;
+    const from = next || game;
+    next = answerPassage(from, { houses: [guest, host] }, host, guest, relationOf(from, host, guest) !== RELATION.WAR, { nowMs });
+  }
   for (const key of offers) {
     const [from, to] = key.split('>');
     if (!aiHouses.includes(to) || abandoned(game, to)) continue;
@@ -215,5 +280,24 @@ export function diplomacyView(game, house, known = null) {
     if (house && to === house) offers_in.push(from);
     if (house && from === house) offers_out.push(to);
   }
-  return { relations, offers_in, offers_out, max_allies: MAX_ALLIES, known: known ? [...known] : null };
+  const passage_asked_in = [];
+  const passage_asked_out = [];
+  for (const key of Object.keys(game?.diplomacy?.passage_requests || {})) {
+    const [guest, host] = key.split('>');
+    if (house && host === house) passage_asked_in.push(guest);
+    if (house && guest === house) passage_asked_out.push(host);
+  }
+  const passage = game?.state?.passage || {};
+  return {
+    relations,
+    offers_in,
+    offers_out,
+    max_allies: MAX_ALLIES,
+    known: known ? [...known] : null,
+    passage_asked_in,
+    passage_asked_out,
+    // Whose roads are open to us, and to whom ours are.
+    passage_from: Object.keys(passage).filter(host => passage[host].includes(house)),
+    passage_to: [...(passage[house] || [])]
+  };
 }

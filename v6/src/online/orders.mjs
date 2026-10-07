@@ -14,6 +14,7 @@ import {
   settleCommander
 } from '../core/characters.mjs';
 import { declareWarInPlace } from './diplomacy.mjs';
+import { fateDice, recoveryMs, settleFate } from './fate.mjs';
 import {
   finishSeaLandingBridge,
   isSeaWaypoint
@@ -96,19 +97,6 @@ function hydrateOnlineRoute(state,map,constants,action,timing=ONLINE_TIMING) {
 //   to the defender, and losses stay at the level of the dice rules.
 const NEUTRAL_DICE = Object.freeze([3, 4]);
 const BATTLE_DIE = 3;
-
-// A beaten commander's Fate depends on how heavy the defeat was instead of a
-// throw: an even fight counts as a 9, and every point of strength the loser was
-// short takes one off. The core then applies survival and the usual thresholds
-// (10 saved, 7 weakened, 5 captured, below that dead).
-function fateDiceForDefeat(result) {
-  const margin = Math.abs(
-    Number(result.attackerStrength || 0) - Number(result.defenderStrength || 0)
-  );
-  const total = Math.max(2, Math.min(12, 9 - margin));
-  const first = Math.max(1, Math.min(6, Math.floor(total / 2)));
-  return [first, total - first];
-}
 
 // Marches take a share of the game day (see rounds.mjs); 1 in older games.
 export function timeScale(game) {
@@ -452,7 +440,7 @@ function finishRouteBridge(originalState,resolvedState,action,syntheticOrigin) {
   return next;
 }
 
-function resolveOrder(state,map,constants,gameId,order,nowMs) {
+function resolveOrder(state,map,constants,gameId,order,nowMs,recovery) {
   const action=hydrateOnlineRoute(
     state,map,constants,order.action,ONLINE_TIMING
   );
@@ -601,12 +589,11 @@ function resolveOrder(state,map,constants,gameId,order,nowMs) {
           created_at:new Date(nowMs).toISOString()
         }
       );
-      const fateDice=fateDiceForDefeat(resolved.result);
       const fate=resolveCommanderFate(
         resolved.state,map,constants,defenderCommander.id,
-        fateDice,{nowMs}
+        fateDice(resolved.result,defenderCommander),{nowMs}
       );
-      resolved.state=fate.state;
+      resolved.state=settleFate(fate.state,map,defenderCommander.id,{nowMs,recovery});
       resolved.result.defender_commander_fate=fate.result;
     }
   } else {
@@ -633,12 +620,11 @@ function resolveOrder(state,map,constants,gameId,order,nowMs) {
           created_at:new Date(nowMs).toISOString()
         }
       );
-      const fateDice=fateDiceForDefeat(resolved.result);
       const fate=resolveCommanderFate(
         resolved.state,map,constants,attackerCommander.id,
-        fateDice,{nowMs}
+        fateDice(resolved.result,attackerCommander),{nowMs}
       );
-      resolved.state=fate.state;
+      resolved.state=settleFate(fate.state,map,attackerCommander.id,{nowMs,recovery});
       resolved.result.attacker_commander_fate=fate.result;
     }
   }
@@ -666,7 +652,8 @@ export function processDueOrders(game, map, constants, nowMs = Date.now()) {
         constants,
         next.id,
         liveOrder,
-        nowMs
+        nowMs,
+        recoveryMs(next)
       );
       const errors = validateState(resolved.state, map, constants);
       if (errors.length) throw new Error(`post-order state invalid: ${errors.join('; ')}`);

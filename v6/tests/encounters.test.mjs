@@ -136,3 +136,29 @@ test('a House led by the AI takes a free alliance and refuses a second', () => {
   game = answerAiOffers(game, [RIVAL], { nowMs: T0 });
   assert.equal(relationOf(game, HOUSE, RIVAL), RELATION.ALLIANCE);
 });
+
+test('right of passage opens the host\'s roads, and war closes them', async () => {
+  const { requestPassage, answerPassage, hasPassage, declareWar } = await import('../src/online/diplomacy.mjs');
+  const { listQueueableMarches } = await import('../src/online/orders.mjs');
+  let game = borderGame(4, 2);
+  const beyond = [...adjacency.get(NEXT)].find(id => id !== CAPITAL && !adjacency.get(CAPITAL).has(id));
+  const reaches = g => listQueueableMarches(g, map, constants, HOUSE).some(a => a.from === CAPITAL && a.to === beyond);
+  assert.equal(reaches(game), false, 'no road through a foreign land');
+
+  game = requestPassage(game, constants, HOUSE, RIVAL, { nowMs: T0 });
+  assert.deepEqual(diplomacyView(game, RIVAL).passage_asked_in, [HOUSE]);
+  game = answerPassage(game, constants, RIVAL, HOUSE, true, { nowMs: T0 });
+  assert.equal(hasPassage(game.state, RIVAL, HOUSE), true);
+  assert.equal(hasPassage(game.state, HOUSE, RIVAL), false, 'the right is one-way');
+  assert.equal(reaches(game), true, 'the guest marches through');
+  assert.equal(nextEncounter(marchBoth(game, 4, 2)), null, 'guest and host do not fight on the road');
+
+  game = declareWar(game, constants, RIVAL, HOUSE, { nowMs: T0 });
+  assert.equal(hasPassage(game.state, RIVAL, HOUSE), false);
+  assert.equal(reaches(game), false);
+
+  // A House led by the AI opens its roads when asked in peace.
+  let asked = requestPassage(borderGame(1, 1), constants, HOUSE, RIVAL, { nowMs: T0 });
+  asked = answerAiOffers(asked, [RIVAL], { nowMs: T0 });
+  assert.equal(hasPassage(asked.state, RIVAL, HOUSE), true);
+});

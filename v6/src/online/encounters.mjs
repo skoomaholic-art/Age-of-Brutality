@@ -7,8 +7,14 @@
 //
 // As everywhere online there are no dice: warriors and commanders decide.
 
-import { commanderStats, settleCommander } from '../core/characters.mjs';
-import { areAllies, declareWarInPlace } from './diplomacy.mjs';
+import {
+  commanderStats,
+  markCommanderFatePending,
+  resolveCommanderFate,
+  settleCommander
+} from '../core/characters.mjs';
+import { fateDice, recoveryMs, settleFate } from './fate.mjs';
+import { areAllies, declareWarInPlace, hasPassage } from './diplomacy.mjs';
 
 const BATTLE_DIE = 3;
 // Two armies "meet" at a crossroads when they reach it within this share of
@@ -84,6 +90,9 @@ export function nextEncounter(game) {
       const b = pending[j];
       if (a.action.house === b.action.house) continue;
       if (areAllies(game, a.action.house, b.action.house)) continue;
+      // A guest with right of passage and his host do not fight on the road.
+      if (hasPassage(game.state, a.action.house, b.action.house) ||
+        hasPassage(game.state, b.action.house, a.action.house)) continue;
       const met = meeting(a, b);
       if (!met) continue;
       if (!best || met.at < best.at || (met.at === best.at && a.id < best.a.id)) {
@@ -128,6 +137,27 @@ function side(state, order) {
   };
 }
 
+// The beaten commander faces his Fate like after any lost battle.
+function commanderFate(game, map, constants, order, opponent, strengths, destroyed, nowMs) {
+  const id = order.commander_id;
+  const commander = id ? game.state.characters?.[id] : null;
+  if (!commander || !commander.alive) return;
+  try {
+    let state = markCommanderFatePending(game.state, id, {
+      battle_territory: order.action.from,
+      opponent_house: opponent,
+      side: 'ATTACKER',
+      army_destroyed: destroyed,
+      fallback_territory: destroyed ? null : order.action.from,
+      created_at: new Date(nowMs).toISOString()
+    });
+    const fate = resolveCommanderFate(state, map, constants, id, fateDice(strengths, commander), { nowMs });
+    game.state = settleFate(fate.state, map, id, { nowMs, recovery: recoveryMs(game) });
+  } catch {
+    // The march is already settled; a commander the Fate rules cannot place stays with his army.
+  }
+}
+
 function turnBack(game, order, result, nowMs) {
   order.status = 'RESOLVED';
   order.resolved_at = new Date(nowMs).toISOString();
@@ -138,7 +168,7 @@ function turnBack(game, order, result, nowMs) {
   }
 }
 
-function fight(game, found, nowMs) {
+function fight(game, found, nowMs, map, constants) {
   const orderA = game.orders.find(order => order.id === found.a.id);
   const orderB = game.orders.find(order => order.id === found.b.id);
   const a = side(game.state, orderA);
@@ -184,6 +214,15 @@ function fight(game, found, nowMs) {
         survivors: left,
         returned_to: order.action.from
       }, nowMs);
+      commanderFate(
+        game, map, constants, order, me === a ? b.house : a.house,
+        { attackerStrength: a.strength, defenderStrength: b.strength },
+        left === 0 && Number(
+          (game.state.territories?.[order.action.from] || game.state.sea_nodes?.[order.action.from])
+            ?.warriors?.[me.house] || 0
+        ) === 0,
+        nowMs
+      );
     }
   }
 
@@ -199,7 +238,7 @@ export function processEncounters(game, map, constants, nowMs = Date.now()) {
     const found = nextEncounter(next || game);
     if (!found || found.at > nowMs) break;
     next ||= structuredClone(game);
-    fight(next, found, nowMs);
+    fight(next, found, nowMs, map, constants);
   }
   return next || game;
 }

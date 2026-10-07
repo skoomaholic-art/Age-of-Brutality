@@ -206,6 +206,44 @@
       padding: 16px; background: rgba(43,27,18,.5);
     }
     .finale.show { display: grid; }
+    /* A window that waits for the player's answer. */
+    .decision { position: absolute; inset: 0; z-index: 9; display: none; place-items: center; padding: 16px; background: rgba(43,27,18,.45); }
+    .decision.show { display: grid; }
+    .decision-card {
+      width: min(430px, 100%); max-height: 100%; overflow: auto; padding: 16px;
+      border: 1.5px solid var(--ink); outline: 1px solid var(--vermilion); outline-offset: -6px;
+      background: var(--vellum); box-shadow: 6px 6px 0 rgba(43,27,18,.45);
+    }
+    .decision-card .miniature img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
+    .decision-from { margin-top: 11px; font-size: 13.5px; font-style: italic; color: var(--ink-soft); }
+    .decision-card h3 { margin: 2px 0 0; font-family: 'Vek Gothic', Kurale, Alegreya, serif; font-weight: 400; font-size: 30px; line-height: 1.1; color: var(--vermilion-deep); }
+    .decision-card p { margin: 6px 0 0; font-size: 15.5px; line-height: 1.35; }
+    .decision-terms { margin: 10px 0 0; padding: 8px 10px; border-left: 3px solid var(--gold); background: rgba(201,162,58,.16); font-size: 14.5px; }
+    .decision-terms:empty { display: none; }
+    .decision-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    .decision-actions button:disabled { opacity: .7; }
+    .decision-extra { margin-top: 10px; font-size: 14px; }
+    .decision-extra:empty { display: none; }
+    .decision-extra input { width: 70px; margin: 0 6px; }
+    .captive-row { padding: 8px 0; border-top: 1px solid var(--rule); font-size: 14px; }
+    .captive-row button { margin-top: 6px; }
+    .dip-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: -2px 0 4px; font-size: 12.5px; font-style: italic; color: var(--ink-soft); }
+    .dip-sub button { padding: 1px 7px; font-size: 12px; font-style: normal; }
+    /* The chronicler's glass: a closer look at an army under the cursor. */
+    .army-token { cursor: help; pointer-events: auto; }
+    .lens {
+      position: fixed; z-index: 30; width: 230px; pointer-events: none; display: none;
+      filter: drop-shadow(4px 5px 0 rgba(43,27,18,.4));
+    }
+    .lens.show { display: block; }
+    .lens-glass {
+      width: 190px; height: 190px; margin: 0 auto; border-radius: 50%; overflow: hidden;
+      border: 5px solid #c9a23a; outline: 1.5px solid var(--ink); box-shadow: inset 0 0 0 1.5px var(--ink), inset 0 0 22px rgba(43,27,18,.55);
+      background: #c9a23a;
+    }
+    .lens-glass img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.18); }
+    .lens-note { margin: -16px auto 0; position: relative; width: fit-content; max-width: 230px; padding: 5px 10px; text-align: center; border: 1.5px solid var(--ink); background: var(--vellum); font-size: 13px; line-height: 1.25; }
+    .lens-note b { display: block; font-family: Kurale, serif; font-size: 15px; }
     .finale-card {
       width: min(380px, 100%); padding: 16px; text-align: center;
       border: 1.5px solid var(--ink); outline: 1px solid var(--vermilion); outline-offset: -6px;
@@ -488,6 +526,17 @@
         <h3 id="battle-title">Битва</h3>
         <p id="battle-text"></p>
       </div>
+      <div id="decision" class="decision">
+        <div class="decision-card">
+          <figure class="miniature"><img id="decision-art" src="/assets/img/notif-pact-offer.jpg" alt="" width="720" height="540"></figure>
+          <div id="decision-from" class="decision-from"></div>
+          <h3 id="decision-title"></h3>
+          <p id="decision-text"></p>
+          <div id="decision-terms" class="decision-terms"></div>
+          <div id="decision-extra" class="decision-extra"></div>
+          <div id="decision-actions" class="decision-actions"></div>
+        </div>
+      </div>
       <div id="finale" class="finale">
         <div class="finale-card">
           <figure class="miniature"><img id="finale-art" src="/assets/img/notif-finale-won.jpg" alt="" width="720" height="540"></figure>
@@ -610,6 +659,7 @@
     </div>
   </aside>
 </main>
+<div id="lens" class="lens"><div class="lens-glass"><img id="lens-art" alt=""></div><div id="lens-note" class="lens-note"></div></div>
 
 <script>
 const colors = {
@@ -834,17 +884,16 @@ function renderCharacters() {
       character.status === 'FATE_PENDING'
         ? 'Ожидает проверки Судьбы после боя'
         : character.status === 'FATE_LOCATION_PENDING'
-          ? 'Судьба: ' +
-            (character.fate_pending?.fate_outcome === 'WEAKENED' ? 'Ослаблен' : 'Спасён') +
-            ' · требуется правило местонахождения'
+          ? 'Возвращается ко двору после разгрома'
           : character.mode === 'CAPTIVE'
             ? 'В плену у Дома ' +
               (character.captivity?.held_by || 'не определено') +
-              (character.captivity?.detention_location
-                ? ' · ' +
-                  (territoryById(character.captivity.detention_location)?.name ||
-                    character.captivity.detention_location)
-                : '')
+              (character.captivity?.prison
+                ? ' · в темнице крепости ' +
+                  (territoryById(character.captivity.prison)?.name || character.captivity.prison)
+                : character.captivity?.ransom_amount
+                  ? ' · за него просят ' + character.captivity.ransom_amount + ' золота'
+                  : ' · ждёт решения пленителя')
             : character.mode === 'DEAD'
               ? 'Мёртв'
               : character.mode === 'ARMY'
@@ -877,9 +926,12 @@ function renderCharacters() {
       character.status === 'FATE_PENDING'
         ? '<div class="tiny failed">Ожидается разрешение Судьбы командира.</div>'
         : character.status === 'FATE_LOCATION_PENDING'
-          ? '<div class="tiny failed">Исход Судьбы определён, но правило местонахождения после уничтожения армии не задано.</div>'
+          ? ''
           : character.mode === 'CAPTIVE'
-            ? '<div class="tiny failed">Персонаж не может действовать, пока находится в плену.</div>'
+            ? '<div class="tiny failed">Персонаж не может действовать, пока находится в плену.</div>' +
+              (character.captivity?.ransom_amount
+                ? '<div class="character-actions"><button data-open-ransom="' + escapeHtml(character.id) + '">Ответить на требование выкупа</button></div>'
+                : '')
             : character.mode === 'DEAD'
               ? '<div class="tiny failed">Персонаж погиб.</div>'
               : canAssign
@@ -921,7 +973,10 @@ function renderCharacters() {
       '<div class="character-top"><div><div class="character-name">' +
       escapeHtml(character.name) + '</div><div class="character-role">' +
       escapeHtml(characterRoleLabel(character.role)) +
-      (character.health === 'WEAKENED' ? ' · Ослаблен' : '') +
+      (character.health === 'WEAKENED'
+        ? ' · Ослаблен, бонусы не действуют' +
+          (character.weakened_until ? ' (ещё ' + timeLeft(character.weakened_until) + ')' : '')
+        : '') +
       '</div></div><span class="character-mode ' +
       characterModeClass(character) + '">' +
       escapeHtml(characterModeLabel(character)) + '</span></div>' +
@@ -1071,6 +1126,276 @@ function renderRounds() {
   }).join('');
 }
 
+// ---------- windows that wait for an answer ----------
+let decisionKey = null;
+const decisionsPutOff = new Set();
+
+function showDecision(spec) {
+  decisionKey = spec.key;
+  $('decision-art').src = '/assets/img/notif-' + spec.art + '.jpg';
+  $('decision-from').textContent = spec.from || '';
+  $('decision-title').textContent = spec.title;
+  $('decision-text').textContent = spec.text;
+  $('decision-terms').textContent = spec.terms || '';
+  $('decision-extra').innerHTML = spec.extra || '';
+  const box = $('decision-actions');
+  box.innerHTML = '';
+  for (const item of spec.buttons) {
+    const button = document.createElement('button');
+    button.textContent = item.label;
+    if (item.primary) button.className = 'primary';
+    if (item.disabled) { button.disabled = true; button.title = item.disabled; }
+    button.onclick = async () => {
+      if (item.confirm && !confirm(item.confirm)) return;
+      button.disabled = true;
+      try {
+        if (item.run) await item.run();
+        if (!item.keep) hideDecision(item.later ? spec.key : null);
+        if (item.run) await refresh();
+      } catch (error) {
+        alert(error.message);
+        button.disabled = false;
+      }
+    };
+    box.appendChild(button);
+  }
+  $('decision').classList.add('show');
+}
+
+function hideDecision(putOffKey = null) {
+  if (putOffKey) decisionsPutOff.add(putOffKey);
+  decisionKey = null;
+  $('decision').classList.remove('show');
+}
+
+const later = { label: 'Позже', later: true };
+
+async function diplomacyDo(action, targetHouse) {
+  await api('/api/diplomacy', {
+    method: 'POST',
+    headers: {'content-type':'application/json'},
+    body: JSON.stringify({ house, target: targetHouse, action })
+  });
+}
+
+async function captiveDo(characterId, action, amount = null) {
+  await api('/api/captives', {
+    method: 'POST',
+    headers: {'content-type':'application/json'},
+    body: JSON.stringify({ house, character_id: characterId, action, amount })
+  });
+}
+
+function warnBeforeMarch(master) {
+  const dip = snapshot?.game?.diplomacy || {};
+  const ally = relationWith(master) === 'ALLIANCE';
+  const open = (dip.passage_from || []).includes(master);
+  const asked = (dip.passage_asked_out || []).includes(master);
+  const land = mapNodeById(target)?.name || '';
+  showDecision({
+    key: 'march',
+    art: ally ? 'pact-broken' : 'war-declared',
+    from: 'Твой советник',
+    title: ally ? 'Это предательство' : 'Это война',
+    text: ally
+      ? land + ' принадлежит твоему союзнику, Дому ' + master + '. Войти туда с оружием значит нарушить клятву и начать войну.'
+      : land + ' принадлежит Дому ' + master + ', с которым у тебя нет войны. Войти туда с оружием значит её начать.',
+    terms: open
+      ? 'Его дороги тебе открыты: через его земли можно пройти дальше, но остановиться на них значит напасть.'
+      : asked
+        ? 'Ты уже просил права прохода. Ответа пока нет.'
+        : 'Можно попросить права прохода: тогда твои войска пройдут через его земли дальше без боя.',
+    buttons: [
+      ...(open || asked ? [] : [{ label: 'Запросить право прохода', primary: true, run: () => diplomacyDo('REQUEST_PASSAGE', master) }]),
+      { label: 'Всё равно отправить воинов', primary: open || asked, run: () => sendOrder(true) },
+      { label: 'Отмена' }
+    ]
+  });
+}
+
+function captiveDecision(captive) {
+  const name = captive.name + ' из Дома ' + captive.house;
+  const prison = captive.prison_available ? (territoryById(captive.prison_available)?.name || captive.prison_available) : null;
+  const where = captive.captivity?.prison
+    ? 'Сидит в темнице крепости ' + (territoryById(captive.captivity.prison)?.name || captive.captivity.prison) + '.'
+    : captive.captivity?.ransom_response === 'REFUSED'
+      ? 'Его Дом отказался платить выкуп.'
+      : 'Взят живым и ждёт твоего слова.';
+  return {
+    key: 'captive:' + captive.id + ':' + (captive.captivity?.ransom_response || '') + ':' + (captive.captivity?.prison || ''),
+    art: 'prisoner-fate',
+    from: 'Твой тюремщик',
+    title: 'Что делать с пленником?',
+    text: name + '. ' + where,
+    terms: prison
+      ? 'Темница найдётся в крепости ' + prison + '. Если крепость падёт, пленник уйдёт к тому, кто её взял.'
+      : 'Чтобы держать пленника, нужна крепость: у тебя её нет.',
+    extra: 'Выкуп: <input id="ransom-amount" type="number" min="1" max="' + Number(characterData?.captives?.max_ransom || 20) + '" value="3"> золота',
+    buttons: [
+      { label: 'Требовать выкуп', primary: true, run: () => captiveDo(captive.id, 'RANSOM', Number($('ransom-amount').value)) },
+      { label: 'Пленить', disabled: prison ? '' : 'Нужна крепость', run: () => captiveDo(captive.id, 'IMPRISON') },
+      { label: 'Отпустить', run: () => captiveDo(captive.id, 'RELEASE') },
+      { label: 'Казнить', confirm: 'Казнить пленника? ' + captive.name + ' умрёт, и этого не вернуть.', run: () => captiveDo(captive.id, 'EXECUTE') },
+      later
+    ]
+  };
+}
+
+function ransomDecision(character) {
+  const price = Number(character.captivity.ransom_amount);
+  const gold = Number(snapshot?.game?.state?.houses?.[house]?.gold || 0);
+  return {
+    key: 'ransom:' + character.id + ':' + price,
+    art: 'ransom-demand',
+    from: 'Гонец Дома ' + character.captivity.held_by,
+    title: 'Цена свободы',
+    text: character.name + ' жив и в руках Дома ' + character.captivity.held_by + '. За его свободу назначена цена.',
+    terms: 'Выкуп: ' + price + ' золота (в казне ' + gold + '). Откажешь, и его судьбу решит пленитель.',
+    buttons: [
+      { label: 'Заплатить выкуп', primary: true, disabled: gold >= price ? '' : 'В казне не хватает золота', run: () => captiveDo(character.id, 'PAY_RANSOM') },
+      { label: 'Не платить', run: () => captiveDo(character.id, 'REFUSE_RANSOM') },
+      later
+    ]
+  };
+}
+
+// Everything that waits for the player, most pressing first.
+function pendingDecisions() {
+  if (isSpectator || !house || snapshot?.game?.lifecycle?.status !== 'RUNNING') return [];
+  const out = [];
+  for (const character of characterData?.characters || []) {
+    if (character.mode === 'CAPTIVE' && character.captivity?.ransom_amount) out.push(ransomDecision(character));
+  }
+  for (const captive of characterData?.captives?.held || []) {
+    if (captive.captivity?.decision_pending) out.push(captiveDecision(captive));
+  }
+  const dip = snapshot?.game?.diplomacy || {};
+  for (const guest of dip.passage_asked_in || []) {
+    out.push({
+      key: 'passage:' + guest,
+      art: 'passage-offer',
+      from: 'Гонец Дома ' + guest,
+      title: 'Просят прохода',
+      text: 'Дом ' + guest + ' просит пропустить его войска через твои земли.',
+      terms: 'Гость может пройти насквозь, но не остановиться: войти в твою землю значит напасть. Право можно отозвать.',
+      buttons: [
+        { label: 'Открыть дороги', primary: true, run: () => diplomacyDo('GRANT_PASSAGE', guest) },
+        { label: 'Отказать', run: () => diplomacyDo('DENY_PASSAGE', guest) },
+        later
+      ]
+    });
+  }
+  for (const other of dip.offers_in || []) {
+    out.push({
+      key: 'alliance:' + other,
+      art: 'pact-offer',
+      from: 'Гонец Дома ' + other,
+      title: 'Предложение союза',
+      text: 'Дом ' + other + ' предлагает союз: ваши войска не тронут друг друга.',
+      terms: 'У Дома может быть только один союзник. Напасть на союзника значит предать его и начать войну.',
+      buttons: [
+        { label: 'Скрепить печатью', primary: true, run: () => diplomacyDo('ACCEPT_ALLIANCE', other) },
+        { label: 'Отослать гонца', run: () => diplomacyDo('DECLINE_ALLIANCE', other) },
+        later
+      ]
+    });
+  }
+  return out;
+}
+
+function renderDecisions() {
+  const pending = pendingDecisions();
+  if (decisionKey === 'march') return;
+  if (decisionKey && !pending.some(item => item.key === decisionKey)) hideDecision();
+  if (!decisionKey) {
+    const next = pending.find(item => !decisionsPutOff.has(item.key));
+    if (next) showDecision(next);
+  }
+  // The prisoners in our hands are also listed with the characters.
+  const held = characterData?.captives?.held || [];
+  let box = $('captives');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'captives';
+    $('characters').after(box);
+  }
+  box.innerHTML = held.length
+    ? '<h2 style="margin-top:14px">Пленники</h2>' + held.map(captive =>
+        '<div class="captive-row"><b>' + escapeHtml(captive.name) + '</b> · Дом ' + escapeHtml(captive.house) +
+        '<div class="tiny">' + (captive.captivity?.prison
+          ? 'в темнице крепости ' + escapeHtml(territoryById(captive.captivity.prison)?.name || captive.captivity.prison)
+          : captive.captivity?.ransom_amount
+            ? 'назначен выкуп ' + captive.captivity.ransom_amount + ' золота, ждём ответа'
+            : 'ждёт твоего решения') + '</div>' +
+        '<button data-captive="' + escapeHtml(captive.id) + '">Решить судьбу</button></div>').join('')
+    : '';
+}
+
+// ---------- the chronicler's glass ----------
+function lensFor(node) {
+  const state = snapshot?.game?.state;
+  if (!state) return null;
+  let owner, count, place, moving = null;
+  if (node.dataset.lensOrder) {
+    const order = (snapshot.game.orders || []).find(item => item.id === node.dataset.lensOrder);
+    if (!order) return null;
+    owner = order.action.house;
+    count = Number(order.action.warriors || 0);
+    moving = order;
+    place = (mapNodeById(order.action.from)?.name || '') + ' → ' + (mapNodeById(order.action.to)?.name || '');
+  } else {
+    const id = node.dataset.lensAt;
+    owner = nodeOwner(id);
+    count = owner ? warriorsAt(id, owner) : 0;
+    place = mapNodeById(id)?.name || '';
+  }
+  if (!owner) return null;
+  const at = moving ? null : node.dataset.lensAt;
+  const commander = Object.values(state.characters || {}).find(character => {
+    if (character.house !== owner || character.mode !== 'ARMY' || !character.alive) return false;
+    const army = state.armies?.[character.army_id];
+    return moving ? army?.moving_order_id === moving.id || moving.commander_id === character.id : army?.territory === at && !army?.moving_order_id;
+  });
+  const weak = commander?.health === 'WEAKENED';
+  const art = weak ? 'battle-lost' : moving ? 'march-arrived' : commander ? 'commander-assigned' : 'recruit-done';
+  const lines = [
+    count + ' ' + (count % 10 === 1 && count % 100 !== 11 ? 'воин' : count % 10 >= 2 && count % 10 <= 4 && (count % 100 < 12 || count % 100 > 14) ? 'воина' : 'воинов'),
+    commander
+      ? 'ведёт ' + commander.name + (weak ? ' (ослаблен)' : ' · атака ' + Number(commander.stats?.attack || 0) + ', защита ' + Number(commander.stats?.defense || 0))
+      : 'без командира',
+    moving ? 'в походе: ' + place + ', ещё ' + timeLeft(moving.due_at) : 'стоит: ' + place
+  ];
+  return { art, title: 'Дом ' + owner, lines };
+}
+
+function setupLens() {
+  const lens = $('lens');
+  const svg = $('map');
+  svg.addEventListener('pointermove', event => {
+    const node = event.target.closest?.('.army-token');
+    const view = node && !svg.classList.contains('panning') ? lensFor(node) : null;
+    if (!view) { lens.classList.remove('show'); return; }
+    const src = '/assets/img/notif-' + view.art + '.jpg';
+    if ($('lens-art').getAttribute('src') !== src) $('lens-art').src = src;
+    $('lens-note').innerHTML = '<b>' + escapeHtml(view.title) + '</b>' + view.lines.map(escapeHtml).join('<br>');
+    lens.classList.add('show');
+    const w = 230, h = 260;
+    let x = event.clientX + 22;
+    let y = event.clientY - h / 2;
+    if (x + w > innerWidth - 8) x = event.clientX - w - 22;
+    y = Math.max(8, Math.min(innerHeight - h - 8, y));
+    lens.style.left = x + 'px';
+    lens.style.top = y + 'px';
+  });
+  svg.addEventListener('pointerleave', () => lens.classList.remove('show'));
+  // A click on an army is a click on the land it stands on.
+  svg.addEventListener('click', event => {
+    const node = event.target.closest?.('.army-token[data-lens-at]');
+    if (node && !mapDragged) selectTerritory(node.dataset.lensAt);
+  });
+  svg.addEventListener('pointerdown', () => lens.classList.remove('show'));
+}
+
 // ---------- the bar over the map ----------
 // Every panel of the game opens from the bar. The panels are the same elements
 // the rest of the page renders into; they are only housed in the drop-down.
@@ -1213,6 +1538,44 @@ function newsFor(item) {
   if (item.type === 'MARCH_FAILED' && mine(d.house)) {
     return { rank: 4, art: 'order-failed', title: 'Приказ не выполнен', text: strip(/^[^:]*:\s*/) };
   }
+  if (item.type === 'COMMANDER_FATE') {
+    const who = d.character_name || 'Командир';
+    const at = d.territory ? ' у ' + d.territory : '';
+    if (mine(d.house)) {
+      if (d.outcome === 'DEAD') return { rank: 9, art: 'commander-dead', title: 'Командир пал', text: who + ' не вернулся с поля' + at + '.' };
+      if (d.outcome === 'CAPTURED') return { rank: 9, art: 'commander-captured', title: 'Командир в плену', text: who + ' схвачен людьми Дома ' + d.captor + '. Его судьбу решит пленитель.' };
+      return { rank: 6, art: 'battle-lost', title: 'Командир ослаблен', text: who + ' ранен' + at + '. Пока он не оправится, его бонусы не действуют, а новое поражение будет опаснее.' };
+    }
+    if (mine(d.captor) && d.outcome === 'CAPTURED') return { rank: 8, art: 'prisoner-fate', title: 'Взят пленник', text: who + ' из Дома ' + d.house + ' в твоих руках. Реши его судьбу.' };
+    if (mine(d.captor) && d.outcome === 'DEAD') return { rank: 6, art: 'battle-won', title: 'Вражеский командир пал', text: who + ' из Дома ' + d.house + ' убит' + at + '.' };
+    return null;
+  }
+  const captiveNews = {
+    CAPTIVE_EXECUTED: ['execution-suffered', 'Казнь в чужих стенах', 'execution-done', 'Приговор исполнен', 9],
+    CAPTIVE_RELEASED: ['release-received', 'Возвращение из плена', 'release-done', 'Пленник отпущен', 7],
+    RANSOM_PAID: ['release-received', 'Выкуп уплачен', 'deal-made', 'Выкуп получен', 7],
+    RANSOM_REFUSED: ['deal-failed', 'Выкуп отвергнут', 'deal-failed', 'В выкупе отказано', 6],
+    RANSOM_DEMANDED: ['ransom-demand', 'Цена свободы', 'ransom-demand', 'Выкуп назначен', 8],
+    CAPTIVE_IMPRISONED: ['commander-captured', 'В темнице', 'prisoner-fate', 'Пленник в темнице', 6],
+    PRISONER_FREED: ['release-received', 'Темница пала', 'land-lost', 'Пленник бежал', 7],
+    PRISONER_TAKEN_OVER: ['commander-captured', 'Пленник сменил хозяина', 'prisoner-fate', 'Пленник достался тебе', 7]
+  }[item.type];
+  if (captiveNews) {
+    const body = text;
+    if (mine(d.house)) return { rank: captiveNews[4], art: captiveNews[0], title: captiveNews[1], text: body };
+    if (mine(d.captor)) return { rank: captiveNews[4] - 1, art: captiveNews[2], title: captiveNews[3], text: body };
+    return null;
+  }
+  if (item.type === 'COMMANDER_RECOVERED' && mine(d.house)) {
+    return { rank: 3, art: 'commander-returned', title: 'Снова в силе', text };
+  }
+  if (item.type === 'PASSAGE_GRANTED' || item.type === 'PASSAGE_DENIED' || item.type === 'PASSAGE_REVOKED') {
+    if (!(d.houses || []).includes(house)) return null;
+    const body = strip(/^Право прохода:\s*/);
+    return item.type === 'PASSAGE_GRANTED'
+      ? { rank: 6, art: 'deal-made', title: 'Дороги открыты', text: body }
+      : { rank: 6, art: 'deal-failed', title: item.type === 'PASSAGE_DENIED' ? 'В проходе отказано' : 'Дороги закрыты', text: body };
+  }
   if (item.type === 'JOB_SEIZED') {
     const what = d.job_type === 'RECRUIT' ? 'Набранные воины' : 'Начатая крепость';
     if (mine(d.house)) {
@@ -1322,7 +1685,22 @@ function renderDiplomacy() {
       buttons = (hasAlly ? '' : '<button data-dip="OFFER_ALLIANCE" data-target="' + escapeHtml(other) + '">Союз</button>') +
         '<button data-dip="DECLARE_WAR" data-target="' + escapeHtml(other) + '">Война</button>';
     }
-    return '<div class="dip-row"><span class="dip-name">' + escapeHtml(other) + '</span>' + state + buttons + '</div>';
+    // Right of passage, both ways.
+    const tag = escapeHtml(other);
+    let sub = '';
+    if (rel !== 'WAR' && !abandonedHouses()[other]) {
+      if ((dip.passage_asked_in || []).includes(other)) {
+        sub += 'просит прохода через твои земли <button class="primary" data-dip="GRANT_PASSAGE" data-target="' + tag + '">Открыть дороги</button>' +
+          '<button data-dip="DENY_PASSAGE" data-target="' + tag + '">Отказать</button>';
+      } else if ((dip.passage_to || []).includes(other)) {
+        sub += 'твои дороги ему открыты <button data-dip="REVOKE_PASSAGE" data-target="' + tag + '">Закрыть</button>';
+      }
+      if ((dip.passage_from || []).includes(other)) sub += '<span>его дороги открыты тебе</span>';
+      else if ((dip.passage_asked_out || []).includes(other)) sub += '<span>ты просишь прохода, ответа нет</span>';
+      else sub += '<button data-dip="REQUEST_PASSAGE" data-target="' + tag + '">Просить прохода</button>';
+    }
+    return '<div class="dip-row"><span class="dip-name">' + escapeHtml(other) + '</span>' + state + buttons + '</div>' +
+      (sub ? '<div class="dip-sub">' + sub + '</div>' : '');
   }).join('');
   box.innerHTML = rows + unknownNote(others.length - met.length);
   box.querySelectorAll('button[data-dip]').forEach(button => {
@@ -1739,8 +2117,8 @@ function settlementFigure(kind, w, c, owner) {
   return `<image href="/assets/img/${file}.png" x="${c.x - w / 2}" y="${c.y - w * 0.62}" width="${w}" height="${w}"></image>`;
 }
 
-function shieldToken(x, y, color, count, scale = 1) {
-  return `<g class="army-token" transform="translate(${x} ${y}) scale(${scale})">` +
+function shieldToken(x, y, color, count, scale = 1, lens = '') {
+  return `<g class="army-token" ${lens} transform="translate(${x} ${y}) scale(${scale})">` +
     `<path class="shield" d="M-4.8 -5.4H4.8V.8Q4.8 4.9 0 6.4Q-4.8 4.9 -4.8 .8Z" fill="${color}"></path>` +
     '<path class="shield-shine" d="M-3.4 -4H3.4"></path>' +
     `<text y="2.3">${count}</text>` +
@@ -1759,6 +2137,8 @@ function nameRibbon(x, y, label, capital) {
     '</g>';
 }
 
+let exploredNow = null;
+
 function renderMap() {
   setupMapScaffold();
   const live = document.getElementById('map-live');
@@ -1770,6 +2150,20 @@ function renderMap() {
   const legalTargets = new Set(
     legal.filter(a => !origin || a.from === origin).map(a => a.to)
   );
+  // Lands the House cannot see into are veiled; armies there are not sent to the client.
+  const fogVisible = snapshot.game.visibility?.fog
+    ? new Set(snapshot.game.visibility.visible)
+    : null;
+  // Lands never seen lie under clouds. A land once seen stays on the map, dark:
+  // only the House's own lands are in full light. A march can be aimed only at
+  // what has been seen: the rest must be discovered step by step.
+  const explored = fogVisible
+    ? new Set(snapshot.game.visibility.explored || snapshot.game.visibility.visible)
+    : null;
+  exploredNow = explored;
+  if (explored) {
+    for (const id of [...legalTargets]) if (!explored.has(id)) legalTargets.delete(id);
+  }
 
   const activeAction = preferredActionForSelection();
   const activePath = Array.isArray(activeAction?.path)
@@ -1834,24 +2228,10 @@ function renderMap() {
         <circle class="sea-hit" r="9"></circle>
         <circle class="selection-ring" r="8"></circle>
         <circle class="sea-waypoint${active}" r="2.6"></circle>
-        ${total ? shieldToken(0, -1, colors[owner] || '#2c4a86', total, 0.9) : ''}
+        ${total ? shieldToken(0, -1, colors[owner] || '#2c4a86', total, 0.9, `data-lens-at="${id}"`) : ''}
       </g>`;
   });
 
-  // Lands the House cannot see into are veiled; armies there are not sent to the client.
-  const fogVisible = snapshot.game.visibility?.fog
-    ? new Set(snapshot.game.visibility.visible)
-    : null;
-  // Lands never seen lie under clouds. A land once seen stays on the map, dark:
-  // only the House's own lands are in full light.
-  const explored = fogVisible
-    ? new Set(snapshot.game.visibility.explored || snapshot.game.visibility.visible)
-    : null;
-  if (explored) {
-    // While a march is being aimed, the lands it can reach show through the clouds.
-    if (origin) for (const id of legalTargets) explored.add(id);
-    if (target) explored.add(target);
-  }
   focusOnHome();
 
   const borders = [];
@@ -1898,7 +2278,7 @@ function renderMap() {
     if (total && owner) {
       const tx = capital ? c.x + 21 : t.type === 'Город' ? c.x + 14 : t.type === 'Деревня' ? c.x + 11 : c.x + 8.5;
       const ty = capital ? c.y - 1 : c.y - 5;
-      tokens.push(shieldToken(tx, ty, colors[owner] || '#8a7a5c', total));
+      tokens.push(shieldToken(tx, ty, colors[owner] || '#8a7a5c', total, 1, `data-lens-at="${t.id}"`));
     }
   }
 
@@ -1913,7 +2293,7 @@ function renderMap() {
       if (!pos) return '';
       const fill = colors[order.action.house] || '#2b1b12';
       return `<g class="moving-army" data-order-id="${escapeHtml(order.id)}" transform="translate(${pos.x} ${pos.y})">` +
-        shieldToken(0, 0, fill, Number(order.action.warriors || 0), 1.1) +
+        shieldToken(0, 0, fill, Number(order.action.warriors || 0), 1.1, `data-lens-order="${order.id}"`) +
         '</g>';
     });
 
@@ -2191,6 +2571,8 @@ async function selectTerritory(id) {
   const owner = nodeOwner(id);
   const movable = warriorsAt(id, house);
 
+  if (exploredNow && !exploredNow.has(id)) return;
+
   if (!origin) {
     if (owner !== house || movable < 1) return;
     origin = id;
@@ -2202,7 +2584,8 @@ async function selectTerritory(id) {
     target = null;
     marchModePreference = null;
   } else {
-    const valid = legal.some(a => a.from === origin && a.to === id);
+    const valid = legal.some(a => a.from === origin && a.to === id) &&
+      (!exploredNow || exploredNow.has(id));
     if (!valid) {
       if (owner === house && movable > 0) {
         origin = id;
@@ -2219,11 +2602,18 @@ async function selectTerritory(id) {
   renderSelection();
 }
 
-async function sendOrder() {
+async function sendOrder(confirmed = false) {
   if (!origin || !target) return;
   const blocked = roundBlockReason();
   if (blocked) {
     alert(blocked);
+    return;
+  }
+  // Marching onto the land of a House we are not at war with starts a war.
+  const master = nodeOwner(target);
+  if (confirmed !== true && master && master !== house && !abandonedHouses()[master] &&
+    isKnownHouse(master) && relationWith(master) !== 'WAR') {
+    warnBeforeMarch(master);
     return;
   }
   const warriors = Number($('warriors').value);
@@ -2473,6 +2863,7 @@ async function refresh() {
   renderDiplomacy();
   renderNews();
   renderBarStatus();
+  renderDecisions();
   renderRounds();
   renderHouse();
   renderCharacters();
@@ -2616,6 +3007,20 @@ $('restore-game').addEventListener('click', async () => {
 });
 
 setupBar();
+setupLens();
+
+document.addEventListener('click', event => {
+  const captive = event.target.closest?.('[data-captive]');
+  if (captive) {
+    const found = (characterData?.captives?.held || []).find(item => item.id === captive.dataset.captive);
+    if (found) { togglePane(null); showDecision(captiveDecision(found)); }
+  }
+  const ransom = event.target.closest?.('[data-open-ransom]');
+  if (ransom) {
+    const found = (characterData?.characters || []).find(item => item.id === ransom.dataset.openRansom);
+    if (found?.captivity?.ransom_amount) { togglePane(null); showDecision(ransomDecision(found)); }
+  }
+});
 
 $('jobs').addEventListener('click', async event => {
   const button = event.target.closest('[data-cancel-job]');

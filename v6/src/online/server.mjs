@@ -49,9 +49,12 @@ import {
 import { applyFog, knownHouses, recordExploration } from './fog.mjs';
 import { generateMap, MAX_HOUSES, MIN_HOUSES } from './mapgen.mjs';
 import { processEncounters } from './encounters.mjs';
+import { captiveAction, captivesView, processCharacters } from './fate.mjs';
 import {
   acceptAlliance,
   answerAiOffers,
+  answerPassage,
+  requestPassage,
   breakAlliance,
   declareWar,
   declineAlliance,
@@ -495,6 +498,7 @@ async function tickUnlocked(ctx) {
   processed = processDueOrders(processed, map, constants, nowMs);
   processed = processEconomy(processed, map, constants, nowMs);
   processed = processRounds(processed, map, constants, { nowMs });
+  processed = processCharacters(processed, map, constants, { nowMs });
   processed = recordExploration(processed, map, constants.houses, nowMs);
   if (
     processed.updated_at !== ctx.game.updated_at ||
@@ -1276,7 +1280,8 @@ async function handleGameApi(req, res, url, ctx, subpath) {
           }
         )
       })),
-      armies
+      armies,
+      captives: captivesView(ctx.game, map, house)
     });
   }
 
@@ -1392,6 +1397,9 @@ async function handleGameApi(req, res, url, ctx, subpath) {
         else if (action === 'DECLINE_ALLIANCE') next = declineAlliance(game, house, target, { nowMs });
         else if (action === 'BREAK_ALLIANCE') next = breakAlliance(game, house, target, { nowMs });
         else if (action === 'DECLARE_WAR') next = declareWar(game, constants, house, target, { nowMs });
+        else if (action === 'REQUEST_PASSAGE') next = requestPassage(game, constants, house, target, { nowMs });
+        else if (action === 'GRANT_PASSAGE') next = answerPassage(game, constants, house, target, true, { nowMs });
+        else if (action === 'DENY_PASSAGE' || action === 'REVOKE_PASSAGE') next = answerPassage(game, constants, house, target, false, { nowMs });
         else throw new Error(`unknown diplomacy action ${action}`);
         next = answerAiOffers(next, next.rounds?.ai_houses || [], { nowMs });
         return { game: next, response: { diplomacy: diplomacyView(next, house, knownHouses(next, house, constants.houses)) } };
@@ -1412,6 +1420,30 @@ async function handleGameApi(req, res, url, ctx, subpath) {
       mutate: async game => {
         const next = passRound(game, house);
         return { game: next, response: { rounds: roundsView(next) } };
+      }
+    }));
+    return json(res, result.status, result.response);
+  }
+
+  if (req.method === 'POST' && subpath === '/captives') {
+    const body = await readBody(req);
+    const house = String(body.house || '').trim();
+    await requireHouse(ctx, req, house);
+
+    const result = await serial(ctx, () => runGameCommand(ctx, req, {
+      kind: 'CAPTIVE',
+      status: 200,
+      house,
+      mutate: async game => {
+        let next = captiveAction(game, map, constants, {
+          house,
+          characterId: String(body.character_id || '').trim(),
+          action: body.action,
+          amount: body.amount
+        });
+        // A House nobody plays answers at once.
+        next = processCharacters(next, map, constants);
+        return { game: next, response: { captives: captivesView(next, map, house) } };
       }
     }));
     return json(res, result.status, result.response);

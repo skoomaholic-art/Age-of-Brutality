@@ -173,6 +173,58 @@ export function journalEntryToAudit(entry, map, game) {
     };
   }
 
+  if (entry.kind === 'COMMANDER_FATE') {
+    const where = entry.battle_territory ? ` у ${territoryName(map, entry.battle_territory)}` : '';
+    const fate = {
+      DEAD: 'пал в бою',
+      CAPTURED: `взят в плен Домом ${entry.opponent_house || '—'}`,
+      WEAKENED: 'ранен и ослаблен',
+      SAVED: 'вышел из боя ослабленным'
+    }[entry.outcome] || entry.outcome;
+    return {
+      ...base,
+      message: `Судьба командира: ${entry.character_name} (Дом ${entry.house}) ${fate}${where}.`,
+      details: {
+        character_id: entry.character_id,
+        character_name: entry.character_name,
+        house: entry.house,
+        captor: entry.opponent_house || null,
+        houses: [entry.house, entry.opponent_house].filter(Boolean),
+        outcome: entry.outcome === 'SAVED' ? 'WEAKENED' : entry.outcome,
+        territory: entry.battle_territory ? territoryName(map, entry.battle_territory) : null,
+        at: entry.at || null
+      }
+    };
+  }
+
+  const CAPTIVE_NEWS = {
+    CAPTIVE_RELEASED: e => `Дом ${e.captor} отпустил пленника: ${e.character_name} вернулся ко двору Дома ${e.house}.`,
+    CAPTIVE_EXECUTED: e => `Дом ${e.captor} казнил пленника: ${e.character_name} из Дома ${e.house} мёртв.`,
+    CAPTIVE_IMPRISONED: e => `${e.character_name} из Дома ${e.house} заточён Домом ${e.captor} в крепости ${territoryName(map, e.territory)}.`,
+    RANSOM_DEMANDED: e => `Дом ${e.captor} требует выкуп ${e.amount} золота за пленника: ${e.character_name} из Дома ${e.house}.`,
+    RANSOM_PAID: e => `Дом ${e.house} заплатил Дому ${e.captor} выкуп ${e.amount} золота: ${e.character_name} свободен.`,
+    RANSOM_REFUSED: e => `Дом ${e.house} отказался платить выкуп ${e.amount} золота. ${e.character_name} остаётся в руках Дома ${e.captor}.`,
+    PRISONER_FREED: e => `Крепость ${territoryName(map, e.territory)} пала, и ${e.character_name} из Дома ${e.house} вышел на свободу.`,
+    PRISONER_TAKEN_OVER: e => `Крепость ${territoryName(map, e.territory)} сменила хозяина: пленник ${e.character_name} из Дома ${e.house} теперь в руках Дома ${e.captor}.`,
+    COMMANDER_RECOVERED: e => `${e.character_name} из Дома ${e.house} оправился от ран и снова в силе.`
+  };
+  if (CAPTIVE_NEWS[entry.kind]) {
+    return {
+      ...base,
+      message: CAPTIVE_NEWS[entry.kind](entry),
+      details: {
+        character_id: entry.character_id,
+        character_name: entry.character_name,
+        house: entry.house,
+        captor: entry.captor || null,
+        houses: [...(entry.houses || [])],
+        amount: entry.amount ?? null,
+        territory: entry.territory ? territoryName(map, entry.territory) : null,
+        at: entry.at || null
+      }
+    };
+  }
+
   if (entry.kind === 'JOB_SEIZED') {
     const territory = territoryName(map, entry.territory);
     const what = entry.job_type === 'RECRUIT' ? 'набранные воины' : 'начатая крепость';
@@ -230,6 +282,19 @@ export function journalEntryToAudit(entry, map, game) {
       ...base,
       message: `Союз: Дома ${entry.houses[0]} и ${entry.houses[1]} скрепили союз. Их войска не тронут друг друга.`,
       details: { houses: [...entry.houses], at: entry.at || null }
+    };
+  }
+
+  if (entry.kind === 'PASSAGE_GRANTED' || entry.kind === 'PASSAGE_DENIED' || entry.kind === 'PASSAGE_REVOKED') {
+    const message = {
+      PASSAGE_GRANTED: `Право прохода: Дом ${entry.host} открыл свои дороги войскам Дома ${entry.guest}.`,
+      PASSAGE_DENIED: `Право прохода: Дом ${entry.host} отказал Дому ${entry.guest}.`,
+      PASSAGE_REVOKED: `Право прохода: Дом ${entry.host} закрыл свои дороги для Дома ${entry.guest}.`
+    }[entry.kind];
+    return {
+      ...base,
+      message,
+      details: { host: entry.host, guest: entry.guest, houses: [...entry.houses], at: entry.at || null }
     };
   }
 
