@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Жестокий век · Тронный зал</title>
+<title>Жестокий век - Игровой центр</title>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/img/favicon-32.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/img/favicon-180.png">
 <style>
@@ -246,7 +246,7 @@ button.loading { opacity:.65; cursor:wait; }
       <img class="brand-mark" src="/assets/img/s-mark.png" alt="Skoomaholic Dev" width="96" height="96">
       <div>
         <h1>Жестокий Век</h1>
-        <div class="lobby-sub">Тронный зал</div>
+        <div class="lobby-sub">Игровой центр</div>
       </div>
     </div>
     <img class="lobby-miniature" src="/assets/img/brawl.jpg" alt="" width="560" height="366">
@@ -255,28 +255,28 @@ button.loading { opacity:.65; cursor:wait; }
   <section id="hub">
     <section class="section card" id="account-card">
       <div id="account-signed-out">
-        <h2>Грамота правителя</h2>
+        <h2>Профиль игрока</h2>
         <div class="muted" style="margin-bottom:12px">
-          Назовись, и твои века будут ждать тебя в любом замке.
+          Войди в профиль, чтобы видеть свои партии на любом устройстве.
         </div>
         <div class="account-grid">
           <div>
             <h3>Войти</h3>
-            <label>Прозвание</label>
+            <label>Логин</label>
             <input id="login-handle" maxlength="24" autocomplete="username" placeholder="skoomaholic">
-            <label>Заветное слово</label>
+            <label>Пароль</label>
             <input id="login-password" type="password" maxlength="128" autocomplete="current-password">
             <button id="login-profile" class="primary" style="margin-top:14px">Войти</button>
           </div>
           <div>
-            <h3>Назваться впервые</h3>
-            <label>Прозвание</label>
+            <h3>Создать профиль</h3>
+            <label>Логин</label>
             <input id="register-handle" maxlength="24" autocomplete="username" placeholder="skoomaholic">
-            <label>Имя, под коим тебя знают</label>
+            <label>Имя в игре</label>
             <input id="register-name" maxlength="40" placeholder="Например, Александр">
-            <label>Заветное слово</label>
-            <input id="register-password" type="password" maxlength="128" autocomplete="new-password" placeholder="Не короче 8 знаков">
-            <button id="register-profile" class="primary" style="margin-top:14px">Назваться впервые</button>
+            <label>Пароль</label>
+            <input id="register-password" type="password" maxlength="128" autocomplete="new-password" placeholder="Минимум 8 символов">
+            <button id="register-profile" class="primary" style="margin-top:14px">Создать профиль</button>
           </div>
         </div>
         <div id="profile-error" class="error"></div>
@@ -291,138 +291,138 @@ button.loading { opacity:.65; cursor:wait; }
               <div id="account-handle" class="account-handle">@login</div>
             </div>
           </div>
-          <button id="logout-profile">Удалиться</button>
+          <button id="logout-profile">Выйти</button>
         </div>
 
         <div class="profile-stats">
           <div class="profile-stat"><span>MMR</span><b id="stat-mmr">1000</b></div>
-          <div class="profile-stat"><span>Прожито веков</span><b id="stat-games">0</b></div>
+          <div class="profile-stat"><span>Сыграно</span><b id="stat-games">0</b></div>
           <div class="profile-stat"><span>Победы</span><b id="stat-wins">0</b></div>
-          <div class="profile-stat"><span>Разгромы</span><b id="stat-losses">0</b></div>
-          <div class="profile-stat"><span>В походе</span><b id="stat-time">0 мин</b></div>
+          <div class="profile-stat"><span>Поражения</span><b id="stat-losses">0</b></div>
+          <div class="profile-stat"><span>В игре</span><b id="stat-time">0 мин</b></div>
         </div>
 
         <div class="achievement-box">
-          <h3>Деяния</h3>
+          <h3>Достижения</h3>
           <div id="achievement-list" class="achievement-list">
-            <span class="muted">Летописцу пока нечего о тебе сказать.</span>
+            <span class="muted">Пока достижений нет.</span>
           </div>
         </div>
       </div>
     </section>
 
     <section id="social-card" class="section card" style="display:none">
-      <h2>Други и грамоты <span id="social-unread" class="unread-badge" style="display:none">0</span></h2>
+      <h2>Друзья и сообщения <span id="social-unread" class="unread-badge" style="display:none">0</span></h2>
       <div class="social-search">
-        <input id="friend-search" maxlength="24" placeholder="Сыскать правителя по прозванию">
-        <button id="friend-search-button">Сыскать</button>
+        <input id="friend-search" maxlength="24" placeholder="Найти игрока по логину">
+        <button id="friend-search-button">Найти</button>
       </div>
       <div id="friend-search-result" class="social-list"></div>
 
       <div class="social-grid" style="margin-top:16px">
         <div>
-          <h3>Други</h3>
-          <div id="friends-list" class="social-list"><div class="empty">Другов у тебя пока нет.</div></div>
+          <h3>Друзья</h3>
+          <div id="friends-list" class="social-list"><div class="empty">Пока друзей нет.</div></div>
         </div>
         <div>
-          <h3>Челобитные</h3>
-          <div id="friend-requests" class="social-list"><div class="empty">Челобитных нет.</div></div>
+          <h3>Заявки</h3>
+          <div id="friend-requests" class="social-list"><div class="empty">Новых заявок нет.</div></div>
         </div>
         <div>
-          <h3>Зовут в свои века</h3>
-          <div id="game-invites-list" class="social-list"><div class="empty">Никто тебя не зовёт.</div></div>
+          <h3>Приглашения в игры</h3>
+          <div id="game-invites-list" class="social-list"><div class="empty">Приглашений нет.</div></div>
         </div>
         <div>
-          <h3>Изгнанные с глаз</h3>
-          <div id="blocked-list" class="social-list"><div class="empty">Никого.</div></div>
+          <h3>Заблокированные</h3>
+          <div id="blocked-list" class="social-list"><div class="empty">Список пуст.</div></div>
         </div>
       </div>
       <div id="social-error" class="error"></div>
     </section>
 
     <section class="section card">
-      <h2 id="games">Мои века</h2>
+      <h2 id="games">Мои игры</h2>
       <div id="my-games" class="game-list">
-        <div class="empty">Писарь ищет твои свитки...</div>
+        <div class="empty">Загружаем сохранённые партии...</div>
       </div>
     </section>
 
     <section class="section card">
-      <h2>Открытые залы</h2>
-      <div class="muted" style="margin-bottom:12px">Залы, куда пускают без тайного слова.</div>
+      <h2>Открытые комнаты</h2>
+      <div class="muted" style="margin-bottom:12px">Публичные лобби, к которым можно подключиться без кода.</div>
       <div id="open-rooms" class="room-list">
-        <div class="empty">Глашатай обходит залы...</div>
+        <div class="empty">Ищем открытые комнаты...</div>
       </div>
     </section>
 
     <section class="section">
-      <h2 id="new">Новый век</h2>
+      <h2 id="new">Новая игра</h2>
       <div class="create-grid">
         <div class="card">
-          <h3>В одиночку</h3>
-          <div class="muted">Ты один против Домов, коими правят бездушные советники, на неведомой земле.</div>
+          <h3>Соло</h3>
+          <div class="muted">Ты против Домов под управлением ИИ на случайной карте.</div>
           <label>Дом</label>
           <select id="solo-house"></select>
-          <label>Ход времени</label>
+          <label>Темп партии</label>
           <select id="solo-pace" class="pace-select">
-            <option value="fast">Скорый век: день за 10 минут, всё решится за час</option>
-            <option value="evening">Вечерний век: день за час</option>
-            <option value="classic">Долгий век: день за сутки</option>
+            <option value="fast">Быстрая: день за 10 минут, партия на час</option>
+            <option value="evening">Вечерняя: день за час</option>
+            <option value="classic">Долгая: день за сутки</option>
           </select>
-          <button id="create-solo" class="primary" style="margin-top:14px">Править в одиночку</button>
+          <button id="create-solo" class="primary" style="margin-top:14px">Начать соло</button>
           <div id="solo-error" class="error"></div>
         </div>
 
         <div class="card">
-          <h3>Открытый зал</h3>
-          <div class="muted">О нём объявят на площади.</div>
-          <label>Имя зала</label>
-          <input id="public-room-name" maxlength="60" placeholder="Например, Большой совет">
+          <h3>Открытая комната</h3>
+          <div class="muted">Появится в общем списке комнат.</div>
+          <label>Название комнаты</label>
+          <input id="public-room-name" maxlength="60" placeholder="Например, Комната 1">
           <label>Твой Дом</label>
           <select id="public-house">
-            <option value="">Решу после</option>
+            <option value="">Выбрать позже</option>
           </select>
-          <label>Ход времени</label>
+          <label>Темп партии</label>
           <select id="public-pace" class="pace-select">
-            <option value="fast">Скорый век: день за 10 минут, всё решится за час</option>
-            <option value="evening">Вечерний век: день за час</option>
-            <option value="classic">Долгий век: день за сутки</option>
+            <option value="fast">Быстрая: день за 10 минут, партия на час</option>
+            <option value="evening">Вечерняя: день за час</option>
+            <option value="classic">Долгая: день за сутки</option>
           </select>
-          <button id="create-public" class="primary" style="margin-top:14px">Созвать открытый зал</button>
+          <button id="create-public" class="primary" style="margin-top:14px">Создать открытую</button>
           <div id="public-error" class="error"></div>
         </div>
 
         <div class="card">
-          <h3>Закрытый зал</h3>
-          <div class="muted">Впустят лишь знающих тайное слово.</div>
-          <label>Имя зала</label>
-          <input id="private-room-name" maxlength="60" placeholder="Например, Пир для своих">
+          <h3>Приватная комната</h3>
+          <div class="muted">Вход только по коду приглашения.</div>
+          <label>Название комнаты</label>
+          <input id="private-room-name" maxlength="60" placeholder="Например, Для друзей">
           <label>Твой Дом</label>
           <select id="private-house">
-            <option value="">Решу после</option>
+            <option value="">Выбрать позже</option>
           </select>
-          <label>Ход времени</label>
+          <label>Темп партии</label>
           <select id="private-pace" class="pace-select">
-            <option value="fast">Скорый век: день за 10 минут, всё решится за час</option>
-            <option value="evening">Вечерний век: день за час</option>
-            <option value="classic">Долгий век: день за сутки</option>
+            <option value="fast">Быстрая: день за 10 минут, партия на час</option>
+            <option value="evening">Вечерняя: день за час</option>
+            <option value="classic">Долгая: день за сутки</option>
           </select>
-          <button id="create-private" class="primary" style="margin-top:14px">Созвать закрытый зал</button>
+          <button id="create-private" class="primary" style="margin-top:14px">Создать приватную</button>
           <div id="private-error" class="error"></div>
         </div>
       </div>
     </section>
 
     <section class="section card">
-      <h2>Войти по тайному слову</h2>
+      <h2>Войти по коду</h2>
       <div class="grid">
         <div>
-          <label>Тайное слово</label>
+          <label>Код приглашения</label>
           <input id="join-code" maxlength="6" placeholder="ABC234" style="text-transform:uppercase">
         </div>
         <div>
           <label>&nbsp;</label>
-          <button id="join-private" class="primary">Войти в зал</button>
+          <button id="join-private" class="primary">Подключиться</button>
         </div>
       </div>
       <div id="join-error" class="error"></div>
@@ -436,20 +436,20 @@ button.loading { opacity:.65; cursor:wait; }
         <div id="invite" class="code">------</div>
         <div id="status" class="muted"></div>
       </div>
-      <button id="back-menu">В тронный зал</button>
+      <button id="back-menu">В главное меню</button>
     </div>
 
     <h2 style="margin-top:22px">Дома</h2>
     <div id="houses" class="house-grid"></div>
 
-    <h2 style="margin-top:22px">Правители</h2>
+    <h2 style="margin-top:22px">Игроки</h2>
     <div id="players" class="players"></div>
 
     <div class="actions">
-      <button id="release-house" style="display:none">Отречься от Дома</button>
-      <button id="start" class="primary" style="display:none">Начать век</button>
-      <button id="open-game" style="display:none">Развернуть карту</button>
-      <button id="refresh">Оглядеться</button>
+      <button id="release-house" style="display:none">Освободить Дом</button>
+      <button id="start" class="primary" style="display:none">Начать игру</button>
+      <button id="open-game" style="display:none">Открыть карту</button>
+      <button id="refresh">Обновить</button>
     </div>
     <div id="start-hint" class="start-hint"></div>
     <div id="room-error" class="error"></div>
@@ -463,15 +463,15 @@ button.loading { opacity:.65; cursor:wait; }
   <div class="avatar-dialog">
     <div class="avatar-dialog-head">
       <div>
-        <h2 id="avatar-modal-title" style="margin:0">Выбрать личину</h2>
-        <div class="muted" style="margin-top:4px">Выбери себе новую личину.</div>
+        <h2 id="avatar-modal-title" style="margin:0">Выбрать аватар</h2>
+        <div class="muted" style="margin-top:4px">Выбери и сохрани новый аватар профиля.</div>
       </div>
       <button id="avatar-close" type="button" aria-label="Закрыть">✕</button>
     </div>
     <div id="avatar-picker" class="avatar-picker"></div>
     <div class="avatar-dialog-actions">
-      <button id="avatar-cancel" type="button">Оставить</button>
-      <button id="avatar-save" type="button" class="primary">Скрепить печатью</button>
+      <button id="avatar-cancel" type="button">Отмена</button>
+      <button id="avatar-save" type="button" class="primary">Сохранить</button>
     </div>
     <div id="avatar-error" class="error"></div>
   </div>
@@ -481,7 +481,7 @@ button.loading { opacity:.65; cursor:wait; }
   <div class="social-dialog">
     <div class="social-dialog-head">
       <div>
-        <h2 id="player-profile-name" style="margin:0">Грамота правителя</h2>
+        <h2 id="player-profile-name" style="margin:0">Профиль игрока</h2>
         <div id="player-profile-handle" class="muted" style="margin-top:4px"></div>
       </div>
       <button id="player-profile-close" type="button">✕</button>
@@ -497,16 +497,16 @@ button.loading { opacity:.65; cursor:wait; }
 
     <div class="profile-stats">
       <div class="profile-stat"><span>MMR</span><b id="view-stat-mmr">1000</b></div>
-      <div class="profile-stat"><span>Прожито веков</span><b id="view-stat-games">0</b></div>
+      <div class="profile-stat"><span>Сыграно</span><b id="view-stat-games">0</b></div>
       <div class="profile-stat"><span>Победы</span><b id="view-stat-wins">0</b></div>
-      <div class="profile-stat"><span>Разгромы</span><b id="view-stat-losses">0</b></div>
-      <div class="profile-stat"><span>В походе</span><b id="view-stat-time">0 мин</b></div>
+      <div class="profile-stat"><span>Поражения</span><b id="view-stat-losses">0</b></div>
+      <div class="profile-stat"><span>В игре</span><b id="view-stat-time">0 мин</b></div>
     </div>
 
     <div class="achievement-box">
-      <h3>Деяния</h3>
+      <h3>Достижения</h3>
       <div id="player-profile-achievements" class="achievement-list">
-        <span class="muted">Летописцу пока нечего о тебе сказать.</span>
+        <span class="muted">Пока достижений нет.</span>
       </div>
     </div>
 
@@ -519,15 +519,15 @@ button.loading { opacity:.65; cursor:wait; }
   <div class="social-dialog">
     <div class="social-dialog-head">
       <div>
-        <h2 id="chat-title" style="margin:0">Грамоты</h2>
+        <h2 id="chat-title" style="margin:0">Сообщения</h2>
         <div id="chat-subtitle" class="muted" style="margin-top:4px"></div>
       </div>
       <button id="chat-close" type="button">✕</button>
     </div>
     <div id="chat-log" class="chat-log"></div>
     <div class="chat-compose">
-      <input id="chat-input" maxlength="1000" placeholder="Начертать грамоту...">
-      <button id="chat-send" class="primary">Послать гонца</button>
+      <input id="chat-input" maxlength="1000" placeholder="Написать сообщение...">
+      <button id="chat-send" class="primary">Отправить</button>
     </div>
     <div id="chat-error" class="error"></div>
   </div>
@@ -537,7 +537,7 @@ button.loading { opacity:.65; cursor:wait; }
   <div class="social-dialog">
     <div class="social-dialog-head">
       <div>
-        <h2 id="game-invite-title" style="margin:0">Звать в свой век</h2>
+        <h2 id="game-invite-title" style="margin:0">Пригласить в игру</h2>
         <div id="game-invite-subtitle" class="muted" style="margin-top:4px"></div>
       </div>
       <button id="game-invite-close" type="button">✕</button>
@@ -552,7 +552,14 @@ button.loading { opacity:.65; cursor:wait; }
 try {
   if (!new URLSearchParams(location.search).get('game') && !location.hash && !sessionStorage.getItem('aob-menu-seen')) location.replace('/menu.html');
 } catch {}
+// The logo always leads back to the lobby.
+document.addEventListener('click', event => {
+  if (!event.target.closest('.brand, .brand-mark, header h1')) return;
+  try { sessionStorage.setItem('aob-menu-seen', '1'); } catch {}
+  location.href = '/lobby.html';
+});
 </script>
+<style>.brand, .brand-mark, header h1 { cursor: pointer; }</style>
 <script>
 const houses = ['Варкайр','Сайрвен','Ортайн','Эркай','Тасвар','Айрель'];
 const profileAvatars = [
@@ -643,7 +650,7 @@ async function saveAvatarSelection() {
   const button = $('avatar-save');
 
   try {
-    await withBusy(button, 'Ставим печать...', async () => {
+    await withBusy(button, 'Сохраняем...', async () => {
       const data = await request('/api/profile/avatar', {
         method:'POST',
         headers:{'content-type':'application/json'},
@@ -667,7 +674,7 @@ function renderAccount() {
 
   for (const id of ['create-solo','create-public','create-private','join-private']) {
     $(id).disabled = !signedIn;
-    $(id).title = signedIn ? '' : 'Сперва назовись';
+    $(id).title = signedIn ? '' : 'Сначала войди в профиль';
   }
 
   if (signedIn) {
@@ -686,7 +693,7 @@ function renderAccount() {
       ? achievements.map(item =>
           '<span class="achievement-pill">' + escapeHtml(item) + '</span>'
         ).join('')
-      : '<span class="muted">Летописцу пока нечего о тебе сказать.</span>';
+      : '<span class="muted">Пока достижений нет.</span>';
 
     localStorage.setItem('aob-display-name', activeProfile.display_name);
   }
@@ -785,17 +792,17 @@ async function request(url, options = {}, authToken = null) {
       if (res.ok) return data;
 
       if (retryable.has(res.status) && attempt < delays.length - 1) {
-        lastError = new Error('Гонец не добрался до двора. Шлём другого...');
+        lastError = new Error('Сервер временно недоступен. Повторяем запрос...');
         continue;
       }
-      throw new Error(data.error || ('Писарь разводит руками: ' + res.status));
+      throw new Error(data.error || ('Ошибка сервера HTTP ' + res.status));
     } catch (error) {
       lastError = error;
       if (error instanceof TypeError && attempt < delays.length - 1) continue;
       throw error;
     }
   }
-  throw lastError || new Error('Гонец не добрался до двора.');
+  throw lastError || new Error('Сервер временно недоступен.');
 }
 
 async function withBusy(button, busyText, fn) {
@@ -815,7 +822,7 @@ async function withBusy(button, busyText, fn) {
 function friendlyError(error) {
   const message = String(error?.message || error || '');
   if (/Service Unavailable|Bad Gateway|Gateway Timeout|HTTP 50[234]/i.test(message)) {
-    return 'Гонец не добрался до двора. Попробуй чуть погодя.';
+    return 'Сервер временно недоступен. Попробуй ещё раз через несколько секунд.';
   }
   return message;
 }
@@ -845,16 +852,16 @@ function savedGames() {
 
 function badgeFor(life) {
   if (life.game_mode === 'SOLO') return '<span class="badge solo">СОЛО</span>';
-  if (life.visibility === 'PUBLIC') return '<span class="badge public">ОТКРЫТЫЙ ЗАЛ</span>';
-  return '<span class="badge private">ЗАКРЫТЫЙ ЗАЛ</span>';
+  if (life.visibility === 'PUBLIC') return '<span class="badge public">ОТКРЫТАЯ</span>';
+  return '<span class="badge private">ПРИВАТНАЯ</span>';
 }
 
 function statusText(status) {
   return {
     LOBBY:'Лобби',
-    RUNNING:'Век идёт',
-    FINISHED:'Век окончен',
-    ARCHIVED:'В ларце'
+    RUNNING:'Идёт игра',
+    FINISHED:'Завершена',
+    ARCHIVED:'Архив'
   }[status] || status;
 }
 
@@ -882,7 +889,7 @@ async function loadMyGames() {
   } else {
     const entries = savedGames();
     if (!entries.length) {
-      $('my-games').innerHTML = '<div class="empty">Назовись или начни свой век прямо здесь.</div>';
+      $('my-games').innerHTML = '<div class="empty">Войди в профиль или создай игру на этом устройстве.</div>';
       knownGameIds = new Set();
       return [];
     }
@@ -915,7 +922,7 @@ async function loadMyGames() {
   knownGameIds = new Set(games.map(item => item.game_id));
 
   if (!games.length) {
-    $('my-games').innerHTML = '<div class="empty">Ни один век тебя не ждёт.</div>';
+    $('my-games').innerHTML = '<div class="empty">Активных игр нет.</div>';
     return [];
   }
 
@@ -925,7 +932,7 @@ async function loadMyGames() {
     const target = life.status === 'RUNNING'
       ? '/?game=' + encodeURIComponent(item.game_id)
       : '/lobby.html?game=' + encodeURIComponent(item.game_id);
-    const action = life.status === 'RUNNING' ? 'Продолжить век' : 'В зале ждут';
+    const action = life.status === 'RUNNING' ? 'Продолжить' : 'В лобби';
     const house = me?.house ? ' · Дом: ' + escapeHtml(me.house) : '';
     return `
       <div class="game-card">
@@ -939,7 +946,7 @@ async function loadMyGames() {
         </div>
         <div class="game-actions">
           <button class="primary" onclick="location.href='${target}'">${action}</button>
-          <button class="leave-game" data-leave="${escapeHtml(item.game_id)}">Предать забвению</button>
+          <button class="leave-game" data-leave="${escapeHtml(item.game_id)}">Удалить</button>
         </div>
       </div>`;
   }).join('');
@@ -962,16 +969,16 @@ async function leaveGame(item, button) {
   const name = life.room_name || 'Игра';
   const others = Number(life.player_count || 0) > 1;
   const question = life.game_mode === 'SOLO' || !others
-    ? 'Предать забвению век «' + name + '» навсегда? Вернуть его будет нельзя.'
+    ? 'Удалить игру «' + name + '» навсегда? Восстановить её будет нельзя.'
     : life.status === 'RUNNING'
-      ? 'Покинуть век «' + name + '» навсегда?\n\n' +
-        'Твой Дом останется на карте брошенной державой, прочим государям о том возвестят. ' +
-        'Вернуться в этот век будет нельзя.'
-      : 'Покинуть зал «' + name + '»? Твой Дом останется без государя.';
+      ? 'Выйти из игры «' + name + '» навсегда?\n\n' +
+        'Твой Дом останется на карте брошенным государством, остальные игроки получат известие. ' +
+        'Вернуться в эту партию будет нельзя.'
+      : 'Выйти из комнаты «' + name + '»? Твой Дом освободится.';
   if (!confirm(question)) return;
 
   try {
-    await withBusy(button, 'Предаём забвению...', async () => {
+    await withBusy(button, 'Удаляем...', async () => {
       await request(
         '/api/games/' + encodeURIComponent(item.game_id) + '/leave',
         { method:'POST' },
@@ -987,10 +994,10 @@ async function leaveGame(item, button) {
 
 function presenceLabel(presence) {
   if (presence?.status === 'IN_GAME') {
-    return '<span class="presence in-game">В походе</span>';
+    return '<span class="presence in-game">В игре</span>';
   }
   if (presence?.status === 'ONLINE') {
-    return '<span class="presence online">При дворе</span>';
+    return '<span class="presence online">В сети</span>';
   }
   return '<span class="presence">Offline</span>';
 }
@@ -1026,13 +1033,13 @@ function renderSocial() {
         const conversation = conversationFor(friend.id);
         const unreadCount = Number(conversation?.unread_count || 0);
         const actions =
-          '<button data-chat="' + friend.id + '">Грамота' + (unreadCount ? ' (' + unreadCount + ')' : '') + '</button>' +
-          '<button data-invite-friend="' + friend.id + '">Позвать</button>' +
-          '<button data-remove-friend="' + friend.id + '">Предать забвению</button>' +
-          '<button data-block-user="' + friend.id + '">Прогнать</button>';
+          '<button data-chat="' + friend.id + '">Сообщение' + (unreadCount ? ' (' + unreadCount + ')' : '') + '</button>' +
+          '<button data-invite-friend="' + friend.id + '">Пригласить</button>' +
+          '<button data-remove-friend="' + friend.id + '">Удалить</button>' +
+          '<button data-block-user="' + friend.id + '">Блок</button>';
         return socialUserCard(friend, actions);
       }).join('')
-    : '<div class="empty">Другов у тебя пока нет.</div>';
+    : '<div class="empty">Пока друзей нет.</div>';
 
   const incoming = social.incoming_requests || [];
   const outgoing = social.outgoing_requests || [];
@@ -1040,15 +1047,15 @@ function renderSocial() {
     ...incoming.map(player => socialUserCard(
       player,
       '<button class="primary" data-accept-friend="' + player.id + '">Принять</button>' +
-      '<button data-decline-friend="' + player.id + '">Отказать</button>' +
-      '<button data-block-user="' + player.id + '">Прогнать</button>',
-      ' · бьёт челом'
+      '<button data-decline-friend="' + player.id + '">Отклонить</button>' +
+      '<button data-block-user="' + player.id + '">Блок</button>',
+      ' · входящая заявка'
     )),
-    ...outgoing.map(player => socialUserCard(player, '', ' · гонец послан'))
+    ...outgoing.map(player => socialUserCard(player, '', ' · заявка отправлена'))
   ];
   $('friend-requests').innerHTML = requestRows.length
     ? requestRows.join('')
-    : '<div class="empty">Челобитных нет.</div>';
+    : '<div class="empty">Новых заявок нет.</div>';
 
   const invites = social.game_invites || [];
   $('game-invites-list').innerHTML = invites.length
@@ -1057,18 +1064,18 @@ function renderSocial() {
         const room = invite.game?.lifecycle?.room_name || 'Комната';
         const actions =
           '<button class="primary" data-accept-game-invite="' + invite.invite_id + '">Войти</button>' +
-          '<button data-decline-game-invite="' + invite.invite_id + '">Отказать</button>';
+          '<button data-decline-game-invite="' + invite.invite_id + '">Отклонить</button>';
         return socialUserCard(from, actions, ' · ' + escapeHtml(room));
       }).join('')
-    : '<div class="empty">Никто тебя не зовёт.</div>';
+    : '<div class="empty">Приглашений нет.</div>';
 
   const blocked = social.blocked || [];
   $('blocked-list').innerHTML = blocked.length
     ? blocked.map(player => socialUserCard(
         player,
-        '<button data-unblock-user="' + player.id + '">Вернуть милость</button>'
+        '<button data-unblock-user="' + player.id + '">Разблокировать</button>'
       )).join('')
-    : '<div class="empty">Никого.</div>';
+    : '<div class="empty">Список пуст.</div>';
 
   bindSocialActions();
 }
@@ -1126,7 +1133,7 @@ function bindSocialActions() {
 
   document.querySelectorAll('[data-remove-friend]').forEach(button => {
     button.onclick = async () => {
-      if (!confirm('Отречься от этого друга?')) return;
+      if (!confirm('Удалить игрока из друзей?')) return;
       await socialPost('/api/social/friends/remove', {
         profile_id:button.dataset.removeFriend
       });
@@ -1136,7 +1143,7 @@ function bindSocialActions() {
 
   document.querySelectorAll('[data-block-user]').forEach(button => {
     button.onclick = async () => {
-      if (!confirm('Прогнать его с глаз? Дружбе и челобитным конец.')) return;
+      if (!confirm('Заблокировать игрока? Дружба и заявки будут удалены.')) return;
       await socialPost('/api/social/block', { profile_id:button.dataset.blockUser });
       await loadSocial();
     };
@@ -1192,16 +1199,16 @@ async function findFriend() {
     const data = await request('/api/social/search?handle=' + encodeURIComponent(handle), {}, profileToken);
     const player = data.player;
     const actions = data.are_friends
-      ? '<span class="muted">Уже в другах</span>'
-      : '<button class="primary" id="send-friend-request">Позвать</button>' +
-        '<button id="block-search-result">Прогнать</button>';
+      ? '<span class="muted">Уже в друзьях</span>'
+      : '<button class="primary" id="send-friend-request">Добавить</button>' +
+        '<button id="block-search-result">Блок</button>';
 
     $('friend-search-result').innerHTML = socialUserCard(player, actions);
 
     if (!data.are_friends) {
       $('send-friend-request').onclick = async () => {
         await socialPost('/api/social/friends/request', { profile_id:player.id });
-        $('friend-search-result').innerHTML = '<div class="empty">Гонец послан.</div>';
+        $('friend-search-result').innerHTML = '<div class="empty">Заявка отправлена.</div>';
         await loadSocial();
       };
       $('block-search-result').onclick = async () => {
@@ -1236,7 +1243,7 @@ async function openPlayerProfile(profileId) {
     $('player-profile-avatar').textContent = avatarSymbol(profile.avatar_id);
     $('player-profile-presence').innerHTML = presenceLabel(presence);
     $('player-profile-game').textContent = presence.in_game && presence.game
-      ? 'Ныне правит: ' + (presence.game.room_name || 'Игра')
+      ? 'Сейчас играет: ' + (presence.game.room_name || 'Игра')
       : '';
 
     $('view-stat-mmr').textContent = Number(stats.mmr || 1000);
@@ -1250,18 +1257,18 @@ async function openPlayerProfile(profileId) {
       ? achievements.map(item =>
           '<span class="achievement-pill">' + escapeHtml(item) + '</span>'
         ).join('')
-      : '<span class="muted">Летописцу пока нечего о тебе сказать.</span>';
+      : '<span class="muted">Пока достижений нет.</span>';
 
     const actions = [];
     if (data.are_friends) {
-      actions.push('<button data-profile-message="' + profile.id + '">Грамота</button>');
-      actions.push('<button data-profile-invite="' + profile.id + '">Звать в свой век</button>');
+      actions.push('<button data-profile-message="' + profile.id + '">Сообщение</button>');
+      actions.push('<button data-profile-invite="' + profile.id + '">Пригласить в игру</button>');
     } else if (profile.id !== activeProfile?.id) {
-      actions.push('<button class="primary" data-profile-add="' + profile.id + '">Звать в други</button>');
+      actions.push('<button class="primary" data-profile-add="' + profile.id + '">Добавить в друзья</button>');
     }
 
     if (presence.in_game && presence.game?.game_id) {
-      actions.push('<button class="primary" data-profile-watch="' + profile.id + '">Смотреть со стены</button>');
+      actions.push('<button class="primary" data-profile-watch="' + profile.id + '">Наблюдать</button>');
     }
 
     $('player-profile-actions').innerHTML = actions.join('');
@@ -1338,7 +1345,7 @@ async function openChat(profileId) {
   const friend = (currentSocial?.friends || []).find(item => item.id === profileId);
   if (!friend) return;
   activeChatProfile = friend;
-  $('chat-title').textContent = friend.display_name || friend.handle || 'Грамоты';
+  $('chat-title').textContent = friend.display_name || friend.handle || 'Сообщения';
   $('chat-subtitle').textContent = '@' + (friend.handle || '');
   $('chat-input').value = '';
   $('chat-error').textContent = '';
@@ -1371,7 +1378,7 @@ async function refreshChat() {
             '<div>' + escapeHtml(message.text) + '</div>' +
             '<div class="chat-time">' + escapeHtml(time) + '</div></div>';
         }).join('')
-      : '<div class="empty">Грамот пока нет.</div>';
+      : '<div class="empty">Сообщений пока нет.</div>';
     $('chat-log').scrollTop = $('chat-log').scrollHeight;
     await loadSocial();
   } catch (error) {
@@ -1414,7 +1421,7 @@ function openGameInviteModal(profileId) {
         ' · ' + Number(item.lifecycle?.player_count || 0) + '/' + Number(item.lifecycle?.max_players || 6) +
         '</button>'
       ).join('')
-    : '<div class="empty">Залы пусты: никто не созывает правителей.</div>';
+    : '<div class="empty">Нет активных мультиплеерных комнат в лобби.</div>';
 
   document.querySelectorAll('[data-send-game-invite]').forEach(button => {
     button.onclick = async () => {
@@ -1446,19 +1453,19 @@ async function loadOpenRooms() {
     const rooms = data.rooms || [];
 
     if (!rooms.length) {
-      $('open-rooms').innerHTML = '<div class="empty">Открытых залов сейчас нет.</div>';
+      $('open-rooms').innerHTML = '<div class="empty">Сейчас нет открытых комнат.</div>';
       return;
     }
 
     $('open-rooms').innerHTML = rooms.map(room => {
       const already = myIds.has(room.game_id);
       const free = Number(room.max_players || 6) - Number(room.player_count || 0);
-      const claimed = (room.claimed_houses || []).join(', ') || 'пока никого';
+      const claimed = (room.claimed_houses || []).join(', ') || 'пока никто';
       return `
         <div class="room-card">
           <div>
-            <div><span class="badge public">ОТКРЫТЫЙ ЗАЛ</span></div>
-            <div class="game-title">${escapeHtml(room.room_name || 'Открытый зал')}</div>
+            <div><span class="badge public">ОТКРЫТАЯ</span></div>
+            <div class="game-title">${escapeHtml(room.room_name || 'Открытая комната')}</div>
             <div class="game-meta">
               Игроков: ${room.player_count}/${room.max_players} · Свободно мест: ${free}<br>
               Заняты Дома: ${escapeHtml(claimed)}
@@ -1466,7 +1473,7 @@ async function loadOpenRooms() {
           </div>
           <div class="game-actions">
             <button class="primary" data-public-game="${escapeHtml(room.game_id)}">
-              ${already ? 'Вернуться в зал' : 'Войти в зал'}
+              ${already ? 'Вернуться' : 'Подключиться'}
             </button>
           </div>
         </div>`;
@@ -1481,11 +1488,11 @@ async function loadOpenRooms() {
           return;
         }
         if (!profileToken) {
-          alert('Сперва назовись, потом входи в зал.');
+          alert('Сначала войди в профиль, чтобы подключиться к комнате.');
           return;
         }
         try {
-          await withBusy(button, 'Отворяем двери...', async () => {
+          await withBusy(button, 'Подключаем...', async () => {
             const joined = await request(
               '/api/games/' + encodeURIComponent(id) + '/join-public',
               {
@@ -1526,15 +1533,15 @@ for (const prefix of ['solo', 'public', 'private']) {
   const pace = $(prefix + '-pace');
   if (!pace) continue;
   const label = document.createElement('label');
-  label.textContent = 'Земля и число Домов';
+  label.textContent = 'Карта и число Домов';
   const select = document.createElement('select');
   select.id = prefix + '-map';
   select.className = pace.className;
   const sizes = { 2: 'малая', 3: 'небольшая', 4: 'средняя', 5: 'большая', 6: 'огромная' };
   select.innerHTML = Object.entries(sizes).map(([count, size]) =>
-    '<option value="' + count + '"' + (count === '4' ? ' selected' : '') + '>Неведомая земля, ' + count +
+    '<option value="' + count + '"' + (count === '4' ? ' selected' : '') + '>Случайная, ' + count +
     (count < 5 ? ' Дома' : ' Домов') + ' · ' + size + '</option>').join('') +
-    '<option value="classic">Старая карта, 6 Домов · для проб</option>';
+    '<option value="classic">Классическая, 6 Домов · для тестов</option>';
   pace.after(label, select);
 }
 
@@ -1546,7 +1553,7 @@ function mapChoice(prefix) {
 async function createMultiplayer(visibility, button, errorId, roomInputId, houseSelectId, paceSelectId) {
   $(errorId).textContent = '';
   try {
-    await withBusy(button, 'Созываем...', async () => {
+    await withBusy(button, 'Создаём...', async () => {
       const data = await request('/api/games', {
         method:'POST',
         headers:{'content-type':'application/json'},
@@ -1614,7 +1621,7 @@ $('register-profile').onclick = async () => {
   $('profile-error').textContent = '';
   const button = $('register-profile');
   try {
-    await withBusy(button, 'Созываем...', async () => {
+    await withBusy(button, 'Создаём...', async () => {
       const data = await request('/api/profiles/register', {
         method:'POST',
         headers:{'content-type':'application/json'},
@@ -1635,7 +1642,7 @@ $('login-profile').onclick = async () => {
   $('profile-error').textContent = '';
   const button = $('login-profile');
   try {
-    await withBusy(button, 'Стража отворяет...', async () => {
+    await withBusy(button, 'Входим...', async () => {
       const data = await request('/api/profiles/login', {
         method:'POST',
         headers:{'content-type':'application/json'},
@@ -1670,7 +1677,7 @@ $('create-solo').onclick = async () => {
   $('solo-error').textContent = '';
   const button = $('create-solo');
   try {
-    await withBusy(button, 'Созываем...', async () => {
+    await withBusy(button, 'Создаём...', async () => {
       const data = await request('/api/games/solo', {
         method:'POST',
         headers:{'content-type':'application/json'},
@@ -1700,7 +1707,7 @@ $('join-private').onclick = async () => {
   $('join-error').textContent = '';
   const button = $('join-private');
   try {
-    await withBusy(button, 'Отворяем двери...', async () => {
+    await withBusy(button, 'Подключаем...', async () => {
       const data = await request('/api/games/join', {
         method:'POST',
         headers:{'content-type':'application/json'},
@@ -1754,17 +1761,17 @@ async function loadRoom() {
     $('room-kind').textContent = solo
       ? 'Соло-партия'
       : publicRoom
-        ? 'Открытый зал'
-        : 'Закрытый зал';
+        ? 'Открытая комната'
+        : 'Приватная комната';
 
     $('invite').textContent = solo
       ? (life.room_name || 'СОЛО')
-      : (life.invite_code || 'ВЕК НАЧАТ');
+      : (life.invite_code || 'ИГРА НАЧАТА');
 
     $('status').textContent =
       (life.room_name ? life.room_name + ' · ' : '') +
-      'Ныне: ' + statusText(life.status) +
-      ' · устав: ' + (life.ruleset_version || 'V6');
+      'Статус: ' + statusText(life.status) +
+      ' · правила: ' + (life.ruleset_version || 'V6');
 
     const claims = life.house_claims || {};
     $('houses').innerHTML = '';
@@ -1776,7 +1783,7 @@ async function loadRoom() {
       button.className = 'house' + (ownerId ? ' claimed' : '') + (me?.house === house ? ' mine' : '');
       button.textContent =
         house +
-        (me?.house === house ? ' · ТВОЙ ДОМ' : ownerId ? ' · уже правят' : ' · ждёт государя');
+        (me?.house === house ? ' · ТВОЙ ДОМ' : ownerId ? ' · занят' : ' · свободен');
 
       const canClaim =
         life.status === 'LOBBY' &&
@@ -1791,7 +1798,7 @@ async function loadRoom() {
     }
 
     $('players').innerHTML = data.players.map(player => {
-      const role = player.role === 'ADMIN' ? 'хозяин зала' : player.role === 'SPECTATOR' ? 'зритель' : 'государь';
+      const role = player.role === 'ADMIN' ? 'хост' : player.role === 'SPECTATOR' ? 'наблюдатель' : 'игрок';
       const house = player.house ? ' · ' + player.house : '';
       return '<div class="player"><span>' + escapeHtml(player.display_name) +
         '</span><span class="muted">' + escapeHtml(role + house) + '</span></div>';
@@ -1811,16 +1818,16 @@ async function loadRoom() {
       isAdmin && !solo && life.status === 'LOBBY' ? 'block' : 'none';
     $('start').disabled = !canStart;
     $('start').textContent = canStart
-      ? 'Начать век'
-      : 'Начать век · ждём ещё ' + needed;
+      ? 'Начать игру'
+      : 'Начать игру · нужно ещё ' + needed;
 
     $('start-hint').textContent =
       !solo && life.status === 'LOBBY'
         ? (missingCount === 0
-            ? 'Все Дома при государях. Хозяин зала может начинать век.'
+            ? 'Все 6 Домов заняты. Хост может начинать партию.'
             : needed === 0
-              ? 'Домов при государях: ' + claimedCount + '. Можно начинать: прочие Дома возьмут советники.'
-              : 'Нужны хотя бы два государя. Домов занято: ' + claimedCount + ' из 6.')
+              ? 'Занято ' + claimedCount + ' из 6. Можно начинать: свободные Дома возьмёт ИИ.'
+              : 'Нужно хотя бы 2 игрока с Домами. Занято: ' + claimedCount + ' из 6.')
         : '';
 
     $('open-game').style.display = life.status === 'RUNNING' ? 'block' : 'none';
@@ -1847,7 +1854,7 @@ $('release-house').onclick = async () => {
   $('room-error').textContent = '';
   const button = $('release-house');
   try {
-    await withBusy(button,'Снимаем венец...',async () => {
+    await withBusy(button,'Освобождаем...',async () => {
       await request('/api/games/' + encodeURIComponent(gameId) + '/release-house',{method:'POST'},token);
       await loadRoom();
     });
@@ -1861,7 +1868,7 @@ $('start').onclick = async () => {
   $('room-error').textContent = '';
   const button = $('start');
   try {
-    await withBusy(button,'Трубят начало...',async () => {
+    await withBusy(button,'Запускаем...',async () => {
       await request('/api/games/' + encodeURIComponent(gameId) + '/start',{method:'POST'},token);
       await loadRoom();
     });

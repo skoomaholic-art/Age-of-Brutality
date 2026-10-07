@@ -4041,6 +4041,13 @@ $('restore-game').addEventListener('click', async () => {
 });
 
 setupBar();
+
+// The logo leads back to the lobby.
+document.querySelector('header .brand').style.cursor = 'pointer';
+document.querySelector('header .brand').addEventListener('click', () => {
+  try { sessionStorage.setItem('aob-menu-seen', '1'); } catch {}
+  location.href = '/lobby.html';
+});
 setupLens();
 setupLand();
 setupMaker();
