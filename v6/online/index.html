@@ -839,6 +839,7 @@ let isSpectator = false;
 
 const pageParams = new URLSearchParams(location.search);
 const scopedGameId = pageParams.get('game');
+try { if (scopedGameId) localStorage.setItem('aob-last-game', scopedGameId); } catch {}
 const profileToken = localStorage.getItem('aob-profile-token');
 const scopedToken = scopedGameId
   ? (profileToken || localStorage.getItem('aob-token-' + scopedGameId))

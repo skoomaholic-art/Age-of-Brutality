@@ -341,7 +341,7 @@ button.loading { opacity:.65; cursor:wait; }
     </section>
 
     <section class="section card">
-      <h2>Мои века</h2>
+      <h2 id="games">Мои века</h2>
       <div id="my-games" class="game-list">
         <div class="empty">Писарь ищет твои свитки...</div>
       </div>
@@ -356,7 +356,7 @@ button.loading { opacity:.65; cursor:wait; }
     </section>
 
     <section class="section">
-      <h2>Новый век</h2>
+      <h2 id="new">Новый век</h2>
       <div class="create-grid">
         <div class="card">
           <h3>В одиночку</h3>
@@ -547,6 +547,12 @@ button.loading { opacity:.65; cursor:wait; }
   </div>
 </div>
 
+<script>
+// A visitor who comes without a game in hand is shown the title screen first.
+try {
+  if (!new URLSearchParams(location.search).get('game') && !location.hash && !sessionStorage.getItem('aob-menu-seen')) location.replace('/menu.html');
+} catch {}
+</script>
 <script>
 const houses = ['Варкайр','Сайрвен','Ортайн','Эркай','Тасвар','Айрель'];
 const profileAvatars = [

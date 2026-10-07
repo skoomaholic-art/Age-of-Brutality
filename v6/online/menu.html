@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Жестокий Век</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/img/favicon-32.png">
+<link rel="apple-touch-icon" href="/assets/img/favicon-180.png">
+<style>
+  @font-face { font-family: Kurale; src: url('/assets/fonts/kurale-cyrillic-400-normal.woff2') format('woff2'); font-display: swap; }
+  html, body { margin: 0; height: 100%; background: #1b1512; overflow: hidden; }
+  /* The stage keeps the proportions of the painting and always fills the window;
+     it is pinned to the left so the menu never slides out of view. */
+  .stage {
+    position: fixed; left: 0; top: 50%; transform: translateY(-50%);
+    width: max(100vw, calc(100vh * 1672 / 941)); aspect-ratio: 1672 / 941;
+    container-type: size; overflow: hidden;
+  }
+  .scene { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: 62% 55%; animation: breathe 26s ease-in-out infinite alternate; }
+  @keyframes breathe { from { transform: scale(1); } to { transform: scale(1.035) translateX(-.4%); } }
+
+  .cloud { position: absolute; left: -26%; opacity: .92; animation: drift linear infinite; pointer-events: none; }
+  @keyframes drift { from { transform: translateX(0); } to { transform: translateX(135cqw); } }
+
+  /* Marginal beasts cross the foot of the page one after another. */
+  .walker { position: absolute; bottom: 1.2%; left: 37%; pointer-events: none; opacity: 0; animation: cross 64s linear infinite; }
+  .walker img { display: block; width: 100%; animation: hop .55s ease-in-out infinite alternate; transform-origin: 50% 100%; }
+  @keyframes cross { 0% { transform: translateX(-12cqw); opacity: 0; } 1% { opacity: 1; } 21% { opacity: 1; } 22%, 100% { transform: translateX(78cqw); opacity: 0; } }
+  @keyframes hop { from { transform: translateY(0) rotate(-1.5deg); } to { transform: translateY(-.9cqh) rotate(1.5deg); } }
+
+  .panel {
+    position: absolute; left: 3.7%; top: 0; bottom: 0; width: 24%;
+    background: #1d1814 url('/assets/img/menu-panel.png') center / 100% 100% no-repeat;
+    box-shadow: 0 0 2.4cqw rgba(0,0,0,.55);
+    display: flex; flex-direction: column; align-items: stretch;
+  }
+  .logo { display: block; width: 86%; margin: 5.5cqh auto 3cqh; filter: drop-shadow(0 .4cqh .5cqh rgba(0,0,0,.6)); animation: glint 7s ease-in-out infinite; }
+  @keyframes glint { 0%, 100% { filter: drop-shadow(0 .4cqh .5cqh rgba(0,0,0,.6)) brightness(1); } 50% { filter: drop-shadow(0 .4cqh .9cqh rgba(0,0,0,.6)) brightness(1.12); } }
+  nav { display: grid; gap: .7cqh; padding: 0 0 0 9%; }
+  nav button {
+    all: unset; box-sizing: border-box; cursor: pointer; position: relative;
+    font-family: Kurale, Georgia, serif; font-size: 3.5cqh; line-height: 1; color: #efe4c6; letter-spacing: .02em;
+    padding: 1.35cqh 1.2cqw 1.35cqh 2.3cqw; white-space: nowrap;
+  }
+  nav button::before { content: '⚜'; position: absolute; left: .2cqw; top: 50%; transform: translateY(-50%) scale(0); color: #d9b24a; font-size: 2.6cqh; transition: transform .18s; }
+  nav button:hover:not(:disabled), nav button:focus-visible { background: linear-gradient(90deg, #9c2c1e, #7d2217 70%, transparent); color: #fff6dd; }
+  nav button:hover:not(:disabled)::before, nav button:focus-visible::before { transform: translateY(-50%) scale(1); }
+  nav button:disabled { color: #7d7362; cursor: default; }
+  .snail { margin: auto auto 3.5cqh; width: 62%; transform-origin: 30% 100%; animation: toot 3.2s ease-in-out infinite; }
+  @keyframes toot { 0%, 60%, 100% { transform: rotate(0); } 70% { transform: rotate(-4deg) translateY(-.4cqh); } 80% { transform: rotate(1deg); } 90% { transform: rotate(-3deg); } }
+  .mark { position: absolute; right: 1cqw; bottom: 1cqh; width: 3.4cqh; opacity: .8; }
+  @media (prefers-reduced-motion: reduce) { .scene, .cloud, .walker, .walker img, .snail, .logo { animation: none; } .walker { display: none; } }
+</style>
+</head>
+<body>
+<div class="stage">
+  <img class="scene" src="/assets/img/menu-scene.jpg" alt="">
+  <img class="cloud" src="/assets/img/menu-cloud-1.png" alt="" style="top:2%;width:15%;animation-duration:150s;animation-delay:-40s">
+  <img class="cloud" src="/assets/img/menu-cloud-2.png" alt="" style="top:1%;width:13%;animation-duration:210s;animation-delay:-120s">
+  <img class="cloud" src="/assets/img/menu-cloud-3.png" alt="" style="top:5%;width:11%;animation-duration:180s;animation-delay:-5s">
+  <div class="walker" style="width:9%;animation-delay:2s"><img src="/assets/img/menu-hare.png" alt=""></div>
+  <div class="walker" style="width:12%;animation-delay:18s"><img src="/assets/img/menu-beast.png" alt=""></div>
+  <div class="walker" style="width:12%;animation-delay:34s"><img src="/assets/img/menu-dragon.png" alt=""></div>
+  <div class="walker" style="width:9%;animation-delay:50s"><img src="/assets/img/menu-monkey.png" alt=""></div>
+  <div class="panel">
+    <img class="logo" src="/assets/img/menu-logo.png" alt="Жестокий Век">
+    <nav>
+      <button id="m-continue" disabled>Продолжить</button>
+      <button id="m-new">Новая игра</button>
+      <button id="m-load">Загрузить</button>
+      <button disabled title="Мастера ещё не прибыли">Настройки</button>
+      <button disabled title="Мастера ещё не прибыли">Авторы</button>
+      <button disabled title="Мастера ещё не прибыли">Выход</button>
+    </nav>
+    <img class="snail" src="/assets/img/menu-snail.png" alt="">
+  </div>
+  <img class="mark" src="/assets/img/s-mark.png" alt="Skoomaholic Dev">
+</div>
+<script>
+// The lobby opens the menu first; this flag tells it the visitor has been here.
+const go = url => { try { sessionStorage.setItem('aob-menu-seen', '1'); } catch {} location.href = url; };
+let last = null;
+try {
+  last = localStorage.getItem('aob-last-game');
+  if (last && !localStorage.getItem('aob-token-' + last) && !localStorage.getItem('aob-profile-token')) last = null;
+} catch {}
+const cont = document.getElementById('m-continue');
+if (last) { cont.disabled = false; cont.onclick = () => go('/?game=' + encodeURIComponent(last)); }
+document.getElementById('m-new').onclick = () => go('/lobby.html#new');
+document.getElementById('m-load').onclick = () => go('/lobby.html#games');
+(last ? cont : document.getElementById('m-new')).focus();
+</script>
+</body>
+</html>
