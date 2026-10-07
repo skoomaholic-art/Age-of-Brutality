@@ -148,6 +148,9 @@ main { width:min(1500px,100%); margin:0 auto; padding:22px 22px 80px; }
 .note { max-width:420px; display:grid; grid-template-columns:auto 1fr; gap:10px; align-items:start; padding:9px 12px; border:1.5px solid var(--ink); border-left:5px solid var(--gold); background:rgba(242,230,200,.98); box-shadow:3px 3px 0 rgba(43,27,18,.32); }
 .note.bad { border-left-color:var(--vermilion); }
 .note.good { border-left-color:var(--verdigris); }
+.note .slot { width:92px; aspect-ratio:1 / 1; }
+.note .slot .hint, .note .slot .clear { display:none !important; }
+.note .slot img { object-fit:contain; }
 .note .mark { font-family:Kurale, serif; font-size:24px; line-height:1; color:var(--vermilion-deep); }
 .note h3 { font-size:22px; }
 .note p { font-size:14px; margin-top:1px; }
@@ -214,7 +217,13 @@ const GROUPS = [
         text: 'Рейтар III не вернулся с поля у Желгарда. Армия осталась без вождя.' },
       { id: 'commander_captured', kind: 'herald', live: true, where: 'твой командир попал в плен',
         title: 'Командир в плену',
-        text: 'Рейтар III схвачен людьми Дома Тасвар. Жди гонца с ценой выкупа.' }
+        text: 'Рейтар III схвачен людьми Дома Тасвар. Жди гонца с ценой выкупа.' },
+      { id: 'commander_assigned', kind: 'herald', live: true, where: 'командир возглавил армию',
+        title: 'Командир при войске',
+        text: 'Рейтар III принял знамя и встал во главе армии в Корвейне.' },
+      { id: 'commander_returned', kind: 'herald', live: true, where: 'командир вернулся в королевский двор',
+        title: 'Командир при дворе',
+        text: 'Рейтар III сложил меч и вернулся ко двору. Армия в Корвейне осталась без вождя.' }
     ]
   },
   {
@@ -241,7 +250,28 @@ const GROUPS = [
         text: 'Следы ведут ко двору Дома Айрель. Их человека взяли у твоей казны с отмычками и подложной грамотой.' },
       { id: 'heir_born', kind: 'herald', live: false, where: 'в твоём Доме родился наследник',
         title: 'В Доме прибавление',
-        text: 'У правителя родился сын. Династия продолжается, а с ней и чужие виды на твой престол.' }
+        text: 'У правителя родился сын. Династия продолжается, а с ней и чужие виды на твой престол.' },
+      { id: 'execution_done', kind: 'herald', live: false, where: 'ты казнил чужого члена семьи',
+        title: 'Приговор исполнен',
+        text: 'Кайсар I казнён на площади Рейтара. Дом Тасвар этого не забудет.' },
+      { id: 'execution_suffered', kind: 'herald', live: false, where: 'казнили твоего члена семьи',
+        title: 'Казнь в чужих стенах',
+        text: 'Рейтар III казнён по слову Дома Тасвар. Двор в трауре, войско требует мести.' },
+      { id: 'release_done', kind: 'herald', live: false, where: 'ты отпустил чужого члена семьи',
+        title: 'Пленник отпущен',
+        text: 'Кайсар I вышел за ворота и уехал к своим. Милость запомнят, как и слабость.' },
+      { id: 'release_received', kind: 'herald', live: false, where: 'отпустили твоего члена семьи',
+        title: 'Возвращение из плена',
+        text: 'Рейтар III отпущен Домом Тасвар и вернулся ко двору.' },
+      { id: 'deal_made', kind: 'herald', live: true, where: 'игроки успешно договорились о чём-то в меню дипломатии',
+        title: 'Договор скреплён',
+        text: 'Дома Эркай и Варкайр ударили по рукам. Печати поставлены, гонцы разосланы.' },
+      { id: 'deal_failed', kind: 'herald', live: true, where: 'игроки не сумели договориться в дипломатии',
+        title: 'Послы уехали ни с чем',
+        text: 'Дом Варкайр отверг твоё предложение. Грамота вернулась без печати.' },
+      { id: 'day_change', kind: 'herald', live: true, where: 'смена игрового дня',
+        title: 'Настал день третий',
+        text: 'Солнце встало над шестью Домами. Доход начислен, приказы ждут.' }
     ]
   },
   {
@@ -286,7 +316,7 @@ const GROUPS = [
     about: 'Лист со сводкой за прошедший день. Открывается при смене дня.',
     wide: true,
     items: [
-      { id: 'chronicle_day', kind: 'chronicle', live: false, where: 'смена игрового дня',
+      { id: 'chronicle_day', kind: 'chronicle', live: false, where: 'смена игрового дня (хроника / статистика)',
         day: 'День третий из шести',
         title: 'Хроника',
         lines: [
@@ -315,7 +345,7 @@ const GROUPS = [
   },
   {
     title: 'Короткие вести',
-    about: 'Строка без картинки: то, что случается часто и не должно закрывать карту.',
+    about: 'Строка с маленькой иконкой: то, что случается часто и не должно закрывать карту.',
     items: [
       { id: 'day_started', kind: 'note', live: true, mark: '☼', tone: '', where: 'начался новый день',
         title: 'Настал день третий', text: 'Доход начислен: 7 золота, 1 влияние.' },
@@ -332,6 +362,11 @@ const GROUPS = [
 ];
 
 const STORE_KEY = 'aob-notification-art';
+// Pictures chosen so far. In the repository they are read from the game's
+// assets; the stand-alone copy of this sheet carries them inside (EMBEDDED).
+const EMBEDDED = {};
+const ASSET_BASE = '../../online/assets/img/notif-';
+const defaultArt = id => EMBEDDED[id] || ASSET_BASE + id.replace(/_/g, '-') + '.jpg';
 let art = {};
 try { art = JSON.parse(localStorage.getItem(STORE_KEY) || '{}') || {}; } catch { art = {}; }
 let pickingFor = null;
@@ -366,7 +401,7 @@ function windowMarkup(item) {
       '<div class="day">' + esc(item.day) + '</div><h3>' + esc(item.title) + '</h3><div class="rule"></div>' +
       '<ul>' + item.lines.map(line => '<li>' + esc(line) + '</li>').join('') + '</ul>' + buttons(item.buttons) + '</div>';
   }
-  return '<div class="win note ' + esc(item.tone || '') + '"><div class="mark">' + esc(item.mark) + '</div>' +
+  return '<div class="win note ' + esc(item.tone || '') + '">' + slot(item.id) +
     '<div><h3>' + esc(item.title) + '</h3><p>' + esc(item.text) + '</p></div></div>';
 }
 
@@ -390,9 +425,13 @@ function paint() {
   document.querySelectorAll('[data-slot]').forEach(node => {
     total += 1;
     const entry = art[node.dataset.slot];
+    const img = node.querySelector('img');
+    // An uploaded picture wins; otherwise the chosen default, if there is one.
+    img.onerror = () => { node.classList.remove('filled'); };
+    img.onload = () => { node.classList.add('filled'); };
     node.classList.toggle('filled', Boolean(entry));
-    node.querySelector('img').src = entry ? entry.data : '';
-    if (entry) filled += 1;
+    img.src = entry ? entry.data : defaultArt(node.dataset.slot);
+    if (entry || EMBEDDED[node.dataset.slot]) filled += 1;
   });
   document.getElementById('count').textContent = 'Изображений: ' + filled + ' из ' + total;
 }
