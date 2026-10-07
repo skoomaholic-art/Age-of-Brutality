@@ -49,8 +49,39 @@ export function recordExploration(game, map, houses, nowMs = Date.now()) {
     next.exploration ||= {};
     next.exploration[house] = [...known, ...fresh].sort();
   }
+
+  // Houses meet when one sees a land or a fleet of the other. The meeting is
+  // mutual: from then on each exists for the other.
+  const source = next || game;
+  const met = [];
+  for (const house of houses) {
+    for (const id of visiblePositions(source.state, map, house)) {
+      const owner = source.state.territories?.[id]?.owner ?? source.state.sea_nodes?.[id]?.owner ?? null;
+      if (!owner || owner === house || !houses.includes(owner)) continue;
+      if (!(source.contacts?.[house] || []).includes(owner)) met.push([house, owner]);
+    }
+  }
+  if (met.length) {
+    next ||= structuredClone(game);
+    next.contacts ||= {};
+    for (const [a, b] of met) {
+      for (const [x, y] of [[a, b], [b, a]]) {
+        const list = new Set(next.contacts[x] || []);
+        list.add(y);
+        next.contacts[x] = [...list].sort();
+      }
+    }
+  }
   if (next) next.updated_at = new Date(nowMs).toISOString();
   return next || game;
+}
+
+// The Houses this one has met. Without fog everyone knows everyone.
+export function knownHouses(game, house, houses) {
+  if (game.rounds?.mode !== 'days' || game.lifecycle?.status !== 'RUNNING') {
+    return houses.filter(other => other !== house);
+  }
+  return [...(game.contacts?.[house] || [])];
 }
 
 // What other Houses do in private: their marches, levies and building.
@@ -108,10 +139,18 @@ export function applyFog(clientGame, map, house) {
       (seen.has(order.action?.from) || seen.has(order.action?.to));
   });
 
+  // News of Houses not yet met does not reach this one.
+  const known = new Set([house, ...(clientGame.contacts?.[house] || [])]);
+  const named = item => [
+    ...(item.details?.houses || []),
+    item.details?.attacker, item.details?.defender, item.details?.house
+  ].filter(Boolean);
   clientGame.audit_log = (clientGame.audit_log || []).filter(item => {
-    if (!PRIVATE_EVENTS.has(item.type)) return true;
-    return item.details?.house === house;
+    if (PRIVATE_EVENTS.has(item.type)) return item.details?.house === house;
+    const names = named(item);
+    return !names.length || names.some(name => known.has(name));
   });
+  delete clientGame.contacts;
 
   delete clientGame.exploration;
   clientGame.visibility = {

@@ -81,10 +81,17 @@ export function declareWarInPlace(game, a, b, { nowMs = Date.now(), cause = 'ATT
   return true;
 }
 
+// Under fog a House can deal only with the Houses it has met on the map.
+export function hasMet(game, house, other) {
+  if (game?.rounds?.mode !== 'days') return true;
+  return Boolean(game.contacts?.[house]?.includes(other));
+}
+
 function assertHouses(game, constants, house, target) {
   if (!constants.houses.includes(house)) throw new Error(`unknown house ${house}`);
   if (!constants.houses.includes(target)) throw new Error(`unknown house ${target}`);
   if (house === target) throw new Error('дипломатия с самим собой невозможна');
+  if (!hasMet(game, house, target)) throw new Error('этот Дом тебе ещё не встретился');
   if (abandoned(game, target)) throw new Error('это государство брошено, договариваться не с кем');
 }
 
@@ -193,9 +200,12 @@ export function answerAiOffers(game, aiHouses, { nowMs = Date.now() } = {}) {
 }
 
 // What one House is shown: every war and alliance is public, offers are not.
-export function diplomacyView(game, house) {
+export function diplomacyView(game, house, known = null) {
+  const seen = known ? new Set([house, ...known]) : null;
   const relations = {};
   for (const [key, value] of Object.entries(game?.diplomacy?.relations || {})) {
+    // Dealings between Houses this one has not met stay unknown to it.
+    if (seen && !key.split('::').every(name => seen.has(name))) continue;
     relations[key] = value;
   }
   const offers_in = [];
@@ -205,5 +215,5 @@ export function diplomacyView(game, house) {
     if (house && to === house) offers_in.push(from);
     if (house && from === house) offers_out.push(to);
   }
-  return { relations, offers_in, offers_out, max_allies: MAX_ALLIES };
+  return { relations, offers_in, offers_out, max_allies: MAX_ALLIES, known: known ? [...known] : null };
 }

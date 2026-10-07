@@ -208,10 +208,11 @@ test('fog hides what other Houses order but not what happens in the open', () =>
   const types = client.audit_log.map(item => `${item.type}:${item.details?.house || ''}`);
   assert.equal(types.some(entry => entry === `MARCH_QUEUED:${RIVAL}`), false);
   assert.ok(types.some(entry => entry === `MARCH_QUEUED:${HOUSE}`));
-  assert.ok(
-    client.audit_log.some(item => item.type === 'NEUTRAL_CAPTURE' && item.details?.house === RIVAL),
-    'a land changing hands is public'
-  );
+  const captureSeen = log => log.some(item => item.type === 'NEUTRAL_CAPTURE' && item.details?.house === RIVAL);
+  assert.equal(captureSeen(client.audit_log), false, 'news of a House not yet met does not arrive');
+  const met = structuredClone(game);
+  met.contacts = { [HOUSE]: [RIVAL], [RIVAL]: [HOUSE] };
+  assert.ok(captureSeen(applyFog(met, map, HOUSE).audit_log), 'once met, a land changing hands is public');
 });
 
 test('Houses without a player are played by the House AI in multiplayer too', () => {

@@ -190,7 +190,7 @@
     #round-wait img { width: 58%; margin: 0 auto; }
 
     .battle-card {
-      position: absolute; z-index: 5; left: 12px; bottom: 12px; width: min(330px, calc(100% - 24px));
+      position: absolute; z-index: 5; right: 64px; top: 12px; width: min(320px, calc(100% - 88px));
       display: none; padding: 10px; cursor: pointer;
       border: 1.5px solid var(--ink); background: rgba(242,230,200,.97);
       box-shadow: 4px 4px 0 rgba(43,27,18,.35);
@@ -309,6 +309,7 @@
     .status-final { border-left-color: var(--vermilion); background: rgba(179,49,31,.10); color: var(--ink); font-style: normal; font-weight: 700; font-size: 15px; }
     .diplomacy { margin-top:12px; border-top:1px solid rgba(43,27,18,.25); padding-top:8px; font-size:13px; }
     .diplomacy h4 { margin:0 0 6px; font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--vermilion, #a3271c); }
+    .unmet { margin-top:5px; font-style:italic; font-size:12.5px; opacity:.8; }
     .dip-row { display:flex; align-items:center; gap:6px; padding:3px 0; }
     .dip-row .dip-name { flex:1; }
     .dip-row .dip-state { font-style:italic; opacity:.85; }
@@ -421,13 +422,13 @@
       </div>
       <svg id="map" viewBox="40 30 760 490" role="img" aria-label="Карта Жестокого Века"></svg>
       <div id="battle-card" class="battle-card" role="status" title="Нажми, чтобы закрыть">
-        <figure class="miniature"><img src="/assets/img/battle.jpg" alt="" width="560" height="356"></figure>
+        <figure class="miniature"><img id="battle-art" src="/assets/img/notif-battle-seen.jpg" alt="" width="720" height="540"></figure>
         <h3 id="battle-title">Битва</h3>
         <p id="battle-text"></p>
       </div>
       <div id="finale" class="finale">
         <div class="finale-card">
-          <figure class="miniature"><img src="/assets/img/finale.jpg" alt="" width="560" height="611"></figure>
+          <figure class="miniature"><img id="finale-art" src="/assets/img/notif-finale-won.jpg" alt="" width="720" height="540"></figure>
           <h3 id="finale-title">Партия завершена</h3>
           <p id="finale-text"></p>
           <button id="finale-close" class="primary">Посмотреть карту</button>
@@ -992,7 +993,7 @@ function renderRounds() {
     !days && Boolean(mine?.done) && !rounds.finished && !isSpectator
   );
 
-  $('round-houses').innerHTML = rounds.houses.map(item => {
+  $('round-houses').innerHTML = rounds.houses.filter(item => isKnownHouse(item.house)).map(item => {
     // In a game played in days orders are not counted, so there is nothing to tick off.
     const pips = days
       ? (item.ai || abandonedHouses()[item.house] ? '' : 'игрок')
@@ -1008,60 +1009,128 @@ function renderRounds() {
   }).join('');
 }
 
-// Shows a battle miniature when a new battle is reported. Battles already in
-// the journal when the page opens are history and stay quiet.
-let lastBattleSeq = null;
-let battleTimer = null;
+// The heralds: one card in the corner for the most important fresh news.
+// What is already in the journal when the page opens is history and stays quiet.
+let lastNewsSeq = null;
 
-function announceBattles() {
-  const battles = (snapshot?.game?.audit_log || []).filter(item => item.type === 'BATTLE');
-  const newest = battles.reduce((max, item) => Math.max(max, Number(item.seq || 0)), 0);
-  if (lastBattleSeq === null) {
-    lastBattleSeq = newest;
-    return;
+function newsFor(item) {
+  const d = item.details || {};
+  const text = String(item.message || '');
+  const strip = prefix => text.replace(prefix, '');
+  const capitals = Object.values(snapshot?.map?.capitals || {});
+  const mine = name => Boolean(name) && name === house;
+
+  if (item.type === 'BATTLE') {
+    const involved = mine(d.attacker) || mine(d.defender);
+    const capital = capitals.includes(d.territory_id) && d.captured;
+    const body = strip(/^Битва:\s*/);
+    if (!involved) return { rank: 5, art: 'battle-seen', title: 'Битва у твоих границ', text: body };
+    if (mine(d.winner)) {
+      return capital && mine(d.attacker)
+        ? { rank: 9, art: 'capital-taken', title: 'Столица пала', text: body }
+        : { rank: 8, art: 'battle-won', title: 'Победа при ' + (d.territory || ''), text: body };
+    }
+    return capital && mine(d.defender)
+      ? { rank: 9, art: 'capital-lost', title: 'Враг в твоих стенах', text: body }
+      : { rank: 8, art: 'battle-lost', title: 'Разгром у ' + (d.territory || ''), text: body };
   }
-  if (newest <= lastBattleSeq) return;
-  const fresh = battles.filter(item => Number(item.seq || 0) > lastBattleSeq);
-  lastBattleSeq = newest;
-  // A battle of the player's own House matters most; otherwise show the latest one.
-  const own = fresh.filter(item =>
-    item.details?.attacker === house || item.details?.defender === house
-  );
-  const shown = (own.length ? own : fresh).slice(-1)[0];
-  showHerald('Битва', String(shown.message || '').replace(/^Битва:\s*/, ''), true, 10000);
+  if (item.type === 'FIELD_BATTLE') {
+    const involved = (d.houses || []).includes(house);
+    const body = strip(/^Встречный бой:\s*/);
+    if (!involved) return { rank: 5, art: 'battle-seen', title: 'Встречный бой', text: body };
+    return mine(d.winner)
+      ? { rank: 8, art: 'battle-won', title: 'Победа в поле', text: body }
+      : { rank: 8, art: 'battle-lost', title: 'Разбиты в пути', text: body };
+  }
+  if (item.type === 'EMPTY_ENEMY_OCCUPATION') {
+    const capital = capitals.includes(d.to_id);
+    if (mine(d.defender)) {
+      return capital
+        ? { rank: 9, art: 'capital-lost', title: 'Враг в твоих стенах', text: d.to + ' взят Домом ' + d.attacker + '. Гарнизона там не было.' }
+        : { rank: 7, art: 'land-lost', title: 'Земля потеряна', text: d.to + ' перешёл под руку Дома ' + d.attacker + '. Гарнизона там не было.' };
+    }
+    if (mine(d.attacker)) {
+      return capital
+        ? { rank: 9, art: 'capital-taken', title: 'Столица пала', text: 'Знамя твоего Дома поднято над ' + d.to + '.' }
+        : { rank: 6, art: 'neutral-taken', title: 'Земля занята', text: d.to + ' взят без боя: Дом ' + d.defender + ' оставил его без гарнизона.' };
+    }
+    return null;
+  }
+  if (item.type === 'NEUTRAL_CAPTURE' && mine(d.house)) {
+    return /УСПЕХ/.test(text)
+      ? { rank: 5, art: 'neutral-taken', title: 'Новая земля', text: d.to + ' присягнул твоему Дому.' }
+      : { rank: 6, art: 'order-failed', title: 'Приступ отбит', text: d.to + ' устоял. Отряд вернулся в ' + d.from + '.' };
+  }
+  if (item.type === 'FORT_COMPLETE' && mine(d.house)) {
+    return { rank: 4, art: 'fort-built', title: 'Крепость стоит', text: 'В земле ' + d.territory + ' поднялись стены.' };
+  }
+  if (item.type === 'RECRUIT_COMPLETE' && mine(d.house)) {
+    return { rank: 2, art: 'recruit-done', title: 'Воины набраны', text: d.territory + ': под знамя встали новые воины (' + d.warriors + ').' };
+  }
+  if (item.type === 'MARCH_FAILED' && mine(d.house)) {
+    return { rank: 4, art: 'order-failed', title: 'Приказ не выполнен', text: strip(/^[^:]*:\s*/) };
+  }
+  if (item.type === 'HOUSE_ABANDONED') {
+    return { rank: 7, art: 'house-abandoned', title: 'Брошенное государство', text, ms: 16000 };
+  }
+  if (item.type === 'WAR_DECLARED') {
+    const involved = (d.houses || []).includes(house);
+    if (d.betrayal) return { rank: involved ? 8 : 5, art: 'pact-broken', title: 'Клятва нарушена', text: strip(/^Война:\s*/) };
+    return { rank: involved ? 7 : 4, art: 'war-declared', title: mine(d.target) ? 'Тебе объявлена война' : 'Война', text: strip(/^Война:\s*/) };
+  }
+  if (item.type === 'ALLIANCE_FORMED') {
+    return { rank: 6, art: 'deal-made', title: 'Союз скреплён', text: strip(/^Союз:\s*/) };
+  }
+  if (item.type === 'ALLIANCE_BROKEN') {
+    return { rank: 6, art: 'deal-failed', title: 'Союз расторгнут', text: strip(/^Союз расторгнут:\s*/) };
+  }
+  if (item.type === 'ROUND_STARTED' && daysGame()) {
+    return { rank: 3, art: 'day-change', title: 'Настал день ' + (d.round || ''), text: 'Солнце встало над Домами. Доход начислен, приказы ждут.' };
+  }
+  return null;
 }
 
-function showHerald(title, text, withMiniature, ms) {
+function announceNews() {
+  const log = snapshot?.game?.audit_log || [];
+  const newest = log.reduce((max, item) => Math.max(max, Number(item.seq || 0)), 0);
+  if (lastNewsSeq === null) { lastNewsSeq = newest; return; }
+  if (newest <= lastNewsSeq) return;
+  const fresh = log.filter(item => Number(item.seq || 0) > lastNewsSeq);
+  lastNewsSeq = newest;
+  let best = null;
+  for (const item of fresh) {
+    const news = newsFor(item);
+    if (news && (!best || news.rank >= best.rank)) best = news;
+  }
+  if (best) showHerald(best.title, best.text, best.art, best.ms || 11000);
+}
+
+let battleTimer = null;
+
+function showHerald(title, text, art, ms) {
   $('battle-title').textContent = title;
   $('battle-text').textContent = text;
-  $('battle-card').classList.toggle('no-art', !withMiniature);
+  if (art) $('battle-art').src = '/assets/img/notif-' + art + '.jpg';
+  $('battle-card').classList.toggle('no-art', !art);
   $('battle-card').classList.add('show');
   clearTimeout(battleTimer);
   battleTimer = setTimeout(() => $('battle-card').classList.remove('show'), ms);
 }
 
-// Wars, alliances and battles on the road, as the heralds cry them.
-const DIPLOMACY_NEWS = {
-  FIELD_BATTLE: ['Встречный бой', /^Встречный бой:\s*/, true],
-  WAR_DECLARED: ['Война', /^Война:\s*/, false],
-  ALLIANCE_FORMED: ['Союз', /^Союз:\s*/, false],
-  ALLIANCE_BROKEN: ['Союз расторгнут', /^Союз расторгнут:\s*/, false]
-};
-let lastDiplomacySeq = null;
+// Under fog a House exists for the player only once they have met on the map.
+function isKnownHouse(other) {
+  const known = snapshot?.game?.diplomacy?.known;
+  return other === house || !Array.isArray(known) || known.includes(other);
+}
 
-function announceDiplomacy() {
-  const items = (snapshot?.game?.audit_log || []).filter(item => DIPLOMACY_NEWS[item.type]);
-  const newest = items.reduce((max, item) => Math.max(max, Number(item.seq || 0)), 0);
-  if (lastDiplomacySeq === null) { lastDiplomacySeq = newest; return; }
-  if (newest <= lastDiplomacySeq) return;
-  const fresh = items.filter(item => Number(item.seq || 0) > lastDiplomacySeq);
-  lastDiplomacySeq = newest;
-  const own = fresh.filter(item => (item.details?.houses || []).includes(house));
-  const pool = own.length ? own : fresh;
-  // The battle tells more than the declaration of war that came with it.
-  const shown = pool.filter(item => item.type === 'FIELD_BATTLE').slice(-1)[0] || pool.slice(-1)[0];
-  const [title, strip, art] = DIPLOMACY_NEWS[shown.type];
-  showHerald(title, String(shown.message || '').replace(strip, ''), art, 11000);
+function gameHouses() {
+  return Object.keys(snapshot?.game?.state?.houses || colors);
+}
+
+function unknownNote(total) {
+  return total > 0
+    ? '<div class="unmet">Ещё не встречено Домов: ' + total + '</div>'
+    : '';
 }
 
 function relationWith(other) {
@@ -1075,8 +1144,10 @@ function renderDiplomacy() {
   const dip = snapshot?.game?.diplomacy;
   const running = snapshot?.game?.lifecycle?.status === 'RUNNING';
   if (!dip || !house || isSpectator || !running) { box.innerHTML = ''; return; }
-  const hasAlly = Object.keys(colors).some(h => h !== house && relationWith(h) === 'ALLIANCE');
-  const rows = Object.keys(colors).filter(h => h !== house).map(other => {
+  const others = gameHouses().filter(h => h !== house);
+  const met = others.filter(isKnownHouse);
+  const hasAlly = met.some(h => relationWith(h) === 'ALLIANCE');
+  const rows = met.map(other => {
     const rel = relationWith(other);
     let state = '<span class="dip-state">нейтралитет</span>';
     let buttons = '';
@@ -1100,7 +1171,7 @@ function renderDiplomacy() {
     }
     return '<div class="dip-row"><span class="dip-name">' + escapeHtml(other) + '</span>' + state + buttons + '</div>';
   }).join('');
-  box.innerHTML = '<h4>Дипломатия</h4>' + rows;
+  box.innerHTML = '<h4>Дипломатия</h4>' + rows + unknownNote(others.length - met.length);
   box.querySelectorAll('button[data-dip]').forEach(button => {
     button.onclick = async () => {
       const action = button.dataset.dip;
@@ -1123,22 +1194,6 @@ function renderDiplomacy() {
   });
 }
 
-// Tells the players when a ruler leaves the game and his realm is abandoned.
-let lastAbandonSeq = null;
-
-function announceAbandoned() {
-  const items = (snapshot?.game?.audit_log || []).filter(item => item.type === 'HOUSE_ABANDONED');
-  const newest = items.reduce((max, item) => Math.max(max, Number(item.seq || 0)), 0);
-  if (lastAbandonSeq === null) {
-    lastAbandonSeq = newest;
-    return;
-  }
-  if (newest <= lastAbandonSeq) return;
-  const shown = items.filter(item => Number(item.seq || 0) > lastAbandonSeq).slice(-1)[0];
-  lastAbandonSeq = newest;
-  showHerald('Брошенное государство', shown.message, false, 16000);
-}
-
 let finaleDismissed = false;
 
 function renderFinale() {
@@ -1153,6 +1208,8 @@ function renderFinale() {
       ? 'Совместная победа'
       : 'Партия завершена';
   const mine = winners.includes(house);
+  $('finale-art').src = '/assets/img/notif-finale-' +
+    (winners.length > 1 ? 'shared' : mine ? 'won' : 'lost') + '.jpg';
   $('finale-text').textContent = winners.length > 1
     ? winners.join(', ') + ' делят победу.'
     : winners.length === 1
@@ -1212,7 +1269,7 @@ function renderVictory() {
     note.textContent = parts.join(' ');
   }
 
-  const rows = victory.standings || [];
+  const rows = (victory.standings || []).filter(item => isKnownHouse(item.house));
   $('standings').innerHTML = rows.map((item, index) => {
     const exile = item.abandoned
       ? '<div class="standing-exile abandoned">Брошенное государство</div>'
@@ -2236,10 +2293,8 @@ async function refresh() {
 
   renderVictory();
   renderFinale();
-  announceBattles();
-  announceDiplomacy();
+  announceNews();
   renderDiplomacy();
-  announceAbandoned();
   renderRounds();
   renderHouse();
   renderCharacters();

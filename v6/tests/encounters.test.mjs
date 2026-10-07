@@ -9,6 +9,7 @@ import { processDueOrders } from '../src/online/orders.mjs';
 import { normalizeOnlineEconomy } from '../src/online/economy.mjs';
 import { normalizeAudit, syncAuditFromJournal } from '../src/online/audit.mjs';
 import { startRounds } from '../src/online/rounds.mjs';
+import { recordExploration } from '../src/online/fog.mjs';
 import { calculateNextDueAt } from '../src/online/scheduling.mjs';
 import { nextEncounter, processEncounters } from '../src/online/encounters.mjs';
 import {
@@ -35,6 +36,10 @@ const NEXT = [...adjacency.get(CAPITAL)][0];
 
 // Варкайр holds its capital, Сайрвен the land next door; `mine`/`theirs` warriors.
 function borderGame(mine, theirs) {
+  return recordExploration(rawBorderGame(mine, theirs), map, constants.houses, T0);
+}
+
+function rawBorderGame(mine, theirs) {
   let game = createOnlineGame(map, constants, {
     id: 'enc-test', nowMs: T0, accessMode: 'PLAYER_BOUND', inviteCode: null, characterCatalog
   });
@@ -109,6 +114,8 @@ test('allies pass each other without a fight', () => {
   // Marching onto each other's land is still an attack, so use the meeting check alone.
   game = marchBoth(game, 4, 2);
   assert.equal(nextEncounter(game), null);
+  assert.throws(() => offerAlliance(game, constants, THIRD, HOUSE, { nowMs: T0 }), /ещё не встретился/);
+  game.contacts[THIRD] = [HOUSE];
   assert.throws(() => offerAlliance(game, constants, THIRD, HOUSE, { nowMs: T0 }), /уже есть союзник/);
 });
 

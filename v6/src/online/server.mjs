@@ -44,7 +44,7 @@ import {
   roundsView,
   startRounds
 } from './rounds.mjs';
-import { applyFog, recordExploration } from './fog.mjs';
+import { applyFog, knownHouses, recordExploration } from './fog.mjs';
 import { processEncounters } from './encounters.mjs';
 import {
   acceptAlliance,
@@ -449,7 +449,11 @@ function redactGameForPlayer(game, player) {
   const clientGame = structuredClone(game);
   clientGame.lifecycle = publicLifecycle(clientGame.lifecycle);
   // Wars and alliances are public; offers reach only the Houses concerned.
-  clientGame.diplomacy = diplomacyView(game, player?.house || null);
+  clientGame.diplomacy = diplomacyView(
+    game,
+    player?.house || null,
+    player?.house ? knownHouses(game, player.house, constants.houses) : null
+  );
 
   clientGame.orders = player?.role === PLAYER_ROLE.SPECTATOR
     ? (clientGame.orders || []).filter(item => item.status !== 'PENDING').slice(-30)
@@ -1263,7 +1267,7 @@ async function handleGameApi(req, res, url, ctx, subpath) {
         else if (action === 'DECLARE_WAR') next = declareWar(game, constants, house, target, { nowMs });
         else throw new Error(`unknown diplomacy action ${action}`);
         next = answerAiOffers(next, next.rounds?.ai_houses || [], { nowMs });
-        return { game: next, response: { diplomacy: diplomacyView(next, house) } };
+        return { game: next, response: { diplomacy: diplomacyView(next, house, knownHouses(next, house, constants.houses)) } };
       }
     }));
     return json(res, result.status, result.response);
