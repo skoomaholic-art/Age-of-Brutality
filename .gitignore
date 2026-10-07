@@ -9,3 +9,6 @@ Thumbs.db
 # Arena reconstructed/local test output
 playtest-output/
 qa-output/
+
+# Local installs
+node_modules/

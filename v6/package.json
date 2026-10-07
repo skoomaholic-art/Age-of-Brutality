@@ -7,12 +7,16 @@
     "validate": "node tools/validate.mjs",
     "test": "node --test",
     "check": "npm run validate && npm test",
-    "dev:local": "node --import ./tools/dev/register-fake-firestore.mjs src/online/server.mjs"
+    "dev:local": "node --import ./tools/dev/register-fake-firestore.mjs src/online/server.mjs",
+    "build:map": "node tools/build-map-art.mjs"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
     "@google-cloud/firestore": "^9.3.0"
+  },
+  "devDependencies": {
+    "d3-contour": "^4.0.2"
   }
 }

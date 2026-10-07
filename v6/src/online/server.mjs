@@ -2,6 +2,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { enumerateMarches } from '../core/legal-actions.mjs';
 import { loadJson } from '../core/map.mjs';
@@ -83,6 +84,7 @@ const characterCatalog = loadJson(path.join(v6Root, 'src/data/characters.v6.json
 
 const defaultGameId = process.env.AOB_GAME_ID || 'prototype-1';
 const databaseId = process.env.AOB_FIRESTORE_DATABASE || '(default)';
+const assetGzipCache = new Map();
 const contexts = new Map();
 const contextLoads = new Map();
 
@@ -1343,6 +1345,37 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && (url.pathname === '/lobby' || url.pathname === '/lobby.html')) {
       const html = fs.readFileSync(path.join(v6Root, 'online/lobby.html'), 'utf8');
       return text(res, 200, html, 'text/html; charset=utf-8');
+    }
+
+    // Static assets: self-hosted fonts, the painted map and miniatures. Flat file
+    // names in three known folders only, so no path can escape them.
+    const asset = url.pathname.match(/^\/assets\/(fonts|map|img)\/([a-z0-9][a-z0-9.-]*\.(woff2|svg|json|jpg|png))$/);
+    if (req.method === 'GET' && asset) {
+      const file = path.join(v6Root, 'online/assets', asset[1], asset[2]);
+      if (!fs.existsSync(file)) return json(res, 404, { error: 'not found' });
+      const fonts = asset[1] === 'fonts';
+      res.statusCode = 200;
+      res.setHeader('content-type', {
+        woff2: 'font/woff2',
+        svg: 'image/svg+xml; charset=utf-8',
+        json: 'application/json; charset=utf-8',
+        jpg: 'image/jpeg',
+        png: 'image/png'
+      }[asset[3]]);
+      // Fonts never change; the map is rebuilt from the map data, so it is revalidated.
+      res.setHeader(
+        'cache-control',
+        fonts ? 'public, max-age=31536000, immutable' : asset[1] === 'img' ? 'public, max-age=86400' : 'public, max-age=300'
+      );
+      // The painted map is ~1.5 MB of SVG text; compressed once and kept in memory.
+      const body = fs.readFileSync(file);
+      if (asset[1] === 'map' && /\bgzip\b/.test(String(req.headers['accept-encoding'] || ''))) {
+        if (!assetGzipCache.has(file)) assetGzipCache.set(file, zlib.gzipSync(body));
+        res.setHeader('content-encoding', 'gzip');
+        res.setHeader('vary', 'accept-encoding');
+        return res.end(assetGzipCache.get(file));
+      }
+      return res.end(body);
     }
 
     if (req.method === 'POST' && url.pathname === '/api/internal/tick-due') {
