@@ -2,7 +2,11 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Жестокий Век">
 <title>Жестокий Век</title>
 <link rel="icon" type="image/png" sizes="32x32" href="/assets/img/favicon-32.png">
 <link rel="apple-touch-icon" href="/assets/img/favicon-180.png">
@@ -64,6 +68,7 @@
   .sheet header button { all: unset; cursor: pointer; font: 22px Kurale, serif; color: #2b1b12; padding: 2px 10px; border: 1.5px solid #2b1b12; background: #f2e6c8; }
   .sheet iframe { flex: 1; border: 0; width: 100%; background: transparent; }
   @media (max-width: 760px) { .sheet { left: 2vw; } }
+  #hint { position: fixed; left: 50%; bottom: 6vh; transform: translateX(-50%); width: min(520px, 88vw); padding: 14px 18px; z-index: 9; background: #f2e6c8; color: #2b1b12; border: 2px solid #2b1b12; font: 17px/1.35 Kurale, Georgia, serif; box-shadow: 0 8px 30px rgba(0,0,0,.6); }
   .mark { position: absolute; right: 1cqw; bottom: 1cqh; width: 3.4cqh; opacity: .8; }
   @media (prefers-reduced-motion: reduce) { .world, .cloud, .walker, .walker img, .snail, .logo { animation: none; } .walker { display: none; } }
 </style>
@@ -122,9 +127,16 @@ document.getElementById('sheet-close').onclick = closeSheet;
 addEventListener('keydown', event => { if (event.key === 'Escape') closeSheet(); });
 const fullButton = document.getElementById('m-full');
 const fullLabel = () => { fullButton.textContent = document.fullscreenElement ? 'Выйти из полного экрана' : 'Во весь экран'; };
-fullButton.onclick = () => { (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {}); };
+const standalone = navigator.standalone || matchMedia('(display-mode: standalone)').matches;
+fullButton.onclick = () => {
+  const root = document.documentElement;
+  // The iPhone has no fullscreen for pages: the game is put on the home screen instead.
+  if (!root.requestFullscreen) return showHint('На iPhone полный экран включается иначе: нажмите «Поделиться» → «На экран „Домой“» и запускайте игру с появившегося значка — она откроется без панелей браузера.');
+  (document.fullscreenElement ? document.exitFullscreen() : root.requestFullscreen()).catch(() => showHint('Браузер не дал развернуть игру на весь экран.'));
+};
+const showHint = text => { let box = document.getElementById('hint'); if (!box) { box = document.createElement('div'); box.id = 'hint'; box.onclick = () => box.remove(); document.body.append(box); } box.textContent = text; };
+if (standalone) fullButton.hidden = true;
 document.addEventListener('fullscreenchange', fullLabel);
-if (!document.documentElement.requestFullscreen) fullButton.hidden = true;
 
 // Living faces. Each eye: centre x, y and size in pixels of the 1672x941 painting.
 const EYES = [[781,338,13,9,0],[807,329,10,8,0],[596,577,12,8,1],[616,575,9,8,1],[636,601,6,6,2],[1458,494,6,5,3],[1470,496,6,5,3],[1519,484,5,5,4],[1533,488,6,5,4],[1565,495,6,5,5],[1578,497,6,5,5]];

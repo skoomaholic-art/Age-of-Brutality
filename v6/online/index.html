@@ -2,7 +2,11 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Жестокий Век" />
   <title>Жестокий Век - Online Prototype</title>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/img/favicon-32.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/img/favicon-180.png">
@@ -563,6 +567,7 @@
     .move-box { display: none; }
     .move-box.show { display: block; }
     .move-grid { display: grid; grid-template-columns: 1fr 86px; gap: 8px; align-items: end; }
+    #phone-more { display: none; }
     @media (prefers-reduced-motion: reduce) {
       .territory, .sea-node { transition: none; }
     }
@@ -579,7 +584,36 @@
       .controls { width:100%; }
       .save-status { width:100%; text-align:left; }
     }
-  </style>
+      /* Phone: the map takes the whole screen, the menus sit under the thumb. */
+    @media (max-width: 760px), (pointer: coarse) and (max-width: 1000px) {
+      body { overscroll-behavior: none; }
+      header { flex-direction: row; align-items: center; padding: 6px 10px; gap: 8px; position: relative; }
+      header .sub, header #build-info { display: none; }
+      header h1 { font-size: 22px; }
+      .brand-mark { width: 30px; height: 30px; padding: 4px; }
+      #phone-more { display: block; margin-left: auto; min-width: 44px; height: 40px; font-size: 20px; padding: 0; }
+      .controls { display: none; position: absolute; z-index: 30; right: 6px; top: 100%; width: min(280px, 90vw); padding: 10px; background: #8c2e1f; border: 2px solid var(--ink); box-shadow: 4px 4px 0 rgba(43,27,18,.4); flex-direction: column; align-items: stretch; }
+      .controls.show { display: flex; }
+      .controls button, .controls select { min-height: 44px; font-size: 16px; }
+      main { min-height: 0; }
+      .map-wrap { padding: 0; }
+      .map-card { margin: 0; height: calc(100dvh - 54px); min-height: 0; box-shadow: none; border-width: 2px 0 0; }
+      .bar-status { position: absolute; z-index: 8; left: 0; right: 0; top: 0; margin: 0; height: 30px; justify-content: space-around; gap: 6px; padding: 0 6px; font-size: 12px; background: linear-gradient(#f2e6c8, #e6d6ad); border-bottom: 2px solid var(--ink); }
+      .bar-status b { font-size: 14px; }
+      .map-bar { top: auto; bottom: 0; height: 54px; border-bottom: 0; border-top: 2px solid var(--ink); box-shadow: 0 -3px 0 rgba(43,27,18,.25); scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; padding-bottom: env(safe-area-inset-bottom); }
+      .map-bar button.bar-tab { font-size: 16px; padding: 0 16px; min-width: 64px; flex: 0 0 auto; scroll-snap-align: start; }
+      #bar-full { display: none; }
+      .bar-drop { top: auto !important; bottom: 54px !important; left: 0 !important; right: 0 !important; width: auto !important; max-width: none !important; max-height: 62% !important; border-radius: 14px 14px 0 0; }
+      .bar-drop button, .land-card button, .route-card button, .decision-card button { min-height: 44px; font-size: 16px; }
+      .map-zoom { top: 40px; right: 8px; gap: 8px; }
+      .map-zoom button { width: 46px; height: 46px; font-size: 24px; }
+      .land-card { left: 0; right: 0; bottom: 54px; width: auto; max-height: 55%; overflow: auto; border-width: 2px 0 0; }
+      .route-card { bottom: 60px !important; }
+      .map-guide { display: none; }
+      .decision { padding: 8px; }
+      .lens { width: 210px; } .lens-glass { width: 180px; height: 180px; }
+    }
+</style>
 </head>
 <body>
 <header>
@@ -591,7 +625,8 @@
     <div id="spectator-badge" class="spectator-badge">Ты здесь лишь зритель</div>
     </div>
   </div>
-  <div class="controls">
+  <button id="phone-more" aria-label="Меню партии">☰</button>
+  <div class="controls" id="controls">
     <label>
       <span class="muted">Дом</span>
       <select id="house"></select>
@@ -3195,6 +3230,23 @@ function applyMapView() {
   );
 }
 
+// Home view: the whole map on a wide screen, the player's own capital on a phone.
+let homeShown = false;
+function goHome() {
+  mapView = { ...MAP_HOME };
+  const capital = snapshot?.map?.capitals?.[$('house').value];
+  const c = capital && snapshot.map.coordinates?.[capital];
+  if (c && matchMedia('(max-width: 760px), (pointer: coarse) and (max-width: 1000px)').matches) {
+    mapView.w = Math.min(MAP_HOME.w, 420);
+    mapView.h = mapView.w * (MAP_HOME.h / MAP_HOME.w);
+    mapView.x = c.x - mapView.w / 2;
+    mapView.y = c.y - mapView.h / 2;
+    clampMapView();
+    homeShown = true;
+  }
+  applyMapView();
+}
+
 function clampMapView() {
   const bounds = mapArt?.bounds || { x0: -160, y0: -110, x1: 1000, y1: 660 };
   const ratio = MAP_HOME.h / MAP_HOME.w;
@@ -3248,14 +3300,37 @@ function setupMapScaffold() {
     zoomMap(event.deltaY > 0 ? 1.18 : 1 / 1.18, mapPointFromEvent(event));
   }, { passive: false });
 
+  // Two fingers pinch the map closer or farther.
+  const fingers = new Map();
+  let pinch = 0;
+  const spread = () => { const [a, b] = [...fingers.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
+  svg.addEventListener('pointerdown', event => {
+    if (event.pointerType !== 'touch') return;
+    fingers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (fingers.size === 2) { pinch = spread(); drag = null; mapDragged = true; }
+  });
+  window.addEventListener('pointermove', event => {
+    if (!fingers.has(event.pointerId)) return;
+    fingers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (fingers.size !== 2 || !pinch) return;
+    const now = spread();
+    if (Math.abs(now - pinch) < 4) return;
+    const [a, b] = [...fingers.values()];
+    zoomMap(pinch / now, mapPointFromEvent({ clientX: (a.x + b.x) / 2, clientY: (a.y + b.y) / 2 }));
+    pinch = now;
+  });
+  const lift = event => { fingers.delete(event.pointerId); if (fingers.size < 2) pinch = 0; };
+  window.addEventListener('pointerup', lift);
+  window.addEventListener('pointercancel', lift);
+
   let drag = null;
   svg.addEventListener('pointerdown', event => {
-    if (event.button !== 0) return;
+    if (event.button !== 0 || fingers.size > 1) return;
     drag = { x: event.clientX, y: event.clientY, view: { ...mapView }, moved: false };
     mapDragged = false;
   });
   window.addEventListener('pointermove', event => {
-    if (!drag) return;
+    if (!drag || pinch) return;
     const dx = event.clientX - drag.x;
     const dy = event.clientY - drag.y;
     if (!drag.moved && Math.hypot(dx, dy) < 5) return;
@@ -3281,10 +3356,7 @@ function setupMapScaffold() {
 
   $('zoom-in').addEventListener('click', () => zoomMap(1 / 1.35));
   $('zoom-out').addEventListener('click', () => zoomMap(1.35));
-  $('zoom-home').addEventListener('click', () => {
-    mapView = { ...MAP_HOME };
-    applyMapView();
-  });
+  $('zoom-home').addEventListener('click', goHome);
 }
 
 // Capital castles: whole under its own House, sacked under a conqueror,
@@ -4248,7 +4320,15 @@ document.querySelector('header .brand').addEventListener('click', () => {
   location.href = '/menu.html';
 });
 // The whole game unfolds to the full screen and back.
-document.getElementById('bar-full').onclick = () => { (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {}); };
+document.getElementById('bar-full').onclick = () => { const root = document.documentElement; if (!root.requestFullscreen) return; (document.fullscreenElement ? document.exitFullscreen() : root.requestFullscreen()).catch(() => {}); };
+$('phone-more').onclick = event => { event.stopPropagation(); $('controls').classList.toggle('show'); };
+document.addEventListener('click', event => { if (!event.target.closest('#controls')) $('controls').classList.remove('show'); });
+// On a phone the day, gold and glory ride in a strip above the map.
+const phoneLayout = matchMedia('(max-width: 760px), (pointer: coarse) and (max-width: 1000px)');
+const placeStatus = () => { const status = document.querySelector('.bar-status'); (phoneLayout.matches ? document.querySelector('.map-card') : $('map-bar')).appendChild(status); };
+placeStatus(); phoneLayout.addEventListener('change', placeStatus);
+// A phone opens on the player's own capital as soon as the map is known.
+const homeWatch = setInterval(() => { if (homeShown || !phoneLayout.matches) return clearInterval(homeWatch); if (snapshot?.map?.capitals && $('map').dataset.ready) goHome(); }, 400);
 setupLens();
 setupLand();
 setupMaker();
