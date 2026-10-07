@@ -36,6 +36,8 @@ import {
   normalizeCommand
 } from './commands.mjs';
 import { buildGameStats } from './stats.mjs';
+import { passRound, roundsView, startRounds } from './rounds.mjs';
+import { processRounds } from './ai.mjs';
 import {
   emitCloudAudit,
   normalizeAudit,
@@ -374,12 +376,48 @@ async function tickUnlocked(ctx) {
   const nowMs = Date.now();
   let processed = processDueOrders(ctx.game, map, constants, nowMs);
   processed = processEconomy(processed, map, constants, nowMs);
+  processed = processRounds(processed, map, constants, { nowMs });
   if (
     processed.updated_at !== ctx.game.updated_at ||
     processed.state.journal.length !== ctx.game.state.journal.length
   ) {
     await finalizeGame(ctx, processed, nowMs);
+    if (ctx.game.lifecycle?.status === GAME_STATUS.FINISHED) {
+      // A joint victory is not ranked: there is no approved rating rule for ties.
+      const winners = ctx.game.rounds?.winners || [];
+      if (winners.length === 1) await recordRankedResults(ctx, winners, nowMs);
+    }
   }
+}
+
+// Ranked results are recorded for multiplayer games only and are idempotent per game.
+async function recordRankedResults(ctx, winnerHouses, nowMs) {
+  const rankedResults = [];
+  if (
+    !winnerHouses.length ||
+    ctx.game.lifecycle?.game_mode !== GAME_MODE.MULTIPLAYER
+  ) {
+    return rankedResults;
+  }
+
+  const players = await ctx.store.listPlayers();
+  for (const participant of players) {
+    if (!participant.profile_id || !participant.house) continue;
+    const won = winnerHouses.includes(participant.house);
+    const result = await ctx.store.recordProfileRankedResult(
+      participant.profile_id,
+      ctx.game.id,
+      { won },
+      nowMs
+    );
+    rankedResults.push({
+      profile_id: participant.profile_id,
+      house: participant.house,
+      result: won ? 'WIN' : 'LOSS',
+      duplicate: Boolean(result.duplicate)
+    });
+  }
+  return rankedResults;
 }
 
 function redactGameForPlayer(game, player) {
@@ -427,6 +465,7 @@ async function publicState(ctx, player = null) {
   return {
     game: redactGameForPlayer(ctx.game, player),
     lobby,
+    rounds: roundsView(ctx.game),
     victory: buildVictoryStatus(ctx.game, map, constants)
   };
 }
@@ -446,6 +485,11 @@ function publicBootstrap(ctx) {
     },
     houses: constants.houses,
     ruleset_version: constants.version,
+    // Which build is serving this page: the deployed commit and the Cloud Run revision.
+    build: {
+      commit: process.env.AOB_BUILD_SHA || null,
+      revision: process.env.K_REVISION || null
+    },
     timing: {
       ...ONLINE_TIMING,
       ...ONLINE_ECONOMY_TIMING
@@ -486,6 +530,7 @@ function errorStatus(error) {
   if (/already|claimed|full|closed|not joinable|not in lobby|require all six|missing:|only a running game|only a finished game|unique invite|not a public room|not multiplayer|profile login already exists|linked to another profile|players are already friends|friend request already sent|friend is already in this game|game is not accepting invitations|game invite already sent|player is not in game|game is not watchable/i.test(message)) return 409;
   if (/Idempotency-Key|unknown|invalid|must be|request body|not running|solo game requires|login must be|password must be|display name must be|invalid avatar|unknown winner house|message must be|conversation requires|profile id required|invite id required|cannot add this profile|cannot block this profile|invalid watch target|character does not belong|only adult|dead character|weakened character|character is not|army must be|capital army already|two army characters|Нельзя назначить|Мёртвый персонаж|Назначить командиром|Ослабленного персонажа|Персонаж сейчас недоступен|Персонаж должен находиться|У Дома уже два персонажа|Армия в столице|Нет свободной армии|Выберите армию Дома|no legal route|stored route is no longer legal|sea waypoint .* is occupied/i.test(message)) return 400;
   if (/stale game state|could not be committed/i.test(message)) return 409;
+  if (/no actions left this round|round already ended for this House|round time expired|rounds are not enabled|house does not take part/i.test(message)) return 409;
   return 500;
 }
 
@@ -636,7 +681,6 @@ async function createSoloGame(body, profile = null) {
   const lifecycle = await store.startGame(player.id, constants, nowMs);
   await refreshContext(ctx);
   ctx.game.lifecycle = lifecycle;
-  ctx.game.next_income_at = new Date(nowMs + ONLINE_ECONOMY_TIMING.incomeIntervalMs).toISOString();
   ctx.game.updated_at = new Date(nowMs).toISOString();
   ctx.game.state.journal.push({
     kind: 'GAME_STARTED',
@@ -645,6 +689,8 @@ async function createSoloGame(body, profile = null) {
     ruleset_version: ctx.game.ruleset_version,
     game_mode: GAME_MODE.SOLO
   });
+  // The five Houses the player did not take are played by the House AI.
+  ctx.game = startRounds(ctx.game, map, constants, { nowMs });
   await finalizeGame(ctx, ctx.game, nowMs);
 
   return {
@@ -770,7 +816,6 @@ async function handleGameApi(req, res, url, ctx, subpath) {
       const lifecycle = await ctx.store.startGame(player.id, constants, nowMs);
       await refreshContext(ctx);
       ctx.game.lifecycle = lifecycle;
-      ctx.game.next_income_at = new Date(nowMs + ONLINE_ECONOMY_TIMING.incomeIntervalMs).toISOString();
       ctx.game.updated_at = new Date(nowMs).toISOString();
       ctx.game.state.journal.push({
         kind: 'GAME_STARTED',
@@ -778,6 +823,7 @@ async function handleGameApi(req, res, url, ctx, subpath) {
         game_id: ctx.game.id,
         ruleset_version: ctx.game.ruleset_version
       });
+      ctx.game = startRounds(ctx.game, map, constants, { nowMs });
       await finalizeGame(ctx, ctx.game, nowMs);
       return {
         game_id: ctx.game.id,
@@ -814,28 +860,11 @@ async function handleGameApi(req, res, url, ctx, subpath) {
       });
       await finalizeGame(ctx, ctx.game, nowMs);
 
-      const rankedResults = [];
-      if (
-        winnerHouse &&
-        ctx.game.lifecycle?.game_mode === GAME_MODE.MULTIPLAYER
-      ) {
-        const players = await ctx.store.listPlayers();
-        for (const participant of players) {
-          if (!participant.profile_id || !participant.house) continue;
-          const result = await ctx.store.recordProfileRankedResult(
-            participant.profile_id,
-            ctx.game.id,
-            { won: participant.house === winnerHouse },
-            nowMs
-          );
-          rankedResults.push({
-            profile_id: participant.profile_id,
-            house: participant.house,
-            result: participant.house === winnerHouse ? 'WIN' : 'LOSS',
-            duplicate: Boolean(result.duplicate)
-          });
-        }
-      }
+      const rankedResults = await recordRankedResults(
+        ctx,
+        winnerHouse ? [winnerHouse] : [],
+        nowMs
+      );
 
       return {
         game_id: ctx.game.id,
@@ -1118,6 +1147,23 @@ async function handleGameApi(req, res, url, ctx, subpath) {
       mutate: async game => executeCommand(game, map, constants, command)
     }));
 
+    return json(res, result.status, result.response);
+  }
+
+  if (req.method === 'POST' && subpath === '/end-round') {
+    const body = await readBody(req);
+    const house = String(body.house || '').trim();
+    await requireHouse(ctx, req, house);
+
+    const result = await serial(ctx, () => runGameCommand(ctx, req, {
+      kind: 'END_ROUND',
+      status: 200,
+      house,
+      mutate: async game => {
+        const next = passRound(game, house);
+        return { game: next, response: { rounds: roundsView(next) } };
+      }
+    }));
     return json(res, result.status, result.response);
   }
 

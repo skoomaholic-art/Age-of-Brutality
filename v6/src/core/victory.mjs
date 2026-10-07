@@ -76,7 +76,7 @@ export function buildVictoryStatus(game, map, constants) {
       ]
     },
     online_adapter: {
-      canonical_round_progression_connected: false,
+      canonical_round_progression_connected: Boolean(game.rounds?.enabled),
       exile_return_connected: false
     }
   };

@@ -11,7 +11,10 @@ export function normalizeOnlineEconomy(game, nowMs = Date.now(), timing = ONLINE
   const next = structuredClone(game);
   if (!Array.isArray(next.jobs)) next.jobs = [];
   if (!Number.isInteger(next.next_job_id)) next.next_job_id = 1;
-  if (!next.next_income_at) {
+  // Games played in rounds are paid at the start of each round (see rounds.mjs).
+  if (next.rounds?.enabled) {
+    next.next_income_at = null;
+  } else if (!next.next_income_at) {
     next.next_income_at = new Date(nowMs + timing.incomeIntervalMs).toISOString();
   }
   return next;
@@ -220,7 +223,7 @@ export function processEconomy(game, map, constants, nowMs = Date.now(), timing 
   const next = normalizeOnlineEconomy(game, nowMs, timing);
   let changed = false;
 
-  while (Date.parse(next.next_income_at) <= nowMs) {
+  while (!next.rounds?.enabled && Date.parse(next.next_income_at) <= nowMs) {
     const result = applyIncomePulse(next.state, map, constants);
     next.state = result.state;
     next.state.journal.push({
