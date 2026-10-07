@@ -20,6 +20,12 @@ export function normalizeOnlineEconomy(game, nowMs = Date.now(), timing = ONLINE
   return next;
 }
 
+// Building takes a share of the game day (see rounds.mjs); 1 in older games.
+function buildScale(game) {
+  const scale = Number(game?.clock?.time_scale);
+  return scale > 0 ? scale : 1;
+}
+
 function jobId(game) {
   return `J${String(game.next_job_id).padStart(6, '0')}`;
 }
@@ -67,7 +73,7 @@ export function queueRecruitJob(game, constants, {
   }
 
   const id = jobId(next);
-  const duration = timing.recruitBuildMs;
+  const duration = Math.round(timing.recruitBuildMs * buildScale(next));
   const job = {
     id,
     type: 'RECRUIT',
@@ -121,6 +127,7 @@ export function queueFortJob(game, map, constants, {
   }
   if (next.state.houses[house].gold < constants.economy.fort_cost) throw new Error('not enough gold');
 
+  const fortMs = Math.round(timing.fortBuildMs * buildScale(next));
   const id = jobId(next);
   const job = {
     id,
@@ -130,7 +137,7 @@ export function queueFortJob(game, map, constants, {
     territory,
     gold_paid: constants.economy.fort_cost,
     created_at: new Date(nowMs).toISOString(),
-    due_at: new Date(nowMs + timing.fortBuildMs).toISOString(),
+    due_at: new Date(nowMs + fortMs).toISOString(),
     failure_reason: null
   };
 
@@ -146,7 +153,7 @@ export function queueFortJob(game, map, constants, {
     gold_spent: constants.economy.fort_cost,
     started_at: job.created_at,
     due_at: job.due_at,
-    planned_duration_ms: timing.fortBuildMs
+    planned_duration_ms: fortMs
   });
   return { game: next, job };
 }

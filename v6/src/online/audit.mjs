@@ -97,7 +97,9 @@ export function journalEntryToAudit(entry, map, game) {
   if (entry.kind === 'ROUND_STARTED') {
     return {
       ...base,
-      message: `Раунд ${entry.round} из ${entry.max_rounds} начался. Доход начислен всем Домам.`,
+      message: entry.mode === 'days'
+        ? `Настал день ${entry.round} из ${entry.max_rounds}. Доход начислен всем Домам.`
+        : `Раунд ${entry.round} из ${entry.max_rounds} начался. Доход начислен всем Домам.`,
       details: {
         round: entry.round,
         deadline_at: entry.deadline_at || null,

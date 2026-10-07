@@ -8,6 +8,8 @@ import { executeCommand } from './commands.mjs';
 import {
   ONLINE_ROUND_TIMING,
   advanceRound,
+  aiOrderIntervalMs,
+  daysMode,
   houseRoundStatus,
   passRound,
   refundFailedRoundActions,
@@ -64,33 +66,22 @@ function territoryValue(map, constants, house, id) {
   return 1 + gold + influence * 1.5 + island;
 }
 
-// Chance that 2d6 + warriors beats 7 + resistance (strictly greater).
-function neutralCaptureChance(warriors, resistance) {
-  const needed = 7 + resistance - warriors;
-  let wins = 0;
-  for (let a = 1; a <= 6; a += 1) {
-    for (let b = 1; b <= 6; b += 1) if (a + b > needed) wins += 1;
-  }
-  return wins / 36;
+// The online game has no dice (see orders.mjs), so the AI can tell the outcome
+// of a fight from the numbers it sees. It does not know about commanders.
+
+// A neutral land falls when the warriors outnumber its resistance.
+function capturesNeutral(warriors, resistance) {
+  return warriors > resistance;
 }
 
-// Exact battle odds over both dice, using the same formula as core/combat.mjs
-// without commanders or support. Terrain defense only reduces defender losses,
-// so it does not change whether the territory is taken.
+// The larger force wins, ties go to the defender. Losses follow core/combat.mjs
+// with both dice fixed at 3.
 function battleOutlook(attackers, defenders) {
-  let captures = 0;
-  let losses = 0;
-  for (let a = 1; a <= 6; a += 1) {
-    for (let d = 1; d <= 6; d += 1) {
-      const attackStrength = attackers + a;
-      const defendStrength = defenders + d;
-      const damageToAttacker = Math.min(attackers, Math.ceil(defendStrength / 2));
-      const survivors = attackers - damageToAttacker;
-      if (attackStrength > defendStrength && survivors > 0) captures += 1;
-      losses += damageToAttacker;
-    }
-  }
-  return { chance: captures / 36, expectedLosses: losses / 36 };
+  const losses = Math.min(attackers, Math.ceil((defenders + 3) / 2));
+  return {
+    wins: attackers > defenders && attackers - losses > 0,
+    losses
+  };
 }
 
 function garrisonNeeded(state, map, house, from) {
@@ -136,15 +127,13 @@ function marchCandidates(game, map, constants, house, adjacency) {
       } catch {
         continue;
       }
-      // Smallest force that is reliable; otherwise the largest one if it is at least even odds.
-      const reliable = sizes.find(count => neutralCaptureChance(count, resistance) >= 0.72);
-      const warriors = reliable ?? sizes[sizes.length - 1];
-      const chance = neutralCaptureChance(warriors, resistance);
-      if (chance < 0.5) continue;
+      // The smallest force that is enough: spare warriors stay home.
+      const warriors = sizes.find(count => capturesNeutral(count, resistance));
+      if (!warriors) continue;
       const firstCapture = hasAchievement(state, house, 'VP-W1') ? 0 : 4;
       out.push({
         kind: 'CAPTURE_NEUTRAL',
-        value: chance * (worth + firstCapture) - (1 - chance),
+        value: worth + firstCapture - warriors * 0.15,
         command: command(warriors)
       });
       continue;
@@ -162,14 +151,12 @@ function marchCandidates(game, map, constants, house, adjacency) {
         continue;
       }
       const outlook = battleOutlook(warriors, defenders);
-      if (outlook.chance < 0.55) continue;
+      if (!outlook.wins) continue;
       const capital = territoryMeta(map, to)?.type === 'Столица' ? 4 : 0;
       const firstBattle = hasAchievement(state, house, 'VP-W2') ? 0 : 4;
       out.push({
         kind: 'ATTACK',
-        value:
-          outlook.chance * (worth + capital + firstBattle) -
-          outlook.expectedLosses * 0.7,
+        value: worth + capital + firstBattle - outlook.losses * 0.7,
         command: command(warriors)
       });
       continue;
@@ -281,18 +268,20 @@ export function takeAiAction(game, map, constants, house, { nowMs = Date.now() }
     }
   }
 
+  // Nothing worth doing right now. In a game played in days the House simply
+  // waits for its next turn to think; in rounds it ends its round.
   return {
-    game: passRound(game, house, nowMs),
+    game: daysMode(game) ? game : passRound(game, house, nowMs),
     decision: { kind: 'PASS', value: 0, command: null }
   };
 }
 
 function ownWorkPending(game, house) {
   return (
-    (game.orders || []).some(
+    (game.orders || []).filter(
       order => order.status === 'PENDING' && order.action?.house === house
-    ) ||
-    (game.jobs || []).some(job => job.status === 'PENDING' && job.house === house)
+    ).length +
+    (game.jobs || []).filter(job => job.status === 'PENDING' && job.house === house).length
   );
 }
 
@@ -311,13 +300,16 @@ export function runAiHouses(game, map, constants, {
   const offset = (game.rounds.number - 1) % aiHouses.length;
   const order = [...aiHouses.slice(offset), ...aiHouses.slice(0, offset)];
 
+  const days = daysMode(game);
   let next = game;
   for (const house of order) {
     if (houseRoundStatus(next, house).done) continue;
     const dueAt = Date.parse(next.rounds.ai_next_at?.[house] || 0);
     if (dueAt > nowMs) continue;
-    // Wait for the House's previous action to resolve so it decides on the real outcome.
-    if (ownWorkPending(next, house)) continue;
+    // In rounds the House waits for its previous action to resolve, so it decides
+    // on the real outcome. In days marches take long, so it may run up to three
+    // things at once.
+    if (ownWorkPending(next, house) >= (days ? 3 : 1)) continue;
 
     // Same check a player's command triggers: was a captured capital held until this action?
     const hold = resolvePendingCapitalHold(next.state, map, constants, house);
@@ -325,7 +317,10 @@ export function runAiHouses(game, map, constants, {
 
     const acted = takeAiAction(next, map, constants, house, { nowMs });
     next = acted.game;
-    next.rounds.ai_next_at[house] = new Date(nowMs + timing.aiActionDelayMs).toISOString();
+    next = next === game ? structuredClone(next) : next;
+    next.rounds.ai_next_at[house] = new Date(
+      nowMs + (days ? aiOrderIntervalMs(next.rounds) : timing.aiActionDelayMs)
+    ).toISOString();
     next.updated_at = new Date(nowMs).toISOString();
   }
   return next;

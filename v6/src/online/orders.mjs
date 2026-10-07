@@ -85,19 +85,46 @@ function hydrateOnlineRoute(state,map,constants,action,timing=ONLINE_TIMING) {
   };
 }
 
-function hash32(input) {
-  let hash = 2166136261;
-  for (let i = 0; i < input.length; i += 1) {
-    hash ^= input.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
+// The online game has no dice: numbers and facts decide.
+//
+// The core rules still take dice, so the online layer feeds them fixed values
+// that stand for an average throw:
+// - a neutral land falls when the warriors outnumber its resistance
+//   (2d6 fixed at 7, so `7 + warriors > 7 + resistance`);
+// - in a battle both sides get the same 3, so the larger force wins, ties go
+//   to the defender, and losses stay at the level of the dice rules.
+const NEUTRAL_DICE = Object.freeze([3, 4]);
+const BATTLE_DIE = 3;
+
+// A beaten commander's Fate depends on how heavy the defeat was instead of a
+// throw: an even fight counts as a 9, and every point of strength the loser was
+// short takes one off. The core then applies survival and the usual thresholds
+// (10 saved, 7 weakened, 5 captured, below that dead).
+function fateDiceForDefeat(result) {
+  const margin = Math.abs(
+    Number(result.attackerStrength || 0) - Number(result.defenderStrength || 0)
+  );
+  const total = Math.max(2, Math.min(12, 9 - margin));
+  const first = Math.max(1, Math.min(6, Math.floor(total / 2)));
+  return [first, total - first];
 }
 
-function deterministicDice(seed) {
-  const a = hash32(seed);
-  const b = hash32(seed + ':second');
-  return [(a % 6) + 1, (b % 6) + 1];
+// Marches take a share of the game day (see rounds.mjs); 1 in older games.
+export function timeScale(game) {
+  const scale = Number(game?.clock?.time_scale);
+  return scale > 0 ? scale : 1;
+}
+
+function scaleRoute(action, scale) {
+  if (scale === 1) return action;
+  return {
+    ...action,
+    route_duration_ms: Math.round(Number(action.route_duration_ms || 0) * scale),
+    route_segments: (action.route_segments || []).map(segment => ({
+      ...segment,
+      duration_ms: Math.round(Number(segment.duration_ms || 0) * scale)
+    }))
+  };
 }
 
 export function reservedWarriors(game, house, from) {
@@ -178,6 +205,7 @@ export function listQueueableMarches(game,map,constants,house) {
     game.state,map,constants,house,ONLINE_TIMING
   );
 
+  const scale=timeScale(game);
   return legal.filter(action => {
     const available=onlinePositionWarriors(
       game.state,action.from,house
@@ -186,7 +214,7 @@ export function listQueueableMarches(game,map,constants,house) {
       game,house,action.from
     );
     return action.warriors<=available-reserved;
-  });
+  }).map(action => scaleRoute(action,scale));
 }
 
 export function travelDurationMs(
@@ -221,10 +249,13 @@ export function queueTimedOrder(
   );
   assertOnlineLegalAction(hydratedAction, legal);
 
-  action = hydratedAction;
+  const scale = timeScale(game);
+  action = scaleRoute(hydratedAction, scale);
   let next = structuredClone(game);
   const id = `O${String(next.next_order_id).padStart(6, '0')}`;
-  const durationMs = travelDurationMs(next.state, map, constants, action, timing);
+  const durationMs = Math.round(
+    travelDurationMs(next.state, map, constants, action, timing) * scale
+  );
   const availableWarriors =
     onlinePositionWarriors(game.state, action.from, action.house) -
     reservedWarriors(game, action.house, action.from);
@@ -481,9 +512,7 @@ function resolveOrder(state,map,constants,gameId,order,nowMs) {
   }
 
   if(destination==='NEUTRAL') {
-    const dice=deterministicDice(
-      `${gameId}:${order.id}:neutral`
-    );
+    const dice=[...NEUTRAL_DICE];
     let resolved=resolveNeutralCapture(
       resolutionState,
       resolutionMap,
@@ -530,9 +559,8 @@ function resolveOrder(state,map,constants,gameId,order,nowMs) {
     state,defenderHouse,action.to
   );
 
-  const [attackerDie,defenderDie]=deterministicDice(
-    `${gameId}:${order.id}:battle`
-  );
+  const attackerDie=BATTLE_DIE;
+  const defenderDie=BATTLE_DIE;
 
   let resolved=resolveBattle(
     resolutionState,
@@ -572,9 +600,7 @@ function resolveOrder(state,map,constants,gameId,order,nowMs) {
           created_at:new Date(nowMs).toISOString()
         }
       );
-      const fateDice=deterministicDice(
-        `${gameId}:${order.id}:fate:${defenderCommander.id}`
-      );
+      const fateDice=fateDiceForDefeat(resolved.result);
       const fate=resolveCommanderFate(
         resolved.state,map,constants,defenderCommander.id,
         fateDice,{nowMs}
@@ -606,9 +632,7 @@ function resolveOrder(state,map,constants,gameId,order,nowMs) {
           created_at:new Date(nowMs).toISOString()
         }
       );
-      const fateDice=deterministicDice(
-        `${gameId}:${order.id}:fate:${attackerCommander.id}`
-      );
+      const fateDice=fateDiceForDefeat(resolved.result);
       const fate=resolveCommanderFate(
         resolved.state,map,constants,attackerCommander.id,
         fateDice,{nowMs}

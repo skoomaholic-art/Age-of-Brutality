@@ -91,7 +91,7 @@ export function createLobbyMetadata(constants, {
     player_count: 0,
     spectator_count: 0,
     max_players: solo ? 1 : constants.houses.length,
-    start_requirement: solo ? 'ONE_HOUSE_FOR_SOLO' : 'ALL_SIX_HOUSES_FOR_V6_REFERENCE'
+    start_requirement: solo ? 'ONE_HOUSE_FOR_SOLO' : 'TWO_HOUSES_AI_FILLS_THE_REST'
   };
 }
 
@@ -122,7 +122,7 @@ export function normalizeGameMetadata(game, constants, {
       player_count: 0,
       spectator_count: 0,
       max_players: constants.houses.length,
-      start_requirement: 'ALL_SIX_HOUSES_FOR_V6_REFERENCE'
+      start_requirement: 'TWO_HOUSES_AI_FILLS_THE_REST'
     };
   }
   if (!next.lifecycle.house_claims) next.lifecycle.house_claims = {};
@@ -198,6 +198,8 @@ export function canAdminister(player) {
   return player?.role === PLAYER_ROLE.ADMIN;
 }
 
+export const MIN_MULTIPLAYER_HOUSES = 2;
+
 export function validateStart(game, constants) {
   if (game.lifecycle?.status !== GAME_STATUS.LOBBY) throw new Error('game is not in lobby');
   const claims = game.lifecycle?.house_claims || {};
@@ -210,10 +212,11 @@ export function validateStart(game, constants) {
     return true;
   }
 
-  const missing = constants.houses.filter(house => !claims[house]);
-  if (missing.length) {
+  // Houses nobody took are played by the House AI, so two players are enough.
+  const claimed = constants.houses.filter(house => Boolean(claims[house]));
+  if (claimed.length < MIN_MULTIPLAYER_HOUSES) {
     throw new Error(
-      `current V6 reference rules require all six Houses before start; missing: ${missing.join(', ')}`
+      `a multiplayer game needs at least ${MIN_MULTIPLAYER_HOUSES} Houses with players; claimed: ${claimed.length}`
     );
   }
   return true;

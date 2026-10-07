@@ -358,9 +358,15 @@ button.loading { opacity:.65; cursor:wait; }
       <div class="create-grid">
         <div class="card">
           <h3>Соло</h3>
-          <div class="muted">Отдельная сохраняемая партия для одного игрока.</div>
+          <div class="muted">Ты против пяти Домов под управлением ИИ.</div>
           <label>Дом</label>
           <select id="solo-house"></select>
+          <label>Темп партии</label>
+          <select id="solo-pace" class="pace-select">
+            <option value="fast">Быстрая: день за 10 минут, партия на час</option>
+            <option value="evening">Вечерняя: день за час</option>
+            <option value="classic">Долгая: день за сутки</option>
+          </select>
           <button id="create-solo" class="primary" style="margin-top:14px">Начать соло</button>
           <div id="solo-error" class="error"></div>
         </div>
@@ -374,6 +380,12 @@ button.loading { opacity:.65; cursor:wait; }
           <select id="public-house">
             <option value="">Выбрать позже</option>
           </select>
+          <label>Темп партии</label>
+          <select id="public-pace" class="pace-select">
+            <option value="fast">Быстрая: день за 10 минут, партия на час</option>
+            <option value="evening">Вечерняя: день за час</option>
+            <option value="classic">Долгая: день за сутки</option>
+          </select>
           <button id="create-public" class="primary" style="margin-top:14px">Создать открытую</button>
           <div id="public-error" class="error"></div>
         </div>
@@ -386,6 +398,12 @@ button.loading { opacity:.65; cursor:wait; }
           <label>Твой Дом</label>
           <select id="private-house">
             <option value="">Выбрать позже</option>
+          </select>
+          <label>Темп партии</label>
+          <select id="private-pace" class="pace-select">
+            <option value="fast">Быстрая: день за 10 минут, партия на час</option>
+            <option value="evening">Вечерняя: день за час</option>
+            <option value="classic">Долгая: день за сутки</option>
           </select>
           <button id="create-private" class="primary" style="margin-top:14px">Создать приватную</button>
           <div id="private-error" class="error"></div>
@@ -1455,7 +1473,7 @@ async function loadHub() {
   }
 }
 
-async function createMultiplayer(visibility, button, errorId, roomInputId, houseSelectId) {
+async function createMultiplayer(visibility, button, errorId, roomInputId, houseSelectId, paceSelectId) {
   $(errorId).textContent = '';
   try {
     await withBusy(button, 'Создаём...', async () => {
@@ -1466,6 +1484,7 @@ async function createMultiplayer(visibility, button, errorId, roomInputId, house
           display_name:displayName(),
           room_name:$(roomInputId).value.trim(),
           visibility,
+          pace:$(paceSelectId).value,
           house:$(houseSelectId).value || null
         })
       }, profileAuth());
@@ -1587,6 +1606,7 @@ $('create-solo').onclick = async () => {
         body:JSON.stringify({
           display_name:displayName(),
           house:$('solo-house').value,
+          pace:$('solo-pace').value,
           room_name:'Соло · ' + $('solo-house').value
         })
       }, profileAuth());
@@ -1599,10 +1619,10 @@ $('create-solo').onclick = async () => {
 };
 
 $('create-public').onclick = () =>
-  createMultiplayer('PUBLIC',$('create-public'),'public-error','public-room-name','public-house');
+  createMultiplayer('PUBLIC',$('create-public'),'public-error','public-room-name','public-house','public-pace');
 
 $('create-private').onclick = () =>
-  createMultiplayer('PRIVATE',$('create-private'),'private-error','private-room-name','private-house');
+  createMultiplayer('PRIVATE',$('create-private'),'private-error','private-room-name','private-house','private-pace');
 
 $('join-private').onclick = async () => {
   $('join-error').textContent = '';
@@ -1707,7 +1727,9 @@ async function loadRoom() {
     const isAdmin = me?.role === 'ADMIN';
     const claimedCount = houses.filter(house => Boolean(claims[house])).length;
     const missingCount = houses.length - claimedCount;
-    const canStart = isAdmin && !solo && life.status === 'LOBBY' && missingCount === 0;
+    // Two players are enough: the House AI plays every House nobody took.
+    const needed = Math.max(0, 2 - claimedCount);
+    const canStart = isAdmin && !solo && life.status === 'LOBBY' && needed === 0;
 
     $('release-house').style.display =
       !solo && life.status === 'LOBBY' && me?.house ? 'block' : 'none';
@@ -1717,13 +1739,15 @@ async function loadRoom() {
     $('start').disabled = !canStart;
     $('start').textContent = canStart
       ? 'Начать игру'
-      : 'Начать игру · ждём ' + missingCount;
+      : 'Начать игру · нужно ещё ' + needed;
 
     $('start-hint').textContent =
       !solo && life.status === 'LOBBY'
         ? (missingCount === 0
             ? 'Все 6 Домов заняты. Хост может начинать партию.'
-            : 'Для текущих правил V6 нужны все 6 Домов. Занято: ' + claimedCount + '/6.')
+            : needed === 0
+              ? 'Занято ' + claimedCount + ' из 6. Можно начинать: свободные Дома возьмёт ИИ.'
+              : 'Нужно хотя бы 2 игрока с Домами. Занято: ' + claimedCount + ' из 6.')
         : '';
 
     $('open-game').style.display = life.status === 'RUNNING' ? 'block' : 'none';

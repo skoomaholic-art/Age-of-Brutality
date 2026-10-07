@@ -141,6 +141,8 @@
     .province.legal { fill: rgba(44,74,134,.34); stroke: #172c5c; stroke-width: 1.5; stroke-dasharray: 4 2; }
     .province.legal:hover { fill: rgba(44,74,134,.5); }
     .province.target { fill: rgba(179,49,31,.36); stroke: var(--vermilion); stroke-width: 2.8; }
+    .province.fogged { fill: rgba(58,62,66,.36); }
+    .province.fogged:hover { fill: rgba(58,62,66,.26); }
     .province.dim { fill: rgba(30,20,10,.45); }
 
     .land-edge.active-route { stroke: var(--vermilion); stroke-width: 2.6; stroke-linecap: round; stroke-dasharray: 5 3; pointer-events: none; }
@@ -251,6 +253,7 @@
     .legend-mark { width:14px; height:11px; display:inline-block; background: rgba(63,112,72,.55); border:1.5px dashed var(--white-lead); outline: 1px solid var(--ink-soft); }
     .legend-mark.origin { border: 2.5px solid var(--white-lead); }
     .legend-mark.legal { background: rgba(44,74,134,.55); border: 1.5px dashed #172c5c; outline: 0; }
+    .legend-mark.fog { background: rgba(58,62,66,.6); border: 1.5px solid var(--ink-soft); outline: 0; }
     .legend-mark.target { background: rgba(179,49,31,.55); border: 2.5px solid var(--vermilion); outline: 0; }
 
     /* Side column: leaves of the same book, ruled in ink with red rubrics. */
@@ -387,6 +390,7 @@
           <span class="legend-pill"><i class="legend-mark origin"></i>откуда</span>
           <span class="legend-pill"><i class="legend-mark legal"></i>куда можно</span>
           <span class="legend-pill"><i class="legend-mark target"></i>цель выбрана</span>
+          <span class="legend-pill"><i class="legend-mark fog"></i>туман: армий не видно</span>
         </div>
       </div>
       <svg id="map" viewBox="40 30 760 490" role="img" aria-label="Карта Жестокого Века"></svg>
@@ -447,12 +451,12 @@
       <h2>Партия</h2>
       <div class="game-status-grid">
         <div class="game-status-cell"><span>Статус</span><b id="game-status">...</b></div>
-        <div class="game-status-cell"><span>Раунд</span><b id="game-round">...</b></div>
+        <div class="game-status-cell"><span id="round-label">Раунд</span><b id="game-round">...</b></div>
       </div>
       <div id="round-box" style="display:none">
         <div class="game-status-grid">
-          <div class="game-status-cell"><span>Действия Дома</span><b id="round-actions">...</b></div>
-          <div class="game-status-cell"><span>До конца раунда</span><b id="round-timer">...</b></div>
+          <div class="game-status-cell"><span id="round-actions-label">Действия Дома</span><b id="round-actions">...</b></div>
+          <div class="game-status-cell"><span id="round-timer-label">До конца раунда</span><b id="round-timer">...</b></div>
         </div>
         <button id="end-round" class="primary" style="width:100%">Завершить раунд</button>
         <figure id="round-wait" class="miniature">
@@ -869,6 +873,26 @@ function renderCharacters() {
   });
 }
 
+// "45 сек", "12:05" or "3:20:00": short spans in seconds, long ones as a clock.
+function formatSpan(ms) {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  if (total < 90) return total + ' сек';
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = String(total % 60).padStart(2, '0');
+  return hours
+    ? hours + ':' + String(minutes).padStart(2, '0') + ':' + seconds
+    : minutes + ':' + seconds;
+}
+
+function timeLeft(iso) {
+  return formatSpan(Date.parse(iso) - Date.now());
+}
+
+function daysGame() {
+  return snapshot?.rounds?.mode === 'days';
+}
+
 function myRoundStatus() {
   return snapshot?.rounds?.houses?.find(item => item.house === house) || null;
 }
@@ -882,6 +906,7 @@ function roundBlockReason() {
   const rounds = snapshot?.rounds;
   if (!rounds) return null;
   if (rounds.finished) return 'Партия завершена.';
+  if (daysGame()) return null;
   const mine = myRoundStatus();
   if (!mine) return null;
   if (mine.passed) return 'Ты уже завершил этот раунд. Ждём остальные Дома.';
@@ -899,30 +924,39 @@ function renderRounds() {
   box.style.display = '';
 
   const mine = myRoundStatus();
-  $('round-actions').textContent = !mine
-    ? '—'
-    : mine.passed
-      ? 'раунд завершён'
-      : mine.left + ' из ' + rounds.actions_per_round;
+  const days = daysGame();
+  $('round-label').textContent = days ? 'День' : 'Раунд';
+  $('round-actions-label').textContent = days ? 'Длина дня' : 'Действия Дома';
+  $('round-timer-label').textContent = days ? 'До смены дня' : 'До конца раунда';
+  $('round-actions').textContent = days
+    ? formatSpan(rounds.day_ms)
+    : !mine
+      ? '—'
+      : mine.passed
+        ? 'раунд завершён'
+        : mine.left + ' из ' + rounds.actions_per_round;
   $('round-timer').textContent = rounds.finished
     ? '—'
     : rounds.deadline_at
-      ? secondsLeft(rounds.deadline_at) + ' сек'
+      ? timeLeft(rounds.deadline_at)
       : 'без таймера';
 
   const button = $('end-round');
-  button.style.display = !mine || rounds.finished || isSpectator ? 'none' : '';
+  button.style.display = days || !mine || rounds.finished || isSpectator ? 'none' : '';
   button.disabled = Boolean(mine?.done);
   button.textContent = mine?.done ? 'Ждём остальные Дома…' : 'Завершить раунд';
 
   $('round-wait').classList.toggle(
     'show',
-    Boolean(mine?.done) && !rounds.finished && !isSpectator
+    !days && Boolean(mine?.done) && !rounds.finished && !isSpectator
   );
 
   $('round-houses').innerHTML = rounds.houses.map(item => {
-    const pips = '●'.repeat(item.used) +
-      '○'.repeat(Math.max(0, rounds.actions_per_round - item.used));
+    // In a game played in days orders are not counted, so there is nothing to tick off.
+    const pips = days
+      ? (item.ai ? '' : 'игрок')
+      : '●'.repeat(item.used) +
+        '○'.repeat(Math.max(0, rounds.actions_per_round - item.used));
     const cls = 'round-house' +
       (item.house === house ? ' mine' : '') +
       (item.done ? ' done' : '');
@@ -1000,7 +1034,9 @@ function renderVictory() {
       : 'Победитель: ' + (winners[0] || 'не определён') + '.';
   } else {
     const parts = [
-      'По правилам победитель определяется после фазы Династии 6-го раунда.'
+      daysGame()
+        ? 'Победитель определяется после шестого игрового дня.'
+        : 'По правилам победитель определяется после фазы Династии 6-го раунда.'
     ];
     if (exiled.length) {
       parts.push(
@@ -1020,9 +1056,11 @@ function renderVictory() {
         'Раундовый цикл persistent-режима ещё не подключён к каноническому финишу.'
       );
     } else {
-      parts.push(
-        'Раунд состоит из Дохода и трёх действий каждого Дома; партия завершается сама после 6-го раунда. ' +
-        'События и фаза Династии ещё не перенесены.'
+      parts.push(daysGame()
+        ? 'Партия идёт в реальном времени шесть игровых дней и завершается сама. Доход приходит при смене дня. ' +
+          'Исход боя решают числа, кубиков нет. События и фаза Династии ещё не перенесены.'
+        : 'Раунд состоит из Дохода и трёх действий каждого Дома; партия завершается сама после 6-го раунда. ' +
+          'События и фаза Династии ещё не перенесены.'
       );
     }
     note.textContent = parts.join(' ');
@@ -1370,6 +1408,11 @@ function renderMap() {
       </g>`;
   });
 
+  // Lands the House cannot see into are veiled; armies there are not sent to the client.
+  const fogVisible = snapshot.game.visibility?.fog
+    ? new Set(snapshot.game.visibility.visible)
+    : null;
+
   const borders = [];
   const zones = [];
   const ribbons = [];
@@ -1391,6 +1434,7 @@ function renderMap() {
     if (origin && legalTargets.has(t.id)) classes.push('legal');
     if (t.id === target) classes.push('target');
     if (origin && t.id !== origin && !legalTargets.has(t.id) && t.id !== target) classes.push('dim');
+    if (fogVisible && !fogVisible.has(t.id)) classes.push('fogged');
 
     borders.push(`<path d="${shape.d}"></path>`);
     zones.push(`<path class="${classes.join(' ')}" data-id="${t.id}" d="${shape.d}"><title>${escapeHtml(t.name)} · ${escapeHtml(t.type)}</title></path>`);
@@ -1491,11 +1535,14 @@ function renderEconomy() {
   const influence = gain.influence ? ` +${gain.influence} влияния` : '';
   $('income-rate').textContent = `+${gain.gold} золота${influence}`;
   $('income-countdown').textContent = economy.next_income_at
-    ? `${secondsLeft(economy.next_income_at)} сек`
-    : 'в начале раунда';
+    ? timeLeft(economy.next_income_at)
+    : daysGame()
+      ? 'при смене дня'
+      : 'в начале раунда';
   if (!economy.next_income_at) {
-    $('income-hint').textContent =
-      'Доход начисляется всем Домам в начале каждого раунда. Формула дохода взята из правил настолки.';
+    $('income-hint').textContent = daysGame()
+      ? 'Доход начисляется всем Домам при смене игрового дня. Формула дохода взята из правил настолки.'
+      : 'Доход начисляется всем Домам в начале каждого раунда. Формула дохода взята из правил настолки.';
   }
 
   const select = $('manage-territory');
@@ -1529,7 +1576,7 @@ function renderEconomy() {
       const label = job.type === 'RECRUIT'
         ? `Найм ${job.warriors} воин.`
         : 'Крепость';
-      const status = job.status === 'PENDING' ? `${secondsLeft(job.due_at)} сек` : job.status;
+      const status = job.status === 'PENDING' ? timeLeft(job.due_at) : (STATUS_WORDS[job.status] || job.status);
       const error = job.failure_reason ? `<div class="failed">${escapeHtml(job.failure_reason)}</div>` : '';
       return `<div class="job"><b>${escapeHtml(label)}</b> · ${escapeHtml(territory)}<div class="${cls}">${escapeHtml(status)}</div>${error}</div>`;
     }).join('');
@@ -1665,7 +1712,7 @@ function renderSelection() {
     'Отряд: до ' + max +
     ' воинов · путь: ' + escapeHtml(modeName) +
     ' · ' + hops + ' участк.' +
-    ' · ' + seconds + ' сек' +
+    ' · ' + formatSpan(seconds * 1000) +
     (routeNames
       ? '<br><span class="tiny">' + escapeHtml(routeNames) + '</span>'
       : '');
@@ -1743,10 +1790,11 @@ async function sendOrder() {
   await refresh();
 }
 
+const STATUS_WORDS = { RESOLVED: 'выполнено', FAILED: 'не выполнено', PENDING: 'в пути' };
+
 function countdown(order) {
-  if (order.status !== 'PENDING') return order.status;
-  const left = Math.max(0, Date.parse(order.due_at) - Date.now());
-  return `${Math.ceil(left / 1000)} сек`;
+  if (order.status !== 'PENDING') return STATUS_WORDS[order.status] || order.status;
+  return timeLeft(order.due_at);
 }
 
 function renderOrders() {
