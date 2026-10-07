@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -45,6 +46,7 @@ import {
   startRounds
 } from './rounds.mjs';
 import { applyFog, knownHouses, recordExploration } from './fog.mjs';
+import { generateMap, MAX_HOUSES, MIN_HOUSES } from './mapgen.mjs';
 import { processEncounters } from './encounters.mjs';
 import {
   acceptAlliance,
@@ -95,8 +97,98 @@ import {
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const v6Root = path.resolve(here, '../..');
-const map = loadJson(path.join(v6Root, 'src/data/map.v6.json'));
-const constants = loadJson(path.join(v6Root, 'src/data/constants.v6.json'));
+const classicMap = loadJson(path.join(v6Root, 'src/data/map.v6.json'));
+const baseConstants = loadJson(path.join(v6Root, 'src/data/constants.v6.json'));
+
+// Every game plays on its own map with its own set of Houses: the classic
+// hand-made map with all six, or a generated one. `map` and `constants` below
+// stand for "the map and the Houses of the game this request is about"; the
+// scope is entered once the game is known (enterGameScope).
+const gameScope = new AsyncLocalStorage();
+
+function scopedView(key, fallback) {
+  const current = () => gameScope.getStore()?.[key] || fallback;
+  return new Proxy(fallback, {
+    get: (_, name) => current()[name],
+    has: (_, name) => name in current(),
+    ownKeys: () => Reflect.ownKeys(current()),
+    getOwnPropertyDescriptor: (_, name) => {
+      const found = Reflect.getOwnPropertyDescriptor(current(), name);
+      if (found) found.configurable = true;
+      return found;
+    }
+  });
+}
+
+const map = scopedView('map', classicMap);
+const constants = scopedView('constants', baseConstants);
+
+const scopeCache = new Map();
+
+// A generated map is not stored: it is rebuilt from its seed and its Houses.
+function scopeForSpec(spec) {
+  if (!spec || spec.kind !== 'generated') return {};
+  const key = JSON.stringify([spec.seed, spec.houses]);
+  if (!scopeCache.has(key)) {
+    if (scopeCache.size > 200) scopeCache.delete(scopeCache.keys().next().value);
+    scopeCache.set(key, {
+      key,
+      map: generateMap(classicMap, baseConstants, { houses: spec.houses, seed: spec.seed }),
+      constants: { ...baseConstants, houses: [...spec.houses] }
+    });
+  }
+  return scopeCache.get(key);
+}
+
+function enterGameScope(game) {
+  gameScope.enterWith(scopeForSpec(game?.map_spec));
+}
+
+// What the creator of a game asked for: the classic map, or a generated one
+// for a chosen number of Houses (the creator's House is always among them).
+function mapSpecFrom(body, { defaultHouses }) {
+  if (String(body.map || '').toLowerCase() === 'classic') return null;
+  const asked = Number(body.houses_count);
+  const count = Number.isInteger(asked)
+    ? Math.max(MIN_HOUSES, Math.min(MAX_HOUSES, asked))
+    : defaultHouses;
+  const own = String(body.house || '').trim();
+  const picked = new Set(baseConstants.houses.includes(own) ? [own] : []);
+  for (const house of baseConstants.houses) {
+    if (picked.size >= count) break;
+    picked.add(house);
+  }
+  return {
+    kind: 'generated',
+    seed: Number.isInteger(Number(body.seed)) && Number(body.seed) > 0
+      ? Number(body.seed)
+      : crypto.randomInt(1, 2 ** 31 - 1),
+    houses: baseConstants.houses.filter(house => picked.has(house))
+  };
+}
+
+const mapArtCache = new Map();
+
+async function mapArtFor(scope) {
+  if (!mapArtCache.has(scope.key)) {
+    if (mapArtCache.size > 12) mapArtCache.delete(mapArtCache.keys().next().value);
+    mapArtCache.set(scope.key, (async () => {
+      const { buildMapArt } = await import('./map-art.mjs');
+      const art = buildMapArt(scope.map, {
+        bounds: scope.map.art.bounds,
+        step: 1.6,
+        seed: scope.map.seed,
+        rivers: scope.map.art.rivers,
+        compass: null
+      });
+      return {
+        terrain: zlib.gzipSync(art.terrain),
+        provinces: zlib.gzipSync(JSON.stringify({ bounds: art.bounds, provinces: art.provinces }))
+      };
+    })());
+  }
+  return mapArtCache.get(scope.key);
+}
 const characterCatalog = loadJson(path.join(v6Root, 'src/data/characters.v6.json'));
 
 const defaultGameId = process.env.AOB_GAME_ID || 'prototype-1';
@@ -154,6 +246,7 @@ async function loadContext(gameId, {
   const pending = (async () => {
     const store = createStore(gameId);
     let game = await store.load();
+    enterGameScope(game);
 
     if (!game && createIfMissing) {
       game = createOnlineGame(map, constants, {
@@ -522,7 +615,10 @@ function publicBootstrap(ctx) {
       sea_waypoints: map.sea_waypoints || {},
       sea_lane_edges: map.sea_lane_edges || [],
       ports: map.ports,
-      capitals: map.capitals
+      capitals: map.capitals,
+      generated: Boolean(map.generated),
+      seed: map.seed || null,
+      centre: map.art?.centre || null
     },
     houses: constants.houses,
     ruleset_version: constants.version,
@@ -644,6 +740,8 @@ async function createMultiplayerGame(body, profile = null) {
   });
 
   const store = createStore(gameId);
+  const mapSpec = mapSpecFrom(body, { defaultHouses: 4 });
+  enterGameScope({ map_spec: mapSpec });
   let game = createOnlineGame(map, constants, {
     id: gameId,
     accessMode: ACCESS_MODE.PLAYER_BOUND,
@@ -657,6 +755,10 @@ async function createMultiplayerGame(body, profile = null) {
   });
   game = normalizeAudit(normalizeOnlineEconomy(game));
   game.pace = paceFrom(body);
+  if (mapSpec) {
+    game.map_spec = mapSpec;
+    game.lifecycle.houses = [...mapSpec.houses];
+  }
 
   const ctx = {
     gameId,
@@ -687,7 +789,9 @@ async function createMultiplayerGame(body, profile = null) {
 
 async function createSoloGame(body, profile = null) {
   const house = String(body.house || '').trim();
-  if (!constants.houses.includes(house)) throw new Error('solo game requires a valid house');
+  if (!baseConstants.houses.includes(house)) throw new Error('solo game requires a valid house');
+  const mapSpec = mapSpecFrom(body, { defaultHouses: 4 });
+  enterGameScope({ map_spec: mapSpec });
 
   const gameId = newGameId();
   const credentials = createPlayerCredentials();
@@ -713,6 +817,10 @@ async function createSoloGame(body, profile = null) {
   });
   game = normalizeAudit(normalizeOnlineEconomy(game));
   game.pace = paceFrom(body);
+  if (mapSpec) {
+    game.map_spec = mapSpec;
+    game.lifecycle.houses = [...mapSpec.houses];
+  }
 
   const ctx = {
     gameId,
@@ -761,6 +869,8 @@ async function createSoloGame(body, profile = null) {
 
 async function joinGameById(gameId, body, { publicOnly = false, profile = null } = {}) {
   const ctx = await loadContext(gameId);
+  // From here on `map` and `constants` are those of this game.
+  enterGameScope(ctx.game);
   const lifecycle = ctx.game.lifecycle || {};
 
   if (lifecycle.status !== GAME_STATUS.LOBBY) throw new Error('game is not joinable');
@@ -1029,6 +1139,22 @@ async function handleGameApi(req, res, url, ctx, subpath) {
   if (req.method === 'GET' && subpath === '/storage') {
     await requirePlayer(ctx, req);
     return json(res, 200, ctx.store.status());
+  }
+
+  // The painted map of a generated game. It carries no secrets of play and an
+  // <image> cannot send a token, so it is served without one.
+  const artFile = subpath.match(/^\/map-art\/(terrain\.svg|provinces\.json)$/);
+  if (req.method === 'GET' && artFile) {
+    const scope = gameScope.getStore();
+    if (!scope?.key) return json(res, 404, { error: 'this game uses the classic map' });
+    const art = await mapArtFor(scope);
+    const svg = artFile[1] === 'terrain.svg';
+    res.writeHead(200, {
+      'content-type': svg ? 'image/svg+xml' : 'application/json; charset=utf-8',
+      'content-encoding': 'gzip',
+      'cache-control': 'public, max-age=86400, immutable'
+    });
+    return res.end(svg ? art.terrain : art.provinces);
   }
 
   if (req.method === 'GET' && subpath === '/bootstrap') {
@@ -1424,6 +1550,8 @@ async function tickDueGames({
   for (const gameId of ids) {
     try {
       const ctx = await loadContext(gameId);
+      // From here on `map` and `constants` are those of this game.
+      enterGameScope(ctx.game);
       await serial(ctx, () => tickUnlocked(ctx));
       results.push({
         game_id: gameId,
@@ -1596,6 +1724,10 @@ const server = http.createServer(async (req, res) => {
       if (!gameId || !gameToken) throw new Error('game id and game token required');
 
       const ctx = await loadContext(gameId);
+
+      // From here on `map` and `constants` are those of this game.
+
+      enterGameScope(ctx.game);
       const player = await ctx.store.authenticateToken(gameToken);
       if (!player) throw new Error('invalid player token');
       await ctx.store.linkPlayerToProfile(player.id, profile.id);
@@ -1681,6 +1813,8 @@ const server = http.createServer(async (req, res) => {
 
       const gameId = presence.game.game_id;
       const ctx = await loadContext(gameId);
+      // From here on `map` and `constants` are those of this game.
+      enterGameScope(ctx.game);
       if (ctx.game.lifecycle?.status !== GAME_STATUS.RUNNING) {
         throw new Error('game is not watchable');
       }
@@ -1899,11 +2033,14 @@ const server = http.createServer(async (req, res) => {
     const scoped = gamePath(url.pathname);
     if (scoped && scoped.gameId !== 'join') {
       const ctx = await loadContext(scoped.gameId);
+      // From here on `map` and `constants` are those of this game.
+      enterGameScope(ctx.game);
       return await handleGameApi(req, res, url, ctx, scoped.subpath);
     }
 
     if (url.pathname.startsWith('/api/')) {
       const subpath = url.pathname.slice('/api'.length);
+      enterGameScope(defaultContext.game);
       return await handleGameApi(req, res, url, defaultContext, subpath);
     }
 

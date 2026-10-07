@@ -360,7 +360,7 @@ button.loading { opacity:.65; cursor:wait; }
       <div class="create-grid">
         <div class="card">
           <h3>Соло</h3>
-          <div class="muted">Ты против пяти Домов под управлением ИИ.</div>
+          <div class="muted">Ты против Домов под управлением ИИ на случайной карте.</div>
           <label>Дом</label>
           <select id="solo-house"></select>
           <label>Темп партии</label>
@@ -1514,6 +1514,29 @@ async function loadHub() {
   }
 }
 
+// Every "new game" card gets a map choice next to its tempo: a generated map
+// sized for the number of Houses, or the classic hand-made one (for tests).
+for (const prefix of ['solo', 'public', 'private']) {
+  const pace = $(prefix + '-pace');
+  if (!pace) continue;
+  const label = document.createElement('label');
+  label.textContent = 'Карта и число Домов';
+  const select = document.createElement('select');
+  select.id = prefix + '-map';
+  select.className = pace.className;
+  const sizes = { 2: 'малая', 3: 'небольшая', 4: 'средняя', 5: 'большая', 6: 'огромная' };
+  select.innerHTML = Object.entries(sizes).map(([count, size]) =>
+    '<option value="' + count + '"' + (count === '4' ? ' selected' : '') + '>Случайная, ' + count +
+    (count < 5 ? ' Дома' : ' Домов') + ' · ' + size + '</option>').join('') +
+    '<option value="classic">Классическая, 6 Домов · для тестов</option>';
+  pace.after(label, select);
+}
+
+function mapChoice(prefix) {
+  const value = $(prefix + '-map')?.value || '4';
+  return value === 'classic' ? { map: 'classic' } : { map: 'random', houses_count: Number(value) };
+}
+
 async function createMultiplayer(visibility, button, errorId, roomInputId, houseSelectId, paceSelectId) {
   $(errorId).textContent = '';
   try {
@@ -1526,6 +1549,7 @@ async function createMultiplayer(visibility, button, errorId, roomInputId, house
           room_name:$(roomInputId).value.trim(),
           visibility,
           pace:$(paceSelectId).value,
+          ...mapChoice(paceSelectId.replace('-pace', '')),
           house:$(houseSelectId).value || null
         })
       }, profileAuth());
@@ -1648,6 +1672,7 @@ $('create-solo').onclick = async () => {
           display_name:displayName(),
           house:$('solo-house').value,
           pace:$('solo-pace').value,
+          ...mapChoice('solo'),
           room_name:'Соло · ' + $('solo-house').value
         })
       }, profileAuth());
@@ -1738,7 +1763,8 @@ async function loadRoom() {
     const claims = life.house_claims || {};
     $('houses').innerHTML = '';
 
-    for (const house of houses) {
+    const roomHouses = life.houses || houses;
+    for (const house of roomHouses) {
       const ownerId = claims[house];
       const button = document.createElement('button');
       button.className = 'house' + (ownerId ? ' claimed' : '') + (me?.house === house ? ' mine' : '');
@@ -1766,8 +1792,8 @@ async function loadRoom() {
     }).join('');
 
     const isAdmin = me?.role === 'ADMIN';
-    const claimedCount = houses.filter(house => Boolean(claims[house])).length;
-    const missingCount = houses.length - claimedCount;
+    const claimedCount = roomHouses.filter(house => Boolean(claims[house])).length;
+    const missingCount = roomHouses.length - claimedCount;
     // Two players are enough: the House AI plays every House nobody took.
     const needed = Math.max(0, 2 - claimedCount);
     const canStart = isAdmin && !solo && life.status === 'LOBBY' && needed === 0;

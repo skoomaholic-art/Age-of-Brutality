@@ -253,7 +253,7 @@ export function createSeaLandingBridge(state, map, action) {
   }
 
   const bridgedState = structuredClone(state);
-  const bridgedMap = structuredClone(map);
+  const bridgedMap = structuredClone({ ...map });
   const warriors = onlineWarriorsAt(state, action.from, action.house);
 
   bridgedState.territories[action.from] = {

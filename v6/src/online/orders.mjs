@@ -384,7 +384,7 @@ function moveToSeaWaypoint(state,map,constants,action) {
 
 function routeResolutionBridge(state,map,action) {
   const bridgedState=structuredClone(state);
-  const bridgedMap=structuredClone(map);
+  const bridgedMap=structuredClone({ ...map });
   let syntheticOrigin=false;
 
   if(isSeaWaypoint(map,action.from)) {
