@@ -345,6 +345,23 @@
     .bar-drop.show { display: block; }
     .bar-drop .panel { margin: 0; border: 0; outline: 0; box-shadow: none; background: transparent; }
     .bar-drop .panel + .panel { border-top: 1px solid var(--rule); }
+    .land-card { position: absolute; z-index: 6; left: 12px; bottom: 12px; width: min(300px, calc(100% - 24px)); display: none;
+      border: 1.5px solid var(--ink); background: rgba(242,230,200,.98); box-shadow: 4px 4px 0 rgba(43,27,18,.38); }
+    .land-card.show { display: block; }
+    .land-head { display: flex; align-items: baseline; gap: 8px; padding: 8px 10px 4px; }
+    .land-head b { font-family: 'Vek Gothic', Kurale, serif; font-weight: 400; font-size: 23px; color: var(--vermilion-deep); }
+    .land-head span { flex: 1; font-size: 12.5px; font-style: italic; color: var(--ink-soft); }
+    .land-head button { padding: 0 7px; box-shadow: none; }
+    .land-tab { flex: 1; border: 0; border-radius: 0; box-shadow: none; background: transparent; padding: 5px 6px; font-family: Kurale, serif; font-size: 14px; }
+    .land-tab.on { background: var(--ink); color: var(--vellum); }
+    .land-tab:disabled { opacity: .45; }
+    .land-body { padding: 9px 10px 10px; font-size: 13.5px; line-height: 1.35; }
+    .land-body .row { display: flex; justify-content: space-between; gap: 10px; padding: 2px 0; border-bottom: 1px dotted var(--rule); }
+    .land-body .lore { margin-top: 7px; font-style: italic; }
+    .land-body .acts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 6px; }
+    .land-body .built { margin: 6px 0; }
+    .land-body .built span { display: inline-block; margin: 0 5px 4px 0; padding: 1px 7px; border: 1px solid var(--ink); background: rgba(201,162,58,.25); }
+    .land-body button.wide { width: 100%; margin-top: 6px; }
     .sub-tabs { display: flex; border-bottom: 1.5px solid var(--ink); margin: 2px 2px 0; }
     .sub-tab { flex: 1; border: 0; border-radius: 0; box-shadow: none; background: transparent; padding: 7px 8px; font-family: Kurale, serif; font-size: 15px; }
     .sub-tab.on { background: var(--ink); color: var(--vellum); }
@@ -569,6 +586,15 @@
         <figure class="miniature"><img id="battle-art" src="/assets/img/notif-battle-seen.jpg" alt="" width="720" height="540"></figure>
         <h3 id="battle-title">Битва</h3>
         <p id="battle-text"></p>
+      </div>
+      <div id="land-card" class="land-card">
+        <div class="land-head"><b id="land-name"></b><span id="land-kind"></span><button id="land-close" title="Закрыть">×</button></div>
+        <div class="sub-tabs">
+          <button class="land-tab on" data-land="info">Инфо</button>
+          <button class="land-tab" data-land="hire">Нанять</button>
+          <button class="land-tab" data-land="build">Строить</button>
+        </div>
+        <div id="land-body" class="land-body"></div>
       </div>
       <div id="decision" class="decision">
         <div class="decision-card">
@@ -1171,6 +1197,99 @@ function renderRounds() {
     return '<div class="' + cls + '"><span>' + escapeHtml(item.house) + tag + state +
       '</span><span class="round-pips">' + pips + '</span></div>';
   }).join('');
+}
+
+// ---------- the land card: info, hire, build ----------
+let landId = null;
+let landTab = 'info';
+const LAND_LORE = [
+  'Здешний эль хвалят даже враги, а местный поп проклинает его каждое воскресенье.',
+  'Говорят, под старым дубом зарыт клад. Копали трижды, нашли двух кротов и один сапог.',
+  'Староста клянётся, что видел в лесу зайца с рогами. Староста пьёт.',
+  'На ярмарке тут однажды продали одну и ту же корову четырежды.',
+  'Колокол здешней церкви треснул в день, когда родился нынешний правитель. Дурной знак или плохая медь.',
+  'Мост через ручей чинят каждый год, и каждый год он падает под сборщиком податей.',
+  'Здесь растят лучшую репу в округе и гордятся этим больше, чем следует.',
+  'Местные уверяют, что их земля древнее всех Домов. Грамот об этом нет.',
+  'В трактире висит щит рыцаря, который не заплатил за ужин.',
+  'Пастухи поют такую песню, что волки обходят стадо стороной.'
+];
+
+function openLand(id) {
+  landId = id;
+  if (nodeOwner(id) !== house) landTab = 'info';
+  renderLand();
+}
+
+function renderLand() {
+  const card = $('land-card');
+  const t = landId ? territoryById(landId) : null;
+  if (!t || target) { card.classList.remove('show'); return; }
+  const st = snapshot.game.state.territories[landId];
+  const mine = st.owner === house;
+  card.classList.add('show');
+  $('land-name').textContent = t.name;
+  $('land-kind').textContent = t.type;
+  document.querySelectorAll('.land-tab').forEach(tab => {
+    tab.disabled = tab.dataset.land !== 'info' && !mine;
+    tab.classList.toggle('on', tab.dataset.land === landTab);
+  });
+  const body = $('land-body');
+  const seen = !snapshot.game.visibility?.fog || (snapshot.game.visibility.visible || []).includes(landId);
+  const built = (st.fort ? '<span>Крепость</span>' : '') + (t.type === 'Столица' ? '<span>Замок правителя</span>' : '');
+  if (landTab === 'info') {
+    const past = (snapshot.game.land_history?.[landId]?.past || []).filter(Boolean);
+    const garrison = st.owner ? warriorsAt(landId, st.owner) : 0;
+    const hash = [...landId].reduce((sum, ch) => sum * 31 + ch.charCodeAt(0), 7);
+    const bonus = t.island_bonus ? '<div class="row"><span>Весь остров даёт</span><b>' + escapeHtml(t.island_bonus) + '</b></div>' : '';
+    body.innerHTML =
+      '<div class="row"><span>Владелец</span><b>' + escapeHtml(st.owner ? 'Дом ' + st.owner : 'ничья земля') + '</b></div>' +
+      '<div class="row"><span>Даёт владельцу</span><b>+' + Number(t.gold_income || 0) + ' золота в день</b></div>' + bonus +
+      '<div class="row"><span>Гарнизон</span><b>' + (seen ? garrison + ' ' + warriorWord(garrison) : 'неизвестно') + '</b></div>' +
+      '<div class="row"><span>Постройки</span><b>' + (st.fort ? 'крепость' : 'нет') + '</b></div>' +
+      '<div class="row"><span>Исконно</span><b>' + escapeHtml(t.house_sector && colors[t.house_sector] ? 'земля Дома ' + t.house_sector : t.house_sector || 'вольная земля') + '</b></div>' +
+      '<div class="row"><span>Прежде владели</span><b>' + escapeHtml(past.length ? past.join(', ') : 'никто') + '</b></div>' +
+      '<div class="lore">' + escapeHtml(LAND_LORE[Math.abs(hash) % LAND_LORE.length]) + '</div>';
+    return;
+  }
+  const jobs = (economy?.jobs || []).filter(job => job.territory === landId && job.status === 'PENDING');
+  if (landTab === 'hire') {
+    const here = warriorsAt(landId, house);
+    const queue = jobs.filter(job => job.type === 'RECRUIT').map(job => '<span>+' + job.warriors + ' · ' + escapeHtml(timeLeft(job.due_at)) + '</span>').join('');
+    body.innerHTML = '<div class="row"><span>Стоит здесь</span><b>' + here + ' ' + warriorWord(here) + '</b></div>' +
+      (queue ? '<div class="built">Набираются: ' + queue + '</div>' : '') +
+      '<div class="acts">' + [1, 2, 3].map(n => '<button data-land-hire="' + n + '">+' + n + '<br><span class="tiny">' + n + ' зол.</span></button>').join('') + '</div>';
+    return;
+  }
+  const building = jobs.some(job => job.type === 'FORT');
+  const fortNote = t.type === 'Столица' ? 'В столице крепость не строят' : st.fort ? 'Крепость уже стоит' : building ? 'Крепость строится' : '';
+  body.innerHTML = '<div class="built">Построено: ' + (built || 'ничего') + '</div>' +
+    '<button class="wide" data-land-fort ' + (fortNote ? 'disabled' : '') + '>' + (fortNote || 'Крепость · 3 золота') + '</button>' +
+    '<button class="wide" disabled>Тайный приказ · скоро</button>' +
+    '<button class="wide" disabled>Порт · скоро</button>';
+}
+
+async function landCommand(path, body) {
+  const blocked = roundBlockReason();
+  if (blocked) { alert(blocked); return; }
+  try {
+    await api(path, { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({ house, territory: landId, ...body }) });
+    await refresh();
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+function setupLand() {
+  $('land-close').onclick = () => { landId = null; renderLand(); };
+  document.querySelectorAll('.land-tab').forEach(tab => {
+    tab.onclick = () => { landTab = tab.dataset.land; renderLand(); };
+  });
+  $('land-body').addEventListener('click', event => {
+    const hire = event.target.closest('[data-land-hire]');
+    if (hire) landCommand('/api/recruit', { warriors: Number(hire.dataset.landHire) });
+    if (event.target.closest('[data-land-fort]')) landCommand('/api/fort', {});
+  });
 }
 
 // ---------- windows that wait for an answer ----------
@@ -2852,6 +2971,9 @@ async function selectTerritory(id) {
   const movable = warriorsAt(id, house);
 
   if (exploredNow && !exploredNow.has(id)) return;
+  // Any land that is not the aim of a march opens its card.
+  const aimed = origin && id !== origin && legal.some(a => a.from === origin && a.to === id);
+  if (!aimed && snapshot.game.state.territories[id]) openLand(id);
 
   if (!origin) {
     if (movable < 1) return;
@@ -2880,6 +3002,7 @@ async function selectTerritory(id) {
 
   renderMap();
   renderSelection();
+  renderLand();
 }
 
 async function sendOrder(confirmed = false) {
@@ -3145,6 +3268,7 @@ async function refresh() {
   renderNews();
   renderFinders();
   renderFamily();
+  renderLand();
   renderBarStatus();
   pumpWindows();
   renderDecisions();
@@ -3292,6 +3416,7 @@ $('restore-game').addEventListener('click', async () => {
 
 setupBar();
 setupLens();
+setupLand();
 
 document.addEventListener('click', event => {
   const find = event.target.closest?.('[data-find]');

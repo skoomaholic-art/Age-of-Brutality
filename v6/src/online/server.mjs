@@ -46,7 +46,7 @@ import {
   roundsView,
   startRounds
 } from './rounds.mjs';
-import { applyFog, knownHouses, recordExploration } from './fog.mjs';
+import { applyFog, knownHouses, recordExploration, recordLandHistory } from './fog.mjs';
 import { generateMap, MAX_HOUSES, MIN_HOUSES } from './mapgen.mjs';
 import { processEncounters } from './encounters.mjs';
 import { expelGuests } from './guests.mjs';
@@ -503,6 +503,7 @@ async function tickUnlocked(ctx) {
   processed = processCharacters(processed, map, constants, { nowMs });
   processed = expelGuests(processed, map, constants, nowMs);
   processed = recordExploration(processed, map, constants.houses, nowMs);
+  processed = recordLandHistory(processed, nowMs);
   if (
     processed.updated_at !== ctx.game.updated_at ||
     processed.state.journal.length !== ctx.game.state.journal.length

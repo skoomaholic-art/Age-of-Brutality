@@ -80,6 +80,24 @@ export function recordExploration(game, map, houses, nowMs = Date.now()) {
   return next || game;
 }
 
+// Remembers who held every land before its present master.
+export function recordLandHistory(game, nowMs = Date.now()) {
+  let next = null;
+  for (const [id, territory] of Object.entries(game.state?.territories || {})) {
+    const owner = territory.owner ?? null;
+    const known = game.land_history?.[id];
+    if (known ? known.now === owner : owner === null) continue;
+    next ||= structuredClone(game);
+    next.land_history ||= {};
+    const entry = next.land_history[id] || { now: null, past: [] };
+    if (entry.now) entry.past = [...entry.past, entry.now].slice(-6);
+    entry.now = owner;
+    next.land_history[id] = entry;
+  }
+  if (next) next.updated_at = new Date(nowMs).toISOString();
+  return next || game;
+}
+
 // The Houses this one has met. Without fog everyone knows everyone.
 export function knownHouses(game, house, houses) {
   if (game.rounds?.mode !== 'days' || game.lifecycle?.status !== 'RUNNING') {
@@ -166,6 +184,10 @@ export function applyFog(clientGame, map, house) {
   delete clientGame.contacts;
 
   delete clientGame.exploration;
+  // The past of lands never seen is unknown too.
+  for (const id of Object.keys(clientGame.land_history || {})) {
+    if (!explored.has(id)) delete clientGame.land_history[id];
+  }
   clientGame.visibility = {
     fog: true,
     visible: [...seen].sort(),
