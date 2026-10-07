@@ -1290,19 +1290,22 @@ const BANNER_FIELDS = [
   ['полосы', '<rect x="0" y="17" width="64" height="9"/><rect x="0" y="35" width="64" height="9"/><rect x="0" y="53" width="64" height="9"/>'],
   ['кайма', '<path fill-rule="evenodd" d="M0 0H64V80H0ZM14 14V56H50V14Z"/>']
 ];
-const BANNER_EMBLEMS = ['', '⚜', '♜', '☀', '☾', '✚', '★', '♞', '♛', '⚔', '☠', '♥', '⚖', '❦'];
-const BANNER_EMBLEM_NAMES = ['нет', 'лилия', 'башня', 'солнце', 'месяц', 'крест', 'звезда', 'конь', 'корона', 'мечи', 'череп', 'сердце', 'весы', 'лоза'];
-const BANNER_ROWS = [['shape', 'Полотно', BANNER_SHAPES.length], ['field', 'Поле', BANNER_FIELDS.length], ['c1', 'Цвет', 10], ['c2', 'Второй цвет', 10], ['emblem', 'Герб', BANNER_EMBLEMS.length], ['ec', 'Цвет герба', 10]];
+// Emblems and ready standards are cut from the painted constructor sheet.
+const BANNER_EMBLEM_COUNT = 34;
+const BANNER_READY = ['лев', 'лилии', 'волк', 'древо', 'солнце', 'крест', 'ворон', 'шахматный', 'череп', 'длань'];
+const BANNER_ROWS = [['preset', 'Штандарт', BANNER_READY.length + 1], ['shape', 'Полотно', BANNER_SHAPES.length], ['field', 'Поле', BANNER_FIELDS.length],
+  ['c1', 'Цвет', 10], ['c2', 'Второй цвет', 10], ['emblem', 'Герб', BANNER_EMBLEM_COUNT + 1]];
 let bannerSeq = 0;
 
 function bannerOf(who) {
   const saved = snapshot?.game?.house_profiles?.[who]?.banner;
   if (saved) return saved;
   const own = Math.max(0, BANNER_COLORS.indexOf(colors[who]));
-  return { shape: 0, field: 0, c1: own, c2: 7, emblem: 1, ec: 6 };
+  return { preset: 0, shape: 0, field: 0, c1: own, c2: 7, emblem: 4, ec: 6 };
 }
 
 function bannerSvg(b) {
+  if (b.preset) return '<img alt="" src="/assets/img/banner-ready-' + b.preset + '.png" style="display:block;width:100%;height:auto">';
   const id = 'bn' + (bannerSeq += 1);
   const shape = BANNER_SHAPES[b.shape % BANNER_SHAPES.length][1];
   return '<svg viewBox="0 0 64 80" style="display:block;width:100%;height:auto"><defs><clipPath id="' + id + '"><path d="' + shape + '"/></clipPath></defs>' +
@@ -1310,17 +1313,18 @@ function bannerSvg(b) {
     '<g clip-path="url(#' + id + ')"><rect width="64" height="80" fill="' + BANNER_COLORS[b.c1 % 10] + '"/><g fill="' + BANNER_COLORS[b.c2 % 10] + '">' +
     BANNER_FIELDS[b.field % BANNER_FIELDS.length][1] + '</g></g>' +
     '<path d="' + shape + '" fill="none" stroke="#2b1b12" stroke-width="1.6" stroke-linejoin="round"/>' +
-    '<text x="32" y="' + (b.shape === 5 ? 34 : 44) + '" text-anchor="middle" font-size="' + (b.shape === 5 ? 18 : 26) + '" font-family="serif" fill="' + BANNER_COLORS[b.ec % 10] +
-    '" stroke="#2b1b12" stroke-width=".5" paint-order="stroke">' + BANNER_EMBLEMS[b.emblem % BANNER_EMBLEMS.length] + '</text></svg>';
+    (b.emblem ? '<image href="/assets/img/banner-emblem-' + b.emblem + '.png" x="' + (b.shape === 5 ? 12 : 16) + '" y="' + (b.shape === 5 ? 12 : 19) +
+      '" width="' + (b.shape === 5 ? 24 : 32) + '" height="' + (b.shape === 5 ? 24 : 32) + '"/>' : '') + '</svg>';
 }
 
 let makerBanner = null;
 
 function drawBannerMaker() {
   $('maker-flag').innerHTML = bannerSvg(makerBanner);
-  $('maker-flag-rows').innerHTML = BANNER_ROWS.map(([key, label]) => {
-    const v = makerBanner[key];
-    const name = key === 'shape' ? BANNER_SHAPES[v][0] : key === 'field' ? BANNER_FIELDS[v][0] : key === 'emblem' ? BANNER_EMBLEM_NAMES[v] : BANNER_COLOR_NAMES[v];
+  $('maker-flag-rows').innerHTML = BANNER_ROWS.filter(([key]) => key === 'preset' || !makerBanner.preset).map(([key, label]) => {
+    const v = Number(makerBanner[key] || 0);
+    const name = key === 'preset' ? (v ? BANNER_READY[v - 1] : 'свой, собрать') : key === 'shape' ? BANNER_SHAPES[v][0] : key === 'field' ? BANNER_FIELDS[v][0]
+      : key === 'emblem' ? (v ? v + ' из ' + BANNER_EMBLEM_COUNT : 'нет') : BANNER_COLOR_NAMES[v];
     return '<div class="maker-row"><span>' + label + '</span><button data-bstep="-1" data-bkey="' + key + '">‹</button><b>' + name +
       '</b><button data-bstep="1" data-bkey="' + key + '">›</button></div>';
   }).join('');
@@ -1473,13 +1477,14 @@ function setupMaker() {
     if (!button) return;
     const key = button.dataset.bkey;
     const n = BANNER_ROWS.find(row => row[0] === key)[2];
-    makerBanner[key] = (makerBanner[key] + Number(button.dataset.bstep) + n) % n;
+    makerBanner[key] = (Number(makerBanner[key] || 0) + Number(button.dataset.bstep) + n) % n;
     drawBannerMaker();
   });
   $('maker-random').onclick = () => {
     for (const [key, , n] of BANNER_ROWS) makerBanner[key] = Math.floor(Math.random() * n);
     if (makerBanner.c2 === makerBanner.c1) makerBanner.c2 = (makerBanner.c1 + 1) % 10;
-    if (makerBanner.ec === makerBanner.c1) makerBanner.ec = (makerBanner.c1 + 6) % 10;
+    if (Math.random() < 0.6) makerBanner.preset = 0;
+    if (!makerBanner.emblem) makerBanner.emblem = 1;
     drawBannerMaker();
     for (const [kind, , optional] of FACE_PARTS) {
       const n = FACE[kind].length;

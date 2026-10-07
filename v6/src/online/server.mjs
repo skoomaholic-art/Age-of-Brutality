@@ -1358,7 +1358,7 @@ async function handleGameApi(req, res, url, ctx, subpath) {
         if (typeof body.motto === 'string') {
           next.house_profiles ||= {};
           const banner = {};
-          for (const key of ['shape', 'field', 'c1', 'c2', 'emblem', 'ec']) {
+          for (const key of ['preset', 'shape', 'field', 'c1', 'c2', 'emblem', 'ec']) {
             const value = Number(body.banner?.[key]);
             banner[key] = Number.isInteger(value) && value >= 0 && value <= 40 ? value : 0;
           }
