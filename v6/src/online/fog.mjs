@@ -1,6 +1,10 @@
-// Fog of war for games played in days: a House sees its own lands, the lands
-// next to them and the sea around its ports and fleets. Who owns a land is
-// common knowledge, as on a political map; where armies stand is not.
+// Fog of war for games played in days.
+//
+// A House starts knowing only its capital and the lands that border it; the
+// rest of the world lies under clouds. It sees into its own lands, the lands
+// next to them and the sea around its ports and fleets. Every land it has once
+// seen stays on its map (explored), but armies show only where it sees now.
+// Lands never seen are not sent at all: neither their owner nor their armies.
 
 function addNeighbours(seen, edges, own) {
   for (const [a, b] of edges || []) {
@@ -25,6 +29,30 @@ export function visiblePositions(state, map, house) {
   return seen;
 }
 
+// Everything the House has ever seen: what it sees now and what it remembers.
+export function exploredPositions(game, map, house) {
+  const seen = visiblePositions(game.state, map, house);
+  for (const id of game.exploration?.[house] || []) seen.add(id);
+  return seen;
+}
+
+// Remembers for every House the lands it sees at this moment. Returns the same
+// game when nobody discovered anything new.
+export function recordExploration(game, map, houses, nowMs = Date.now()) {
+  if (game.rounds?.mode !== 'days') return game;
+  let next = null;
+  for (const house of houses) {
+    const known = new Set(game.exploration?.[house] || []);
+    const fresh = [...visiblePositions(game.state, map, house)].filter(id => !known.has(id));
+    if (!fresh.length) continue;
+    next ||= structuredClone(game);
+    next.exploration ||= {};
+    next.exploration[house] = [...known, ...fresh].sort();
+  }
+  if (next) next.updated_at = new Date(nowMs).toISOString();
+  return next || game;
+}
+
 // What other Houses do in private: their marches, levies and building.
 const PRIVATE_EVENTS = new Set([
   'MARCH_QUEUED',
@@ -45,10 +73,15 @@ const PRIVATE_EVENTS = new Set([
 export function applyFog(clientGame, map, house) {
   const state = clientGame.state;
   const seen = visiblePositions(state, map, house);
+  const explored = exploredPositions(clientGame, map, house);
 
   for (const [id, territory] of Object.entries(state.territories || {})) {
     if (seen.has(id)) continue;
     territory.warriors = {};
+    if (explored.has(id)) continue;
+    // Under the clouds: the House does not know whose land this is.
+    territory.owner = null;
+    territory.fort = false;
   }
   for (const [id, node] of Object.entries(state.sea_nodes || {})) {
     if (seen.has(id)) continue;
@@ -80,6 +113,11 @@ export function applyFog(clientGame, map, house) {
     return item.details?.house === house;
   });
 
-  clientGame.visibility = { fog: true, visible: [...seen].sort() };
+  delete clientGame.exploration;
+  clientGame.visibility = {
+    fog: true,
+    visible: [...seen].sort(),
+    explored: [...explored].sort()
+  };
   return clientGame;
 }

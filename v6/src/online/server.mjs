@@ -44,7 +44,7 @@ import {
   roundsView,
   startRounds
 } from './rounds.mjs';
-import { applyFog } from './fog.mjs';
+import { applyFog, recordExploration } from './fog.mjs';
 import { processEncounters } from './encounters.mjs';
 import {
   acceptAlliance,
@@ -401,6 +401,7 @@ async function tickUnlocked(ctx) {
   processed = processDueOrders(processed, map, constants, nowMs);
   processed = processEconomy(processed, map, constants, nowMs);
   processed = processRounds(processed, map, constants, { nowMs });
+  processed = recordExploration(processed, map, constants.houses, nowMs);
   if (
     processed.updated_at !== ctx.game.updated_at ||
     processed.state.journal.length !== ctx.game.state.journal.length

@@ -8,7 +8,7 @@ import { executeCommand } from '../src/online/commands.mjs';
 import { listQueueableMarches, processDueOrders } from '../src/online/orders.mjs';
 import { normalizeOnlineEconomy, processEconomy } from '../src/online/economy.mjs';
 import { processRounds } from '../src/online/ai.mjs';
-import { applyFog, visiblePositions } from '../src/online/fog.mjs';
+import { applyFog, recordExploration, visiblePositions } from '../src/online/fog.mjs';
 import { syncAuditFromJournal, normalizeAudit } from '../src/online/audit.mjs';
 import {
   GAME_PACES,
@@ -169,7 +169,18 @@ test('a House sees its own lands and their neighbours, and nothing of armies bey
 
   const client = applyFog(structuredClone(game), map, HOUSE);
   assert.deepEqual(client.state.territories[far].warriors, {}, 'the rival garrison is hidden');
-  assert.equal(client.state.territories[far].owner, RIVAL, 'who owns the land stays known');
+  assert.equal(client.state.territories[far].owner, null, 'an unexplored land hides its owner');
+  assert.deepEqual(client.visibility.explored, client.visibility.visible, 'at first only what is seen is known');
+
+  // Once seen, a land stays on the map even when it is out of sight again.
+  let later = recordExploration(game, map, constants.houses, T0);
+  assert.equal(recordExploration(later, map, constants.houses, T0), later, 'nothing new, nothing written');
+  later = structuredClone(later);
+  later.exploration[HOUSE].push(far);
+  const remembered = applyFog(structuredClone(later), map, HOUSE);
+  assert.equal(remembered.state.territories[far].owner, RIVAL, 'an explored land shows its owner');
+  assert.deepEqual(remembered.state.territories[far].warriors, {}, 'but not its garrison');
+  assert.equal(remembered.exploration, undefined, 'what others explored is not sent');
   assert.equal(client.state.territories[CAPITAL].warriors[HOUSE], 4);
   assert.equal(client.visibility.visible.includes(far), false);
   assert.ok(
