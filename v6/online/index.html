@@ -252,13 +252,13 @@
       border: 5px solid #c9a23a; outline: 1.5px solid var(--ink); box-shadow: inset 0 0 0 1.5px var(--ink), inset 0 0 22px rgba(43,27,18,.55);
       background: #c9a23a;
     }
-    .lens-glass img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.18); }
+    .lens-glass > img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.18); }
     .lens-glass { background: radial-gradient(circle at 50% 38%, #e7c65a, #b98a24 78%); }
-    .lens-glass img.host { object-fit: contain; transform: none; padding: 16px 10px 6px; transform-origin: 50% 100%; animation: lens-rest 3.6s ease-in-out infinite; }
-    .lens-glass img.host.marching { animation: lens-march .62s ease-in-out infinite; }
+    .lens-glass > img.host { object-fit: contain; transform: none; padding: 16px 10px 6px; transform-origin: 50% 100%; animation: lens-rest 3.6s ease-in-out infinite; }
+    .lens-glass > img.host.marching { animation: lens-march .62s ease-in-out infinite; }
     @keyframes lens-march { 0%, 100% { transform: translate(-3px, 0) rotate(-1.6deg); } 50% { transform: translate(3px, -5px) rotate(1.6deg); } }
     @keyframes lens-rest { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-2px) scale(1.012); } }
-    @media (prefers-reduced-motion: reduce) { .lens-glass img.host { animation: none !important; } }
+    @media (prefers-reduced-motion: reduce) { .lens-glass > img.host { animation: none !important; } }
     .lens-note { margin: -16px auto 0; position: relative; width: fit-content; max-width: 230px; padding: 5px 10px; text-align: center; border: 1.5px solid var(--ink); background: var(--vellum); font-size: 13px; line-height: 1.25; }
     .lens-note b { display: block; font-family: Kurale, serif; font-size: 15px; }
     .finale-card {
@@ -399,6 +399,23 @@
     .banner-mini { display: inline-block; width: 15px; vertical-align: -5px; margin-right: 5px; }
     .maker-foot { grid-column: 1 / -1; display: flex; gap: 8px; justify-content: flex-end; }
     @media (max-width: 640px) { .maker-card { grid-template-columns: 1fr; } }
+    /* A living head: painted parts that blink, glance about, talk and gesture. */
+    .live { position: relative; aspect-ratio: 270 / 350; animation: live-nod 3.4s ease-in-out infinite; transform-origin: 45% 100%; }
+    .live img { position: absolute; display: block; }
+    .live .lh { inset: 0; width: 100%; height: 100%; }
+    .live .le { left: 37%; top: 41.5%; width: 37%; }
+    .live .lb { left: 33%; top: 35%; width: 45%; animation: live-brow 2.6s ease-in-out infinite; }
+    .live .lm { left: 53%; top: 61%; width: 21%; }
+    .live .lhand { right: -34%; bottom: -4%; width: 62%; transform-origin: 20% 90%; animation: live-wave 1.5s ease-in-out infinite; }
+    .live.marching { animation: live-march .6s ease-in-out infinite; }
+    @keyframes live-nod { 0%, 100% { transform: rotate(-1.2deg); } 50% { transform: rotate(1.6deg) translateY(-1%); } }
+    @keyframes live-march { 0%, 100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-3%) rotate(2deg); } }
+    @keyframes live-brow { 0%, 70%, 100% { transform: translateY(0); } 80% { transform: translateY(-9%); } }
+    @keyframes live-wave { 0%, 100% { transform: rotate(-7deg); } 50% { transform: rotate(9deg) translateY(-3%); } }
+    @media (prefers-reduced-motion: reduce) { .live, .live .lb, .live .lhand { animation: none; } }
+    .decision-card { position: relative; }
+    .decision-herald { position: absolute; right: 26px; top: 26px; width: 92px; pointer-events: none; filter: drop-shadow(2px 3px 0 rgba(43,27,18,.45)); }
+    .lens-glass .live { width: 66%; margin: 9% auto 0 12%; }
     .sub-tabs { display: flex; border-bottom: 1.5px solid var(--ink); margin: 2px 2px 0; }
     .sub-tab { flex: 1; border: 0; border-radius: 0; box-shadow: none; background: transparent; padding: 7px 8px; font-family: Kurale, serif; font-size: 15px; }
     .sub-sex { flex: 1; border: 0; border-radius: 0; box-shadow: none; background: transparent; padding: 6px; font-family: Kurale, serif; font-size: 16px; }
@@ -1676,6 +1693,11 @@ const decisionsPutOff = new Set();
 function showDecision(spec) {
   decisionKey = spec.key;
   $('decision-art').src = '/assets/img/notif-' + spec.art + '.jpg';
+  $('lens').classList.remove('show');
+  let herald = document.getElementById('decision-herald');
+  if (!herald) { herald = document.createElement('div'); herald.id = 'decision-herald'; herald.className = 'decision-herald'; $('decision-art').closest('.decision-card').appendChild(herald); }
+  const [heraldMood, heraldHand] = heraldFor(spec.art);
+  herald.innerHTML = liveBust(4, heraldMood, heraldHand);
   $('decision-from').textContent = spec.from || '';
   $('decision-title').textContent = spec.title;
   $('decision-text').textContent = spec.text;
@@ -1980,6 +2002,53 @@ function wayfarerLens(index) {
   return { title: kind.name, lines: [text, now.resting ? 'Остановились в ' + (mapNodeById(now.from)?.name || '') + ', скоро двинутся дальше.' : 'В пути.'], host: '/assets/img/npc-' + kind.art + '.png', moving: !now.resting };
 }
 
+// ---------- living heads ----------
+const LIVE_MOODS = {
+  calm:    { eyes: 1, brows: 1, mouth: 1 },
+  glad:    { eyes: 1, brows: 2, mouth: 2 },
+  worried: { eyes: 2, brows: 4, mouth: 7 },
+  angry:   { eyes: 6, brows: 6, mouth: 6 },
+  sad:     { eyes: 5, brows: 5, mouth: 8 }
+};
+const LIVE_TALK = [3, 4, 5, 9, 10, 15, 16, 22, 1];
+const LIVE_HANDS = { up: 6, down: 4, fist: 5, pray: 15, open: 2, point: 3, forward: 8 };
+
+function liveBust(head, mood = 'calm', hand = null, extra = '') {
+  const m = LIVE_MOODS[mood] || LIVE_MOODS.calm;
+  return '<div class="live ' + extra + '" data-mood="' + mood + '">' +
+    '<img class="lh" alt="" src="/assets/img/live-head-' + head + '.png">' +
+    '<img class="le" alt="" src="/assets/img/live-eyes-' + m.eyes + '.png">' +
+    '<img class="lb" alt="" src="/assets/img/live-brows-' + m.brows + '.png">' +
+    '<img class="lm" alt="" src="/assets/img/live-mouth-' + m.mouth + '.png">' +
+    (hand ? '<img class="lhand" alt="" src="/assets/img/live-hand-' + LIVE_HANDS[hand] + '.png">' : '') + '</div>';
+}
+
+// Every head blinks and glances on its own clock; a fresh one talks for a while.
+setInterval(() => {
+  document.querySelectorAll('.live').forEach(el => {
+    const m = LIVE_MOODS[el.dataset.mood] || LIVE_MOODS.calm;
+    const s = el._s || (el._s = { t: 0, blink: 14 + Math.random() * 20, glance: 30 + Math.random() * 30, talk: 22 });
+    s.t += 1;
+    let eyes = m.eyes;
+    if (s.t >= s.blink) { eyes = s.t - s.blink < 1 ? 10 : 11; if (s.t - s.blink >= 2) s.blink = s.t + 16 + Math.random() * 26; }
+    else if (s.t >= s.glance) { eyes = 3; if (s.t - s.glance >= 6) s.glance = s.t + 30 + Math.random() * 40; }
+    const mouth = s.t < s.talk ? LIVE_TALK[Math.floor(Math.random() * LIVE_TALK.length)] : m.mouth;
+    const set = (cls, kind, n) => { const img = el.querySelector(cls); const src = '/assets/img/live-' + kind + '-' + n + '.png'; if (img && img.getAttribute('src') !== src) img.src = src; };
+    set('.le', 'eyes', eyes);
+    set('.lm', 'mouth', mouth);
+  });
+}, 140);
+
+// The herald who brings a notice: his face and his gesture fit the news.
+function heraldFor(art) {
+  if (/battle-won|capital-taken|neutral-taken|fort-built|recruit-done|deal-made|release-|commander-returned|marriage|finale-won|march-arrived/.test(art)) return ['glad', 'up'];
+  if (/war-declared|pact-broken/.test(art)) return ['angry', 'fist'];
+  if (/commander-dead|execution/.test(art)) return ['sad', 'pray'];
+  if (/battle-lost|capital-lost|land-lost|order-failed|deal-failed|house-abandoned|finale-lost/.test(art)) return ['worried', 'down'];
+  if (/ransom|prisoner|passage|pact-offer|captured|intrigue/.test(art)) return ['worried', 'open'];
+  return ['calm', 'point'];
+}
+
 // ---------- the chronicler's glass ----------
 function lensFor(node) {
   const state = snapshot?.game?.state;
@@ -2016,7 +2085,9 @@ function lensFor(node) {
       : (node.dataset.lensHouse ? 'в гостях: ' : 'стоит: ') + place
   ];
   const slug = abandonedHouses()[owner] ? 'abandoned' : HOUSE_SLUGS[owner];
-  return { art, title: 'Дом ' + owner, lines, host: slug ? '/assets/img/army-' + slug + '.png' : null, moving: Boolean(moving) };
+  const head = commander ? (commander.role === 'RULER' ? 1 : 2) : 3 + (count % 3);
+  return { art, title: 'Дом ' + owner, lines, moving: Boolean(moving),
+    bust: liveBust(head, weak ? 'sad' : moving ? 'angry' : 'calm', moving ? 'forward' : null, moving ? 'marching' : '') };
 }
 
 function setupLens() {
@@ -2030,8 +2101,13 @@ function setupLens() {
     return npc ? wayfarerLens(Number(npc.dataset.npc)) : node ? lensFor(node) : null;
   };
   const show = (view, event) => {
+    let bust = document.getElementById('lens-bust');
+    if (!bust) { bust = document.createElement('div'); bust.id = 'lens-bust'; $('lens-art').after(bust); }
+    const bustKey = view.bust ? view.title + view.bust.length + view.moving + view.lines[1] : '';
+    if (bust.dataset.key !== bustKey) { bust.dataset.key = bustKey; bust.innerHTML = view.bust || ''; }
+    $('lens-art').style.display = view.bust ? 'none' : '';
     const src = view.host || '/assets/img/notif-' + view.art + '.jpg';
-    if ($('lens-art').getAttribute('src') !== src) $('lens-art').src = src;
+    if (!view.bust && $('lens-art').getAttribute('src') !== src) $('lens-art').src = src;
     $('lens-art').className = view.host ? 'host' + (view.moving ? ' marching' : '') : '';
     $('lens-note').innerHTML = '<b>' + escapeHtml(view.title) + '</b>' + view.lines.map(escapeHtml).join('<br>');
     lens.classList.add('show');
