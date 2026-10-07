@@ -15,9 +15,15 @@ export function onlinePositionOwner(state, id) {
   return state.sea_nodes?.[id]?.owner ?? null;
 }
 
+// Warriors standing as guests on another House's land (right of passage) are
+// kept apart from the land's garrison: state.guests[territory][house].
+export function guestWarriors(state, id, house) {
+  return Number(state.guests?.[id]?.[house] || 0);
+}
+
 export function onlinePositionWarriors(state, id, house) {
   if (state.territories?.[id]) {
-    return Number(state.territories[id].warriors?.[house] || 0);
+    return Number(state.territories[id].warriors?.[house] || 0) + guestWarriors(state, id, house);
   }
   return Number(state.sea_nodes?.[id]?.warriors?.[house] || 0);
 }
@@ -113,7 +119,9 @@ export function findOnlineRoute(
   if (!destinationAllowed(state,map,house,to)) return null;
 
   const owner=onlinePositionOwner(state,from);
-  if (owner!==house || onlinePositionWarriors(state,from,house)<1) return null;
+  // A march starts from our own land or fleet, or from a camp of our guests.
+  const camped=owner!==house && guestWarriors(state,from,house)>0;
+  if ((owner!==house && !camped) || onlinePositionWarriors(state,from,house)<1) return null;
 
   const dist=new Map([[from,0]]);
   const hops=new Map([[from,0]]);

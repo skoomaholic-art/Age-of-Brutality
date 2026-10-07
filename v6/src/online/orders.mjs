@@ -13,7 +13,7 @@ import {
   resolveCommanderFate,
   settleCommander
 } from '../core/characters.mjs';
-import { declareWarInPlace } from './diplomacy.mjs';
+import { declareWarInPlace, hasPassage } from './diplomacy.mjs';
 import { fateDice, recoveryMs, settleFate } from './fate.mjs';
 import {
   finishSeaLandingBridge,
@@ -22,6 +22,7 @@ import {
 import {
   findOnlineRoute,
   listReachableOnlineRoutes,
+  guestWarriors,
   onlinePositionOwner,
   onlinePositionWarriors
 } from './route-planner.mjs';
@@ -156,6 +157,11 @@ export function enumerateOnlineMarches(
       onlinePositionOwner(state,id)===house &&
       onlinePositionWarriors(state,id,house)>0
     ) origins.push(id);
+  }
+
+  // Our warriors standing as guests on a host's land can march on from there.
+  for(const id of Object.keys(state.guests || {})) {
+    if(guestWarriors(state,id,house)>0 && !origins.includes(id)) origins.push(id);
   }
 
   const actions=[];
@@ -317,7 +323,29 @@ export function queueTimedOrder(
   return { game: next, order };
 }
 
+const GUEST_ORIGIN='__guest_origin__';
+
+function isGuestOrigin(state,action) {
+  return guestWarriors(state,action.from,action.house)>0 &&
+    state.territories?.[action.from]?.owner!==action.house;
+}
+
+function setGuests(state,id,house,count) {
+  state.guests ||= {};
+  state.guests[id] ||= {};
+  if(count>0) state.guests[id][house]=count;
+  else delete state.guests[id][house];
+  if(!Object.keys(state.guests[id]).length) delete state.guests[id];
+}
+
 function removeFromOnlineOrigin(next,action) {
+  if(isGuestOrigin(next,action)) {
+    setGuests(
+      next,action.from,action.house,
+      guestWarriors(next,action.from,action.house)-action.warriors
+    );
+    return;
+  }
   const source=next.territories?.[action.from] ||
     next.sea_nodes?.[action.from];
   if(!source) throw new Error(`unknown route origin ${action.from}`);
@@ -370,10 +398,60 @@ function moveToSeaWaypoint(state,map,constants,action) {
   return next;
 }
 
+// Entering the land of a host who gave us right of passage: the warriors
+// camp there as guests. The land stays the host's and nobody fights.
+function moveInAsGuest(state,map,constants,action) {
+  const next=structuredClone(state);
+  const target=next.territories[action.to];
+  const here=Object.values(target.warriors || {}).reduce((sum,n)=>sum+Number(n || 0),0) +
+    Object.values(next.guests?.[action.to] || {}).reduce((sum,n)=>sum+Number(n || 0),0);
+  if(here+action.warriors>constants.territory_warrior_cap) {
+    throw new Error(`destination ${action.to} would exceed warrior cap ${constants.territory_warrior_cap}`);
+  }
+  removeFromOnlineOrigin(next,action);
+  setGuests(next,action.to,action.house,guestWarriors(next,action.to,action.house)+action.warriors);
+  next.journal.push({
+    kind:'GUEST_MARCH',
+    house:action.house,
+    host:target.owner,
+    houses:[action.house,target.owner],
+    from:action.from,
+    to:action.to,
+    warriors:action.warriors,
+    route_path:[...(action.path || [])]
+  });
+  return next;
+}
+
 function routeResolutionBridge(state,map,action) {
   const bridgedState=structuredClone(state);
   const bridgedMap=structuredClone({ ...map });
   let syntheticOrigin=false;
+
+  // A march that starts from a guest camp: for the core rules the camp is a
+  // land of its own, joined to the destination, holding only our warriors.
+  if(isGuestOrigin(state,action)) {
+    bridgedState.territories[GUEST_ORIGIN]={
+      owner:action.house,
+      warriors:{[action.house]:guestWarriors(state,action.from,action.house)},
+      fort:false
+    };
+    bridgedMap.territories=[...bridgedMap.territories,{
+      id:GUEST_ORIGIN,name:GUEST_ORIGIN,house_sector:'Гости',type:'Дикая земля',
+      gold_income:0,is_central_half:false,island:null,island_bonus:null,icon:''
+    }];
+    bridgedMap.land_edges=[...(bridgedMap.land_edges || []),[GUEST_ORIGIN,action.to]];
+    return {
+      state:bridgedState,
+      map:bridgedMap,
+      action:{
+        type:'MARCH',mode:'LAND',house:action.house,
+        from:GUEST_ORIGIN,to:action.to,warriors:action.warriors,
+        path:[GUEST_ORIGIN,action.to]
+      },
+      syntheticOrigin:'GUEST'
+    };
+  }
 
   if(isSeaWaypoint(map,action.from)) {
     const sea=bridgedState.sea_nodes?.[action.from];
@@ -424,6 +502,18 @@ function routeResolutionBridge(state,map,action) {
 function finishRouteBridge(originalState,resolvedState,action,syntheticOrigin) {
   if(!syntheticOrigin) return resolvedState;
 
+  if(syntheticOrigin==='GUEST') {
+    const next=structuredClone(resolvedState);
+    const left=Number(next.territories[GUEST_ORIGIN]?.warriors?.[action.house] || 0);
+    delete next.territories[GUEST_ORIGIN];
+    setGuests(next,action.from,action.house,left);
+    // The camp was only a stand-in: the chronicle names the real place.
+    for(const entry of next.journal.slice(originalState.journal.length)) {
+      if(entry.from===GUEST_ORIGIN) entry.from=action.from;
+    }
+    return next;
+  }
+
   const next=structuredClone(resolvedState);
   const synthetic=next.territories[action.from];
   const remaining=Number(synthetic?.warriors?.[action.house] || 0);
@@ -466,6 +556,21 @@ function resolveOrder(state,map,constants,gameId,order,nowMs,recovery) {
     };
   }
 
+  const master=state.territories?.[action.to]?.owner ?? null;
+  if(master && master!==action.house && hasPassage(state,master,action.house)) {
+    let moved=moveInAsGuest(state,map,constants,action);
+    moved=settleCommander(moved,order.commander_id,action.to);
+    return {
+      state:moved,
+      result:{
+        kind:'GUEST_MARCH',
+        host:master,
+        route_path:[...action.path],
+        commander_id:order.commander_id || null
+      }
+    };
+  }
+
   const bridge=routeResolutionBridge(
     state,map,action
   );
@@ -477,6 +582,10 @@ function resolveOrder(state,map,constants,gameId,order,nowMs,recovery) {
     finishRouteBridge(
       state,resolvedState,action,bridge.syntheticOrigin
     );
+  const realOrigin=result => {
+    if(result && result.from===GUEST_ORIGIN) result.from=action.from;
+    return result;
+  };
 
   const destination=classifyDestination(
     resolutionState,action.house,action.to
@@ -516,6 +625,7 @@ function resolveOrder(state,map,constants,gameId,order,nowMs,recovery) {
       resolved.result.success ? action.to : action.from
     );
     resolved.result.route_path=[...action.path];
+    realOrigin(resolved.result);
     resolved.result.commander_id=order.commander_id || null;
     return resolved;
   }
@@ -537,6 +647,7 @@ function resolveOrder(state,map,constants,gameId,order,nowMs,recovery) {
       resolved.state,order.commander_id,action.to
     );
     resolved.result.route_path=[...action.path];
+    realOrigin(resolved.result);
     resolved.result.commander_id=order.commander_id || null;
     return resolved;
   }
@@ -566,6 +677,7 @@ function resolveOrder(state,map,constants,gameId,order,nowMs,recovery) {
 
   resolved.state=finalize(resolved.state);
   resolved.result.route_path=[...action.path];
+    realOrigin(resolved.result);
   resolved.result.attacker_commander_id=attackerCommander?.id || null;
   resolved.result.defender_commander_id=defenderCommander?.id || null;
 

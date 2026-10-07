@@ -298,6 +298,26 @@ export function journalEntryToAudit(entry, map, game) {
     };
   }
 
+  if (entry.kind === 'GUEST_MARCH') {
+    return {
+      ...base,
+      message: `${entry.house}: отряд (${entry.warriors}) вошёл гостем в ${territoryName(map, entry.to)}, землю Дома ${entry.host}.`,
+      details: { house: entry.house, host: entry.host, houses: [...entry.houses], to_id: entry.to, to: territoryName(map, entry.to), warriors: entry.warriors }
+    };
+  }
+
+  if (entry.kind === 'GUESTS_EXPELLED') {
+    const from = territoryName(map, entry.from);
+    const tail = entry.to
+      ? ` и ушли в ${territoryName(map, entry.to)}` + (entry.lost ? `; ${entry.lost} разбрелись по дороге` : '')
+      : ': идти им было некуда, отряд распущен';
+    return {
+      ...base,
+      message: `Гости ушли: воины Дома ${entry.house} (${entry.warriors}) оставили ${from}${tail}.`,
+      details: { house: entry.house, host: entry.host, houses: [...entry.houses], from, to: entry.to ? territoryName(map, entry.to) : null, warriors: entry.warriors, lost: entry.lost, at: entry.at || null }
+    };
+  }
+
   if (entry.kind === 'ALLIANCE_BROKEN') {
     return {
       ...base,

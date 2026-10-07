@@ -231,6 +231,11 @@
     .dip-sub button { padding: 1px 7px; font-size: 12px; font-style: normal; }
     /* The chronicler's glass: a closer look at an army under the cursor. */
     .army-token { cursor: help; pointer-events: auto; }
+    .army-figure { transform-box: fill-box; transform-origin: 50% 100%; animation: army-rest 4.5s ease-in-out infinite; }
+    .army-figure.marching { animation: army-march .7s ease-in-out infinite; }
+    @keyframes army-march { 0%, 100% { transform: translateY(0) rotate(-1.2deg); } 50% { transform: translateY(-.7px) rotate(1.2deg); } }
+    @keyframes army-rest { 0%, 86%, 100% { transform: rotate(0); } 92% { transform: rotate(-1.6deg); } }
+    @media (prefers-reduced-motion: reduce) { .army-figure { animation: none !important; } }
     .lens {
       position: fixed; z-index: 30; width: 230px; pointer-events: none; display: none;
       filter: drop-shadow(4px 5px 0 rgba(43,27,18,.4));
@@ -805,10 +810,13 @@ function mapNodeById(id) {
   return null;
 }
 
+// Warriors of a House at a place: its garrison or fleet there, or its guests
+// camped on a host's land by right of passage.
 function warriorsAt(id, owner) {
   return Number(
     snapshot.game.state.territories[id]?.warriors?.[owner] ||
     snapshot.game.state.sea_nodes?.[id]?.warriors?.[owner] ||
+    snapshot.game.state.guests?.[id]?.[owner] ||
     0
   );
 }
@@ -1217,10 +1225,10 @@ function warnBeforeMarch(master) {
       ? land + ' принадлежит твоему союзнику, Дому ' + master + '. Войти туда с оружием значит нарушить клятву и начать войну.'
       : land + ' принадлежит Дому ' + master + ', с которым у тебя нет войны. Войти туда с оружием значит её начать.',
     terms: open
-      ? 'Его дороги тебе открыты: через его земли можно пройти дальше, но остановиться на них значит напасть.'
+      ? ''
       : asked
         ? 'Ты уже просил права прохода. Ответа пока нет.'
-        : 'Можно попросить права прохода: тогда твои войска пройдут через его земли дальше без боя.',
+        : 'Можно попросить права прохода: тогда твои войска войдут в его земли гостями, без боя, и смогут идти дальше.',
     buttons: [
       ...(open || asked ? [] : [{ label: 'Запросить право прохода', primary: true, run: () => diplomacyDo('REQUEST_PASSAGE', master) }]),
       { label: 'Всё равно отправить воинов', primary: open || asked, run: () => sendOrder(true) },
@@ -1293,7 +1301,7 @@ function pendingDecisions() {
       from: 'Гонец Дома ' + guest,
       title: 'Просят прохода',
       text: 'Дом ' + guest + ' просит пропустить его войска через твои земли.',
-      terms: 'Гость может пройти насквозь, но не остановиться: войти в твою землю значит напасть. Право можно отозвать.',
+      terms: 'Его войска смогут входить в твои земли, стоять там гостями и идти дальше без боя. Землю они не занимают. Право можно отозвать: тогда гости уйдут домой.',
       buttons: [
         { label: 'Открыть дороги', primary: true, run: () => diplomacyDo('GRANT_PASSAGE', guest) },
         { label: 'Отказать', run: () => diplomacyDo('DENY_PASSAGE', guest) },
@@ -1368,7 +1376,7 @@ function lensFor(node) {
     place = (mapNodeById(order.action.from)?.name || '') + ' → ' + (mapNodeById(order.action.to)?.name || '');
   } else {
     const id = node.dataset.lensAt;
-    owner = nodeOwner(id);
+    owner = node.dataset.lensHouse || nodeOwner(id);
     count = owner ? warriorsAt(id, owner) : 0;
     place = mapNodeById(id)?.name || '';
   }
@@ -1386,7 +1394,8 @@ function lensFor(node) {
     commander
       ? 'ведёт ' + commander.name + (weak ? ' (ослаблен)' : ' · атака ' + Number(commander.stats?.attack || 0) + ', защита ' + Number(commander.stats?.defense || 0))
       : 'без командира',
-    moving ? 'в походе: ' + place + ', ещё ' + timeLeft(moving.due_at) : 'стоит: ' + place
+    moving ? 'в походе: ' + place + ', ещё ' + timeLeft(moving.due_at)
+      : (node.dataset.lensHouse ? 'в гостях: ' : 'стоит: ') + place
   ];
   return { art, title: 'Дом ' + owner, lines };
 }
@@ -1496,7 +1505,7 @@ function renderFinders() {
     ...Object.keys(snapshot.map.sea_waypoints || {})
   ];
   for (const id of places) {
-    const count = nodeOwner(id) === house ? warriorsAt(id, house) : 0;
+    const count = warriorsAt(id, house);
     if (!count) continue;
     const commander = commanderAt(id);
     rows.push('<div class="find-row" data-find="' + escapeHtml(id) + '" data-select="1"><b>' + escapeHtml(mapNodeById(id)?.name || id) +
@@ -1655,6 +1664,12 @@ function newsFor(item) {
     return item.type === 'PASSAGE_GRANTED'
       ? { rank: 6, art: 'deal-made', title: 'Дороги открыты', text: body }
       : { rank: 6, art: 'deal-failed', title: item.type === 'PASSAGE_DENIED' ? 'В проходе отказано' : 'Дороги закрыты', text: body };
+  }
+  if (item.type === 'GUEST_MARCH' && mine(d.house)) {
+    return { rank: 3, art: 'march-arrived', title: 'Отряд в гостях', text: 'Твои воины встали лагерем в земле ' + d.to + ' по праву прохода. Земля остаётся за Домом ' + d.host + '.', ok: 'Ведите себя достойно' };
+  }
+  if (item.type === 'GUESTS_EXPELLED' && (d.houses || []).includes(house)) {
+    return { rank: 6, art: 'deal-failed', title: mine(d.house) ? 'Гостям указали на дверь' : 'Гости ушли', text: strip(/^Гости ушли:\s*/), ok: mine(d.house) ? 'Уходим' : 'Скатертью дорога' };
   }
   if (item.type === 'JOB_SEIZED') {
     const what = d.job_type === 'RECRUIT' ? 'Набранные воины' : 'Начатая крепость';
@@ -1837,7 +1852,7 @@ function renderDiplomacy() {
     let sub = '';
     if (rel !== 'WAR' && !abandonedHouses()[other]) {
       if ((dip.passage_asked_in || []).includes(other)) {
-        sub += 'просит прохода через твои земли <button class="primary" data-dip="GRANT_PASSAGE" data-target="' + tag + '">Открыть дороги</button>' +
+        sub += 'просит права прохода и постоя в твоих землях <button class="primary" data-dip="GRANT_PASSAGE" data-target="' + tag + '">Открыть дороги</button>' +
           '<button data-dip="DENY_PASSAGE" data-target="' + tag + '">Отказать</button>';
       } else if ((dip.passage_to || []).includes(other)) {
         sub += 'твои дороги ему открыты <button data-dip="REVOKE_PASSAGE" data-target="' + tag + '">Закрыть</button>';
@@ -2264,12 +2279,22 @@ function settlementFigure(kind, w, c, owner) {
   return `<image href="/assets/img/${file}.png" x="${c.x - w / 2}" y="${c.y - w * 0.62}" width="${w}" height="${w}"></image>`;
 }
 
-function shieldToken(x, y, color, count, scale = 1, lens = '') {
-  return `<g class="army-token" ${lens} transform="translate(${x} ${y}) scale(${scale})">` +
+// An army on the map: the painted host in its House's colours with the number
+// of warriors on a small shield. A host on the march steps along and faces the
+// way it goes; one that stands shifts its weight now and then.
+function shieldToken(x, y, color, count, scale = 1, lens = '', who = null, moving = false, faceRight = false) {
+  const slug = who && abandonedHouses()[who] ? 'abandoned' : HOUSE_SLUGS[who];
+  // The map is redrawn often: the animation picks up where the clock is, not from its start.
+  const figure = slug
+    ? `<g transform="scale(${faceRight ? -1 : 1} 1)"><image class="army-figure${moving ? ' marching' : ''}" style="animation-delay:-${Date.now() % (moving ? 700 : 4500)}ms" href="/assets/img/army-${slug}.png" x="-9" y="-13.5" width="18" height="18"></image></g>`
+    : '';
+  const badge = slug ? 'translate(6.2 2.6) scale(.62)' : '';
+  return `<g class="army-token" ${lens} transform="translate(${x} ${y}) scale(${scale})">` + figure +
+    `<g transform="${badge}">` +
     `<path class="shield" d="M-4.8 -5.4H4.8V.8Q4.8 4.9 0 6.4Q-4.8 4.9 -4.8 .8Z" fill="${color}"></path>` +
     '<path class="shield-shine" d="M-3.4 -4H3.4"></path>' +
     `<text y="2.3">${count}</text>` +
-    '</g>';
+    '</g></g>';
 }
 
 function nameRibbon(x, y, label, capital) {
@@ -2375,7 +2400,7 @@ function renderMap() {
         <circle class="sea-hit" r="9"></circle>
         <circle class="selection-ring" r="8"></circle>
         <circle class="sea-waypoint${active}" r="2.6"></circle>
-        ${total ? shieldToken(0, -1, colors[owner] || '#2c4a86', total, 0.9, `data-lens-at="${id}"`) : ''}
+        ${total ? shieldToken(0, -1, colors[owner] || '#2c4a86', total, 0.9, `data-lens-at="${id}"`, owner) : ''}
       </g>`;
   });
 
@@ -2397,7 +2422,7 @@ function renderMap() {
     const capital = t.type === 'Столица';
 
     const classes = ['province'];
-    const ownMovable = owner === house && warriorsAt(t.id, house) > 0;
+    const ownMovable = warriorsAt(t.id, house) > 0;
     if (!origin && ownMovable) classes.push('selectable');
     if (t.id === origin) classes.push('origin');
     if (origin && legalTargets.has(t.id)) classes.push('legal');
@@ -2425,7 +2450,16 @@ function renderMap() {
     if (total && owner) {
       const tx = capital ? c.x + 21 : t.type === 'Город' ? c.x + 14 : t.type === 'Деревня' ? c.x + 11 : c.x + 8.5;
       const ty = capital ? c.y - 1 : c.y - 5;
-      tokens.push(shieldToken(tx, ty, colors[owner] || '#8a7a5c', total, 1, `data-lens-at="${t.id}"`));
+      tokens.push(shieldToken(tx, ty + 3, colors[owner] || '#8a7a5c', total, 1, `data-lens-at="${t.id}"`, owner));
+    }
+    // Guests camped here by right of passage stand beside the garrison.
+    let shift = 0;
+    for (const [guest, camped] of Object.entries(state.guests?.[t.id] || {})) {
+      const here = Math.max(0, Number(camped || 0) - pendingOutgoingAt(t.id, guest));
+      if (!here) continue;
+      shift += 1;
+      tokens.push(shieldToken(c.x - 10 - shift * 9, c.y + 4, colors[guest] || '#8a7a5c', here, 0.9,
+        `data-lens-at="${t.id}" data-lens-house="${escapeHtml(guest)}"`, guest));
     }
   }
 
@@ -2440,7 +2474,8 @@ function renderMap() {
       if (!pos) return '';
       const fill = colors[order.action.house] || '#2b1b12';
       return `<g class="moving-army" data-order-id="${escapeHtml(order.id)}" transform="translate(${pos.x} ${pos.y})">` +
-        shieldToken(0, 0, fill, Number(order.action.warriors || 0), 1.1, `data-lens-order="${order.id}"`) +
+        shieldToken(0, 0, fill, Number(order.action.warriors || 0), 1.1, `data-lens-order="${order.id}"`, order.action.house, true,
+          (routeCoordinates()[order.action.to]?.x ?? 0) > (routeCoordinates()[order.action.from]?.x ?? 0)) +
         '</g>';
     });
 
@@ -2721,7 +2756,7 @@ async function selectTerritory(id) {
   if (exploredNow && !exploredNow.has(id)) return;
 
   if (!origin) {
-    if (owner !== house || movable < 1) return;
+    if (movable < 1) return;
     origin = id;
     target = null;
     marchModePreference = null;
@@ -2734,7 +2769,7 @@ async function selectTerritory(id) {
     const valid = legal.some(a => a.from === origin && a.to === id) &&
       (!exploredNow || exploredNow.has(id));
     if (!valid) {
-      if (owner === house && movable > 0) {
+      if (movable > 0) {
         origin = id;
         target = null;
         marchModePreference = null;
@@ -2758,8 +2793,9 @@ async function sendOrder(confirmed = false) {
   }
   // Marching onto the land of a House we are not at war with starts a war.
   const master = nodeOwner(target);
+  const welcome = (snapshot?.game?.diplomacy?.passage_from || []).includes(master);
   if (confirmed !== true && master && master !== house && !abandonedHouses()[master] &&
-    isKnownHouse(master) && relationWith(master) !== 'WAR') {
+    isKnownHouse(master) && relationWith(master) !== 'WAR' && !welcome) {
     warnBeforeMarch(master);
     return;
   }

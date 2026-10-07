@@ -162,3 +162,39 @@ test('right of passage opens the host\'s roads, and war closes them', async () =
   asked = answerAiOffers(asked, [RIVAL], { nowMs: T0 });
   assert.equal(hasPassage(asked.state, RIVAL, HOUSE), true);
 });
+
+test('with right of passage warriors enter the host\'s land as guests', async () => {
+  const { requestPassage, answerPassage } = await import('../src/online/diplomacy.mjs');
+  const { listQueueableMarches } = await import('../src/online/orders.mjs');
+  const { expelGuests } = await import('../src/online/guests.mjs');
+  const { validateState } = await import('../src/core/state.mjs');
+  let game = borderGame(4, 2);
+  game = answerPassage(requestPassage(game, constants, HOUSE, RIVAL, { nowMs: T0 }), constants, RIVAL, HOUSE, true, { nowMs: T0 });
+
+  game = executeCommand(game, map, constants, { type: 'MARCH', house: HOUSE, from: CAPITAL, to: NEXT, warriors: 3 }, { nowMs: T0 }).game;
+  game = processDueOrders(game, map, constants, Date.parse(game.orders[0].due_at));
+  assert.equal(game.orders[0].status, 'RESOLVED', game.orders[0].failure_reason || '');
+  assert.equal(game.orders[0].result.kind, 'GUEST_MARCH');
+  assert.equal(game.state.territories[NEXT].owner, RIVAL, 'the land stays the host\'s');
+  assert.equal(game.state.territories[NEXT].warriors[RIVAL], 3, 'nobody fought');
+  assert.equal(game.state.guests[NEXT][HOUSE], 3);
+  assert.equal(relationOf(game, HOUSE, RIVAL), RELATION.NEUTRAL);
+  assert.deepEqual(validateState(game.state, map, constants), []);
+
+  // From the camp they march on: to a neutral land beyond, and take it.
+  const beyond = [...adjacency.get(NEXT)].find(id => id !== CAPITAL && game.state.territories[id].owner === null);
+  const onward = listQueueableMarches(game, map, constants, HOUSE).filter(a => a.from === NEXT && a.to === beyond);
+  assert.ok(onward.length > 0, 'the camp is a starting point');
+  let moved = executeCommand(game, map, constants, { type: 'MARCH', house: HOUSE, from: NEXT, to: beyond, warriors: 3 }, { nowMs: T0 + 1 }).game;
+  moved = processDueOrders(moved, map, constants, Date.parse(moved.orders[1].due_at));
+  assert.equal(moved.orders[1].status, 'RESOLVED', moved.orders[1].failure_reason || '');
+  assert.equal(moved.state.territories[beyond].owner, HOUSE, 'the neutral land is taken from the camp');
+  assert.equal(moved.state.journal.some(e => e.from === '__guest_origin__'), false);
+  assert.deepEqual(validateState(moved.state, map, constants), []);
+
+  // The host closes his roads: the guests are led home.
+  const closed = expelGuests(answerPassage(game, constants, RIVAL, HOUSE, false, { nowMs: T0 }), map, constants, T0);
+  assert.equal(closed.state.guests?.[NEXT], undefined);
+  assert.equal(closed.state.territories[CAPITAL].warriors[HOUSE], 5);
+  assert.ok(closed.state.journal.some(e => e.kind === 'GUESTS_EXPELLED'));
+});

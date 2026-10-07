@@ -22,6 +22,10 @@ export function visiblePositions(state, map, house) {
   for (const [id, node] of Object.entries(state.sea_nodes || {})) {
     if (node.owner === house) own.add(id);
   }
+  // Where our warriors camp as guests, they see as far as at home.
+  for (const [id, byHouse] of Object.entries(state.guests || {})) {
+    if (Number(byHouse?.[house] || 0) > 0) own.add(id);
+  }
 
   const seen = new Set(own);
   addNeighbours(seen, map.land_edges, own);
@@ -99,6 +103,7 @@ const PRIVATE_EVENTS = new Set([
   'RECRUIT_CANCELLED',
   'FORT_CANCELLED',
   'COMMANDER_RECOVERED',
+  'GUEST_MARCH',
   'ROUND_ACTION_REFUNDED'
 ]);
 
@@ -121,6 +126,9 @@ export function applyFog(clientGame, map, house) {
     if (seen.has(id)) continue;
     node.warriors = {};
     node.owner = null;
+  }
+  for (const id of Object.keys(state.guests || {})) {
+    if (!seen.has(id)) delete state.guests[id];
   }
 
   // Characters and armies of other Houses are known only where they can be seen.

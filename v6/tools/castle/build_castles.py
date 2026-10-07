@@ -89,9 +89,36 @@ def main():
     px[..., 3] = np.where(px[..., 3] < 24, 0, px[..., 3])
     save(px, 'wild.png', 144)
 
+    army = load('army.png')
+    for key, col in {**HOUSES, 'abandoned': ASH}.items():
+        save(army_variant(army, col), f'army-{key}.png', 256)
+
     px = load('island.png')
     px[..., 3] = np.where(px[..., 3] < 24, 0, px[..., 3])
     save(px, 'island.png', 160)
+
+def army_variant(px, colour):
+    """Белый флаг, красные и синие одежды -> цвета Дома; золото, металл и конь не трогаются."""
+    rgb = px[..., :3]
+    r, g, b, a = [px[..., i] for i in range(4)]
+    mx = rgb.max(-1); mn = rgb.min(-1)
+    sat = (mx - mn) / np.maximum(mx, 1)
+    lum = rgb @ np.array([0.299, 0.587, 0.114], dtype=np.float32)
+    yy, xx = np.mgrid[0:px.shape[0], 0:px.shape[1]]
+    flag_zone = ((xx > 335) & (xx <= 850) & (yy < 345)) | ((xx > 850) & (yy > 215) & (yy < 500))
+    cream = flag_zone & (a > 40) & (r > 175) & (sat < 0.33) & (r - b > 14)
+    red = (a > 40) & (r > 120) & (g < r * 0.5) & (b < r * 0.55) & (sat > 0.5)
+    blue = (a > 40) & (b > r * 1.25) & (b > g * 1.02) & (sat > 0.3) & (b > 70)
+    c = np.array(colour, dtype=np.float32)
+    out = px.copy()
+    def paint(mask, base, ref, lo=0.25, hi=1.5):
+        m = soften(mask.astype(np.float32), 0.8)[..., None]
+        k = np.clip(lum / ref, lo, hi)[..., None]
+        out[..., :3] = out[..., :3] * (1 - m) + np.clip(base * k, 0, 255) * m
+    paint(cream, c + (255 - c) * 0.18, 225.0, 0.45, 1.12)
+    paint(red, c + (255 - c) * 0.12, 110.0)
+    paint(blue, c * 0.62, 85.0)
+    return out
 
 FLAG_CAPTURED = [(668, 40), (1100, 40), (1100, 340), (840, 340), (820, 250), (668, 245)]
 

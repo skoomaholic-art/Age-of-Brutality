@@ -49,6 +49,7 @@ import {
 import { applyFog, knownHouses, recordExploration } from './fog.mjs';
 import { generateMap, MAX_HOUSES, MIN_HOUSES } from './mapgen.mjs';
 import { processEncounters } from './encounters.mjs';
+import { expelGuests } from './guests.mjs';
 import { captiveAction, captivesView, processCharacters } from './fate.mjs';
 import {
   acceptAlliance,
@@ -499,6 +500,7 @@ async function tickUnlocked(ctx) {
   processed = processEconomy(processed, map, constants, nowMs);
   processed = processRounds(processed, map, constants, { nowMs });
   processed = processCharacters(processed, map, constants, { nowMs });
+  processed = expelGuests(processed, map, constants, nowMs);
   processed = recordExploration(processed, map, constants.houses, nowMs);
   if (
     processed.updated_at !== ctx.game.updated_at ||
@@ -1402,6 +1404,8 @@ async function handleGameApi(req, res, url, ctx, subpath) {
         else if (action === 'DENY_PASSAGE' || action === 'REVOKE_PASSAGE') next = answerPassage(game, constants, house, target, false, { nowMs });
         else throw new Error(`unknown diplomacy action ${action}`);
         next = answerAiOffers(next, next.rounds?.ai_houses || [], { nowMs });
+        // Guests whose welcome has just ended are led home at once.
+        next = expelGuests(next, map, constants, nowMs);
         return { game: next, response: { diplomacy: diplomacyView(next, house, knownHouses(next, house, constants.houses)) } };
       }
     }));
