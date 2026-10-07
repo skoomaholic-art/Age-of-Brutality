@@ -104,7 +104,7 @@
     button.primary:disabled { background: var(--vellum-deep); color: var(--ink-soft); }
     main {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 360px;
+      grid-template-columns: minmax(0, 1fr);
       min-height: calc(100vh - 68px);
     }
     .map-wrap { min-width: 0; padding: 18px; }
@@ -190,7 +190,7 @@
     #round-wait img { width: 58%; margin: 0 auto; }
 
     .battle-card {
-      position: absolute; z-index: 5; right: 64px; top: 12px; width: min(320px, calc(100% - 88px));
+      position: absolute; z-index: 5; right: 64px; top: 52px; width: min(320px, calc(100% - 88px));
       display: none; padding: 10px; cursor: pointer;
       border: 1.5px solid var(--ink); background: rgba(242,230,200,.97);
       box-shadow: 4px 4px 0 rgba(43,27,18,.35);
@@ -215,13 +215,13 @@
     .finale-card h3 { margin: 14px 0 2px; font-family: 'Vek Gothic', Kurale, Alegreya, serif; font-weight: 400; font-size: 34px; line-height: 1.1; color: var(--vermilion-deep); }
     .finale-card p { margin: 0 0 14px; font-size: 16px; }
 
-    .map-zoom { position: absolute; z-index: 6; right: 12px; top: 12px; display: grid; gap: 5px; }
+    .map-zoom { position: absolute; z-index: 6; right: 12px; top: 52px; display: grid; gap: 5px; }
     .map-zoom button { width: 34px; height: 34px; padding: 0; font-size: 19px; line-height: 1; }
     .map-guide {
       position: absolute;
       z-index: 5;
       left: 12px;
-      top: 12px;
+      top: 52px;
       right: 58px;
       max-width: 560px;
       border: 1.5px solid var(--ink);
@@ -273,7 +273,43 @@
     .legend-mark.target { background: rgba(179,49,31,.55); border: 2.5px solid var(--vermilion); outline: 0; }
 
     /* Side column: leaves of the same book, ruled in ink with red rubrics. */
-    aside {
+    /* The side column is gone: its panels open from the bar over the map. */
+    aside { display: none; }
+    .map-bar {
+      position: absolute; z-index: 8; left: 0; right: 0; top: 0; height: 40px;
+      display: flex; align-items: stretch; gap: 0;
+      background: linear-gradient(#f2e6c8, #e6d6ad); border-bottom: 2px solid var(--ink);
+      box-shadow: 0 3px 0 rgba(43,27,18,.25);
+    }
+    .map-bar button.bar-tab {
+      border: 0; border-right: 1px solid rgba(43,27,18,.35); border-radius: 0; box-shadow: none; background: transparent;
+      padding: 0 14px; font-family: Kurale, Alegreya, serif; font-size: 15px; color: var(--ink); position: relative;
+    }
+    .map-bar button.bar-tab:hover { background: rgba(201,162,58,.25); transform: none; }
+    .map-bar button.bar-tab.on { background: var(--vermilion); color: var(--white-lead); }
+    .bar-badge { display: none; margin-left: 6px; min-width: 18px; padding: 0 5px; border-radius: 9px; background: var(--vermilion); color: var(--white-lead); font-size: 12px; line-height: 18px; text-align: center; }
+    .bar-tab.on .bar-badge { background: var(--white-lead); color: var(--vermilion-deep); }
+    .bar-badge.show { display: inline-block; }
+    .bar-status { margin-left: auto; display: flex; align-items: center; gap: 14px; padding: 0 12px; font-size: 14px; white-space: nowrap; overflow: hidden; }
+    .bar-status b { font-family: Kurale, serif; font-size: 16px; }
+    .bar-status .chip span { color: var(--ink-soft); font-size: 12px; margin-right: 4px; }
+    .bar-drop {
+      position: absolute; z-index: 7; left: 10px; top: 48px; width: min(420px, calc(100% - 20px));
+      max-height: calc(100% - 64px); overflow: auto; display: none;
+      border: 1.5px solid var(--ink); background: var(--vellum); box-shadow: 5px 5px 0 rgba(43,27,18,.4); padding: 4px;
+    }
+    .bar-drop.show { display: block; }
+    .bar-drop .panel { margin: 0; border: 0; outline: 0; box-shadow: none; background: transparent; }
+    .bar-drop .panel + .panel { border-top: 1px solid var(--rule); }
+    .bar-pane { display: none; }
+    .bar-pane.on { display: block; }
+    .news-item { display: grid; grid-template-columns: 84px 1fr; gap: 10px; padding: 8px 4px; border-top: 1px solid var(--rule); }
+    .news-item:first-child { border-top: 0; }
+    .news-item img { width: 84px; aspect-ratio: 4 / 3; object-fit: cover; border: 1px solid var(--ink); }
+    .news-item h4 { margin: 0; font-family: 'Vek Gothic', Kurale, serif; font-weight: 400; font-size: 19px; color: var(--vermilion-deep); }
+    .news-item p { margin: 2px 0 0; font-size: 13px; line-height: 1.3; }
+    .news-item time { font-size: 11.5px; color: var(--ink-soft); }
+    aside.unused {
       border-left: 2px solid var(--ink);
       background: linear-gradient(90deg, rgba(120,84,40,.16), transparent 14px);
       padding: 16px 16px 16px 20px;
@@ -409,6 +445,31 @@
 <main>
   <section class="map-wrap">
     <div class="map-card">
+      <nav id="map-bar" class="map-bar" aria-label="Меню игры">
+        <button class="bar-tab" data-pane="news">Вести<span id="news-badge" class="bar-badge"></span></button>
+        <button class="bar-tab" data-pane="diplomacy">Дипломатия<span id="diplomacy-badge" class="bar-badge"></span></button>
+        <button class="bar-tab" data-pane="realm">Держава</button>
+        <button class="bar-tab" data-pane="characters">Персонажи</button>
+        <button class="bar-tab" data-pane="orders">Приказы<span id="orders-badge" class="bar-badge"></span></button>
+        <button class="bar-tab" data-pane="stats">Статистика</button>
+        <button class="bar-tab" data-pane="journal">Журнал</button>
+        <div class="bar-status">
+          <span class="chip"><span>День</span><b id="bar-day">…</b></span>
+          <span class="chip"><span>до смены</span><b id="bar-timer">…</b></span>
+          <span class="chip"><span>Золото</span><b id="bar-gold">0</b></span>
+          <span class="chip"><span>Влияние</span><b id="bar-influence">0</b></span>
+          <span class="chip"><span>ОП</span><b id="bar-vp">0</b></span>
+        </div>
+      </nav>
+      <div id="bar-drop" class="bar-drop">
+        <div class="bar-pane" data-pane="news"><div class="panel"><h2>Вести</h2><div id="news-list" class="muted">Пока тихо.</div></div></div>
+        <div class="bar-pane" data-pane="diplomacy"><div class="panel"><h2>Дипломатия</h2><div id="diplomacy-slot"></div></div></div>
+        <div class="bar-pane" data-pane="realm"></div>
+        <div class="bar-pane" data-pane="characters"></div>
+        <div class="bar-pane" data-pane="orders"></div>
+        <div class="bar-pane" data-pane="stats"></div>
+        <div class="bar-pane" data-pane="journal"></div>
+      </div>
       <div id="map-guide" class="map-guide">
         <div id="guide-title" class="guide-title">1. Выбери, откуда идти</div>
         <div id="guide-sub" class="guide-sub">Цвет земли показывает Дом. Колесо мыши меняет масштаб, карту можно тянуть.</div>
@@ -542,7 +603,7 @@
       <div id="orders" class="muted">Нет приказов.</div>
     </div>
 
-    <div class="panel">
+    <div id="journal-panel" class="panel">
       <h2>Журнал</h2>
       <div id="journal" class="journal muted">Пока пусто.</div>
     </div>
@@ -1009,6 +1070,87 @@ function renderRounds() {
   }).join('');
 }
 
+// ---------- the bar over the map ----------
+// Every panel of the game opens from the bar. The panels are the same elements
+// the rest of the page renders into; they are only housed in the drop-down.
+const BAR_PANELS = {
+  realm: ['house-panel', 'economy-panel'],
+  characters: ['characters-panel'],
+  orders: ['orders-panel'],
+  stats: ['game-status-panel'],
+  journal: ['journal-panel']
+};
+let openPane = null;
+let newsSeenSeq = null;
+
+function setupBar() {
+  for (const [pane, ids] of Object.entries(BAR_PANELS)) {
+    const home = document.querySelector('.bar-pane[data-pane="' + pane + '"]');
+    for (const id of ids) home.appendChild($(id));
+  }
+  $('diplomacy-slot').appendChild($('diplomacy'));
+  document.querySelectorAll('.bar-tab').forEach(tab => {
+    tab.addEventListener('click', () => togglePane(tab.dataset.pane));
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') togglePane(null);
+  });
+  setInterval(renderBarStatus, 1000);
+}
+
+function togglePane(pane) {
+  openPane = pane && pane !== openPane ? pane : null;
+  $('bar-drop').classList.toggle('show', Boolean(openPane));
+  $('map-guide').style.visibility = openPane ? 'hidden' : '';
+  document.querySelectorAll('.bar-tab').forEach(tab => tab.classList.toggle('on', tab.dataset.pane === openPane));
+  document.querySelectorAll('.bar-pane').forEach(node => node.classList.toggle('on', node.dataset.pane === openPane));
+  if (openPane === 'news') {
+    newsSeenSeq = latestNewsSeq();
+    renderNews();
+  }
+}
+
+function renderBarStatus() {
+  const copy = (to, from) => { if ($(from) && $(to)) $(to).textContent = $(from).textContent; };
+  copy('bar-day', 'game-round');
+  copy('bar-timer', 'round-timer');
+  copy('bar-gold', 'gold');
+  copy('bar-influence', 'influence');
+  copy('bar-vp', 'vp');
+}
+
+function newsEntries() {
+  return (snapshot?.game?.audit_log || [])
+    .map(item => ({ item, news: newsFor(item) }))
+    .filter(entry => entry.news);
+}
+
+function latestNewsSeq() {
+  return newsEntries().reduce((max, entry) => Math.max(max, Number(entry.item.seq || 0)), 0);
+}
+
+function badge(id, count) {
+  $(id).textContent = count > 0 ? String(count) : '';
+  $(id).classList.toggle('show', count > 0);
+}
+
+function renderNews() {
+  const entries = newsEntries();
+  if (newsSeenSeq === null) newsSeenSeq = latestNewsSeq();
+  if (openPane === 'news') newsSeenSeq = latestNewsSeq();
+  badge('news-badge', entries.filter(entry => Number(entry.item.seq || 0) > newsSeenSeq).length);
+  badge('diplomacy-badge', (snapshot?.game?.diplomacy?.offers_in || []).length);
+  badge('orders-badge', (snapshot?.game?.orders || [])
+    .filter(order => order.status === 'PENDING' && order.action?.house === house).length);
+  $('news-list').innerHTML = entries.length
+    ? entries.slice(-20).reverse().map(({ item, news }) =>
+        '<div class="news-item"><img src="/assets/img/notif-' + news.art + '.jpg" alt="" loading="lazy">' +
+        '<div><h4>' + escapeHtml(news.title) + '</h4><p>' + escapeHtml(news.text) + '</p>' +
+        '<time>' + escapeHtml(item.at ? new Date(item.at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '') + '</time></div></div>'
+      ).join('')
+    : 'Пока тихо.';
+}
+
 // The heralds: one card in the corner for the most important fresh news.
 // What is already in the journal when the page opens is history and stays quiet.
 let lastNewsSeq = null;
@@ -1171,7 +1313,7 @@ function renderDiplomacy() {
     }
     return '<div class="dip-row"><span class="dip-name">' + escapeHtml(other) + '</span>' + state + buttons + '</div>';
   }).join('');
-  box.innerHTML = '<h4>Дипломатия</h4>' + rows + unknownNote(others.length - met.length);
+  box.innerHTML = rows + unknownNote(others.length - met.length);
   box.querySelectorAll('button[data-dip]').forEach(button => {
     button.onclick = async () => {
       const action = button.dataset.dip;
@@ -2310,6 +2452,8 @@ async function refresh() {
   renderFinale();
   announceNews();
   renderDiplomacy();
+  renderNews();
+  renderBarStatus();
   renderRounds();
   renderHouse();
   renderCharacters();
@@ -2331,6 +2475,8 @@ $('house').addEventListener('change', async event => {
 });
 
 $('battle-card').addEventListener('click', () => $('battle-card').classList.remove('show'));
+// A click on the map closes whatever panel is open.
+$('map').addEventListener('pointerdown', () => { if (openPane) togglePane(null); });
 $('finale-close').addEventListener('click', () => {
   finaleDismissed = true;
   $('finale').classList.remove('show');
@@ -2449,6 +2595,8 @@ $('restore-game').addEventListener('click', async () => {
     alert('Не удалось восстановить: ' + error.message);
   }
 });
+
+setupBar();
 
 $('send').addEventListener('click', sendOrder);
 
