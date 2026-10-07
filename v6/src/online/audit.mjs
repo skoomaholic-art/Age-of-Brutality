@@ -394,10 +394,13 @@ export function journalEntryToAudit(entry, map, game) {
   if (entry.kind === 'ONLINE_INCOME_PULSE') {
     return {
       ...base,
-      message: 'Начислен доход всем Домам.',
+      message: Number(entry.pulses) > 1
+        ? `Начислен доход всем Домам за ${entry.pulses} пропущенных циклов.`
+        : 'Начислен доход всем Домам.',
       details: {
         at: entry.at,
-        gains: entry.gains
+        gains: entry.gains,
+        pulses: Number(entry.pulses || 1)
       }
     };
   }

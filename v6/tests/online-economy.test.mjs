@@ -65,3 +65,34 @@ test('accelerated test build timers are 4 and 5 seconds', () => {
   assert.equal(ONLINE_ECONOMY_TIMING.recruitBuildMs, 4000);
   assert.equal(ONLINE_ECONOMY_TIMING.fortBuildMs, 5000);
 });
+
+test('income missed over days of idling is paid in one step, not replayed pulse by pulse', () => {
+  const started = Date.parse('2026-10-02T15:00:00Z');
+  const interval = 120_000;
+  let game = normalizeOnlineEconomy(
+    createOnlineGame(map, c, { nowMs: started }),
+    started,
+    { incomeIntervalMs: interval, recruitBuildMs: 4_000, fortBuildMs: 5_000 }
+  );
+  const house = c.houses[0];
+  const goldBefore = game.state.houses[house].gold;
+  const perPulse = 4; // one home capital
+
+  // Five idle days: 3600 pulses. The first one is due one interval after the start.
+  const now = started + 3600 * interval;
+  const clock = Date.now();
+  game = processEconomy(game, map, c, now);
+  const elapsed = Date.now() - clock;
+
+  const pulses = game.state.journal.filter(entry => entry.kind === 'ONLINE_INCOME_PULSE');
+  assert.equal(pulses.length, 1);
+  assert.equal(pulses[0].pulses, 3600);
+  assert.equal(pulses[0].gains[house].gold, perPulse * 3600);
+  assert.equal(game.state.houses[house].gold, goldBefore + perPulse * 3600);
+  assert.equal(Date.parse(game.next_income_at), now + interval);
+  assert.ok(elapsed < 1_000, `catch-up took ${elapsed} ms`);
+
+  // Nothing more is due until the next interval.
+  const again = processEconomy(game, map, c, now + 1);
+  assert.equal(again.state.houses[house].gold, game.state.houses[house].gold);
+});
