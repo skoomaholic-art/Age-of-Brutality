@@ -1375,6 +1375,15 @@ function capitalCastle(territoryId, c, owner) {
   return `<image href="/assets/img/${file}.png" x="${c.x - w / 2}" y="${c.y - w * 0.66}" width="${w}" height="${w}"></image>`;
 }
 
+// Cities carry no flag: whole, or overgrown once their realm is abandoned.
+const CITY_SIZE = 26;
+
+function cityFigure(c, owner) {
+  const file = owner && abandonedHouses()[owner] ? 'city-abandoned' : 'city';
+  const w = CITY_SIZE;
+  return `<image href="/assets/img/${file}.png" x="${c.x - w / 2}" y="${c.y - w * 0.62}" width="${w}" height="${w}"></image>`;
+}
+
 function shieldToken(x, y, color, count, scale = 1) {
   return `<g class="army-token" transform="translate(${x} ${y}) scale(${scale})">` +
     `<path class="shield" d="M-4.8 -5.4H4.8V.8Q4.8 4.9 0 6.4Q-4.8 4.9 -4.8 .8Z" fill="${color}"></path>` +
@@ -1509,15 +1518,16 @@ function renderMap() {
     let note = '';
     if (t.id === origin) note = 'откуда';
     if (t.id === target) note = 'цель';
-    const labelY = c.y + (capital ? 20.5 : t.type === 'Город' ? 14.5 : 13);
+    const labelY = c.y + (capital ? 20.5 : t.type === 'Город' ? 15.5 : 13);
     ribbons.push(nameRibbon(c.x, labelY, mapLabel(t), capital));
     if (note) {
       ribbons.push(`<text class="ribbon-note ${t.id === target ? 'target' : ''}" x="${c.x}" y="${labelY + 10.6}">${note}</text>`);
     }
 
     if (capital) castles.push(capitalCastle(t.id, c, owner));
+    else if (t.type === 'Город') castles.push(cityFigure(c, owner));
     if (total && owner) {
-      const tx = capital ? c.x + 21 : c.x + 8.5;
+      const tx = capital ? c.x + 21 : t.type === 'Город' ? c.x + 14 : c.x + 8.5;
       const ty = capital ? c.y - 1 : c.y - 5;
       tokens.push(shieldToken(tx, ty, colors[owner] || '#8a7a5c', total));
     }

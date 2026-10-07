@@ -448,10 +448,8 @@ function settlement(site) {
     // (online/assets/img/capital-*.png); here only the ground it stands on.
     art += `<ellipse cx="${x}" cy="${f1(y + 3)}" rx="15" ry="7.5" fill="#b9a66a" opacity=".55"/>`;
   } else if (site.type === 'Город') {
-    art += house(x - 7.5, y + 3, 3.6, 2.6, 2) + house(x + 3.6, y + 2.2, 3.8, 2.6, 2);
-    art += house(x - 4, y + 5.6, 3.5, 2.4, 1.8) + house(x + 0.6, y + 5.8, 3.6, 2.4, 1.8);
-    art += house(x - 2.6, y + 1.8, 5, 3.4, 2.2);
-    art += tower(x - 0.2, y - 1.6, 2, 4.6);
+    // Painted figure placed by the client (online/assets/img/city*.png).
+    art += `<ellipse cx="${x}" cy="${f1(y + 2.5)}" rx="10" ry="5" fill="#b9a66a" opacity=".5"/>`;
   } else if (site.type === 'Деревня') {
     art += house(x - 5.6, y + 2.6, 3.4, 2.4, 1.9) + house(x + 1.8, y + 1.6, 3.6, 2.5, 2);
     art += house(x - 1.8, y + 5, 3.4, 2.3, 1.8);

@@ -33,13 +33,13 @@ def tint(px, mask, colour, ref, kmax=1.9):
     out[..., :3] = px[..., :3] * (1 - mask[..., None]) + new * mask[..., None]
     return out
 
-def save(px, name):
+def save(px, name, size=SIZE):
     im = Image.fromarray(np.clip(px, 0, 255).astype(np.uint8), 'RGBA')
     im = im.crop(im.getbbox())
     side = max(im.size)
     sq = Image.new('RGBA', (side, side), (0, 0, 0, 0))
     sq.paste(im, ((side - im.width) // 2, side - im.height))
-    sq.resize((SIZE, SIZE), Image.LANCZOS).save(os.path.join(OUT, name), optimize=True)
+    sq.resize((size, size), Image.LANCZOS).save(os.path.join(OUT, name), optimize=True)
 
 def poly_mask(shape, pts):
     m = Image.new('L', (shape[1], shape[0]), 0)
@@ -74,6 +74,11 @@ def main():
     m = soften((crimson_mask(ab) | flag).astype(np.float32))
     lum = ab[..., :3] @ np.array([0.299, 0.587, 0.114], dtype=np.float32)
     save(tint(ab, m, ASH, float(np.median(lum[m > 0.6])), 1.3), 'capital-abandoned.png')
+
+    for name in ('city', 'city-abandoned'):
+        px = load(name + '.png')
+        px[..., 3] = np.where(px[..., 3] < 24, 0, px[..., 3])  # stray near-transparent specks
+        save(px, name + '.png', 200)
 
 FLAG_CAPTURED = [(668, 40), (1100, 40), (1100, 340), (840, 340), (820, 250), (668, 245)]
 
