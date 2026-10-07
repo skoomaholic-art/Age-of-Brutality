@@ -66,7 +66,7 @@ export function journalEntryToAudit(entry, map, game) {
   if (entry.kind === 'GAME_STARTED') {
     return {
       ...base,
-      message: 'Партия началась.',
+      message: 'Жестокий век начался. Да хранит Господь правых.',
       details: {
         game_id: entry.game_id || game.id,
         ruleset_version: entry.ruleset_version || null,
@@ -84,7 +84,7 @@ export function journalEntryToAudit(entry, map, game) {
         : '';
     return {
       ...base,
-      message: `Партия завершена.${outcome}`,
+      message: `Век окончен.${outcome}`,
       details: {
         game_id: entry.game_id || game.id,
         reason: entry.reason || null,
@@ -98,8 +98,8 @@ export function journalEntryToAudit(entry, map, game) {
     return {
       ...base,
       message: entry.mode === 'days'
-        ? `Настал день ${entry.round} из ${entry.max_rounds}. Доход начислен всем Домам.`
-        : `Раунд ${entry.round} из ${entry.max_rounds} начался. Доход начислен всем Домам.`,
+        ? `Настал день ${entry.round} из ${entry.max_rounds}. Казначеи обошли земли всех Домов.`
+        : `Раунд ${entry.round} из ${entry.max_rounds} начался. Казначеи обошли земли всех Домов.`,
       details: {
         round: entry.round,
         deadline_at: entry.deadline_at || null,
@@ -125,7 +125,7 @@ export function journalEntryToAudit(entry, map, game) {
   if (entry.kind === 'ROUND_ACTION_REFUNDED') {
     return {
       ...base,
-      message: `${entry.house}: действие возвращено, приказ ${entry.source_id} не выполнен.`,
+      message: `Дому ${entry.house} возвращено дело: повеление не сбылось.`,
       details: {
         house: entry.house,
         round: entry.round,
@@ -138,7 +138,7 @@ export function journalEntryToAudit(entry, map, game) {
   if (entry.kind === 'GAME_ARCHIVED') {
     return {
       ...base,
-      message: 'Партия отправлена в архив.',
+      message: 'Свиток этого века убран в ларец.',
       details: {
         game_id: entry.game_id || game.id,
         at: entry.at || null
@@ -149,7 +149,7 @@ export function journalEntryToAudit(entry, map, game) {
   if (entry.kind === 'HOUSE_RELEASED') {
     return {
       ...base,
-      message: `Игрок освободил Дом ${entry.house}.`,
+      message: `Дом ${entry.house} остался без правителя.`,
       details: {
         player_id: entry.player_id || null,
         house: entry.house || null,
@@ -263,7 +263,7 @@ export function journalEntryToAudit(entry, map, game) {
     const territory = territoryName(map, entry.territory);
     return {
       ...base,
-      message: `${entry.house}: ${entry.kind === 'RECRUIT_CANCELLED' ? 'найм' : 'крепость'} в ${territory} - отменено, возвращено ${entry.gold_refunded} золота.`,
+      message: `Дом ${entry.house} отозвал ${entry.kind === 'RECRUIT_CANCELLED' ? 'вербовщиков' : 'каменщиков'} из земли ${territory}; ${entry.gold_refunded} золота вернулось в казну.`,
       details: { house: entry.house, territory_id: entry.territory, territory, gold_refunded: entry.gold_refunded, at: entry.at || null }
     };
   }
@@ -369,7 +369,7 @@ export function journalEntryToAudit(entry, map, game) {
     const repairs = Array.isArray(entry.repairs) ? entry.repairs : [];
     return {
       ...base,
-      message: `Исправлено некорректное состояние войск: ${repairs.length} записей.`,
+      message: `Писарь выправил счёт ратей: строк ${repairs.length}.`,
       details: {
         reason: entry.reason || null,
         repairs
@@ -380,7 +380,7 @@ export function journalEntryToAudit(entry, map, game) {
   if (entry.kind === 'SNAPSHOT_RESTORED') {
     return {
       ...base,
-      message: 'Состояние партии восстановлено из сохранения.',
+      message: 'Век возвращён к записанному в свитке.',
       details: {
         snapshot_saved_at: entry.snapshot_saved_at || null,
         restored_at: entry.at || null
@@ -391,7 +391,7 @@ export function journalEntryToAudit(entry, map, game) {
   if (entry.kind === 'SESSION_START') {
     return {
       ...base,
-      message: `Началась игровая сессия ${game.session_id}.`,
+      message: `Летописец открыл новую тетрадь.`,
       details: {
         session_id: game.session_id,
         started_at: entry.at || game.created_at
@@ -404,7 +404,7 @@ export function journalEntryToAudit(entry, map, game) {
     const to = territoryName(map, entry.to);
     return {
       ...base,
-      message: `${entry.house} начал марш: ${from} -> ${to}, ${entry.warriors} воинов.`,
+      message: `Рать Дома ${entry.house} выступила: ${from} → ${to}, мечей ${entry.warriors}.`,
       details: {
         house: entry.house,
         from_id: entry.from,
@@ -424,7 +424,7 @@ export function journalEntryToAudit(entry, map, game) {
     const to = territoryName(map, entry.to);
     return {
       ...base,
-      message: `${entry.house} завершил марш: ${from} -> ${to}, ${entry.warriors} воинов.`,
+      message: `Рать Дома ${entry.house} дошла: ${from} → ${to}, мечей ${entry.warriors}.`,
       details: {
         house: entry.house,
         from_id: entry.from,
@@ -445,7 +445,7 @@ export function journalEntryToAudit(entry, map, game) {
     const to = territoryName(map, entry.to);
     return {
       ...base,
-      message: `Марш ${entry.house} сорван: ${from} -> ${to}. Причина: ${entry.reason}.`,
+      message: `Поход Дома ${entry.house} не удался: ${from} → ${to}. ${entry.reason}.`,
       details: {
         house: entry.house,
         from_id: entry.from,
@@ -466,7 +466,7 @@ export function journalEntryToAudit(entry, map, game) {
     const to = territoryName(map, entry.to);
     return {
       ...base,
-      message: `${entry.house}: ${from} -> ${to}. Захват нейтральной земли: ${entry.success ? 'УСПЕХ' : 'ПРОВАЛ'}, потери ${entry.loss}.`,
+      message: `Дом ${entry.house} пришёл из земли ${from} в вольную землю ${to}: ${entry.success ? 'земля покорилась' : 'приступ отбит'}, пало ${entry.loss}.`,
       details: {
         house: entry.house,
         from_id: entry.from,
@@ -497,7 +497,7 @@ export function journalEntryToAudit(entry, map, game) {
       : null;
     return {
       ...base,
-      message: `Битва: ${entry.attacker} против ${entry.defender} за ${to}. Победитель: ${winner}. Потери: ${entry.attacker} -${entry.attackerLosses}, ${entry.defender} -${entry.defenderLosses}. Захват: ${entry.captured ? 'да' : 'нет'}.`,
+      message: `Битва: ${entry.attacker} против ${entry.defender} за ${to}. Победитель: ${winner}. Потери: ${entry.attacker} -${entry.attackerLosses}, ${entry.defender} -${entry.defenderLosses}. Земля ${entry.captured ? 'взята' : 'устояла'}.`,
       details: {
         attacker: entry.attacker,
         defender: entry.defender,
@@ -530,7 +530,7 @@ export function journalEntryToAudit(entry, map, game) {
     const to = territoryName(map, entry.to);
     return {
       ...base,
-      message: `${entry.attacker} занял пустую территорию ${to} у ${entry.defender}: ${from} -> ${to}, ${entry.warriors} воинов.`,
+      message: `Дом ${entry.attacker} вошёл в ${to}, оставленный Домом ${entry.defender} без стражи: ${from} → ${to}, мечей ${entry.warriors}.`,
       details: {
         attacker: entry.attacker,
         defender: entry.defender,
@@ -551,7 +551,7 @@ export function journalEntryToAudit(entry, map, game) {
     const complete = entry.kind === 'RECRUIT_COMPLETE';
     return {
       ...base,
-      message: `${entry.house}: найм ${entry.warriors} воинов в ${territory} - ${complete ? 'завершён' : 'начат'}.`,
+      message: `Дом ${entry.house}: в земле ${territory} ${complete ? 'встали под знамя' : 'вербовщики созывают'} воинов (${entry.warriors}).`,
       details: {
         house: entry.house,
         territory_id: entry.territory,
@@ -570,7 +570,7 @@ export function journalEntryToAudit(entry, map, game) {
     const complete = entry.kind === 'FORT_COMPLETE';
     return {
       ...base,
-      message: `${entry.house}: строительство крепости в ${territory} - ${complete ? 'завершено' : 'начато'}.`,
+      message: `Дом ${entry.house}: крепость в земле ${territory} ${complete ? 'возведена' : 'заложена'}.`,
       details: {
         house: entry.house,
         territory_id: entry.territory,
@@ -587,7 +587,7 @@ export function journalEntryToAudit(entry, map, game) {
     const territory = territoryName(map, entry.territory);
     return {
       ...base,
-      message: `${entry.house}: ${entry.kind === 'RECRUIT_FAILED' ? 'найм' : 'крепость'} в ${territory} - ПРОВАЛ. ${entry.reason}`,
+      message: `Дом ${entry.house}: ${entry.kind === 'RECRUIT_FAILED' ? 'сбор воинов' : 'крепость'} в земле ${territory} не задались, золото возвращено. ${entry.reason}`,
       details: {
         house: entry.house,
         territory_id: entry.territory,
@@ -604,8 +604,8 @@ export function journalEntryToAudit(entry, map, game) {
     return {
       ...base,
       message: Number(entry.pulses) > 1
-        ? `Начислен доход всем Домам за ${entry.pulses} пропущенных циклов.`
-        : 'Начислен доход всем Домам.',
+        ? `Казначеи обошли земли за ${entry.pulses} пропущенных срока.`
+        : 'Казначеи обошли земли всех Домов.',
       details: {
         at: entry.at,
         gains: entry.gains,

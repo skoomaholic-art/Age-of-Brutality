@@ -417,6 +417,10 @@
     .tree-line { width: 1.5px; height: 12px; background: var(--ink); }
     .tree-bar { width: 86%; height: 1.5px; background: var(--ink); }
     .tree-label { margin-top: 8px; font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); }
+    #talmud-now .map-guide { position: static; max-width: none; box-shadow: none; margin-bottom: 10px; pointer-events: auto; }
+    .talmud details { border-top: 1px solid var(--rule); padding: 6px 2px; }
+    .talmud summary { cursor: pointer; font-family: Kurale, serif; font-size: 16px; color: var(--vermilion-deep); }
+    .talmud p { margin: 6px 0 2px; font-size: 14px; line-height: 1.4; }
     .bar-pane { display: none; }
     .bar-pane.on { display: block; }
     .find-row { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 7px 6px; border-top: 1px solid var(--rule); cursor: pointer; font-size: 14px; }
@@ -550,8 +554,8 @@
     <img class="brand-mark" src="/assets/img/s-mark.png" alt="Skoomaholic Dev" width="96" height="96">
     <div>
     <h1>Жестокий Век</h1>
-    <div class="sub">онлайн-прототип на правилах V6</div>
-    <div id="spectator-badge" class="spectator-badge">Режим наблюдателя</div>
+    <div class="sub">хроника шести Домов</div>
+    <div id="spectator-badge" class="spectator-badge">Ты здесь лишь зритель</div>
     </div>
   </div>
   <div class="controls">
@@ -559,11 +563,11 @@
       <span class="muted">Дом</span>
       <select id="house"></select>
     </label>
-    <button id="save-game">Сохранить</button>
-    <button id="restore-game">Восстановить</button>
-    <button id="reset">Новая партия</button>
-    <button id="back-menu">Вернуться в меню</button>
-    <div id="save-status" class="save-status">Сохранений ещё нет</div>
+    <button id="save-game">Занести в свиток</button>
+    <button id="restore-game">Вернуть по свитку</button>
+    <button id="reset">Начать век заново</button>
+    <button id="back-menu">Покинуть зал</button>
+    <div id="save-status" class="save-status">Свиток чист</div>
     <div id="build-info" class="save-status" title="Какая сборка сейчас развёрнута"></div>
   </div>
 </header>
@@ -575,23 +579,24 @@
         <button class="bar-tab" data-pane="news">Вести<span id="news-badge" class="bar-badge"></span></button>
         <button class="bar-tab" data-pane="diplomacy">Дипломатия<span id="diplomacy-badge" class="bar-badge"></span></button>
         <button class="bar-tab" data-pane="realm">Держава</button>
-        <button class="bar-tab" data-pane="characters">Персонажи</button>
-        <button class="bar-tab" data-pane="armies">Армии</button>
-        <button class="bar-tab" data-pane="agents">Агенты</button>
-        <button class="bar-tab" data-pane="provinces">Провинции</button>
-        <button class="bar-tab" data-pane="orders">Приказы<span id="orders-badge" class="bar-badge"></span></button>
-        <button class="bar-tab" data-pane="stats">Статистика</button>
-        <button class="bar-tab" data-pane="journal">Журнал</button>
+        <button class="bar-tab" data-pane="characters">Двор</button>
+        <button class="bar-tab" data-pane="armies">Рати</button>
+        <button class="bar-tab" data-pane="agents">Лазутчики</button>
+        <button class="bar-tab" data-pane="provinces">Земли</button>
+        <button class="bar-tab" data-pane="orders">Повеления<span id="orders-badge" class="bar-badge"></span></button>
+        <button class="bar-tab" data-pane="stats">Слава Домов</button>
+        <button class="bar-tab" data-pane="journal">Летопись</button>
+        <button class="bar-tab" data-pane="talmud">Талмуд знаний</button>
         <div class="bar-status">
           <span class="chip"><span>День</span><b id="bar-day">…</b></span>
-          <span class="chip"><span>до смены</span><b id="bar-timer">…</b></span>
+          <span class="chip"><span>до рассвета</span><b id="bar-timer">…</b></span>
           <span class="chip"><span>Золото</span><b id="bar-gold">0</b></span>
           <span class="chip"><span>Влияние</span><b id="bar-influence">0</b></span>
-          <span class="chip"><span>ОП</span><b id="bar-vp">0</b></span>
+          <span class="chip"><span>Слава</span><b id="bar-vp">0</b></span>
         </div>
       </nav>
       <div id="bar-drop" class="bar-drop">
-        <div class="bar-pane" data-pane="news"><div class="panel"><h2>Вести</h2><div id="news-list" class="muted">Пока тихо.</div></div></div>
+        <div class="bar-pane" data-pane="news"><div class="panel"><h2>Вести</h2><div id="news-list" class="muted">На дорогах тихо. Вестей нет.</div></div></div>
         <div class="bar-pane" data-pane="diplomacy"><div class="panel"><h2>Дипломатия</h2><div id="diplomacy-slot"></div></div></div>
         <div class="bar-pane" data-pane="realm">
           <div class="sub-tabs">
@@ -599,25 +604,26 @@
             <button class="sub-tab" data-sub="family">Семейное древо</button>
           </div>
           <div id="sub-faction" class="sub-pane on"></div>
-          <div id="sub-family" class="sub-pane"><div class="panel"><h2>Семейное древо</h2><div id="family-tree" class="muted">Загружаем род...</div></div></div>
+          <div id="sub-family" class="sub-pane"><div class="panel"><h2>Семейное древо</h2><div id="family-tree" class="muted">Писарь ищет родословную...</div></div></div>
         </div>
         <div class="bar-pane" data-pane="characters"></div>
-        <div class="bar-pane" data-pane="armies"><div class="panel"><h2>Армии</h2><div id="armies-list" class="muted">Нет армий.</div></div></div>
-        <div class="bar-pane" data-pane="agents"><div class="panel"><h2>Агенты</h2><div id="agents-list" class="muted">Шпионов нет.</div></div></div>
-        <div class="bar-pane" data-pane="provinces"><div class="panel"><h2>Провинции</h2><div id="provinces-list" class="muted">Нет земель.</div></div></div>
+        <div class="bar-pane" data-pane="armies"><div class="panel"><h2>Рати</h2><div id="armies-list" class="muted">Под знамёнами никого.</div></div></div>
+        <div class="bar-pane" data-pane="agents"><div class="panel"><h2>Лазутчики</h2><div id="agents-list" class="muted">Шпионов нет.</div></div></div>
+        <div class="bar-pane" data-pane="provinces"><div class="panel"><h2>Земли</h2><div id="provinces-list" class="muted">Земель под рукой нет.</div></div></div>
         <div class="bar-pane" data-pane="orders"></div>
         <div class="bar-pane" data-pane="stats"></div>
         <div class="bar-pane" data-pane="journal"></div>
+        <div class="bar-pane" data-pane="talmud"><div class="panel"><h2>Талмуд знаний</h2><div id="talmud-now"></div><div id="talmud" class="talmud"></div></div></div>
       </div>
       <div id="map-guide" class="map-guide">
         <div id="guide-title" class="guide-title">1. Выбери, откуда идти</div>
         <div id="guide-sub" class="guide-sub">Цвет земли показывает Дом. Колесо мыши меняет масштаб, карту можно тянуть.</div>
         <div class="selection-legend">
-          <span class="legend-pill"><i class="legend-mark"></i>твои земли с воинами</span>
-          <span class="legend-pill"><i class="legend-mark origin"></i>откуда</span>
-          <span class="legend-pill"><i class="legend-mark legal"></i>куда можно</span>
-          <span class="legend-pill"><i class="legend-mark target"></i>цель выбрана</span>
-          <span class="legend-pill"><i class="legend-mark fog"></i>тёмные земли: разведаны, но не твои</span>
+          <span class="legend-pill"><i class="legend-mark"></i>твои земли с ратью</span>
+          <span class="legend-pill"><i class="legend-mark origin"></i>отсюда идём</span>
+          <span class="legend-pill"><i class="legend-mark legal"></i>сюда есть дорога</span>
+          <span class="legend-pill"><i class="legend-mark target"></i>сюда идём</span>
+          <span class="legend-pill"><i class="legend-mark fog"></i>тёмные земли: ведомы, но не твои</span>
         </div>
       </div>
       <svg id="map" viewBox="40 30 760 490" role="img" aria-label="Карта Жестокого Века"></svg>
@@ -629,7 +635,7 @@
       <div id="land-card" class="land-card">
         <div class="land-head"><b id="land-name"></b><span id="land-kind"></span><button id="land-close" title="Закрыть">×</button></div>
         <div class="sub-tabs">
-          <button class="land-tab on" data-land="info">Инфо</button>
+          <button class="land-tab on" data-land="info">Сведения</button>
           <button class="land-tab" data-land="hire">Нанять</button>
           <button class="land-tab" data-land="build">Строить</button>
         </div>
@@ -649,9 +655,9 @@
       <div id="finale" class="finale">
         <div class="finale-card">
           <figure class="miniature"><img id="finale-art" src="/assets/img/notif-finale-won.jpg" alt="" width="720" height="540"></figure>
-          <h3 id="finale-title">Партия завершена</h3>
+          <h3 id="finale-title">Век окончен</h3>
           <p id="finale-text"></p>
-          <button id="finale-close" class="primary">Посмотреть карту</button>
+          <button id="finale-close" class="primary">Взглянуть на мир</button>
         </div>
       </div>
       <div class="map-zoom" aria-label="Масштаб карты">
@@ -670,7 +676,7 @@
             <div id="route-meta" class="route-meta"></div>
           </div>
           <button id="split-toggle" title="Отправить только часть армии">Разделить</button>
-          <button id="send" class="primary big">Отдать приказ</button>
+          <button id="send" class="primary big">Выступать</button>
         </div>
         <div id="route-mode-row" style="display:none">
           <select id="march-mode">
@@ -680,12 +686,12 @@
         </div>
         <div id="split-row" class="split-row" style="display:none">
           <label class="split-count">
-            <span class="muted">Сколько воинов идёт</span>
+            <span class="muted">Сколько мечей идёт</span>
             <input id="warriors" type="number" min="1" value="1" />
           </label>
           <button id="max-warriors" class="troop-max">Все</button>
           <label id="commander-row" class="split-commander" style="display:none">
-            <span class="muted">Командир</span>
+            <span class="muted">Воевода</span>
             <select id="commander"></select>
           </label>
         </div>
@@ -695,9 +701,9 @@
 
   <aside>
     <div id="game-status-panel" class="panel">
-      <h2>Партия</h2>
+      <h2>Слава Домов</h2>
       <div class="game-status-grid">
-        <div class="game-status-cell"><span>Статус</span><b id="game-status">...</b></div>
+        <div class="game-status-cell"><span>Век</span><b id="game-status">...</b></div>
         <div class="game-status-cell"><span id="round-label">Раунд</span><b id="game-round">...</b></div>
       </div>
       <div id="round-box" style="display:none">
@@ -722,23 +728,23 @@
       <div class="stats">
         <div class="stat"><span class="muted">Золото</span><b id="gold">0</b></div>
         <div class="stat"><span class="muted">Влияние</span><b id="influence">0</b></div>
-        <div class="stat"><span class="muted">ОП</span><b id="vp">0</b></div>
+        <div class="stat"><span class="muted">Слава</span><b id="vp">0</b></div>
       </div>
     </div>
 
     <div id="characters-panel" class="panel">
-      <h2>Персонажи</h2>
-      <div id="characters" class="character-list muted">Загружаем персонажей...</div>
+      <h2>Двор</h2>
+      <div id="characters" class="character-list muted">Двор собирается...</div>
     </div>
 
     <div id="economy-panel" class="panel">
-      <h2>Экономика</h2>
-      <div class="economy-line"><span class="muted">Доход за цикл</span><b id="income-rate">+0 золота</b></div>
-      <div class="economy-line"><span class="muted">Следующий доход</span><b id="income-countdown">...</b></div>
-      <div id="income-hint" class="tiny">Тестовый онлайн-цикл: каждые 2 минуты. Формула дохода взята из правил настолки.</div>
+      <h2>Казна</h2>
+      <div class="economy-line"><span class="muted">Доход за день</span><b id="income-rate">+0 золота</b></div>
+      <div class="economy-line"><span class="muted">Казначей придёт</span><b id="income-countdown">...</b></div>
+      <div id="income-hint" class="tiny">Золото приносят с рассветом.</div>
       <div style="margin-top:10px">
         <label>
-          <span class="muted">Управлять территорией</span>
+          <span class="muted">Земля под рукой</span>
           <select id="manage-territory" style="width:100%;margin-top:4px"></select>
         </label>
       </div>
@@ -748,23 +754,23 @@
         <button data-recruit="2">+2 воина<br><span class="tiny">2 золота</span></button>
         <button data-recruit="3">+3 воина<br><span class="tiny">3 золота</span></button>
       </div>
-      <button id="build-fort" class="fort-button">Построить крепость · 3 золота</button>
-      <div id="jobs" class="jobs muted">Нет строительства.</div>
+      <button id="build-fort" class="fort-button">Возвести крепость · 3 золота</button>
+      <div id="jobs" class="jobs muted">Мастера и вербовщики сидят без дела.</div>
     </div>
 
     <div id="march-panel" class="panel">
-      <h2>Марш</h2>
+      <h2>Поход</h2>
       <div id="selection" class="muted">1. Выбери свою территорию с воинами.</div>
     </div>
 
     <div id="orders-panel" class="panel">
-      <h2>Приказы</h2>
-      <div id="orders" class="muted">Нет приказов.</div>
+      <h2>Повеления</h2>
+      <div id="orders" class="muted">Гонцы ждут твоего слова.</div>
     </div>
 
     <div id="journal-panel" class="panel">
-      <h2>Журнал</h2>
-      <div id="journal" class="journal muted">Пока пусто.</div>
+      <h2>Летопись</h2>
+      <div id="journal" class="journal muted">Летописец ещё не обмакнул перо.</div>
     </div>
   </aside>
 </main>
@@ -984,15 +990,15 @@ function characterModeClass(character) {
 }
 
 function characterRoleLabel(role) {
-  if (role === 'RULER') return 'Правитель';
-  if (role === 'HEIR') return 'Взрослый наследник';
+  if (role === 'RULER') return 'Государь';
+  if (role === 'HEIR') return 'Наследник';
   return role || 'Персонаж';
 }
 
 function renderCharacters() {
   const box = $('characters');
   if (isSpectator || !house) {
-    box.innerHTML = '<span class="muted">Недоступно наблюдателю.</span>';
+    box.innerHTML = '<span class="muted">Зрителю ко двору хода нет.</span>';
     return;
   }
 
@@ -1018,7 +1024,7 @@ function renderCharacters() {
     const stats = character.stats || {};
     const location =
       character.status === 'FATE_PENDING'
-        ? 'Ожидает проверки Судьбы после боя'
+        ? 'Ждёт своей участи после битвы'
         : character.status === 'FATE_LOCATION_PENDING'
           ? 'Возвращается ко двору после разгрома'
           : character.mode === 'CAPTIVE'
@@ -1034,8 +1040,8 @@ function renderCharacters() {
               ? 'Мёртв'
               : character.mode === 'ARMY'
                 ? army?.moving_order_id
-                  ? 'В марше · приказ ' + army.moving_order_id
-                  : 'Армия · ' +
+                  ? 'В походе'
+                  : 'При рати · ' +
                     (mapNodeById(army?.territory)?.name ||
                       army?.territory ||
                       'не определено')
@@ -1060,16 +1066,16 @@ function renderCharacters() {
 
     const actions =
       character.status === 'FATE_PENDING'
-        ? '<div class="tiny failed">Ожидается разрешение Судьбы командира.</div>'
+        ? '<div class="tiny failed">Судьба его ещё не решена.</div>'
         : character.status === 'FATE_LOCATION_PENDING'
           ? ''
           : character.mode === 'CAPTIVE'
-            ? '<div class="tiny failed">Персонаж не может действовать, пока находится в плену.</div>' +
+            ? '<div class="tiny failed">В оковах много не навоюешь.</div>' +
               (character.captivity?.ransom_amount
                 ? '<div class="character-actions"><button data-open-ransom="' + escapeHtml(character.id) + '">Ответить на требование выкупа</button></div>'
                 : '')
             : character.mode === 'DEAD'
-              ? '<div class="tiny failed">Персонаж погиб.</div>'
+              ? '<div class="tiny failed">Упокой, Господи, его душу.</div>'
               : canAssign
         ? (
             '<div class="character-actions" style="display:grid;gap:6px">' +
@@ -1084,29 +1090,29 @@ function renderCharacters() {
               '</option>'
             ).join('') +
             '</select>' +
-            '<button data-char-army="' + escapeHtml(character.id) + '">Назначить в армию</button>' +
+            '<button data-char-army="' + escapeHtml(character.id) + '">Поставить во главе рати</button>' +
             '</div>'
           )
         : character.mode === 'COURT' && assignment && !assignment.allowed
           ? '<div class="character-actions"><button disabled title="' +
             escapeHtml(assignment.reason || '') +
-            '">Назначить в армию</button></div>' +
+            '">Поставить во главе рати</button></div>' +
             '<div class="tiny failed" style="margin-top:6px">' +
-            escapeHtml(assignment.reason || 'Назначение сейчас недоступно.') +
+            escapeHtml(assignment.reason || 'Сейчас ему рать не доверить.') +
             '</div>'
           : canReturn
             ? '<div class="character-actions"><button data-char-court="' +
-              escapeHtml(character.id) + '">Вернуть во Двор</button></div>'
+              escapeHtml(character.id) + '">Отозвать ко двору</button></div>'
             : '';
 
     const special = character.special_rule && character.special_rule !== '—'
-      ? '<div class="character-rule">Особое правило: ' +
+      ? '<div class="character-rule">Особый дар: ' +
         escapeHtml(character.special_rule) +
-        '<br><span class="tiny">Спецэффект будет подключён отдельным этапом.</span></div>'
+        '<br><span class="tiny">Дар этот ещё дремлет.</span></div>'
       : '';
 
     const face = FACE
-      ? '<div class="character-face portrait-frame" data-face="' + escapeHtml(character.id) + '" title="Изменить облик и имя"><div class="portrait">' +
+      ? '<div class="character-face portrait-frame" data-face="' + escapeHtml(character.id) + '" title="Облачить и наречь"><div class="portrait">' +
         portraitHtml(lookOf(character)) + '</div></div>'
       : '';
     return '<div class="character-card">' + face +
@@ -1114,19 +1120,19 @@ function renderCharacters() {
       escapeHtml(character.name) + '</div><div class="character-role">' +
       escapeHtml((character.appearance ? (character.appearance.sex ? 'Миледи · ' : 'Лорд · ') : '') + characterRoleLabel(character.role)) +
       (character.health === 'WEAKENED'
-        ? ' · Ослаблен, бонусы не действуют' +
+        ? ' · Ослаблен, проку от него рати нет' +
           (character.weakened_until ? ' (ещё ' + timeLeft(character.weakened_until) + ')' : '')
         : '') +
       '</div></div><span class="character-mode ' +
       characterModeClass(character) + '">' +
       escapeHtml(characterModeLabel(character)) + '</span></div>' +
       '<div class="character-stats">' +
-      '<div class="character-stat"><span>АТК</span><b>' + Number(stats.attack || 0) + '</b></div>' +
-      '<div class="character-stat"><span>ЗАЩ</span><b>' + Number(stats.defense || 0) + '</b></div>' +
-      '<div class="character-stat"><span>ВЫЖ</span><b>' + Number(stats.survival || 0) + '</b></div>' +
-      '<div class="character-stat"><span>ДИП</span><b>' + Number(stats.diplomacy || 0) + '</b></div>' +
-      '<div class="character-stat"><span>ИНТ</span><b>' + Number(stats.intrigue || 0) + '</b></div>' +
-      '<div class="character-stat"><span>УПР</span><b>' + Number(stats.stewardship || 0) + '</b></div>' +
+      '<div class="character-stat"><span>Натиск</span><b>' + Number(stats.attack || 0) + '</b></div>' +
+      '<div class="character-stat"><span>Стойк.</span><b>' + Number(stats.defense || 0) + '</b></div>' +
+      '<div class="character-stat"><span>Живуч.</span><b>' + Number(stats.survival || 0) + '</b></div>' +
+      '<div class="character-stat"><span>Речи</span><b>' + Number(stats.diplomacy || 0) + '</b></div>' +
+      '<div class="character-stat"><span>Козни</span><b>' + Number(stats.intrigue || 0) + '</b></div>' +
+      '<div class="character-stat"><span>Хозяйст.</span><b>' + Number(stats.stewardship || 0) + '</b></div>' +
       '</div><div class="character-location">' + escapeHtml(location) + '</div>' +
       special + actions +
       (FACE && character.alive ? '<div class="character-actions"><button data-face="' + escapeHtml(character.id) + '" title="Сменить облик, наряд и имя">Облачить</button></div>' : '') +
@@ -1150,7 +1156,7 @@ function renderCharacters() {
         });
         await refresh();
       } catch (error) {
-        alert(error.message);
+        alert(sayError(error));
       }
     };
   });
@@ -1168,7 +1174,7 @@ function renderCharacters() {
         });
         await refresh();
       } catch (error) {
-        alert(error.message);
+        alert(sayError(error));
       }
     };
   });
@@ -1206,7 +1212,7 @@ function gameFinished() {
 function roundBlockReason() {
   const rounds = snapshot?.rounds;
   if (!rounds) return null;
-  if (rounds.finished) return 'Партия завершена.';
+  if (rounds.finished) return 'Век окончен.';
   if (daysGame()) return null;
   const mine = myRoundStatus();
   if (!mine) return null;
@@ -1373,8 +1379,12 @@ function portraitHtml(look) {
     const top = HEAD_TOP + at - (mode === 'c' ? part.h / 2 : mode === 'b' ? part.h : 0) + (fix.dy || 0);
     const left = 200 - part.w / 2 + (fix.dx || 0);
     // Eyes, nose and mouth are painted on light skin: on darker heads they are toned to match.
-    const shade = ['eyes', 'nose', 'mouth'].includes(kind) ? [null, null, 'brightness(.9) saturate(1.05)', 'brightness(.66) saturate(1.15)'][Number(look?.head || 1)] : null;
-    const tone = shade ? ';filter:' + shade : '';
+    const shade = ['eyes', 'nose', 'mouth'].includes(kind) ? [null, null, 'brightness(.86) saturate(1.08)', 'brightness(.58) saturate(1.25)'][Number(look?.head || 1)] : null;
+    // Their edges fade into the head; of the mouth only the lips are kept, its painted stubble is dropped.
+    const fade = { eyes: 'radial-gradient(ellipse 50% 50% at 50% 55%, #000 62%, transparent 96%)',
+      nose: 'radial-gradient(ellipse 50% 50% at 50% 55%, #000 55%, transparent 98%)',
+      mouth: 'radial-gradient(ellipse 30% 26% at 50% 40%, #000 60%, transparent 100%)' }[kind];
+    const tone = (shade ? ';filter:' + shade : '') + (fade ? ';-webkit-mask-image:' + fade + ';mask-image:' + fade : '');
     html += '<img alt="" src="/assets/img/face-' + kind + '-' + index + '.png" style="left:' + (left / 4).toFixed(2) +
       '%;top:' + (top / 5.75).toFixed(2) + '%;width:' + (part.w / 4).toFixed(2) + '%' + tone + '">';
   }
@@ -1493,7 +1503,7 @@ function setupMaker() {
       $('maker').classList.remove('show');
       await refresh();
     } catch (error) {
-      alert(error.message);
+      alert(sayError(error));
     }
   };
   document.addEventListener('click', event => {
@@ -1558,10 +1568,10 @@ function renderLand() {
     const hash = [...landId].reduce((sum, ch) => sum * 31 + ch.charCodeAt(0), 7);
     const bonus = t.island_bonus ? '<div class="row"><span>Весь остров даёт</span><b>' + escapeHtml(t.island_bonus) + '</b></div>' : '';
     body.innerHTML =
-      '<div class="row"><span>Владелец</span><b>' + escapeHtml(st.owner ? 'Дом ' + st.owner : 'ничья земля') + '</b></div>' +
-      '<div class="row"><span>Даёт владельцу</span><b>+' + Number(t.gold_income || 0) + ' золота в день</b></div>' + bonus +
-      '<div class="row"><span>Гарнизон</span><b>' + (seen ? garrison + ' ' + warriorWord(garrison) : 'неизвестно') + '</b></div>' +
-      '<div class="row"><span>Постройки</span><b>' + (st.fort ? 'крепость' : 'нет') + '</b></div>' +
+      '<div class="row"><span>Хозяин</span><b>' + escapeHtml(st.owner ? 'Дом ' + st.owner : 'ничья земля') + '</b></div>' +
+      '<div class="row"><span>Платит хозяину</span><b>+' + Number(t.gold_income || 0) + ' золота с рассветом</b></div>' + bonus +
+      '<div class="row"><span>Стража</span><b>' + (seen ? garrison + ' ' + warriorWord(garrison) : 'неизвестно') + '</b></div>' +
+      '<div class="row"><span>Возведено</span><b>' + (st.fort ? 'крепость' : 'нет') + '</b></div>' +
       '<div class="row"><span>Исконно</span><b>' + escapeHtml(t.house_sector && colors[t.house_sector] ? 'земля Дома ' + t.house_sector : t.house_sector || 'вольная земля') + '</b></div>' +
       '<div class="row"><span>Прежде владели</span><b>' + escapeHtml(past.length ? past.join(', ') : 'никто') + '</b></div>' +
       '<div class="lore">' + escapeHtml(LAND_LORE[Math.abs(hash) % LAND_LORE.length]) + '</div>' + guestsBlock(mine);
@@ -1574,16 +1584,16 @@ function renderLand() {
     const spies = characterData?.agents;
     const spyRow = spies ? '<button class="wide" data-hire-spy ' + (spies.list.length >= spies.max ? 'disabled' : '') + '>Шпион · ' + spies.cost + ' золота (' + spies.list.length + ' из ' + spies.max + ')</button>' : '';
     body.innerHTML = '<div class="row"><span>Стоит здесь</span><b>' + here + ' ' + warriorWord(here) + '</b></div>' + spyRow +
-      (queue ? '<div class="built">Набираются: ' + queue + '</div>' : '') +
+      (queue ? '<div class="built">Вербовщики ведут: ' + queue + '</div>' : '') +
       '<div class="acts">' + [1, 2, 3].map(n => '<button data-land-hire="' + n + '">+' + n + '<br><span class="tiny">' + n + ' зол.</span></button>').join('') + '</div>';
     return;
   }
   const building = jobs.some(job => job.type === 'FORT');
   const fortNote = t.type === 'Столица' ? 'В столице крепость не строят' : st.fort ? 'Крепость уже стоит' : building ? 'Крепость строится' : '';
-  body.innerHTML = '<div class="built">Построено: ' + (built || 'ничего') + '</div>' +
-    '<button class="wide" data-land-fort ' + (fortNote ? 'disabled' : '') + '>' + (fortNote || 'Крепость · 3 золота') + '</button>' +
-    '<button class="wide" disabled>Тайный приказ · скоро</button>' +
-    '<button class="wide" disabled>Порт · скоро</button>';
+  body.innerHTML = '<div class="built">Возведено: ' + (built || 'ничего') + '</div>' +
+    '<button class="wide" data-land-fort ' + (fortNote ? 'disabled' : '') + '>' + (fortNote || 'Возвести крепость · 3 золота') + '</button>' +
+    '<button class="wide" disabled>Тайный приказ · мастера ещё не прибыли</button>' +
+    '<button class="wide" disabled>Порт · мастера ещё не прибыли</button>';
 }
 
 // Wayfarers resting in this land; with a free spy one of them can take him along.
@@ -1608,7 +1618,7 @@ async function agentCommand(body) {
     await refresh();
     return data;
   } catch (error) {
-    alert(error.message);
+    alert(sayError(error));
     return null;
   }
 }
@@ -1620,7 +1630,7 @@ async function landCommand(path, body) {
     await api(path, { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({ house, territory: landId, ...body }) });
     await refresh();
   } catch (error) {
-    alert(error.message);
+    alert(sayError(error));
   }
 }
 
@@ -1680,7 +1690,7 @@ function showDecision(spec) {
         if (!item.keep) hideDecision(item.later ? spec.key : null);
         if (item.run) await refresh();
       } catch (error) {
-        alert(error.message);
+        alert(sayError(error));
         button.disabled = false;
       }
     };
@@ -1994,8 +2004,8 @@ function lensFor(node) {
   const lines = [
     count + ' ' + (count % 10 === 1 && count % 100 !== 11 ? 'воин' : count % 10 >= 2 && count % 10 <= 4 && (count % 100 < 12 || count % 100 > 14) ? 'воина' : 'воинов'),
     commander
-      ? 'ведёт ' + commander.name + (weak ? ' (ослаблен)' : ' · атака ' + Number(commander.stats?.attack || 0) + ', защита ' + Number(commander.stats?.defense || 0))
-      : 'без командира',
+      ? 'ведёт ' + commander.name + (weak ? ' (ослаблен)' : ' · натиск ' + Number(commander.stats?.attack || 0) + ', стойкость ' + Number(commander.stats?.defense || 0))
+      : 'без воеводы',
     moving ? 'в походе: ' + place + ', ещё ' + timeLeft(moving.due_at)
       : (node.dataset.lensHouse ? 'в гостях: ' : 'стоит: ') + place
   ];
@@ -2044,6 +2054,45 @@ function setupLens() {
   });
 }
 
+// ---------- the book of knowledge ----------
+const TALMUD = [
+  ['О времени и казне', 'Век сей длится шесть дней. С каждым рассветом казначей приносит золото и влияние с твоих земель: столица даёт четыре монеты, город две, деревня одну, дикая земля ничего. Когда минет шестой день, летописец подведёт черту и назовёт победителя.'],
+  ['О походе', 'Укажи землю, где стоит твоя рать, затем землю, куда ей идти, и повели выступать. Идёт вся рать разом; желаешь послать часть, вели «Разделить» и назови число воинов и воеводу. Путь занимает долю дня, по морю дольше, чем посуху.'],
+  ['О битве', 'Костей здесь не мечут: верх берёт тот, у кого больше мечей и крепче воевода. При равных силах поле остаётся за обороняющимся. Крепость и стены столицы берегут защитников. Рати, что сошлись на одной дороге, бьются там же, не дойдя до цели.'],
+  ['О тучах над миром', 'Тебе ведомы лишь твои земли да те, что с ними граничат. Прочее скрыто тучами, и послать туда рать нельзя. Займи землю, и ветер разгонит тучи над её соседями. Раз увиденное остаётся на карте, но чужих ратей там не разглядеть, покуда не подойдёшь.'],
+  ['О найме и стройке', 'Коснись своей земли: откроется грамота с тремя закладками. В «Нанять» зовут под знамя воинов и шпионов, в «Строить» возводят крепость. Всякое дело требует времени. Его можно отменить, и через десять вздохов золото вернётся; но если землю возьмёт враг раньше срока, труд достанется ему.'],
+  ['О Домах и встречах', 'Чужой Дом для тебя не существует, пока ваши люди не свиделись на карте. Лишь тогда его имя появится в «Дипломатии», а вести о нём начнут доходить до твоего двора.'],
+  ['О войне и праве прохода', 'Войти с оружием в землю Дома, с коим нет войны, значит её начать; советник предупредит тебя прежде. Можно испросить права прохода: тогда твои воины станут в чужой земле гостями, без боя, и пойдут дальше. Хозяин волен закрыть дороги, и гости уйдут домой. Мира в этом веке не заключают.'],
+  ['О брачном союзе', 'Союз скрепляется только свадьбой: дочь одного Дома уходит в семью другого. Союзники не трогают друг друга в пути. У Дома может быть один союзник. Кто порвёт союз или поднимет меч на родню, прослывёт клятвопреступником, лишится влияния, заплатит пеню, и никто более не отдаст ему дочь.'],
+  ['О судьбе воеводы и о плене', 'Побитый воевода бывает ослаблен, пленён или убит, смотря по тому, сколь тяжёл разгром. Ослабленный не даёт рати ничего, пока не оправится, а новая беда для него опаснее. Пленника победитель волен отпустить, казнить, заточить в крепости (коли она есть) или назначить за него выкуп.'],
+  ['О шпионах и путниках', 'По дорогам ходят шуты, паломники, крестьяне и беглые ратники под белым штандартом. Наняв шпиона, открой свою землю, где гостят путники, и вели ему примкнуть к ним: он уйдёт их дорогой и, дойдя до названной земли, откроет тебе её и соседей на полдня.'],
+  ['О стекле хрониста', 'Наведи перст на штандарт рати или путников, и в круглом стекле увидишь, кто идёт, сколько их и кто ведёт. Коснись штандарта, и стекло останется открытым.'],
+  ['О брошенных державах', 'Правитель, покинувший век до срока, бросает свои земли. Они сереют, победить такой Дом уже не может, а земли его достаются тому, кто придёт первым.'],
+  ['О победе', 'Славу считают в очках победы: за выигранные битвы, взятые и удержанные чужие столицы и величину державы. У кого их больше к исходу шестого дня, тот и пережил жестокий век.']
+];
+
+// What the server says in the tongue of clerks, said as a herald would.
+const ERROR_WORDS = [
+  [/not enough gold/i, 'Казна пуста: на это не хватает золота.'],
+  [/warrior cap|exceed warrior cap/i, 'Больше воинов здесь не уместить.'],
+  [/no legal route|not emitted|no longer legal/i, 'Туда дороги нет.'],
+  [/commander without an army/i, 'Нельзя оставить воеводу без единого воина.'],
+  [/already has a fort|already being built/i, 'Крепость здесь уже стоит или строится.'],
+  [/fort cannot be built in a capital/i, 'Столице крепость ни к чему: её стены и так высоки.'],
+  [/no own fort tokens/i, 'Твой Дом не может держать больше крепостей.'],
+  [/not controlled|does not control|ownership mismatch|cannot control/i, 'Эта земля тебе не подвластна.'],
+  [/game is not running/i, 'Век ещё не начался или уже окончен.'],
+  [/stale game state/i, 'Гонцы разминулись. Повтори приказ.'],
+  [/Rate exceeded|Failed to fetch|NetworkError/i, 'Гонец не добрался до двора. Попробуй ещё раз.']
+];
+
+function sayError(error) {
+  const text = String(error?.message || error || '');
+  if (/[а-яё]/i.test(text)) return text;
+  const found = ERROR_WORDS.find(([pattern]) => pattern.test(text));
+  return found ? found[1] : 'Писарь разводит руками: ' + text;
+}
+
 // ---------- the bar over the map ----------
 // Every panel of the game opens from the bar. The panels are the same elements
 // the rest of the page renders into; they are only housed in the drop-down.
@@ -2063,6 +2112,8 @@ function setupBar() {
     for (const id of ids) home.appendChild($(id));
   }
   $('diplomacy-slot').appendChild($('diplomacy'));
+  $('talmud-now').appendChild($('map-guide'));
+  $('talmud').innerHTML = TALMUD.map(([title, text]) => '<details><summary>' + title + '</summary><p>' + text + '</p></details>').join('');
   $('sub-faction').append($('house-panel'), $('economy-panel'));
   document.querySelectorAll('.sub-tab').forEach(tab => {
     tab.addEventListener('click', () => {
@@ -2082,7 +2133,7 @@ function setupBar() {
 function togglePane(pane) {
   openPane = pane && pane !== openPane ? pane : null;
   $('bar-drop').classList.toggle('show', Boolean(openPane));
-  $('map-guide').style.visibility = openPane ? 'hidden' : '';
+
   document.querySelectorAll('.bar-tab').forEach(tab => tab.classList.toggle('on', tab.dataset.pane === openPane));
   document.querySelectorAll('.bar-pane').forEach(node => node.classList.toggle('on', node.dataset.pane === openPane));
   if (openPane === 'news') {
@@ -2168,7 +2219,7 @@ function renderFinders() {
     const commander = commanderAt(id);
     rows.push('<div class="find-row" data-find="' + escapeHtml(id) + '" data-select="1"><b>' + escapeHtml(mapNodeById(id)?.name || id) +
       '</b><span class="num">' + count + ' ' + warriorWord(count) + '</span><span>' +
-      escapeHtml(commander ? 'ведёт ' + commander.name + (commander.health === 'WEAKENED' ? ' (ослаблен)' : '') : 'гарнизон без командира') +
+      escapeHtml(commander ? 'ведёт ' + commander.name + (commander.health === 'WEAKENED' ? ' (ослаблен)' : '') : 'стоит без воеводы') +
       '</span><span>стоит</span></div>');
   }
   for (const order of snapshot.game.orders || []) {
@@ -2178,7 +2229,7 @@ function renderFinders() {
       escapeHtml((mapNodeById(order.action.from)?.name || '') + ' → ' + (mapNodeById(order.action.to)?.name || '')) +
       '</b><span class="num">' + count + ' ' + warriorWord(count) + '</span><span>в походе</span><span>ещё ' + escapeHtml(timeLeft(order.due_at)) + '</span></div>');
   }
-  $('armies-list').innerHTML = rows.length ? rows.join('') : 'Нет армий.';
+  $('armies-list').innerHTML = rows.length ? rows.join('') : 'Под знамёнами никого.';
   const spies = characterData?.agents?.list || [];
   $('agents-list').innerHTML = spies.length
     ? spies.map(agent => {
@@ -2197,9 +2248,9 @@ function renderFinders() {
         const count = warriorsAt(t.id, house);
         return '<div class="find-row" data-find="' + escapeHtml(t.id) + '"><b>' + escapeHtml(t.name) + '</b><span class="num">+' +
           Number(t.gold_income || 0) + ' зол.</span><span>' + escapeHtml(t.type + (here.fort ? ' · крепость' : '')) +
-          '</span><span>' + (count ? count + ' ' + warriorWord(count) : 'без гарнизона') + '</span></div>';
+          '</span><span>' + (count ? count + ' ' + warriorWord(count) : 'без стражи') + '</span></div>';
       }).join('')
-    : 'Нет земель.';
+    : 'Земель под рукой нет.';
 }
 
 function newsEntries() {
@@ -2231,7 +2282,7 @@ function renderNews() {
         '<div><h4>' + escapeHtml(news.title) + '</h4><p>' + escapeHtml(news.text) + '</p>' +
         '<time>' + escapeHtml(item.at ? new Date(item.at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '') + '</time></div></div>'
       ).join('')
-    : 'Пока тихо.';
+    : 'На дорогах тихо. Вестей нет.';
 }
 
 // The heralds: one card in the corner for the most important fresh news.
@@ -2282,7 +2333,7 @@ function newsFor(item) {
     return null;
   }
   if (item.type === 'NEUTRAL_CAPTURE' && mine(d.house)) {
-    return /УСПЕХ/.test(text)
+    return /покорилась|УСПЕХ/.test(text)
       ? { rank: 5, art: 'neutral-taken', title: 'Новая земля', text: d.to + ' присягнул твоему Дому.' }
       : { rank: 6, art: 'order-failed', title: 'Приступ отбит', text: d.to + ' устоял. Отряд вернулся в ' + d.from + '.' };
   }
@@ -2481,7 +2532,7 @@ function gameHouses() {
 
 function unknownNote(total) {
   return total > 0
-    ? '<div class="unmet">Ещё не встречено Домов: ' + total + '</div>'
+    ? '<div class="unmet">Домов, что тебе ещё не встретились: ' + total + '</div>'
     : '';
 }
 
@@ -2501,7 +2552,7 @@ function renderDiplomacy() {
   const hasAlly = met.some(h => relationWith(h) === 'ALLIANCE');
   const rows = met.map(other => {
     const rel = relationWith(other);
-    let state = '<span class="dip-state">нейтралитет</span>';
+    let state = '<span class="dip-state">ни мира, ни войны</span>';
     let buttons = '';
     if (abandonedHouses()[other]) {
       state = '<span class="dip-state">брошено</span>';
@@ -2519,7 +2570,7 @@ function renderDiplomacy() {
       buttons = '<button data-dip="DECLINE_ALLIANCE" data-target="' + escapeHtml(other) + '">Отозвать</button>';
     } else {
       buttons = (hasAlly ? '' : '<button data-marry="' + escapeHtml(other) + '">Брачный союз</button>') +
-        '<button data-dip="DECLARE_WAR" data-target="' + escapeHtml(other) + '">Война</button>';
+        '<button data-dip="DECLARE_WAR" data-target="' + escapeHtml(other) + '">Бросить перчатку</button>';
     }
     // Right of passage, both ways.
     const tag = escapeHtml(other);
@@ -2550,7 +2601,7 @@ function renderDiplomacy() {
     button.onclick = async () => {
       const action = button.dataset.dip;
       const target = button.dataset.target;
-      if (action === 'DECLARE_WAR' && !confirm('Объявить войну Дому ' + target + '? Мира в этой партии уже не будет.')) return;
+      if (action === 'DECLARE_WAR' && !confirm('Бросить перчатку Дому ' + target + '? Мира в этом веке уже не будет.')) return;
       if (action === 'BREAK_ALLIANCE' && !confirm('Расторгнуть брачный союз с Домом ' + target + '? Ты прослывёшь клятвопреступником: -' +
         Number(dip.oath_price?.influence || 2) + ' влияния, ' + Number(dip.oath_price?.gold || 3) + ' золота пени, и ни один Дом под рукой ИИ больше не породнится с тобой.')) return;
       button.disabled = true;
@@ -2562,7 +2613,7 @@ function renderDiplomacy() {
         });
         await refresh();
       } catch (error) {
-        alert(error.message);
+        alert(sayError(error));
         button.disabled = false;
       }
     };
@@ -2581,7 +2632,7 @@ function renderFinale() {
     ? 'Победил Дом ' + winners[0]
     : winners.length > 1
       ? 'Совместная победа'
-      : 'Партия завершена';
+      : 'Век окончен';
   const mine = winners.includes(house);
   $('finale-art').src = '/assets/img/notif-finale-' +
     (winners.length > 1 ? 'shared' : mine ? 'won' : 'lost') + '.jpg';
@@ -2589,7 +2640,7 @@ function renderFinale() {
     ? winners.join(', ') + ' делят победу.'
     : winners.length === 1
       ? (mine ? 'Твой Дом пережил жестокий век.' : 'Жестокий век не пощадил твой Дом.')
-      : 'Победитель не определён.';
+      : 'Победителя летописец не назвал.';
 }
 
 function renderVictory() {
@@ -2597,7 +2648,7 @@ function renderVictory() {
   if (!victory) return;
 
   const final = victory.status === 'FINISHED';
-  $('game-status').textContent = final ? 'ЗАВЕРШЕНА' : 'ИДЁТ';
+  $('game-status').textContent = final ? 'ОКОНЧЕН' : 'ИДЁТ';
   $('game-round').textContent =
     String(victory.round || 1) + ' / ' + String(victory.max_rounds || 6);
 
@@ -2620,23 +2671,21 @@ function renderVictory() {
       parts.push(
         exiled.length + ' Дом' +
         (exiled.length === 1 ? '' : exiled.length < 5 ? 'а' : 'ов') +
-        ' сейчас в Изгнании. Потеря всех земель не означает уничтожение Дома.'
+        ' ныне в изгнании. Потерять все земли ещё не значит сгинуть.'
       );
     }
     if (victory.scoring?.coverage === 'PARTIAL') {
       parts.push(
-        'Текущий online-счёт неполный: сейчас подключены только первые военные ОП. ' +
-        'Власть, Династия, центральный остров и секретная Амбиция ещё не мигрированы.'
+        'Слава пока считается лишь ратная: за битвы и столицы.'
       );
     }
     if (victory.online_adapter?.canonical_round_progression_connected === false) {
       parts.push(
-        'Раундовый цикл persistent-режима ещё не подключён к каноническому финишу.'
+        ''
       );
     } else {
       parts.push(daysGame()
-        ? 'Партия идёт в реальном времени шесть игровых дней и завершается сама. Доход приходит при смене дня. ' +
-          'Исход боя решают числа, кубиков нет. События и фаза Династии ещё не перенесены.'
+        ? 'Век длится шесть дней и кончается сам. Золото приходит с рассветом. Костей не мечут: решают мечи и воеводы.'
         : 'Раунд состоит из Дохода и трёх действий каждого Дома; партия завершается сама после 6-го раунда. ' +
           'События и фаза Династии ещё не перенесены.'
       );
@@ -2656,10 +2705,10 @@ function renderVictory() {
       (index + 1) + '. ' + escapeHtml(item.house) +
       '</span>' + exile + '</div>' +
       '<div><b>' + Number(item.victory_points || 0) +
-      ' ОП</b><div class="standing-meta">' +
+      ' славы</b><div class="standing-meta">' +
       Number(item.influence || 0) + ' влияния</div></div>' +
       '<div class="standing-meta">' +
-      Number(item.territories || 0) + ' терр.<br>' +
+      Number(item.territories || 0) + ' земель<br>' +
       Number(item.gold || 0) + ' зол.</div>' +
       '</div>';
   }).join('');
@@ -3258,8 +3307,8 @@ function renderEconomy() {
       : 'в начале раунда';
   if (!economy.next_income_at) {
     $('income-hint').textContent = daysGame()
-      ? 'Доход начисляется всем Домам при смене игрового дня. Формула дохода взята из правил настолки.'
-      : 'Доход начисляется всем Домам в начале каждого раунда. Формула дохода взята из правил настолки.';
+      ? 'Казначей обходит земли с каждым рассветом.'
+      : 'Казначей обходит земли в начале каждого круга.';
   }
 
   const select = $('manage-territory');
@@ -3278,30 +3327,30 @@ function renderEconomy() {
 
   const selected = economy.territories.find(t => t.id === managedTerritory);
   if (!selected) {
-    $('manage-info').textContent = 'Нет контролируемых территорий.';
+    $('manage-info').textContent = 'Под твоей рукой нет ни одной земли.';
   } else {
-    $('manage-info').textContent = `${selected.name}: ${selected.warriors} воинов${selected.fort ? ', крепость построена' : ''}.`;
+    $('manage-info').textContent = `${selected.name}: мечей ${selected.warriors}${selected.fort ? ', крепость стоит' : ''}.`;
   }
 
   const jobs = economy.jobs || [];
   if (!jobs.length) {
-    $('jobs').innerHTML = '<span class="muted">Нет строительства.</span>';
+    $('jobs').innerHTML = '<span class="muted">Мастера и вербовщики сидят без дела.</span>';
   } else {
     $('jobs').innerHTML = jobs.slice(0,8).map(job => {
       const cls = job.status.toLowerCase();
       const territory = territoryById(job.territory)?.name || job.territory;
       const label = job.type === 'RECRUIT'
-        ? `Найм ${job.warriors} воин.`
+        ? `Сбор ${job.warriors} ${warriorWord(Number(job.warriors))}`
         : 'Крепость';
       const pending = job.status === 'PENDING';
       const status = job.seized_by
         ? 'досталось Дому ' + job.seized_by
         : pending
-          ? (job.cancel_at ? 'отмена через ' + timeLeft(job.cancel_at) : timeLeft(job.due_at))
-          : job.status === 'CANCELLED' ? 'отменено, золото возвращено' : (STATUS_WORDS[job.status] || job.status);
+          ? (job.cancel_at ? 'гонец с отменой в пути: ' + timeLeft(job.cancel_at) : timeLeft(job.due_at))
+          : job.status === 'CANCELLED' ? 'отозвано, золото в казне' : (STATUS_WORDS[job.status] || job.status);
       const error = job.failure_reason ? `<div class="failed">${escapeHtml(job.failure_reason)}</div>` : '';
       const cancel = pending && !job.cancel_at
-        ? `<button class="job-cancel" data-cancel-job="${escapeHtml(job.id)}" title="Отмена займёт 10 секунд">Отменить</button>`
+        ? `<button class="job-cancel" data-cancel-job="${escapeHtml(job.id)}" title="Отмена займёт 10 секунд">Отозвать</button>`
         : '';
       return `<div class="job"><b>${escapeHtml(label)}</b> · ${escapeHtml(territory)}${cancel}<div class="${cls}">${escapeHtml(status)}</div>${error}</div>`;
     }).join('');
@@ -3313,7 +3362,7 @@ function renderEconomy() {
     ? 'Крепость уже построена'
     : selected?.isCapital
       ? 'В столице крепость запрещена'
-      : 'Построить крепость · 3 золота';
+      : 'Возвести крепость · 3 золота';
 }
 
 function availableCommandersAtOrigin() {
@@ -3380,17 +3429,17 @@ function renderSelection() {
     target = null;
     card.classList.remove('show');
     $('commander-row').style.display = 'none';
-    $('selection').textContent = 'Наблюдение за партией без управления Домом.';
-    $('guide-title').textContent = 'Режим наблюдателя';
-    $('guide-sub').textContent = 'Карта обновляется автоматически. Ты не можешь отдавать приказы или менять состояние партии.';
+    $('selection').textContent = 'Ты смотришь на век со стороны.';
+    $('guide-title').textContent = 'Ты здесь лишь зритель';
+    $('guide-sub').textContent = 'Карта живёт сама. Повелевать ты не можешь.';
     return;
   }
 
   if (!origin) {
     $('commander-row').style.display = 'none';
-    $('selection').textContent = '1. Выбери свою территорию с воинами.';
-    $('guide-title').textContent = '1. Выбери, откуда идти';
-    $('guide-sub').textContent = 'Светлым пунктиром обведены твои земли с воинами.';
+    $('selection').textContent = 'Укажи землю, где стоит твоя рать.';
+    $('guide-title').textContent = 'Откуда выступит рать?';
+    $('guide-sub').textContent = 'Светлой каймой обведены земли, где стоят твои воины.';
     card.classList.remove('show');
     return;
   }
@@ -3398,11 +3447,11 @@ function renderSelection() {
   const o = mapNodeById(origin);
   const own = warriorsAt(origin, house);
   renderCommanderChoice();
-  $('selection').textContent = `Откуда: ${o.name}. Доступно ${own} воинов.`;
+  $('selection').textContent = `Рать в земле ${o.name}: ${own} мечей.`;
 
   if (!target) {
-    $('guide-title').textContent = `2. Выбери, куда идти из ${o.name}`;
-    $('guide-sub').textContent = 'Синим отмечены земли, куда можно дойти.';
+    $('guide-title').textContent = `Куда идти из земли ${o.name}?`;
+    $('guide-sub').textContent = 'Синей каймой отмечены земли, куда есть дорога.';
     card.classList.remove('show');
     return;
   }
@@ -3448,13 +3497,13 @@ function renderSelection() {
 
   const going = Number($('warriors').value);
   $('route-meta').innerHTML =
-    (going >= max ? 'Вся армия: ' + max : 'Отряд: ' + going + ' из ' + max) +
+    (going >= max ? 'Вся рать: ' + max : 'Отряд: ' + going + ' из ' + max) +
     ' · ' + escapeHtml(modeName) +
     (hops > 1 ? ' · ' + hops + ' перех.' : '') +
     ' · ' + formatSpan(seconds * 1000);
   $('route-meta').title = routeNames;
-  $('guide-title').textContent = '3. Отдай приказ';
-  $('guide-sub').textContent = 'Идёт вся армия. Чтобы отправить часть, нажми «Разделить».';
+  $('guide-title').textContent = 'Повели выступать';
+  $('guide-sub').textContent = 'Идёт вся рать. Чтобы послать часть, вели «Разделить».';
   card.classList.add('show');
 }
 
@@ -3521,7 +3570,7 @@ async function sendOrder(confirmed = false) {
     a.warriors === warriors
   );
   if (!choices.length) {
-    alert('Такой приказ больше не является легальным.');
+    alert('Пока ты думал, дороги переменились. Повели заново.');
     await refresh();
     return;
   }
@@ -3542,7 +3591,7 @@ async function sendOrder(confirmed = false) {
   await refresh();
 }
 
-const STATUS_WORDS = { RESOLVED: 'выполнено', FAILED: 'не выполнено', PENDING: 'в пути' };
+const STATUS_WORDS = { RESOLVED: 'исполнено', FAILED: 'не сбылось', PENDING: 'в пути' };
 
 function countdown(order) {
   if (order.status !== 'PENDING') return STATUS_WORDS[order.status] || order.status;
@@ -3551,7 +3600,7 @@ function countdown(order) {
 
 function renderOrders() {
   if (isSpectator || !house) {
-    $('orders').innerHTML = '<span class="muted">Приказы скрыты в режиме наблюдателя.</span>';
+    $('orders').innerHTML = '<span class="muted">Зрителю чужие повеления не читают.</span>';
     return;
   }
   const orders = snapshot.game.orders
@@ -3560,7 +3609,7 @@ function renderOrders() {
     .reverse();
 
   if (!orders.length) {
-    $('orders').innerHTML = '<span class="muted">Нет приказов.</span>';
+    $('orders').innerHTML = '<span class="muted">Гонцы ждут твоего слова.</span>';
     return;
   }
 
@@ -3574,8 +3623,8 @@ function renderOrders() {
       : '';
     return `
       <div class="order">
-        <div><b>${escapeHtml(from)} -> ${escapeHtml(to)}</b></div>
-        <div>${a.warriors} воин(а) · ${Number(a.route_hops || Math.max(0,(a.path || []).length - 1))} участк. · ${Math.ceil(Number(order.duration_ms || 0) / 1000)} сек</div>
+        <div><b>${escapeHtml(from)} → ${escapeHtml(to)}</b></div>
+        <div>${a.warriors} ${warriorWord(Number(a.warriors))} · переходов: ${Number(a.route_hops || Math.max(0,(a.path || []).length - 1))}</div>
         <div class="${cls}">${escapeHtml(countdown(order))}</div>
         ${extra}
       </div>`;
@@ -3585,7 +3634,7 @@ function renderOrders() {
 function renderJournal() {
   const items = (snapshot.game.audit_log || []).slice(-18).reverse();
   if (!items.length) {
-    $('journal').textContent = 'Пока пусто.';
+    $('journal').textContent = 'Летописец ещё не обмакнул перо.';
     return;
   }
   $('journal').innerHTML = items.map(item => {
@@ -3799,7 +3848,7 @@ $('end-round').addEventListener('click', async () => {
   const mine = myRoundStatus();
   if (!mine || mine.done) return;
   if (mine.left > 0 && !confirm(
-    'Завершить раунд? Неиспользованные действия (' + mine.left + ') сгорят.'
+    'Закончить круг? Несделанные дела (' + mine.left + ') сгорят.'
   )) return;
   try {
     await api('/api/end-round', {
@@ -3809,7 +3858,7 @@ $('end-round').addEventListener('click', async () => {
     });
     await refresh();
   } catch (error) {
-    alert(error.message);
+    alert(sayError(error));
   }
 });
 
@@ -3838,7 +3887,7 @@ document.querySelectorAll('[data-recruit]').forEach(button => {
       });
       await refresh();
     } catch (error) {
-      alert(error.message);
+      alert(sayError(error));
     }
   });
 });
@@ -3858,7 +3907,7 @@ $('build-fort').addEventListener('click', async () => {
     });
     await refresh();
   } catch (error) {
-    alert(error.message);
+    alert(sayError(error));
   }
 });
 
@@ -3951,7 +4000,7 @@ $('jobs').addEventListener('click', async event => {
     });
     await refresh();
   } catch (error) {
-    alert(error.message);
+    alert(sayError(error));
     button.disabled = false;
   }
 });
@@ -4016,7 +4065,7 @@ refresh()
   .then(() => profileHeartbeat())
   .catch(error => {
     console.error(error);
-    alert(error.message);
+    alert(sayError(error));
   });
 
 setInterval(backgroundRefresh, 1500);

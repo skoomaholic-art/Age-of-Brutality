@@ -79,7 +79,14 @@ def main():
         boxes = boxes_blobs(alpha, int(parts[1])) if parts[0] == 'blobs' else boxes_grid(alpha, int(parts[1]), int(parts[2]))
         manifest[kind] = []
         for i, (x0, y0, x1, y1) in enumerate(boxes, 1):
-            im = Image.fromarray(px[y0:y1, x0:x1], 'RGBA')
+            cut = px[y0:y1, x0:x1].copy()
+            # стираем отдельные соринки вокруг детали
+            lab, n = ndimage.label(cut[..., 3] > 0)
+            if n > 1:
+                sizes = ndimage.sum(cut[..., 3] > 0, lab, range(1, n + 1))
+                for k, size in enumerate(sizes, 1):
+                    if size < max(400, sizes.max() * 0.02): cut[lab == k] = 0
+            im = Image.fromarray(cut, 'RGBA')
             w, h = max(1, round(im.width * scale)), max(1, round(im.height * scale))
             # файл вдвое крупнее, чем на холсте: портрет бывает увеличен
             im = im.resize((w * 2, h * 2), Image.LANCZOS).quantize(160, method=2)
