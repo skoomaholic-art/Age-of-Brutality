@@ -417,7 +417,21 @@
     @media (prefers-reduced-motion: reduce) { .live, .live .lb, .live .lhand { animation: none; } }
     .decision-card { position: relative; }
     .decision-herald { position: absolute; right: 26px; top: 26px; width: 92px; pointer-events: none; filter: drop-shadow(2px 3px 0 rgba(43,27,18,.45)); }
-    .lens-glass .live { width: 66%; margin: 9% auto 0 12%; }
+    .lens { width: 290px; }
+    .lens-glass { width: 250px; height: 250px; position: relative; }
+    .lens-note { max-width: 290px; }
+    .troop { position: absolute; inset: 0; }
+    .troop .man { position: absolute; bottom: -6%; transform-origin: 50% 100%; animation: man-rest 3.8s ease-in-out infinite; }
+    .troop.marching .man { animation: man-march .62s ease-in-out infinite; }
+    .troop .man > img { display: block; width: 100%; }
+    .troop .man .face { position: absolute; }
+    .troop .man .face img { position: absolute; display: block; }
+    .troop .man .face .me { left: 4%; top: 22%; width: 92%; }
+    .troop .man .face .mm { left: 30%; top: 62%; width: 46%; }
+    .troop .live { position: absolute; left: 3%; bottom: -5%; width: 46%; z-index: 3; }
+    @keyframes man-march { 0%, 100% { transform: translateY(0) rotate(-1.6deg); } 50% { transform: translateY(-3.5%) rotate(1.6deg); } }
+    @keyframes man-rest { 0%, 100% { transform: rotate(-.6deg); } 50% { transform: rotate(.8deg) translateY(-.6%); } }
+    @media (prefers-reduced-motion: reduce) { .troop .man { animation: none !important; } }
     .sub-tabs { display: flex; border-bottom: 1.5px solid var(--ink); margin: 2px 2px 0; }
     .sub-tab { flex: 1; border: 0; border-radius: 0; box-shadow: none; background: transparent; padding: 7px 8px; font-family: Kurale, serif; font-size: 15px; }
     .sub-sex { flex: 1; border: 0; border-radius: 0; box-shadow: none; background: transparent; padding: 6px; font-family: Kurale, serif; font-size: 16px; }
@@ -2042,6 +2056,29 @@ setInterval(() => {
   });
 }, 140);
 
+// The men of a host as the glass shows them: up to three warriors, and their
+// commander's head in front if they have one.
+const SOLDIER_FACE = { 1: [47.3, 28.3, 14.7, 6.1], 2: [44.5, 33.1, 11.7, 6.0], 3: [29.5, 25.3, 15.8, 6.5] };
+
+function troopScene(count, bust, moving, mood) {
+  const men = Math.max(1, Math.min(3, count));
+  const spots = bust
+    ? [[46, 44], [66, 40], [30, 36]]
+    : men === 1 ? [[30, 46]] : men === 2 ? [[12, 44], [50, 44]] : [[2, 40], [32, 44], [62, 38]];
+  const eyes = mood === 'sad' ? 5 : moving ? 6 : 1;
+  const mouth = mood === 'sad' ? 8 : moving ? 6 : 1;
+  let html = '';
+  for (let i = men - 1; i >= 0; i -= 1) {
+    const kind = 1 + ((count + i) % 3);
+    const f = SOLDIER_FACE[kind];
+    html += '<div class="man" style="left:' + spots[i][0] + '%;width:' + spots[i][1] + '%;z-index:' + (2 - (i % 2)) + ';animation-delay:-' + (i * 0.21).toFixed(2) + 's">' +
+      '<img alt="" src="/assets/img/live-soldier-' + kind + '.png">' +
+      '<div class="face" style="left:' + f[0] + '%;top:' + f[1] + '%;width:' + f[2] + '%;height:' + f[3] + '%">' +
+      '<img class="me" alt="" src="/assets/img/live-eyes-' + eyes + '.png"><img class="mm" alt="" src="/assets/img/live-mouth-' + mouth + '.png"></div></div>';
+  }
+  return '<div class="troop' + (moving ? ' marching' : '') + '">' + html + (bust || '') + '</div>';
+}
+
 // The herald who brings a notice: his face and his gesture fit the news.
 function heraldFor(art) {
   if (/battle-won|capital-taken|neutral-taken|fort-built|recruit-done|deal-made|release-|commander-returned|marriage|finale-won|march-arrived/.test(art)) return ['glad', 'up'];
@@ -2088,9 +2125,9 @@ function lensFor(node) {
       : (node.dataset.lensHouse ? 'в гостях: ' : 'стоит: ') + place
   ];
   const slug = abandonedHouses()[owner] ? 'abandoned' : HOUSE_SLUGS[owner];
-  const head = commander ? (commander.role === 'RULER' ? 1 : 2) : 3 + (count % 3);
-  return { art, title: 'Дом ' + owner, lines, moving: Boolean(moving),
-    bust: liveBust(head, weak ? 'sad' : moving ? 'angry' : 'calm', moving ? 'forward' : null, moving ? 'marching' : '') };
+  const mood = weak ? 'sad' : moving ? 'angry' : 'calm';
+  const bust = commander ? liveBust(commander.role === 'RULER' ? 1 : 2, mood, moving ? 'forward' : null, moving ? 'marching' : '') : '';
+  return { art, title: 'Дом ' + owner, lines, moving: Boolean(moving), bust: troopScene(count, bust, Boolean(moving), mood) };
 }
 
 function setupLens() {
@@ -2114,7 +2151,7 @@ function setupLens() {
     $('lens-art').className = view.host ? 'host' + (view.moving ? ' marching' : '') : '';
     $('lens-note').innerHTML = '<b>' + escapeHtml(view.title) + '</b>' + view.lines.map(escapeHtml).join('<br>');
     lens.classList.add('show');
-    const w = 230, h = 260;
+    const w = 290, h = 330;
     let x = event.clientX + 22;
     let y = event.clientY - h / 2;
     if (x + w > innerWidth - 8) x = event.clientX - w - 22;

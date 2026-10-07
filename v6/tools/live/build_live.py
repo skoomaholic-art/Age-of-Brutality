@@ -63,3 +63,16 @@ for i, b in enumerate(blobs(parts, (265, 565), 2, 4000), 1):
         sizes = ndimage.sum(cut[..., 3] > 0, lab, range(1, n + 1)); cut[lab != (int(np.argmax(sizes)) + 1)] = 0
     im = Image.fromarray(cut, 'RGBA'); im.crop(im.getbbox()).save(os.path.join(IMG, f'live-hand-{i}.png'), optimize=True)
 print('done')
+
+# воины без лиц для линзы
+squad = load('squad.png')
+SOLDIERS = [((480, 336, 790, 1075), (623, 544, 667, 589)), ((790, 262, 1160, 1075), (953, 532, 996, 581)), ((1145, 368, 1440, 1070), (1232, 545, 1278, 590))]
+for i, (b, f) in enumerate(SOLDIERS, 1):
+    cut = squad[b[1]:b[3], b[0]:b[2]].copy()
+    lab, n = ndimage.label(cut[..., 3] > 0)
+    if n > 1:
+        sizes = ndimage.sum(cut[..., 3] > 0, lab, range(1, n + 1)); cut[lab != (int(np.argmax(sizes)) + 1)] = 0
+    im = Image.fromarray(cut, 'RGBA'); box = im.getbbox(); im = im.crop(box)
+    fx, fy = f[0] - b[0] - box[0], f[1] - b[1] - box[1]
+    print('soldier', i, im.size, 'face %', round(fx / im.width * 100, 1), round(fy / im.height * 100, 1), round((f[2] - f[0]) / im.width * 100, 1), round((f[3] - f[1]) / im.height * 100, 1))
+    im.resize((im.width // 2, im.height // 2), Image.LANCZOS).save(os.path.join(IMG, f'live-soldier-{i}.png'), optimize=True)
