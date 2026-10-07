@@ -34,6 +34,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run V6 checks before deploying
+        run: |
+          set -euo pipefail
+          npm run check
+          node tools/check-browser-html.mjs
+
       - name: Require dedicated game cloud config
         run: |
           set -euo pipefail
@@ -112,7 +122,7 @@ jobs:
             --memory=256Mi \
             --concurrency=40 \
             --cpu-throttling \
-            --set-env-vars="AOB_FIRESTORE_DATABASE=${FIRESTORE_DATABASE},AOB_GAME_ID=prototype-1" \
+            --set-env-vars="AOB_FIRESTORE_DATABASE=${FIRESTORE_DATABASE},AOB_GAME_ID=prototype-1,AOB_BUILD_SHA=${GITHUB_SHA}" \
             --quiet
 
           URL="$(gcloud run services describe "${SERVICE}" --project="${PROJECT_ID}" --region="${REGION}" --format='value(status.url)')"

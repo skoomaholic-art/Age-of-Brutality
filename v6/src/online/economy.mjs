@@ -11,7 +11,10 @@ export function normalizeOnlineEconomy(game, nowMs = Date.now(), timing = ONLINE
   const next = structuredClone(game);
   if (!Array.isArray(next.jobs)) next.jobs = [];
   if (!Number.isInteger(next.next_job_id)) next.next_job_id = 1;
-  if (!next.next_income_at) {
+  // Games played in rounds are paid at the start of each round (see rounds.mjs).
+  if (next.rounds?.enabled) {
+    next.next_income_at = null;
+  } else if (!next.next_income_at) {
     next.next_income_at = new Date(nowMs + timing.incomeIntervalMs).toISOString();
   }
   return next;
@@ -220,15 +223,31 @@ export function processEconomy(game, map, constants, nowMs = Date.now(), timing 
   const next = normalizeOnlineEconomy(game, nowMs, timing);
   let changed = false;
 
-  while (Date.parse(next.next_income_at) <= nowMs) {
+  if (!next.rounds?.enabled && Date.parse(next.next_income_at) <= nowMs) {
+    // Every pulse missed while nobody was playing is paid in one step. Ownership
+    // cannot change between those pulses, so the total equals replaying them one by
+    // one, but replaying thousands of them after days of idling blocked the server
+    // and produced more writes than one save can hold.
+    const firstAt = Date.parse(next.next_income_at);
+    const pulses = Math.floor((nowMs - firstAt) / timing.incomeIntervalMs) + 1;
     const result = applyIncomePulse(next.state, map, constants);
     next.state = result.state;
-    next.state.journal.push({
+
+    const gains = {};
+    for (const [house, gain] of Object.entries(result.gains)) {
+      next.state.houses[house].gold += gain.gold * (pulses - 1);
+      next.state.houses[house].influence += gain.influence * (pulses - 1);
+      gains[house] = { gold: gain.gold * pulses, influence: gain.influence * pulses };
+    }
+
+    const entry = {
       kind: 'ONLINE_INCOME_PULSE',
-      at: next.next_income_at,
-      gains: result.gains
-    });
-    next.next_income_at = new Date(Date.parse(next.next_income_at) + timing.incomeIntervalMs).toISOString();
+      at: new Date(firstAt + (pulses - 1) * timing.incomeIntervalMs).toISOString(),
+      gains
+    };
+    if (pulses > 1) entry.pulses = pulses;
+    next.state.journal.push(entry);
+    next.next_income_at = new Date(firstAt + pulses * timing.incomeIntervalMs).toISOString();
     changed = true;
   }
 

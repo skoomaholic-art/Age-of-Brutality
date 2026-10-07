@@ -193,6 +193,11 @@
     .standing-exile { color:#d3a16e; font-size:9px; }
     .status-warning { margin-top:8px; padding:8px; border:1px solid #5b4a2b; border-radius:8px; background:#17140e; font-size:9px; line-height:1.45; color:#d8c49a; }
     .status-final { border-color:#46634d; background:#101711; color:#a8d9b1; }
+    .round-houses { display:grid; gap:3px; margin-top:8px; font-size:10px; }
+    .round-house { display:flex; justify-content:space-between; gap:8px; color:#aab4b9; }
+    .round-house.mine { color:#f0e6cf; font-weight:600; }
+    .round-house.done { color:#6f7b81; }
+    .round-pips { letter-spacing:2px; white-space:nowrap; }
     .character-list { display:grid; gap:8px; }
     .character-card { border:1px solid #2e3940; border-radius:10px; padding:10px; background:#0f1519; }
     .character-top { display:flex; justify-content:space-between; gap:8px; align-items:flex-start; }
@@ -263,6 +268,7 @@
     <button id="reset">Новая партия</button>
     <button id="back-menu">Вернуться в меню</button>
     <div id="save-status" class="save-status">Сохранений ещё нет</div>
+    <div id="build-info" class="save-status" title="Какая сборка сейчас развёрнута"></div>
   </div>
 </header>
 
@@ -321,6 +327,14 @@
         <div class="game-status-cell"><span>Статус</span><b id="game-status">...</b></div>
         <div class="game-status-cell"><span>Раунд</span><b id="game-round">...</b></div>
       </div>
+      <div id="round-box" style="display:none">
+        <div class="game-status-grid">
+          <div class="game-status-cell"><span>Действия Дома</span><b id="round-actions">...</b></div>
+          <div class="game-status-cell"><span>До конца раунда</span><b id="round-timer">...</b></div>
+        </div>
+        <button id="end-round" class="primary" style="width:100%">Завершить раунд</button>
+        <div id="round-houses" class="round-houses"></div>
+      </div>
       <div id="game-status-note" class="status-warning"></div>
       <div id="standings" class="standings"></div>
     </div>
@@ -343,7 +357,7 @@
       <h2>Экономика</h2>
       <div class="economy-line"><span class="muted">Доход за цикл</span><b id="income-rate">+0 золота</b></div>
       <div class="economy-line"><span class="muted">Следующий доход</span><b id="income-countdown">...</b></div>
-      <div class="tiny">Тестовый онлайн-цикл: каждые 2 минуты. Формула дохода взята из правил настолки.</div>
+      <div id="income-hint" class="tiny">Тестовый онлайн-цикл: каждые 2 минуты. Формула дохода взята из правил настолки.</div>
       <div style="margin-top:10px">
         <label>
           <span class="muted">Управлять территорией</span>
@@ -729,6 +743,65 @@ function renderCharacters() {
   });
 }
 
+function myRoundStatus() {
+  return snapshot?.rounds?.houses?.find(item => item.house === house) || null;
+}
+
+function gameFinished() {
+  return snapshot?.game?.lifecycle?.status === 'FINISHED';
+}
+
+// Returns a message when the House cannot act in this round, otherwise null.
+function roundBlockReason() {
+  const rounds = snapshot?.rounds;
+  if (!rounds) return null;
+  if (rounds.finished) return 'Партия завершена.';
+  const mine = myRoundStatus();
+  if (!mine) return null;
+  if (mine.passed) return 'Ты уже завершил этот раунд. Ждём остальные Дома.';
+  if (mine.left < 1) return 'В этом раунде не осталось действий. Ждём остальные Дома.';
+  return null;
+}
+
+function renderRounds() {
+  const rounds = snapshot?.rounds;
+  const box = $('round-box');
+  if (!rounds) {
+    box.style.display = 'none';
+    return;
+  }
+  box.style.display = '';
+
+  const mine = myRoundStatus();
+  $('round-actions').textContent = !mine
+    ? '—'
+    : mine.passed
+      ? 'раунд завершён'
+      : mine.left + ' из ' + rounds.actions_per_round;
+  $('round-timer').textContent = rounds.finished
+    ? '—'
+    : rounds.deadline_at
+      ? secondsLeft(rounds.deadline_at) + ' сек'
+      : 'без таймера';
+
+  const button = $('end-round');
+  button.style.display = !mine || rounds.finished || isSpectator ? 'none' : '';
+  button.disabled = Boolean(mine?.done);
+  button.textContent = mine?.done ? 'Ждём остальные Дома…' : 'Завершить раунд';
+
+  $('round-houses').innerHTML = rounds.houses.map(item => {
+    const pips = '●'.repeat(item.used) +
+      '○'.repeat(Math.max(0, rounds.actions_per_round - item.used));
+    const cls = 'round-house' +
+      (item.house === house ? ' mine' : '') +
+      (item.done ? ' done' : '');
+    const tag = item.ai ? ' · ИИ' : '';
+    const state = item.passed ? ' · готов' : '';
+    return '<div class="' + cls + '"><span>' + escapeHtml(item.house) + tag + state +
+      '</span><span class="round-pips">' + pips + '</span></div>';
+  }).join('');
+}
+
 function renderVictory() {
   const victory = snapshot?.victory;
   if (!victory) return;
@@ -767,6 +840,11 @@ function renderVictory() {
     if (victory.online_adapter?.canonical_round_progression_connected === false) {
       parts.push(
         'Раундовый цикл persistent-режима ещё не подключён к каноническому финишу.'
+      );
+    } else {
+      parts.push(
+        'Раунд состоит из Дохода и трёх действий каждого Дома; партия завершается сама после 6-го раунда. ' +
+        'События и фаза Династии ещё не перенесены.'
       );
     }
     note.textContent = parts.join(' ');
@@ -1082,7 +1160,13 @@ function renderEconomy() {
   const gain = economy.income;
   const influence = gain.influence ? ` +${gain.influence} влияния` : '';
   $('income-rate').textContent = `+${gain.gold} золота${influence}`;
-  $('income-countdown').textContent = `${secondsLeft(economy.next_income_at)} сек`;
+  $('income-countdown').textContent = economy.next_income_at
+    ? `${secondsLeft(economy.next_income_at)} сек`
+    : 'в начале раунда';
+  if (!economy.next_income_at) {
+    $('income-hint').textContent =
+      'Доход начисляется всем Домам в начале каждого раунда. Формула дохода взята из правил настолки.';
+  }
 
   const select = $('manage-territory');
   const previous = managedTerritory;
@@ -1296,6 +1380,11 @@ async function selectTerritory(id) {
 
 async function sendOrder() {
   if (!origin || !target) return;
+  const blocked = roundBlockReason();
+  if (blocked) {
+    alert(blocked);
+    return;
+  }
   const warriors = Number($('warriors').value);
   const choices = legal.filter(a =>
     a.from === origin &&
@@ -1383,6 +1472,12 @@ async function refresh() {
 
   if (!bootstrap) {
     bootstrap = await api('/api/bootstrap');
+    const build = bootstrap.build || {};
+    $('build-info').textContent = build.commit
+      ? 'сборка ' + String(build.commit).slice(0, 7)
+      : build.revision
+        ? 'ревизия ' + build.revision
+        : '';
   }
 
   const live = await api('/api/state');
@@ -1396,8 +1491,9 @@ async function refresh() {
 
   if (playerBound) {
     const me = snapshot.lobby?.current_player;
+    const status = snapshot.game.lifecycle?.status;
     if (
-      snapshot.game.lifecycle?.status !== 'RUNNING' ||
+      (status !== 'RUNNING' && status !== 'FINISHED') ||
       !me
     ) {
       location.href = '/lobby.html?game=' + encodeURIComponent(scopedGameId);
@@ -1483,10 +1579,19 @@ async function refresh() {
     select.value = house;
   }
 
-  if (isSpectator) {
+  if (isSpectator || gameFinished()) {
+    // A finished game is read-only: the final map and standings stay on screen.
     legal = [];
     economy = null;
     characterData = null;
+    if (gameFinished()) {
+      origin = null;
+      target = null;
+      $('characters-panel').style.display = 'none';
+      $('economy-panel').style.display = 'none';
+      $('march-panel').style.display = 'none';
+      $('route-card').classList.remove('show');
+    }
   } else {
     await Promise.all([
       loadLegal(),
@@ -1505,6 +1610,7 @@ async function refresh() {
   }
 
   renderVictory();
+  renderRounds();
   renderHouse();
   renderCharacters();
   renderEconomy();
@@ -1524,6 +1630,24 @@ $('house').addEventListener('change', async event => {
   await refresh();
 });
 
+$('end-round').addEventListener('click', async () => {
+  const mine = myRoundStatus();
+  if (!mine || mine.done) return;
+  if (mine.left > 0 && !confirm(
+    'Завершить раунд? Неиспользованные действия (' + mine.left + ') сгорят.'
+  )) return;
+  try {
+    await api('/api/end-round', {
+      method: 'POST',
+      headers: {'content-type':'application/json'},
+      body: JSON.stringify({ house })
+    });
+    await refresh();
+  } catch (error) {
+    alert(error.message);
+  }
+});
+
 $('manage-territory').addEventListener('change', event => {
   managedTerritory = event.target.value;
   renderEconomy();
@@ -1532,6 +1656,11 @@ $('manage-territory').addEventListener('change', event => {
 document.querySelectorAll('[data-recruit]').forEach(button => {
   button.addEventListener('click', async () => {
     if (!managedTerritory) return;
+    const blocked = roundBlockReason();
+    if (blocked) {
+      alert(blocked);
+      return;
+    }
     try {
       await api('/api/recruit', {
         method: 'POST',
@@ -1551,6 +1680,11 @@ document.querySelectorAll('[data-recruit]').forEach(button => {
 
 $('build-fort').addEventListener('click', async () => {
   if (!managedTerritory) return;
+  const blocked = roundBlockReason();
+  if (blocked) {
+    alert(blocked);
+    return;
+  }
   try {
     await api('/api/fort', {
       method: 'POST',

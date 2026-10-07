@@ -76,12 +76,58 @@ export function journalEntryToAudit(entry, map, game) {
   }
 
   if (entry.kind === 'GAME_FINISHED') {
+    const winners = Array.isArray(entry.winners) ? entry.winners : [];
+    const outcome = winners.length === 1
+      ? ` Победил Дом ${winners[0]}.`
+      : winners.length > 1
+        ? ` Совместная победа: ${winners.join(', ')}.`
+        : '';
     return {
       ...base,
-      message: 'Партия завершена.',
+      message: `Партия завершена.${outcome}`,
       details: {
         game_id: entry.game_id || game.id,
         reason: entry.reason || null,
+        winners,
+        at: entry.at || null
+      }
+    };
+  }
+
+  if (entry.kind === 'ROUND_STARTED') {
+    return {
+      ...base,
+      message: `Раунд ${entry.round} из ${entry.max_rounds} начался. Доход начислен всем Домам.`,
+      details: {
+        round: entry.round,
+        deadline_at: entry.deadline_at || null,
+        gains: entry.gains,
+        at: entry.at || null
+      }
+    };
+  }
+
+  if (entry.kind === 'ROUND_PASSED') {
+    return {
+      ...base,
+      message: `${entry.house}: раунд ${entry.round} завершён, использовано действий: ${entry.actions_used}.`,
+      details: {
+        house: entry.house,
+        round: entry.round,
+        actions_used: entry.actions_used,
+        at: entry.at || null
+      }
+    };
+  }
+
+  if (entry.kind === 'ROUND_ACTION_REFUNDED') {
+    return {
+      ...base,
+      message: `${entry.house}: действие возвращено, приказ ${entry.source_id} не выполнен.`,
+      details: {
+        house: entry.house,
+        round: entry.round,
+        source_id: entry.source_id,
         at: entry.at || null
       }
     };
@@ -348,10 +394,13 @@ export function journalEntryToAudit(entry, map, game) {
   if (entry.kind === 'ONLINE_INCOME_PULSE') {
     return {
       ...base,
-      message: 'Начислен доход всем Домам.',
+      message: Number(entry.pulses) > 1
+        ? `Начислен доход всем Домам за ${entry.pulses} пропущенных циклов.`
+        : 'Начислен доход всем Домам.',
       details: {
         at: entry.at,
-        gains: entry.gains
+        gains: entry.gains,
+        pulses: Number(entry.pulses || 1)
       }
     };
   }
