@@ -232,7 +232,7 @@
     /* The chronicler's glass: a closer look at an army under the cursor. */
     .army-token { cursor: help; pointer-events: auto; }
     .npc { cursor: help; }
-    .npc image { filter: drop-shadow(0 .5px .4px rgba(43,27,18,.5)); }
+    .npc .shield { stroke: #2b1b12; stroke-width: .75; stroke-linejoin: round; }
     .army-figure { transform-box: fill-box; transform-origin: 50% 100%; animation: army-rest 4.5s ease-in-out infinite; }
     .army-figure.marching { animation: army-march .7s ease-in-out infinite; }
     @keyframes army-march { 0%, 100% { transform: translateY(0) rotate(-1.2deg); } 50% { transform: translateY(-.7px) rotate(1.2deg); } }
@@ -1772,7 +1772,7 @@ function buildWayfarers() {
       path.push(options[Math.floor(random() * options.length)]);
     }
     if (path.length < 2) continue;
-    out.push({ kind: k % WAYFARERS.length, line: Math.floor(random() * 3), path: [...path, ...path.slice(1, -1).reverse()], offset: random(), rest: 0.25 + random() * 0.2 });
+    out.push({ kind: k % WAYFARERS.length, line: Math.floor(random() * 3), path: [...path, ...path.slice(1, -1).reverse()], offset: random(), rest: 0.45 + random() * 0.2 });
   }
   return out;
 }
@@ -1802,9 +1802,10 @@ function renderWayfarers() {
     if (!a || !b) return '';
     const x = a.x + (b.x - a.x) * now.along + (now.resting ? -9 : 0);
     const y = a.y + (b.y - a.y) * now.along + (now.resting ? 9 : 0);
-    const flip = b.x > a.x ? -1 : 1;
-    return `<g class="npc" data-npc="${index}" transform="translate(${x.toFixed(1)} ${y.toFixed(1)})"><g transform="scale(${flip} 1)">` +
-      `<image href="/assets/img/npc-${WAYFARERS[band.kind].art}.png" x="-5" y="-8.5" width="10" height="10"></image></g></g>`;
+    // On the map they are a plain white standard; who they are shows in the glass.
+    return `<g class="npc" data-npc="${index}" transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(.8)">` +
+      '<path class="shield" d="M-4.8 -5.4H4.8V.8Q4.8 4.9 0 6.4Q-4.8 4.9 -4.8 .8Z" fill="#f7f0dc"></path>' +
+      '<path d="M-3.4 -4H3.4" fill="none" stroke="rgba(43,27,18,.25)" stroke-width=".6"></path></g>';
   }).join('');
 }
 
@@ -1814,7 +1815,7 @@ function wayfarerLens(index) {
   const now = wayfarerNow(band);
   const kind = WAYFARERS[band.kind];
   const text = kind.lines[band.line].replace('{a}', mapNodeById(now.from)?.name || '').replace('{b}', mapNodeById(now.to)?.name || '');
-  return { title: kind.name, lines: [text, now.resting ? 'Сейчас отдыхают у дороги.' : 'В пути.'], host: '/assets/img/npc-' + kind.art + '.png', moving: !now.resting };
+  return { title: kind.name, lines: [text, now.resting ? 'Остановились в ' + (mapNodeById(now.from)?.name || '') + ', скоро двинутся дальше.' : 'В пути.'], host: '/assets/img/npc-' + kind.art + '.png', moving: !now.resting };
 }
 
 // ---------- the chronicler's glass ----------
