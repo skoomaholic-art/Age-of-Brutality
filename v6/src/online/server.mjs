@@ -1348,7 +1348,7 @@ async function handleGameApi(req, res, url, ctx, subpath) {
         const name = String(body.name || '').replace(/\s+/g, ' ').trim().slice(0, 24);
         if (name.length < 2) throw new Error('имя должно быть не короче двух букв');
         const look = {};
-        for (const key of ['head', 'eyes', 'brows', 'nose', 'mouth', 'beard', 'hair', 'hat', 'clothes']) {
+        for (const key of ['sex', 'head', 'eyes', 'brows', 'nose', 'mouth', 'beard', 'hair', 'hat', 'clothes']) {
           const value = Number(body.appearance?.[key]);
           look[key] = Number.isInteger(value) && value >= 0 && value <= 40 ? value : 0;
         }
