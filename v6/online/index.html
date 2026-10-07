@@ -166,6 +166,42 @@
     .pennant-pole { stroke: #2b1b12; stroke-width: .55; }
     .pennant { stroke: #2b1b12; stroke-width: .4; stroke-linejoin: round; }
 
+    /* Miniatures from medieval manuscripts, framed like the map. */
+    .miniature { margin: 0; }
+    .miniature img {
+      display: block; width: 100%; height: auto;
+      border: 1.5px solid var(--ink);
+      box-shadow: 0 0 0 2px var(--white-lead), 0 0 0 3px var(--ink);
+    }
+    .miniature figcaption { margin-top: 8px; font-style: italic; color: var(--ink-soft); font-size: 13px; text-align: center; }
+    #round-wait { display: none; margin: 10px 3px 6px; }
+    #round-wait.show { display: block; }
+    #round-wait img { width: 58%; margin: 0 auto; }
+
+    .battle-card {
+      position: absolute; z-index: 5; left: 12px; bottom: 12px; width: min(330px, calc(100% - 24px));
+      display: none; padding: 10px; cursor: pointer;
+      border: 1.5px solid var(--ink); background: rgba(242,230,200,.97);
+      box-shadow: 4px 4px 0 rgba(43,27,18,.35);
+    }
+    .battle-card.show { display: block; }
+    .battle-card h3 { margin: 9px 0 2px; font-family: Kurale, Alegreya, serif; font-weight: 400; font-size: 19px; color: var(--vermilion-deep); }
+    .battle-card p { margin: 0; font-size: 13.5px; line-height: 1.35; }
+
+    .finale {
+      position: absolute; inset: 0; z-index: 8; display: none; place-items: center;
+      padding: 16px; background: rgba(43,27,18,.5);
+    }
+    .finale.show { display: grid; }
+    .finale-card {
+      width: min(380px, 100%); padding: 16px; text-align: center;
+      border: 1.5px solid var(--ink); outline: 1px solid var(--vermilion); outline-offset: -6px;
+      background: var(--vellum); box-shadow: 6px 6px 0 rgba(43,27,18,.45);
+    }
+    .finale-card .miniature img { width: 72%; margin: 0 auto; }
+    .finale-card h3 { margin: 14px 0 2px; font-family: Kurale, Alegreya, serif; font-weight: 400; font-size: 28px; line-height: 1.1; color: var(--vermilion-deep); }
+    .finale-card p { margin: 0 0 14px; font-size: 16px; }
+
     .map-zoom { position: absolute; z-index: 6; right: 12px; top: 12px; display: grid; gap: 5px; }
     .map-zoom button { width: 34px; height: 34px; padding: 0; font-size: 19px; line-height: 1; }
     .map-guide {
@@ -346,6 +382,19 @@
         </div>
       </div>
       <svg id="map" viewBox="40 30 760 490" role="img" aria-label="Карта Жестокого Века"></svg>
+      <div id="battle-card" class="battle-card" role="status" title="Нажми, чтобы закрыть">
+        <figure class="miniature"><img src="/assets/img/battle.jpg" alt="" width="560" height="356"></figure>
+        <h3>Битва</h3>
+        <p id="battle-text"></p>
+      </div>
+      <div id="finale" class="finale">
+        <div class="finale-card">
+          <figure class="miniature"><img src="/assets/img/finale.jpg" alt="" width="560" height="611"></figure>
+          <h3 id="finale-title">Партия завершена</h3>
+          <p id="finale-text"></p>
+          <button id="finale-close" class="primary">Посмотреть карту</button>
+        </div>
+      </div>
       <div class="map-zoom" aria-label="Масштаб карты">
         <button id="zoom-in" title="Приблизить" aria-label="Приблизить">+</button>
         <button id="zoom-out" title="Отдалить" aria-label="Отдалить">−</button>
@@ -398,6 +447,10 @@
           <div class="game-status-cell"><span>До конца раунда</span><b id="round-timer">...</b></div>
         </div>
         <button id="end-round" class="primary" style="width:100%">Завершить раунд</button>
+        <figure id="round-wait" class="miniature">
+          <img src="/assets/img/waiting.jpg" alt="" width="560" height="564" loading="lazy">
+          <figcaption>Остальные Дома ещё думают.</figcaption>
+        </figure>
         <div id="round-houses" class="round-houses"></div>
       </div>
       <div id="game-status-note" class="status-warning"></div>
@@ -854,6 +907,11 @@ function renderRounds() {
   button.disabled = Boolean(mine?.done);
   button.textContent = mine?.done ? 'Ждём остальные Дома…' : 'Завершить раунд';
 
+  $('round-wait').classList.toggle(
+    'show',
+    Boolean(mine?.done) && !rounds.finished && !isSpectator
+  );
+
   $('round-houses').innerHTML = rounds.houses.map(item => {
     const pips = '●'.repeat(item.used) +
       '○'.repeat(Math.max(0, rounds.actions_per_round - item.used));
@@ -865,6 +923,53 @@ function renderRounds() {
     return '<div class="' + cls + '"><span>' + escapeHtml(item.house) + tag + state +
       '</span><span class="round-pips">' + pips + '</span></div>';
   }).join('');
+}
+
+// Shows a battle miniature when a new battle is reported. Battles already in
+// the journal when the page opens are history and stay quiet.
+let lastBattleSeq = null;
+let battleTimer = null;
+
+function announceBattles() {
+  const battles = (snapshot?.game?.audit_log || []).filter(item => item.type === 'BATTLE');
+  const newest = battles.reduce((max, item) => Math.max(max, Number(item.seq || 0)), 0);
+  if (lastBattleSeq === null) {
+    lastBattleSeq = newest;
+    return;
+  }
+  if (newest <= lastBattleSeq) return;
+  const fresh = battles.filter(item => Number(item.seq || 0) > lastBattleSeq);
+  lastBattleSeq = newest;
+  // A battle of the player's own House matters most; otherwise show the latest one.
+  const own = fresh.filter(item =>
+    item.details?.attacker === house || item.details?.defender === house
+  );
+  const shown = (own.length ? own : fresh).slice(-1)[0];
+  $('battle-text').textContent = String(shown.message || '').replace(/^Битва:\s*/, '');
+  $('battle-card').classList.add('show');
+  clearTimeout(battleTimer);
+  battleTimer = setTimeout(() => $('battle-card').classList.remove('show'), 10000);
+}
+
+let finaleDismissed = false;
+
+function renderFinale() {
+  const victory = snapshot?.victory;
+  const final = victory?.status === 'FINISHED';
+  $('finale').classList.toggle('show', final && !finaleDismissed);
+  if (!final) return;
+  const winners = victory.winners || [];
+  $('finale-title').textContent = winners.length === 1
+    ? 'Победил Дом ' + winners[0]
+    : winners.length > 1
+      ? 'Совместная победа'
+      : 'Партия завершена';
+  const mine = winners.includes(house);
+  $('finale-text').textContent = winners.length > 1
+    ? winners.join(', ') + ' делят победу.'
+    : winners.length === 1
+      ? (mine ? 'Твой Дом пережил жестокий век.' : 'Жестокий век не пощадил твой Дом.')
+      : 'Победитель не определён.';
 }
 
 function renderVictory() {
@@ -1809,6 +1914,7 @@ async function refresh() {
       $('economy-panel').style.display = 'none';
       $('march-panel').style.display = 'none';
       $('route-card').classList.remove('show');
+      $('map-guide').style.display = 'none';
     }
   } else {
     await Promise.all([
@@ -1828,6 +1934,8 @@ async function refresh() {
   }
 
   renderVictory();
+  renderFinale();
+  announceBattles();
   renderRounds();
   renderHouse();
   renderCharacters();
@@ -1846,6 +1954,12 @@ $('house').addEventListener('change', async event => {
   target = null;
   managedTerritory = null;
   await refresh();
+});
+
+$('battle-card').addEventListener('click', () => $('battle-card').classList.remove('show'));
+$('finale-close').addEventListener('click', () => {
+  finaleDismissed = true;
+  $('finale').classList.remove('show');
 });
 
 $('end-round').addEventListener('click', async () => {

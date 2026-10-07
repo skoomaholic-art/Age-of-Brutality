@@ -1347,9 +1347,9 @@ const server = http.createServer(async (req, res) => {
       return text(res, 200, html, 'text/html; charset=utf-8');
     }
 
-    // Static assets: self-hosted fonts and the painted map. Flat file names in two
-    // known folders only, so no path can escape them.
-    const asset = url.pathname.match(/^\/assets\/(fonts|map)\/([a-z0-9][a-z0-9.-]*\.(woff2|svg|json))$/);
+    // Static assets: self-hosted fonts, the painted map and miniatures. Flat file
+    // names in three known folders only, so no path can escape them.
+    const asset = url.pathname.match(/^\/assets\/(fonts|map|img)\/([a-z0-9][a-z0-9.-]*\.(woff2|svg|json|jpg))$/);
     if (req.method === 'GET' && asset) {
       const file = path.join(v6Root, 'online/assets', asset[1], asset[2]);
       if (!fs.existsSync(file)) return json(res, 404, { error: 'not found' });
@@ -1358,13 +1358,17 @@ const server = http.createServer(async (req, res) => {
       res.setHeader('content-type', {
         woff2: 'font/woff2',
         svg: 'image/svg+xml; charset=utf-8',
-        json: 'application/json; charset=utf-8'
+        json: 'application/json; charset=utf-8',
+        jpg: 'image/jpeg'
       }[asset[3]]);
       // Fonts never change; the map is rebuilt from the map data, so it is revalidated.
-      res.setHeader('cache-control', fonts ? 'public, max-age=31536000, immutable' : 'public, max-age=300');
+      res.setHeader(
+        'cache-control',
+        fonts ? 'public, max-age=31536000, immutable' : asset[1] === 'img' ? 'public, max-age=86400' : 'public, max-age=300'
+      );
       // The painted map is ~1.5 MB of SVG text; compressed once and kept in memory.
       const body = fs.readFileSync(file);
-      if (!fonts && /\bgzip\b/.test(String(req.headers['accept-encoding'] || ''))) {
+      if (asset[1] === 'map' && /\bgzip\b/.test(String(req.headers['accept-encoding'] || ''))) {
         if (!assetGzipCache.has(file)) assetGzipCache.set(file, zlib.gzipSync(body));
         res.setHeader('content-encoding', 'gzip');
         res.setHeader('vary', 'accept-encoding');
