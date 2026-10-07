@@ -254,7 +254,7 @@ button.loading { opacity:.65; cursor:wait; }
   </header>
 
   <section id="hub">
-    <section class="section card" id="account-card">
+    <section class="section card" id="account-card" data-view="profile social">
       <div id="account-signed-out">
         <h2>Профиль игрока</h2>
         <div class="muted" style="margin-bottom:12px">
@@ -312,7 +312,7 @@ button.loading { opacity:.65; cursor:wait; }
       </div>
     </section>
 
-    <section id="social-card" class="section card" style="display:none">
+    <section id="social-card" data-view="social" class="section card" style="display:none">
       <h2>Друзья и сообщения <span id="social-unread" class="unread-badge" style="display:none">0</span></h2>
       <div class="social-search">
         <input id="friend-search" maxlength="24" placeholder="Найти игрока по логину">
@@ -341,14 +341,14 @@ button.loading { opacity:.65; cursor:wait; }
       <div id="social-error" class="error"></div>
     </section>
 
-    <section class="section card">
+    <section class="section card" data-view="games">
       <h2 id="games">Мои игры</h2>
       <div id="my-games" class="game-list">
         <div class="empty">Загружаем сохранённые партии...</div>
       </div>
     </section>
 
-    <section class="section card">
+    <section class="section card" data-view="rooms">
       <h2>Открытые комнаты</h2>
       <div class="muted" style="margin-bottom:12px">Публичные лобби, к которым можно подключиться без кода.</div>
       <div id="open-rooms" class="room-list">
@@ -356,7 +356,7 @@ button.loading { opacity:.65; cursor:wait; }
       </div>
     </section>
 
-    <section class="section">
+    <section class="section" data-view="new">
       <h2 id="new">Новая игра</h2>
       <div class="create-grid">
         <div class="card">
@@ -414,7 +414,7 @@ button.loading { opacity:.65; cursor:wait; }
       </div>
     </section>
 
-    <section class="section card">
+    <section class="section card" data-view="rooms">
       <h2>Войти по коду</h2>
       <div class="grid">
         <div>
@@ -551,20 +551,34 @@ button.loading { opacity:.65; cursor:wait; }
 <script>
 // A visitor who comes without a game in hand is shown the title screen first.
 try {
-  if (!new URLSearchParams(location.search).get('game') && !location.hash && !sessionStorage.getItem('aob-menu-seen')) location.replace('/menu.html');
+  const q = new URLSearchParams(location.search);
+  // Without a room in hand the lobby lives inside the main menu.
+  if (!q.get('game') && !q.get('view')) location.replace('/menu.html');
+  if (q.get('view')) document.documentElement.dataset.view = q.get('view');
 } catch {}
+const EMBED_VIEW = document.documentElement.dataset.view || '';
+// Inside the menu sheet, leaving for a room or a game takes the whole window.
+const goTo = url => { (EMBED_VIEW && window.top !== window ? window.top : window).location.href = url; };
 // The logo always leads back to the lobby.
 document.addEventListener('click', event => {
   if (!event.target.closest('.brand, .brand-mark, header h1')) return;
   try { sessionStorage.setItem('aob-menu-seen', '1'); } catch {}
-  location.href = '/lobby.html';
+  goTo('/menu.html');
 });
 </script>
 <style>.brand, .brand-mark, header h1 { cursor: pointer; }
 .lobby-head { position: relative; }
 .to-menu { position: absolute; left: 18px; top: 10px; z-index: 2; padding: 5px 12px; border: 1.5px solid #2b1b12; background: #f2e6c8; color: #2b1b12; font: 15px Kurale, Alegreya, serif; text-decoration: none; box-shadow: 2px 2px 0 rgba(43,27,18,.35); }
 .to-menu:hover { background: #fff6dd; }
-.lobby-head .brand { margin-top: 26px; }</style>
+.lobby-head .brand { margin-top: 26px; }
+html[data-view] body { background: transparent; }
+html[data-view] .lobby-head, html[data-view] footer.maker, html[data-view] #hub > section > h2:first-child { display: none; }
+html[data-view] main { padding: 4px 16px 24px; }
+html[data-view] #hub > section { display: none !important; }
+html[data-view="profile"] #hub > [data-view~="profile"], html[data-view="social"] #hub > [data-view~="social"],
+html[data-view="games"] #hub > [data-view~="games"], html[data-view="rooms"] #hub > [data-view~="rooms"],
+html[data-view="new"] #hub > [data-view~="new"] { display: block !important; }
+html[data-view="social"] #social-card[style*="none"] { display: none !important; }</style>
 <script>
 const houses = ['Варкайр','Сайрвен','Ортайн','Эркай','Тасвар','Айрель'];
 const profileAvatars = [
@@ -950,7 +964,7 @@ async function loadMyGames() {
           </div>
         </div>
         <div class="game-actions">
-          <button class="primary" onclick="location.href='${target}'">${action}</button>
+          <button class="primary" onclick="goTo('${target}')">${action}</button>
           <button class="leave-game" data-leave="${escapeHtml(item.game_id)}">Удалить</button>
         </div>
       </div>`;
@@ -1176,7 +1190,7 @@ function bindSocialActions() {
         accept:true
       });
       if (data.game_id) {
-        location.href = '/lobby.html?game=' + encodeURIComponent(data.game_id);
+        goTo('/lobby.html?game=' + encodeURIComponent(data.game_id));
       } else {
         await loadSocial();
       }
@@ -1322,7 +1336,7 @@ function bindViewedProfileActions() {
           profile_id:watchButton.dataset.profileWatch
         });
         if (data.game_id) {
-          location.href = '/?game=' + encodeURIComponent(data.game_id);
+          goTo('/?game=' + encodeURIComponent(data.game_id));
         }
       } catch (error) {
         $('player-profile-error').textContent = friendlyError(error);
@@ -1489,7 +1503,7 @@ async function loadOpenRooms() {
         const id = button.dataset.publicGame;
         const existingToken = localStorage.getItem('aob-token-' + id);
         if (knownGameIds.has(id) && (profileToken || existingToken)) {
-          location.href = '/lobby.html?game=' + encodeURIComponent(id);
+          goTo('/lobby.html?game=' + encodeURIComponent(id));
           return;
         }
         if (!profileToken) {
@@ -1508,7 +1522,7 @@ async function loadOpenRooms() {
               profileAuth()
             );
             saveAccess(joined);
-            location.href = '/lobby.html?game=' + encodeURIComponent(joined.game_id);
+            goTo('/lobby.html?game=' + encodeURIComponent(joined.game_id));
           });
         } catch (error) {
           alert(friendlyError(error));
@@ -1572,7 +1586,7 @@ async function createMultiplayer(visibility, button, errorId, roomInputId, house
         })
       }, profileAuth());
       saveAccess(data);
-      location.href = '/lobby.html?game=' + encodeURIComponent(data.game_id);
+      goTo('/lobby.html?game=' + encodeURIComponent(data.game_id));
     });
   } catch (error) {
     $(errorId).textContent = friendlyError(error);
@@ -1695,7 +1709,7 @@ $('create-solo').onclick = async () => {
         })
       }, profileAuth());
       saveAccess(data);
-      location.href = '/?game=' + encodeURIComponent(data.game_id);
+      goTo('/?game=' + encodeURIComponent(data.game_id));
     });
   } catch (error) {
     $('solo-error').textContent = friendlyError(error);
@@ -1722,7 +1736,7 @@ $('join-private').onclick = async () => {
         })
       }, profileAuth());
       saveAccess(data);
-      location.href = '/lobby.html?game=' + encodeURIComponent(data.game_id);
+      goTo('/lobby.html?game=' + encodeURIComponent(data.game_id));
     });
   } catch (error) {
     $('join-error').textContent = friendlyError(error);
@@ -1883,11 +1897,11 @@ $('start').onclick = async () => {
 };
 
 $('open-game').onclick = () => {
-  location.href = '/?game=' + encodeURIComponent(gameId);
+  goTo('/?game=' + encodeURIComponent(gameId));
 };
 
 $('refresh').onclick = loadRoom;
-$('back-menu').onclick = () => { location.href = '/lobby'; };
+$('back-menu').onclick = () => { location.href = '/menu.html'; };
 
 async function initialize() {
   await restoreProfileSession();

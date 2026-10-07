@@ -620,6 +620,7 @@
         <button class="bar-tab" data-pane="stats">Слава Домов</button>
         <button class="bar-tab" data-pane="journal">Летопись</button>
         <button class="bar-tab" data-pane="talmud">Талмуд знаний</button>
+        <button id="bar-full" title="Развернуть игру во весь экран" style="padding:4px 9px">⛶</button>
         <div class="bar-status">
           <span class="chip"><span>День</span><b id="bar-day">…</b></span>
           <span class="chip"><span>до рассвета</span><b id="bar-timer">…</b></span>
@@ -4173,7 +4174,7 @@ $('build-fort').addEventListener('click', async () => {
 
 $('back-menu').addEventListener('click', async () => {
   if (isSpectator) {
-    location.href = '/lobby';
+    location.href = '/menu.html';
     return;
   }
 
@@ -4186,7 +4187,7 @@ $('back-menu').addEventListener('click', async () => {
     const saved = await api('/api/save-exit', { method: 'POST' });
     lastManualSnapshotAt = saved.saved_at || new Date().toISOString();
     renderSaveStatus();
-    location.href = '/lobby';
+    location.href = '/menu.html';
   } catch (error) {
     button.disabled = false;
     button.textContent = original;
@@ -4224,8 +4225,10 @@ setupBar();
 document.querySelector('header .brand').style.cursor = 'pointer';
 document.querySelector('header .brand').addEventListener('click', () => {
   try { sessionStorage.setItem('aob-menu-seen', '1'); } catch {}
-  location.href = '/lobby.html';
+  location.href = '/menu.html';
 });
+// The whole game unfolds to the full screen and back.
+document.getElementById('bar-full').onclick = () => { (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {}); };
 setupLens();
 setupLand();
 setupMaker();

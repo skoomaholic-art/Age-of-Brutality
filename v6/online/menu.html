@@ -16,7 +16,15 @@
     width: max(100vw, calc(100vh * 1672 / 941)); aspect-ratio: 1672 / 941;
     container-type: size; overflow: hidden;
   }
-  .scene { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: 62% 55%; animation: breathe 26s ease-in-out infinite alternate; }
+  .world { position: absolute; inset: 0; transform-origin: 62% 55%; animation: breathe 26s ease-in-out infinite alternate; }
+  .scene { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  /* Living faces: eyes painted over the miniature that glance about and blink. */
+  .eye { position: absolute; transform: translate(-50%, -50%); border-radius: 50%; background: #dfdacb; overflow: hidden; pointer-events: none; }
+  .eye i { position: absolute; left: 50%; top: 50%; width: 46%; aspect-ratio: 1; border-radius: 50%; background: #241d19; transform: translate(calc(-50% + var(--gx, 30%)), calc(-50% + var(--gy, -10%))); transition: transform .22s ease-out; }
+  .eye b { position: absolute; inset: 0; background: #cfae90; border-bottom: .15cqh solid #4a372c; transform: translateY(-101%); transition: transform .07s linear; }
+  .eye.blink b { transform: translateY(0); }
+  .king-mouth { position: absolute; left: 48.33%; top: 38.75%; width: 1.5%; transform: translate(-50%, -50%) rotate(-9deg); opacity: 0; transition: opacity .12s; pointer-events: none; }
+  .king-mouth.open { opacity: 1; }
   @keyframes breathe { from { transform: scale(1); } to { transform: scale(1.035) translateX(-.4%); } }
 
   .cloud { position: absolute; left: -26%; opacity: .92; animation: drift linear infinite; pointer-events: none; }
@@ -34,27 +42,38 @@
     box-shadow: 0 0 2.4cqw rgba(0,0,0,.55);
     display: flex; flex-direction: column; align-items: stretch;
   }
-  .logo { display: block; width: 86%; margin: 5.5cqh auto 3cqh; filter: drop-shadow(0 .4cqh .5cqh rgba(0,0,0,.6)); animation: glint 7s ease-in-out infinite; }
+  .logo { display: block; width: 80%; margin: 3.5cqh auto 2cqh; filter: drop-shadow(0 .4cqh .5cqh rgba(0,0,0,.6)); animation: glint 7s ease-in-out infinite; }
   @keyframes glint { 0%, 100% { filter: drop-shadow(0 .4cqh .5cqh rgba(0,0,0,.6)) brightness(1); } 50% { filter: drop-shadow(0 .4cqh .9cqh rgba(0,0,0,.6)) brightness(1.12); } }
   nav { display: grid; gap: .7cqh; padding: 0 0 0 9%; }
   nav button {
     all: unset; box-sizing: border-box; cursor: pointer; position: relative;
-    font-family: Kurale, Georgia, serif; font-size: 3.5cqh; line-height: 1; color: #efe4c6; letter-spacing: .02em;
-    padding: 1.35cqh 1.2cqw 1.35cqh 2.3cqw; white-space: nowrap;
+    font-family: Kurale, Georgia, serif; font-size: 3.1cqh; line-height: 1; color: #efe4c6; letter-spacing: .02em;
+    padding: 1.05cqh 1.2cqw 1.05cqh 2.3cqw; white-space: nowrap;
   }
   nav button::before { content: '⚜'; position: absolute; left: .2cqw; top: 50%; transform: translateY(-50%) scale(0); color: #d9b24a; font-size: 2.6cqh; transition: transform .18s; }
   nav button:hover:not(:disabled), nav button:focus-visible { background: linear-gradient(90deg, #9c2c1e, #7d2217 70%, transparent); color: #fff6dd; }
   nav button:hover:not(:disabled)::before, nav button:focus-visible::before { transform: translateY(-50%) scale(1); }
   nav button:disabled { color: #7d7362; cursor: default; }
-  .snail { margin: auto auto 3.5cqh; width: 62%; transform-origin: 30% 100%; animation: toot 3.2s ease-in-out infinite; }
+  .snail { margin: auto auto 2cqh; width: 46%; transform-origin: 30% 100%; animation: toot 3.2s ease-in-out infinite; }
   @keyframes toot { 0%, 60%, 100% { transform: rotate(0); } 70% { transform: rotate(-4deg) translateY(-.4cqh); } 80% { transform: rotate(1deg); } 90% { transform: rotate(-3deg); } }
+  nav button.on { background: linear-gradient(90deg, #9c2c1e, #7d2217 70%, transparent); color: #fff6dd; }
+  /* A menu section opens as a sheet of parchment beside the panel. */
+  .sheet { position: fixed; left: calc(max(100vw, 100vh * 1672 / 941) * .29); right: 2vw; top: 4vh; bottom: 4vh; max-width: 1020px; display: none; flex-direction: column; border: 3px solid #2b1b12; outline: 2px solid #c9a24a; outline-offset: -7px; background: #ead9b0; box-shadow: 0 10px 40px rgba(0,0,0,.6); z-index: 5; }
+  .sheet.on { display: flex; }
+  .sheet header { display: flex; align-items: center; justify-content: space-between; padding: 12px 18px 8px; font: 26px Kurale, Georgia, serif; color: #7d2217; }
+  .sheet header button { all: unset; cursor: pointer; font: 22px Kurale, serif; color: #2b1b12; padding: 2px 10px; border: 1.5px solid #2b1b12; background: #f2e6c8; }
+  .sheet iframe { flex: 1; border: 0; width: 100%; background: transparent; }
+  @media (max-width: 760px) { .sheet { left: 2vw; } }
   .mark { position: absolute; right: 1cqw; bottom: 1cqh; width: 3.4cqh; opacity: .8; }
-  @media (prefers-reduced-motion: reduce) { .scene, .cloud, .walker, .walker img, .snail, .logo { animation: none; } .walker { display: none; } }
+  @media (prefers-reduced-motion: reduce) { .world, .cloud, .walker, .walker img, .snail, .logo { animation: none; } .walker { display: none; } }
 </style>
 </head>
 <body>
 <div class="stage">
-  <img class="scene" src="/assets/img/menu-scene.jpg" alt="">
+  <div class="world" id="world">
+    <img class="scene" src="/assets/img/menu-scene.jpg" alt="">
+    <img class="king-mouth" id="king-mouth" src="/assets/img/menu-king-mouth.png" alt="">
+  </div>
   <img class="cloud" src="/assets/img/menu-cloud-1.png" alt="" style="top:2%;width:15%;animation-duration:150s;animation-delay:-40s">
   <img class="cloud" src="/assets/img/menu-cloud-2.png" alt="" style="top:1%;width:13%;animation-duration:210s;animation-delay:-120s">
   <img class="cloud" src="/assets/img/menu-cloud-3.png" alt="" style="top:5%;width:11%;animation-duration:180s;animation-delay:-5s">
@@ -66,16 +85,20 @@
     <img class="logo" src="/assets/img/menu-logo.png" alt="Жестокий Век">
     <nav>
       <button id="m-continue" disabled>Продолжить</button>
-      <button id="m-new">Новая игра</button>
-      <button id="m-load">Загрузить</button>
-      <button disabled title="Мастера ещё не прибыли">Настройки</button>
-      <button disabled title="Мастера ещё не прибыли">Авторы</button>
-      <button disabled title="Мастера ещё не прибыли">Выход</button>
+      <button id="m-new" data-view="new">Новая игра</button>
+      <button id="m-load" data-view="games">Загрузить</button>
+      <button data-view="rooms">Сетевая игра</button>
+      <button data-view="social">Друзья</button>
+      <button data-view="profile">Профиль</button>
+      <button id="m-full">Во весь экран</button>
+      <button disabled title="Скоро">Настройки</button>
+      <button disabled title="Скоро">Авторы</button>
     </nav>
     <img class="snail" src="/assets/img/menu-snail.png" alt="">
   </div>
   <img class="mark" src="/assets/img/s-mark.png" alt="Skoomaholic Dev">
 </div>
+<div class="sheet" id="sheet"><header><span id="sheet-title"></span><button id="sheet-close" title="Закрыть">✕</button></header><iframe id="sheet-frame" title="Раздел меню"></iframe></div>
 <script>
 // The lobby opens the menu first; this flag tells it the visitor has been here.
 const go = url => { try { sessionStorage.setItem('aob-menu-seen', '1'); } catch {} location.href = url; };
@@ -86,9 +109,41 @@ try {
 } catch {}
 const cont = document.getElementById('m-continue');
 if (last) { cont.disabled = false; cont.onclick = () => go('/?game=' + encodeURIComponent(last)); }
-document.getElementById('m-new').onclick = () => go('/lobby.html#new');
-document.getElementById('m-load').onclick = () => go('/lobby.html#games');
-(last ? cont : document.getElementById('m-new')).focus();
+// Every section of the old lobby opens here, inside the menu.
+const sheet = document.getElementById('sheet'), frame = document.getElementById('sheet-frame');
+const closeSheet = () => { sheet.classList.remove('on'); frame.removeAttribute('src'); document.querySelectorAll('nav button.on').forEach(b => b.classList.remove('on')); };
+document.querySelectorAll('nav button[data-view]').forEach(button => button.onclick = () => {
+  if (button.classList.contains('on')) return closeSheet();
+  closeSheet(); button.classList.add('on');
+  document.getElementById('sheet-title').textContent = button.textContent;
+  frame.src = '/lobby.html?view=' + button.dataset.view; sheet.classList.add('on');
+});
+document.getElementById('sheet-close').onclick = closeSheet;
+addEventListener('keydown', event => { if (event.key === 'Escape') closeSheet(); });
+const fullButton = document.getElementById('m-full');
+const fullLabel = () => { fullButton.textContent = document.fullscreenElement ? 'Выйти из полного экрана' : 'Во весь экран'; };
+fullButton.onclick = () => { (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {}); };
+document.addEventListener('fullscreenchange', fullLabel);
+if (!document.documentElement.requestFullscreen) fullButton.hidden = true;
+
+// Living faces. Each eye: centre x, y and size in pixels of the 1672x941 painting.
+const EYES = [[781,338,13,9,0],[807,329,10,8,0],[596,577,12,8,1],[616,575,9,8,1],[636,601,6,6,2],[1458,494,6,5,3],[1470,496,6,5,3],[1519,484,5,5,4],[1533,488,6,5,4],[1565,495,6,5,5],[1578,497,6,5,5]];
+const world = document.getElementById('world');
+const eyes = EYES.map(([x, y, w, h, face]) => {
+  const eye = document.createElement('div'); eye.className = 'eye'; eye.innerHTML = '<i></i><b></b>';
+  eye.style.cssText = `left:${x / 16.72}%;top:${y / 9.41}%;width:${w / 16.72}%;height:${h / 9.41}%`;
+  world.append(eye); return { eye, face };
+});
+const blink = face => { const set = eyes.filter(e => e.face === face); set.forEach(e => e.eye.classList.add('blink')); setTimeout(() => set.forEach(e => e.eye.classList.remove('blink')), 130); };
+const GLANCES = [[30,-10],[34,4],[-28,-6],[0,-22],[24,18],[-30,12],[30,-10]];
+const mouth = document.getElementById('king-mouth');
+if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  setInterval(() => blink(Math.floor(Math.random() * 6)), 900);
+  setInterval(() => { const [gx, gy] = GLANCES[Math.floor(Math.random() * GLANCES.length)]; world.style.setProperty('--gx', gx + '%'); world.style.setProperty('--gy', gy + '%'); }, 2600);
+  // The king gasps now and then.
+  setInterval(() => { mouth.classList.add('open'); setTimeout(() => mouth.classList.remove('open'), 500 + Math.random() * 900); }, 5200);
+}
+
 </script>
 </body>
 </html>
