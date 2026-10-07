@@ -3013,21 +3013,31 @@ function setupPixiFog() {
     const tints = [0xb9bec6, 0xa2a8b2, 0xcfd3d8, 0x8f96a2];
     let seed = 11;
     const random = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+    const addCloud = (x, y, size) => {
+      const sprite = new PIXI.Sprite(textures[Math.floor(random() * 3)]);
+      sprite.anchor.set(0.5);
+      const w = (96 + random() * 30) * size;
+      sprite.width = w;
+      sprite.height = w * 0.42;
+      if (random() < 0.5) sprite.scale.x *= -1;
+      sprite.tint = tints[Math.floor(random() * tints.length)];
+      const cloud = { sprite, far: size > 1, reach: 70 * size, x: x + (random() - 0.5) * 12 * size, y: y + (random() - 0.5) * 6 * size, phase: random() * 6.283, speed: 0.25 + random() * 0.35, on: true, alpha: 1, drift: 0 };
+      sprite.position.set(cloud.x, cloud.y);
+      world.addChild(sprite);
+      pixiFog.clouds.push(cloud);
+    };
+    // Far beyond the lands the sky is closed with bigger, sparser clouds, so a
+    // tall or wide screen never shows bare parchment past the map.
+    const span = Math.max(b.x1 - b.x0, b.y1 - b.y0) * 1.7 + pad;
+    const cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2;
+    const inner = (x, y) => x > b.x0 - pad + 60 && x < b.x1 + pad - 60 && y > b.y0 - pad + 30 && y < b.y1 + pad - 30;
     let row = 0;
+    for (let y = cy - span; y < cy + span; y += 38, row += 1) {
+      for (let x = cx - span + (row % 2 ? 40 : 0); x < cx + span; x += 80) if (!inner(x, y)) addCloud(x, y, 2);
+    }
+    row = 0;
     for (let y = b.y0 - pad; y < b.y1 + pad; y += 19, row += 1) {
-      for (let x = b.x0 - pad + (row % 2 ? 20 : 0); x < b.x1 + pad; x += 40) {
-        const sprite = new PIXI.Sprite(textures[Math.floor(random() * 3)]);
-        sprite.anchor.set(0.5);
-        const w = 96 + random() * 30;
-        sprite.width = w;
-        sprite.height = w * 0.42;
-        if (random() < 0.5) sprite.scale.x *= -1;
-        sprite.tint = tints[Math.floor(random() * tints.length)];
-        const cloud = { sprite, x: x + (random() - 0.5) * 12, y: y + (random() - 0.5) * 6, phase: random() * 6.283, speed: 0.25 + random() * 0.35, on: true, alpha: 1, drift: 0 };
-        sprite.position.set(cloud.x, cloud.y);
-        world.addChild(sprite);
-        pixiFog.clouds.push(cloud);
-      }
+      for (let x = b.x0 - pad + (row % 2 ? 20 : 0); x < b.x1 + pad; x += 40) addCloud(x, y, 1);
     }
 
     app.ticker.add(() => {
@@ -3040,7 +3050,8 @@ function setupPixiFog() {
       world.scale.set(scale);
       world.position.set((W - mapView.w * scale) / 2 - mapView.x * scale, (H - mapView.h * scale) / 2 - mapView.y * scale);
       // Only the clouds in sight are drawn.
-      const vx0 = mapView.x - 70, vx1 = mapView.x + mapView.w + 70, vy0 = mapView.y - 40, vy1 = mapView.y + mapView.h + 40;
+      const ex = (W / scale - mapView.w) / 2, ey = (H / scale - mapView.h) / 2;
+      const vx0 = mapView.x - ex - 140, vx1 = mapView.x + mapView.w + ex + 140, vy0 = mapView.y - ey - 80, vy1 = mapView.y + mapView.h + ey + 80;
       for (const cloud of pixiFog.clouds) {
         const target = cloud.on ? 1 : 0;
         if (cloud.alpha !== target) {
@@ -3086,7 +3097,7 @@ function updatePixiFog(explored, art, coords) {
   }
   for (const cloud of pixiFog.clouds) {
     let on = Boolean(explored);
-    if (on) {
+    if (on && !cloud.far) {
       if (known.some(rings => inRings(rings, cloud.x, cloud.y))) on = false;
       else {
         // Clouds lie on every unknown land right up to its border. Over water
