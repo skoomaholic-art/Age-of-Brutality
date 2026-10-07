@@ -1472,6 +1472,7 @@ const CITY_SIZE = 26;
 
 const VILLAGE_SIZE = 19;
 const WILD_SIZE = 16;
+const ISLAND_SIZE = 18;
 
 function settlementFigure(kind, w, c, owner) {
   const file = owner && abandonedHouses()[owner] ? kind + '-abandoned' : kind;
@@ -1622,6 +1623,7 @@ function renderMap() {
     else if (t.type === 'Город') castles.push(settlementFigure('city', CITY_SIZE, c, owner));
     else if (t.type === 'Деревня') castles.push(settlementFigure('village', VILLAGE_SIZE, c, owner));
     else if (t.type === 'Дикая земля') castles.push(settlementFigure('wild', WILD_SIZE, c, null));
+    else if (t.type === 'Половина острова') castles.push(settlementFigure('island', ISLAND_SIZE, c, null));
     if (total && owner) {
       const tx = capital ? c.x + 21 : t.type === 'Город' ? c.x + 14 : t.type === 'Деревня' ? c.x + 11 : c.x + 8.5;
       const ty = capital ? c.y - 1 : c.y - 5;

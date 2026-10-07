@@ -454,7 +454,7 @@ function settlement(site) {
     // Painted figure placed by the client (online/assets/img/village*.png).
     art += `<ellipse cx="${x}" cy="${f1(y + 2)}" rx="7.5" ry="3.8" fill="#b9a66a" opacity=".45"/>`;
   } else if (site.type === 'Половина острова') {
-    art += tower(x - 1.2, y + 3, 2.4, 6) + house(x + 2.2, y + 4, 3.2, 2.2, 1.7);
+    // Painted tower by the water, placed by the client (online/assets/img/island.png).
   } else {
     // Wild land: the hunting lodge is a painted figure placed by the client.
     art += `<ellipse cx="${x}" cy="${f1(y + 2)}" rx="6.5" ry="3.3" fill="#b9a66a" opacity=".4"/>`;

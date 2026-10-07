@@ -89,6 +89,10 @@ def main():
     px[..., 3] = np.where(px[..., 3] < 24, 0, px[..., 3])
     save(px, 'wild.png', 144)
 
+    px = load('island.png')
+    px[..., 3] = np.where(px[..., 3] < 24, 0, px[..., 3])
+    save(px, 'island.png', 160)
+
 FLAG_CAPTURED = [(668, 40), (1100, 40), (1100, 340), (840, 340), (820, 250), (668, 245)]
 
 if __name__ == '__main__':
