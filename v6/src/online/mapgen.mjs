@@ -195,28 +195,72 @@ export function generateMap(baseMap, constants, { houses, seed = 1 } = {}) {
   const hasIsland = i => (count === 2 ? i === 0 : count % 2 === 0 ? i % 2 === 0 : true);
   let islandIndex = 0;
 
-  for (let i = 0; i < count; i += 1) {
-    const id = `M-O${i + 1}`;
-    waypoints[id] = polar(R + STEP + 62, angles[i]);
-    lanes.push([petal(i, 0), id]);
-    ports.add(petal(i, 0));
+  // Sea waypoints stand in open water all around the land, so no lane ever
+  // runs over the shore: each is placed beyond the outermost land in its
+  // direction, and a port is joined only by a line that crosses no other land.
+  const mainland = sites.map(s => s.pos);
+  const beyond = (angle, gap) => {
+    const dir = { x: Math.cos(angle), y: Math.sin(angle) };
+    const reach = Math.max(...mainland.map(p => p.x * dir.x + p.y * dir.y));
+    return polar(reach + gap, angle);
+  };
+  const toSegment = (p, a, b) => {
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy || 1)));
+    return Math.hypot(p.x - a.x - dx * t, p.y - a.y - dy * t);
+  };
+  const perHouse = count <= 3 ? 4 : 2;
+  const ringSize = count * perHouse;
+  const ring = [];
+  let extra = 0;
+  for (let k = 0; k < ringSize; k += 1) {
+    const angle = angles[0] + (k * 2 * Math.PI) / ringSize;
+    const house = k / perHouse;
+    const border = (k - perHouse / 2) / perHouse;
+    const id = Number.isInteger(house) ? `M-O${house + 1}`
+      : Number.isInteger(border) && border < boundaries ? `M-B${border + 1}`
+        : `M-X${extra += 1}`;
+    ring.push({ id, angle, pos: beyond(angle, 78) });
   }
-  for (let i = 0; i < boundaries; i += 1) {
-    const next = (i + 1) % count;
-    const id = `M-B${i + 1}`;
-    const angle = boundaryAngle(i);
-    const borderReach = count === 2 ? STEP : R * Math.cos(Math.PI / count);
-    waypoints[id] = polar(borderReach + 78, angle);
-    lanes.push([petal(i, 1), id], [petal(next, 5), id]);
-    ports.add(petal(i, 1));
-    ports.add(petal(next, 5));
-    lanes.push([`M-O${i + 1}`, id], [`M-O${next + 1}`, id]);
+  // Push the ring out until no stretch of it comes close to land.
+  for (let pass = 0; pass < 12; pass += 1) {
+    let moved = false;
+    for (let k = 0; k < ringSize; k += 1) {
+      const a = ring[k], b = ring[(k + 1) % ringSize];
+      if (mainland.some(p => toSegment(p, a.pos, b.pos) < 62)) {
+        for (const node of [a, b]) node.gap = (node.gap || 78) + 14;
+        moved = true;
+      }
+    }
+    if (!moved) break;
+    for (const node of ring) node.pos = beyond(node.angle, node.gap || 78);
+  }
+  const mainSites = [...sites];
+  for (let k = 0; k < ringSize; k += 1) {
+    const node = ring[k];
+    waypoints[node.id] = node.pos;
+    lanes.push([node.id, ring[(k + 1) % ringSize].id]);
+    // The nearest shore lands with a clear run to this waypoint become its ports.
+    const clear = mainSites
+      .filter(s => !mainSites.some(t => t !== s && toSegment(t.pos, s.pos, node.pos) < 36))
+      .map(s => ({ s, d: dist(s.pos, node.pos) }))
+      .sort((x, y) => x.d - y.d || (x.s.id < y.s.id ? -1 : 1));
+    for (const { s, d } of clear) {
+      if (d > clear[0].d + 6) break;
+      lanes.push([s.id, node.id]);
+      ports.add(s.id);
+    }
+  }
 
+  for (let i = 0; i < boundaries; i += 1) {
     if (!hasIsland(i)) continue;
+    const id = `M-B${i + 1}`;
+    const node = ring.find(item => item.id === id);
+    const angle = node.angle;
     islandIndex += 1;
     const key = `S${String(islandIndex).padStart(2, '0')}`;
     const pair = bonusCycle[(islandIndex - 1) % bonusCycle.length];
-    const centre = polar(Math.max(mainlandReach + 78, borderReach + 150), angle);
+    const centre = add(node.pos, polar(74, angle));
     const tangent = { x: -Math.sin(angle), y: Math.cos(angle) };
     const baseName = islandNames[(islandIndex - 1) % islandNames.length] || `Остров ${islandIndex}`;
     const halves = ['A', 'B'].map((half, h) => {
@@ -276,7 +320,7 @@ export function generateMap(baseMap, constants, { houses, seed = 1 } = {}) {
 
   return {
     game: baseMap.game,
-    version: 'V6-GENERATED-1',
+    version: 'V6-GENERATED-2',
     generated: true,
     seed: Number(seed) || 1,
     houses: [...houses],
