@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Жестокий век - Игровой центр</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/img/favicon-32.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/img/favicon-180.png">
 <style>
 /* Same illuminated-manuscript look as the game screen. */
 @font-face { font-family: Kurale; font-weight: 400; font-display: swap; src: url(/assets/fonts/kurale-cyrillic-400-normal.woff2) format('woff2'); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
@@ -69,6 +71,10 @@ h1 { margin:0; font-family: Kurale, Alegreya, serif; font-weight:400; font-size:
   box-shadow: 0 0 0 3px var(--white-lead), 0 0 0 4.5px var(--ink), 0 0 0 8px var(--verdigris), 0 0 0 9.5px var(--ink);
   margin: 8px 12px 8px 0;
 }
+.brand { display:flex; align-items:center; gap:18px; }
+.brand-mark { width:72px; height:72px; padding:10px; border-radius:50%; background:#14100d; border:2px solid var(--gold); box-shadow:0 0 0 2px var(--ink); flex:0 0 auto; }
+.maker { margin:36px auto 0; text-align:center; }
+.maker img { width:170px; height:auto; padding:14px 18px; background:#14100d; border:1.5px solid var(--ink); box-shadow:3px 3px 0 rgba(43,27,18,.3); }
 h2 { margin:0 0 12px; font-family: Kurale, Alegreya, serif; font-weight:400; font-size:27px; line-height:1.1; color: var(--vermilion-deep); }
 h3 { margin:0 0 8px; font-size:19px; font-weight:700; }
 .muted { color: var(--ink-soft); }
@@ -234,9 +240,12 @@ button.loading { opacity:.65; cursor:wait; }
 <body>
 <main>
   <header class="lobby-head">
-    <div>
-      <h1>Жестокий Век</h1>
-      <div class="lobby-sub">Игровой центр</div>
+    <div class="brand">
+      <img class="brand-mark" src="/assets/img/s-mark.png" alt="Skoomaholic Dev" width="96" height="96">
+      <div>
+        <h1>Жестокий Век</h1>
+        <div class="lobby-sub">Игровой центр</div>
+      </div>
     </div>
     <img class="lobby-miniature" src="/assets/img/brawl.jpg" alt="" width="560" height="366">
   </header>
@@ -425,6 +434,9 @@ button.loading { opacity:.65; cursor:wait; }
     <div id="start-hint" class="start-hint"></div>
     <div id="room-error" class="error"></div>
   </section>
+  <footer class="maker">
+    <img src="/assets/img/logo.png" alt="Skoomaholic Dev" width="480" height="360" loading="lazy">
+  </footer>
 </main>
 
 <div id="avatar-modal" class="avatar-modal" role="dialog" aria-modal="true" aria-labelledby="avatar-modal-title">

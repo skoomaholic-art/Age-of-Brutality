@@ -4,6 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Жестокий Век - Online Prototype</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/img/favicon-32.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/img/favicon-180.png">
   <style>
     /* Illuminated-manuscript theme: parchment, iron-gall ink, vermilion rubrics,
        lapis, verdigris and a gold-leaf ground for the map. */
@@ -72,6 +74,9 @@
       top: 0;
       z-index: 10;
     }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    /* The maker's mark sits on a dark roundel so the blue reads on the red band. */
+    .brand-mark { width: 42px; height: 42px; padding: 6px; border-radius: 50%; background: #14100d; border: 1.5px solid var(--gold); box-shadow: 0 0 0 1.5px var(--ink); }
     h1 { margin: 0; font-family: Kurale, Alegreya, serif; font-weight: 400; font-size: 30px; line-height: 1; letter-spacing: .01em; text-shadow: 1px 1px 0 rgba(43,27,18,.55); }
     .sub { color: #f3d9c2; font-size: 13px; font-style: italic; margin-top: 3px; }
     .spectator-badge {
@@ -349,10 +354,13 @@
 </head>
 <body>
 <header>
-  <div>
+  <div class="brand">
+    <img class="brand-mark" src="/assets/img/s-mark.png" alt="Skoomaholic Dev" width="96" height="96">
+    <div>
     <h1>Жестокий Век</h1>
     <div class="sub">онлайн-прототип на правилах V6</div>
-    <div id="spectator-badge" class="spectator-badge">РЕЖИМ НАБЛЮДАТЕЛЯ</div>
+    <div id="spectator-badge" class="spectator-badge">Режим наблюдателя</div>
+    </div>
   </div>
   <div class="controls">
     <label>
