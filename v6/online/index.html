@@ -1335,6 +1335,14 @@ const FACE_AT = {
   brows: ['c', 150], beard: ['t', 268], hair: ['t', -30], hat: ['t', -40]
 };
 
+// Each headdress and head of hair is fitted to the head by hand: scale and shift.
+const FACE_FIX = {
+  hat: { 1: { dy: 18, s: 1.05 }, 2: { dy: 8 }, 3: { dy: 8 }, 4: { s: 2.1, dy: -22, dx: -12 }, 5: { s: 1.6, dy: -60 }, 6: { s: 1.3, dy: -22 },
+    7: { s: 1.7, dy: -30 }, 8: { s: 1.85, dy: -50, dx: -8 }, 9: { s: 1.45, dy: -30 }, 10: { s: 1.45, dy: -42 } },
+  hair: { 1: { s: 1.1, dy: -12 }, 2: { s: 1.1, dy: -20 }, 3: { s: 1.15, dy: -15 }, 4: { s: 1.15, dy: -5 }, 5: { s: 1.5, dy: -35, dx: 4 },
+    6: { s: 1.35, dy: -22, dx: -4 }, 7: { s: 1.25, dy: -10, dx: -8 }, 8: { s: 1.15, dy: -15 }, 9: { s: 1.15, dy: -15 }, 10: { s: 1.15, dy: -15 } }
+};
+
 function defaultLook(seedText, ruler) {
   const pick = (kind, salt, none) => {
     const n = FACE?.[kind]?.length || 1;
@@ -1353,13 +1361,17 @@ function portraitHtml(look) {
   let html = '';
   for (const kind of FACE_ORDER) {
     const index = Number(look?.[kind] || 0);
-    const part = FACE[kind]?.[index - 1];
-    if (!part) continue;
+    const raw = FACE[kind]?.[index - 1];
+    if (!raw) continue;
+    // A hood hides the hair.
+    if (kind === 'hair' && Number(look?.hat) === 4) continue;
+    const fix = FACE_FIX[kind]?.[index] || {};
+    const part = { w: raw.w * (fix.s || 1), h: raw.h * (fix.s || 1) };
     let [mode, at] = FACE_AT[kind];
     // Crowns rest on the brow; hoods and caps go over the whole head.
     if (kind === 'hat' && index <= 3) { mode = 'b'; at = 78; }
-    const top = HEAD_TOP + at - (mode === 'c' ? part.h / 2 : mode === 'b' ? part.h : 0);
-    const left = 200 - part.w / 2;
+    const top = HEAD_TOP + at - (mode === 'c' ? part.h / 2 : mode === 'b' ? part.h : 0) + (fix.dy || 0);
+    const left = 200 - part.w / 2 + (fix.dx || 0);
     // Eyes, nose and mouth are painted on light skin: on darker heads they are toned to match.
     const shade = ['eyes', 'nose', 'mouth'].includes(kind) ? [null, null, 'brightness(.9) saturate(1.05)', 'brightness(.66) saturate(1.15)'][Number(look?.head || 1)] : null;
     const tone = shade ? ';filter:' + shade : '';
