@@ -134,7 +134,8 @@
     /* Realms: a colour wash over the painted land and a bold band along the border. */
     .realm-wash { opacity: .5; mix-blend-mode: multiply; stroke-width: .9; stroke-linejoin: round; pointer-events: none; }
     .realm-ring { opacity: .95; stroke-width: .9; stroke-linejoin: round; pointer-events: none; }
-    .province-borders { pointer-events: none; }
+    .province-borders, .map-castles { pointer-events: none; }
+    .map-castles image { filter: drop-shadow(0 .6px .5px rgba(43,27,18,.45)); }
     .province-borders path { fill: none; stroke: #2b1b12; stroke-width: .5; stroke-dasharray: 2.2 1.8; opacity: .6; }
     .province { fill: transparent; stroke: transparent; stroke-linejoin: round; cursor: pointer; transition: fill .12s ease; }
     .province:hover { fill: rgba(255,248,230,.18); }
@@ -1353,6 +1354,27 @@ function setupMapScaffold() {
   });
 }
 
+// Capital castles: whole under its own House, sacked under a conqueror,
+// overgrown once the ruler has abandoned the realm. The flag carries the
+// colour of whoever holds the walls.
+const HOUSE_SLUGS = {
+  'Варкайр': 'varkair', 'Сайрвен': 'sairven', 'Ортайн': 'ortain',
+  'Эркай': 'erkai', 'Тасвар': 'tasvar', 'Айрель': 'airel',
+};
+const CASTLE_SIZE = 40;
+
+function capitalCastle(territoryId, c, owner) {
+  const capitals = snapshot?.map?.capitals || {};
+  const founder = Object.keys(capitals).find(h => capitals[h] === territoryId);
+  const slug = HOUSE_SLUGS[owner] || HOUSE_SLUGS[founder] || 'ortain';
+  let file = `capital-${slug}`;
+  if (owner && abandonedHouses()[owner]) file = 'capital-abandoned';
+  else if (owner && founder && owner !== founder) file = `capital-captured-${slug}`;
+  else if (!owner) file = 'capital-abandoned';
+  const w = CASTLE_SIZE;
+  return `<image href="/assets/img/${file}.png" x="${c.x - w / 2}" y="${c.y - w * 0.66}" width="${w}" height="${w}"></image>`;
+}
+
 function shieldToken(x, y, color, count, scale = 1) {
   return `<g class="army-token" transform="translate(${x} ${y}) scale(${scale})">` +
     `<path class="shield" d="M-4.8 -5.4H4.8V.8Q4.8 4.9 0 6.4Q-4.8 4.9 -4.8 .8Z" fill="${color}"></path>` +
@@ -1458,6 +1480,7 @@ function renderMap() {
     : null;
 
   const borders = [];
+  const castles = [];
   const zones = [];
   const ribbons = [];
   const tokens = [];
@@ -1486,20 +1509,16 @@ function renderMap() {
     let note = '';
     if (t.id === origin) note = 'откуда';
     if (t.id === target) note = 'цель';
-    const labelY = c.y + (capital ? 17.5 : t.type === 'Город' ? 14.5 : 13);
+    const labelY = c.y + (capital ? 20.5 : t.type === 'Город' ? 14.5 : 13);
     ribbons.push(nameRibbon(c.x, labelY, mapLabel(t), capital));
     if (note) {
       ribbons.push(`<text class="ribbon-note ${t.id === target ? 'target' : ''}" x="${c.x}" y="${labelY + 10.6}">${note}</text>`);
     }
 
-    if (capital && owner) {
-      const flag = colors[owner] || '#8a7a5c';
-      tokens.push(`<path class="pennant-pole" d="M${c.x} ${c.y - 6.4}v-7.4"></path>` +
-        `<path class="pennant" d="M${c.x} ${c.y - 13.8}l6.4 1.9l-6.4 1.9Z" fill="${flag}"></path>`);
-    }
+    if (capital) castles.push(capitalCastle(t.id, c, owner));
     if (total && owner) {
-      const tx = capital ? c.x + 15 : c.x + 8.5;
-      const ty = capital ? c.y - 4 : c.y - 5;
+      const tx = capital ? c.x + 21 : c.x + 8.5;
+      const ty = capital ? c.y - 1 : c.y - 5;
       tokens.push(shieldToken(tx, ty, colors[owner] || '#8a7a5c', total));
     }
   }
@@ -1523,6 +1542,7 @@ function renderMap() {
     realms.join('') +
     `<g class="province-borders">${borders.join('')}</g>` +
     zones.join('') +
+    `<g class="map-castles">${castles.join('')}</g>` +
     lines.join('') +
     waypointNodes.join('') +
     `<g class="map-ribbons">${ribbons.join('')}</g>` +

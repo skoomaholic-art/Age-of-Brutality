@@ -444,14 +444,9 @@ function settlement(site) {
   const { x, y } = site;
   let art = '';
   if (site.type === 'Столица') {
-    // A walled town with a keep.
-    art += `<ellipse cx="${x}" cy="${f1(y + 1.5)}" rx="11.5" ry="7.2" fill="#c9b572" stroke="#3a2a1c" stroke-width=".5"/>`;
-    art += `<ellipse cx="${x}" cy="${f1(y + 1.5)}" rx="11.5" ry="7.2" fill="none" stroke="#efe2bf" stroke-width="1.5" stroke-dasharray="2.2 1"/>`;
-    art += `<ellipse cx="${x}" cy="${f1(y + 1.5)}" rx="12.3" ry="8" fill="none" stroke="#3a2a1c" stroke-width=".4"/>`;
-    art += house(x - 8, y + 2.5, 3.6, 2.6, 2) + house(x + 4.2, y + 1.2, 3.8, 2.6, 2);
-    art += house(x - 4.6, y + 5.6, 3.6, 2.4, 1.8) + house(x + 1, y + 6, 3.8, 2.5, 1.9);
-    art += tower(x - 5.6, y - 0.6, 2.4, 5.2) + tower(x + 3.4, y - 1.6, 2.2, 4.6);
-    art += tower(x - 1.9, y + 1.6, 3.8, 8);
+    // The castle itself is a painted figure placed by the client
+    // (online/assets/img/capital-*.png); here only the ground it stands on.
+    art += `<ellipse cx="${x}" cy="${f1(y + 3)}" rx="15" ry="7.5" fill="#b9a66a" opacity=".55"/>`;
   } else if (site.type === 'Город') {
     art += house(x - 7.5, y + 3, 3.6, 2.6, 2) + house(x + 3.6, y + 2.2, 3.8, 2.6, 2);
     art += house(x - 4, y + 5.6, 3.5, 2.4, 1.8) + house(x + 0.6, y + 5.8, 3.6, 2.4, 1.8);
