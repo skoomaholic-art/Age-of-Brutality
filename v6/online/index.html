@@ -345,6 +345,22 @@
     .bar-drop.show { display: block; }
     .bar-drop .panel { margin: 0; border: 0; outline: 0; box-shadow: none; background: transparent; }
     .bar-drop .panel + .panel { border-top: 1px solid var(--rule); }
+    .sub-tabs { display: flex; border-bottom: 1.5px solid var(--ink); margin: 2px 2px 0; }
+    .sub-tab { flex: 1; border: 0; border-radius: 0; box-shadow: none; background: transparent; padding: 7px 8px; font-family: Kurale, serif; font-size: 15px; }
+    .sub-tab.on { background: var(--ink); color: var(--vellum); }
+    .sub-pane { display: none; }
+    .sub-pane.on { display: block; }
+    .tree { display: grid; gap: 4px; justify-items: center; text-align: center; }
+    .tree-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+    .tree-node { min-width: 104px; max-width: 150px; padding: 6px 8px; border: 1.5px solid var(--ink); background: rgba(242,230,200,.9); font-size: 12.5px; line-height: 1.25; }
+    .tree-node b { display: block; font-family: Kurale, serif; font-size: 15px; }
+    .tree-node.ruler { border-width: 2.5px; outline: 1px solid var(--gold); outline-offset: -5px; padding: 9px 12px; }
+    .tree-node.dead { opacity: .5; text-decoration: line-through; }
+    .tree-node.away { border-style: dashed; }
+    .tree-node.minor { border-color: var(--rule); color: var(--ink-soft); }
+    .tree-line { width: 1.5px; height: 12px; background: var(--ink); }
+    .tree-bar { width: 86%; height: 1.5px; background: var(--ink); }
+    .tree-label { margin-top: 8px; font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); }
     .bar-pane { display: none; }
     .bar-pane.on { display: block; }
     .find-row { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 7px 6px; border-top: 1px solid var(--rule); cursor: pointer; font-size: 14px; }
@@ -399,6 +415,7 @@
     .diplomacy h4 { margin:0 0 6px; font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--vermilion, #a3271c); }
     .unmet { margin-top:5px; font-style:italic; font-size:12.5px; opacity:.8; }
     .job-cancel { float:right; padding:1px 7px; font-size:12px; }
+    .oath { margin-left:6px; padding:0 5px; border:1px solid var(--vermilion); color:var(--vermilion-deep); font-size:11px; font-style:normal; }
     .dip-row { display:flex; align-items:center; gap:6px; padding:3px 0; }
     .dip-row .dip-name { flex:1; }
     .dip-row .dip-state { font-style:italic; opacity:.85; }
@@ -520,7 +537,14 @@
       <div id="bar-drop" class="bar-drop">
         <div class="bar-pane" data-pane="news"><div class="panel"><h2>Вести</h2><div id="news-list" class="muted">Пока тихо.</div></div></div>
         <div class="bar-pane" data-pane="diplomacy"><div class="panel"><h2>Дипломатия</h2><div id="diplomacy-slot"></div></div></div>
-        <div class="bar-pane" data-pane="realm"></div>
+        <div class="bar-pane" data-pane="realm">
+          <div class="sub-tabs">
+            <button class="sub-tab on" data-sub="faction">Фракция</button>
+            <button class="sub-tab" data-sub="family">Семейное древо</button>
+          </div>
+          <div id="sub-faction" class="sub-pane on"></div>
+          <div id="sub-family" class="sub-pane"><div class="panel"><h2>Семейное древо</h2><div id="family-tree" class="muted">Загружаем род...</div></div></div>
+        </div>
         <div class="bar-pane" data-pane="characters"></div>
         <div class="bar-pane" data-pane="armies"><div class="panel"><h2>Армии</h2><div id="armies-list" class="muted">Нет армий.</div></div></div>
         <div class="bar-pane" data-pane="agents"><div class="panel"><h2>Агенты</h2><div class="muted">Разведчиков и шпионов у твоего Дома пока нет: эта служба ещё не учреждена.</div></div></div>
@@ -1210,6 +1234,32 @@ async function captiveDo(characterId, action, amount = null) {
   });
 }
 
+// An alliance is sealed by a marriage: whose daughter goes to whose family.
+function marriageWindow(other) {
+  const dip = snapshot?.game?.diplomacy || {};
+  const mine = dip.my_daughter;
+  const theirs = dip.free_daughters?.[other];
+  const offer = bride => () => api('/api/diplomacy', {
+    method: 'POST',
+    headers: {'content-type':'application/json'},
+    body: JSON.stringify({ house, target: other, action: 'OFFER_ALLIANCE', bride })
+  });
+  return {
+    key: 'marry:' + other,
+    art: 'marriage-offer',
+    from: 'Твои сваты',
+    title: 'Брачный союз',
+    text: 'Союз с Домом ' + other + ' скрепляется только свадьбой: дочь одного Дома уходит в семью другого. Союзники не трогают друг друга на дорогах.',
+    terms: 'Нарушивший союз слывёт клятвопреступником: теряет ' + Number(dip.oath_price?.influence || 2) + ' влияния, платит ' +
+      Number(dip.oath_price?.gold || 3) + ' золота пени, а дочь остаётся в чужой семье.',
+    buttons: [
+      { label: mine ? 'Отдать свою дочь, ' + mine : 'Отдать свою дочь', primary: true, disabled: mine ? '' : 'У твоего Дома нет незамужней дочери', run: offer(house) },
+      { label: theirs ? 'Просить руки их дочери, ' + theirs : 'Просить руки их дочери', disabled: theirs ? '' : 'У Дома ' + other + ' нет незамужней дочери', run: offer(other) },
+      { label: 'Отмена' }
+    ]
+  };
+}
+
 function warnBeforeMarch(master) {
   const dip = snapshot?.game?.diplomacy || {};
   const ally = relationWith(master) === 'ALLIANCE';
@@ -1312,14 +1362,16 @@ function pendingDecisions() {
   for (const other of dip.offers_in || []) {
     out.push({
       key: 'alliance:' + other,
-      art: 'pact-offer',
-      from: 'Гонец Дома ' + other,
-      title: 'Предложение союза',
-      text: 'Дом ' + other + ' предлагает союз: ваши войска не тронут друг друга.',
-      terms: 'У Дома может быть только один союзник. Напасть на союзника значит предать его и начать войну.',
+      art: 'marriage-offer',
+      from: 'Сваты Дома ' + other,
+      title: 'Сватовство',
+      text: (dip.offer_brides?.[other] === house
+        ? 'Дом ' + other + ' просит руки твоей дочери, ' + (dip.my_daughter || '') + ', и предлагает брачный союз.'
+        : 'Дом ' + other + ' предлагает отдать свою дочь в твою семью и скрепить брачный союз.') + ' Ваши войска не тронут друг друга.',
+      terms: 'У Дома может быть только один союзник. Нарушивший союз слывёт клятвопреступником: теряет влияние и платит пеню.',
       buttons: [
-        { label: 'Скрепить печатью', primary: true, run: () => diplomacyDo('ACCEPT_ALLIANCE', other) },
-        { label: 'Отослать гонца', run: () => diplomacyDo('DECLINE_ALLIANCE', other) },
+        { label: 'Сыграть свадьбу', primary: true, run: () => diplomacyDo('ACCEPT_ALLIANCE', other) },
+        { label: 'Отказать сватам', run: () => diplomacyDo('DECLINE_ALLIANCE', other) },
         later
       ]
     });
@@ -1432,7 +1484,7 @@ function setupLens() {
 // Every panel of the game opens from the bar. The panels are the same elements
 // the rest of the page renders into; they are only housed in the drop-down.
 const BAR_PANELS = {
-  realm: ['house-panel', 'economy-panel'],
+  realm: [],
   characters: ['characters-panel'],
   orders: ['orders-panel'],
   stats: ['game-status-panel'],
@@ -1447,6 +1499,13 @@ function setupBar() {
     for (const id of ids) home.appendChild($(id));
   }
   $('diplomacy-slot').appendChild($('diplomacy'));
+  $('sub-faction').append($('house-panel'), $('economy-panel'));
+  document.querySelectorAll('.sub-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.sub-tab').forEach(node => node.classList.toggle('on', node === tab));
+      document.querySelectorAll('.sub-pane').forEach(node => node.classList.toggle('on', node.id === 'sub-' + tab.dataset.sub));
+    });
+  });
   document.querySelectorAll('.bar-tab').forEach(tab => {
     tab.addEventListener('click', () => togglePane(tab.dataset.pane));
   });
@@ -1491,6 +1550,37 @@ function focusMapOn(id) {
 function warriorWord(count) {
   return count % 10 === 1 && count % 100 !== 11 ? 'воин'
     : count % 10 >= 2 && count % 10 <= 4 && (count % 100 < 12 || count % 100 > 14) ? 'воина' : 'воинов';
+}
+
+function renderFamily() {
+  const family = characterData?.family;
+  const box = $('family-tree');
+  if (!box || !family) return;
+  const state = person => !person.alive ? 'мёртв'
+    : person.mode === 'CAPTIVE' ? 'в плену у Дома ' + (person.held_by || '?')
+    : person.mode === 'ARMY' ? 'при войске'
+    : person.mode === 'COURT' ? 'при дворе'
+    : 'при дворе, не у дел';
+  const node = (person, title, extra = '') =>
+    '<div class="tree-node ' + extra + (person.alive === false ? ' dead' : '') + (person.mode === 'CAPTIVE' ? ' away' : '') + '"><b>' +
+    escapeHtml(person.name) + '</b>' + escapeHtml(title) + '<br>' + escapeHtml(state(person)) +
+    (person.health === 'WEAKENED' && person.alive ? ' · ослаблен' : '') + '</div>';
+  const children = family.children.map(child => node(child, child.role === 'HEIR' ? 'наследник' : 'сын'));
+  const daughters = family.daughters.map(daughter =>
+    '<div class="tree-node' + (daughter.married_to ? ' away' : '') + '"><b>' + escapeHtml(daughter.name) + '</b>дочь<br>' +
+    escapeHtml(daughter.married_to ? 'замужем в Доме ' + daughter.married_to : 'на выданье') + '</div>');
+  const brides = family.brides.map(bride =>
+    '<div class="tree-node"><b>' + escapeHtml(bride.name) + '</b>невестка<br>из Дома ' + escapeHtml(bride.from) + '</div>');
+  box.className = 'tree';
+  box.innerHTML =
+    (family.ruler ? node(family.ruler, 'правитель Дома ' + family.house, 'ruler') : '') +
+    '<div class="tree-line"></div><div class="tree-bar"></div>' +
+    '<div class="tree-row">' + children.join('') + daughters.join('') + '</div>' +
+    (brides.length ? '<div class="tree-label">Вошли в семью</div><div class="tree-row">' + brides.join('') + '</div>' : '') +
+    (family.bastards.length
+      ? '<div class="tree-label">Побочные дети</div><div class="tree-row">' +
+        family.bastards.map(person => node(person, 'бастард', 'minor')).join('') + '</div>'
+      : '');
 }
 
 function renderFinders() {
@@ -1690,7 +1780,7 @@ function newsFor(item) {
     return { rank: involved ? 7 : 4, art: 'war-declared', title: mine(d.target) ? 'Тебе объявлена война' : 'Война', text: strip(/^Война:\s*/) };
   }
   if (item.type === 'ALLIANCE_FORMED') {
-    return { rank: 6, art: 'deal-made', title: 'Союз скреплён', text: strip(/^Союз:\s*/) };
+    return { rank: 6, art: 'marriage-offer', title: 'Свадьба сыграна', text: strip(/^Союз:\s*/), ok: 'Совет да любовь' };
   }
   if (item.type === 'ALLIANCE_BROKEN') {
     return { rank: 6, art: 'deal-failed', title: 'Союз расторгнут', text: strip(/^Союз расторгнут:\s*/) };
@@ -1844,7 +1934,7 @@ function renderDiplomacy() {
       state = '<span class="dip-state">ждём ответа</span>';
       buttons = '<button data-dip="DECLINE_ALLIANCE" data-target="' + escapeHtml(other) + '">Отозвать</button>';
     } else {
-      buttons = (hasAlly ? '' : '<button data-dip="OFFER_ALLIANCE" data-target="' + escapeHtml(other) + '">Союз</button>') +
+      buttons = (hasAlly ? '' : '<button data-marry="' + escapeHtml(other) + '">Брачный союз</button>') +
         '<button data-dip="DECLARE_WAR" data-target="' + escapeHtml(other) + '">Война</button>';
     }
     // Right of passage, both ways.
@@ -1861,16 +1951,24 @@ function renderDiplomacy() {
       else if ((dip.passage_asked_out || []).includes(other)) sub += '<span>ты просишь прохода, ответа нет</span>';
       else sub += '<button data-dip="REQUEST_PASSAGE" data-target="' + tag + '">Просить прохода</button>';
     }
-    return '<div class="dip-row"><span class="dip-name">' + escapeHtml(other) + '</span>' + state + buttons + '</div>' +
+    const marked = (dip.oathbreakers || []).includes(other) ? ' <span class="oath" title="Нарушил брачный союз">клятвопреступник</span>' : '';
+    const wed = (dip.marriages || []).filter(m => [m.bride_house, m.groom_house].includes(other) && [m.bride_house, m.groom_house].includes(house))
+      .map(m => '<span>' + escapeHtml(m.name + ' из Дома ' + m.bride_house + ' замужем в Доме ' + m.groom_house) + '</span>').join('');
+    sub = wed + sub;
+    return '<div class="dip-row"><span class="dip-name">' + escapeHtml(other) + marked + '</span>' + state + buttons + '</div>' +
       (sub ? '<div class="dip-sub">' + sub + '</div>' : '');
   }).join('');
   box.innerHTML = rows + unknownNote(others.length - met.length);
+  box.querySelectorAll('button[data-marry]').forEach(button => {
+    button.onclick = () => { togglePane(null); showDecision(marriageWindow(button.dataset.marry)); };
+  });
   box.querySelectorAll('button[data-dip]').forEach(button => {
     button.onclick = async () => {
       const action = button.dataset.dip;
       const target = button.dataset.target;
       if (action === 'DECLARE_WAR' && !confirm('Объявить войну Дому ' + target + '? Мира в этой партии уже не будет.')) return;
-      if (action === 'BREAK_ALLIANCE' && !confirm('Расторгнуть союз с Домом ' + target + '?')) return;
+      if (action === 'BREAK_ALLIANCE' && !confirm('Расторгнуть брачный союз с Домом ' + target + '? Ты прослывёшь клятвопреступником: -' +
+        Number(dip.oath_price?.influence || 2) + ' влияния, ' + Number(dip.oath_price?.gold || 3) + ' золота пени, и ни один Дом под рукой ИИ больше не породнится с тобой.')) return;
       button.disabled = true;
       try {
         await api('/api/diplomacy', {
@@ -3046,6 +3144,7 @@ async function refresh() {
   renderDiplomacy();
   renderNews();
   renderFinders();
+  renderFamily();
   renderBarStatus();
   pumpWindows();
   renderDecisions();

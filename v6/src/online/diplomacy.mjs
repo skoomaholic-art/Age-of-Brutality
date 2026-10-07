@@ -1,8 +1,11 @@
-// Relations between Houses: neutral by default, war or alliance by deed.
+// Relations between Houses: neutral by default, war by deed, alliance by marriage.
 //
 // - Neutral Houses whose armies meet on the road go to war and fight.
 // - Enemies fight on sight.
 // - Allies let each other pass.
+// An alliance is sealed only by a marriage: one House gives a daughter into
+// the other's family. Whoever breaks it is an oathbreaker: he pays in gold and
+// influence, and the other Houses remember.
 // War is also declared by attacking a House's land; attacking an ally is
 // treachery and turns the alliance into war.
 
@@ -91,12 +94,14 @@ export function declareWarInPlace(game, a, b, { nowMs = Date.now(), cause = 'ATT
   diplomacy.passage_requests ||= {};
   delete diplomacy.passage_requests[offerKey(a, b)];
   delete diplomacy.passage_requests[offerKey(b, a)];
+  const price = before === RELATION.ALLIANCE ? punishOathbreaker(game, a, b) : {};
   game.state.journal.push({
     kind: 'WAR_DECLARED',
     aggressor: a,
     target: b,
     cause,
     betrayal: before === RELATION.ALLIANCE,
+    ...price,
     at: new Date(nowMs).toISOString()
   });
   stamp(game, nowMs);
@@ -117,7 +122,49 @@ function assertHouses(game, constants, house, target) {
   if (abandoned(game, target)) throw new Error('это государство брошено, договариваться не с кем');
 }
 
-function canAlly(game, a, b) {
+const DAUGHTER_NAMES = {
+  'Варкайр': 'Торвейна', 'Сайрвен': 'Элсайра', 'Ортайн': 'Майвена',
+  'Эркай': 'Рейтара', 'Тасвар': 'Кайсара', 'Айрель': 'Элияра'
+};
+export const OATH_INFLUENCE = 2;   // influence the oathbreaker loses
+export const OATH_GOLD = 3;        // gold he pays to the wronged House
+
+// Every House has a daughter of marriageable age.
+function dynastyOf(game, house) {
+  game.dynasty ||= {};
+  game.dynasty[house] ||= {
+    daughters: [{ id: `D-${house}-1`, name: DAUGHTER_NAMES[house] || `Дочь Дома ${house}`, married_to: null, married_at: null }]
+  };
+  return game.dynasty[house];
+}
+
+export function freeDaughter(game, house) {
+  const known = game?.dynasty?.[house];
+  if (!known) return { id: `D-${house}-1`, name: DAUGHTER_NAMES[house] || `Дочь Дома ${house}`, married_to: null };
+  return known.daughters.find(daughter => !daughter.married_to) || null;
+}
+
+export function isOathbreaker(game, house) {
+  return Number(game?.diplomacy?.oathbreakers?.[house] || 0) > 0;
+}
+
+// The price of a broken marriage alliance. Mutates `game`.
+function punishOathbreaker(game, breaker, wronged) {
+  const diplomacy = ensure(game);
+  diplomacy.oathbreakers ||= {};
+  diplomacy.oathbreakers[breaker] = Number(diplomacy.oathbreakers[breaker] || 0) + 1;
+  const purse = game.state.houses[breaker];
+  const influence = Math.min(OATH_INFLUENCE, Math.max(0, Number(purse.influence || 0)));
+  const gold = Math.min(OATH_GOLD, Math.max(0, Number(purse.gold || 0)));
+  purse.influence = Number(purse.influence || 0) - influence;
+  purse.gold = Number(purse.gold || 0) - gold;
+  if (game.state.houses[wronged]) game.state.houses[wronged].gold = Number(game.state.houses[wronged].gold || 0) + gold;
+  return { influence_lost: influence, gold_paid: gold };
+}
+
+function canAlly(game, a, b, bride = a) {
+  if (![a, b].includes(bride)) return 'невеста должна быть из одного из двух Домов';
+  if (!freeDaughter(game, bride)) return `у Дома ${bride} нет незамужней дочери`;
   if (relationOf(game, a, b) === RELATION.WAR) return 'с этим Домом идёт война';
   if (relationOf(game, a, b) === RELATION.ALLIANCE) return 'союз уже заключён';
   if (alliesOf(game, a).length >= MAX_ALLIES) return `у Дома ${a} уже есть союзник`;
@@ -125,9 +172,13 @@ function canAlly(game, a, b) {
   return null;
 }
 
-function formAlliance(game, a, b, nowMs) {
+function formAlliance(game, a, b, nowMs, bride = a) {
   const diplomacy = ensure(game);
   diplomacy.relations[pairKey(a, b)] = RELATION.ALLIANCE;
+  const groom = bride === a ? b : a;
+  const daughter = dynastyOf(game, bride).daughters.find(item => !item.married_to);
+  daughter.married_to = groom;
+  daughter.married_at = new Date(nowMs).toISOString();
   for (const key of Object.keys(diplomacy.offers)) {
     const [from, to] = key.split('>');
     if ([a, b].includes(from) || [a, b].includes(to)) delete diplomacy.offers[key];
@@ -135,23 +186,31 @@ function formAlliance(game, a, b, nowMs) {
   game.state.journal.push({
     kind: 'ALLIANCE_FORMED',
     houses: [a, b],
+    bride_house: bride,
+    bride_name: daughter.name,
+    groom_house: groom,
     at: new Date(nowMs).toISOString()
   });
   stamp(game, nowMs);
 }
 
-export function offerAlliance(game, constants, house, target, { nowMs = Date.now() } = {}) {
+const offerBride = (offer, from) => (offer && typeof offer === 'object' && offer.bride) || from;
+
+// `bride` names the House whose daughter marries: the offerer's by default
+// ("we give our daughter"), or the other's ("we ask for your daughter's hand").
+export function offerAlliance(game, constants, house, target, { nowMs = Date.now(), bride = house } = {}) {
   assertHouses(game, constants, house, target);
-  const reason = canAlly(game, house, target);
+  const reason = canAlly(game, house, target, bride);
   if (reason) throw new Error(reason);
 
   const next = structuredClone(game);
   const diplomacy = ensure(next);
-  if (diplomacy.offers[offerKey(target, house)]) {
-    formAlliance(next, house, target, nowMs);
+  const theirs = diplomacy.offers[offerKey(target, house)];
+  if (theirs && offerBride(theirs, target) === bride) {
+    formAlliance(next, house, target, nowMs, bride);
     return next;
   }
-  diplomacy.offers[offerKey(house, target)] = new Date(nowMs).toISOString();
+  diplomacy.offers[offerKey(house, target)] = { at: new Date(nowMs).toISOString(), bride };
   stamp(next, nowMs);
   return next;
 }
@@ -161,10 +220,11 @@ export function acceptAlliance(game, constants, house, from, { nowMs = Date.now(
   if (!game?.diplomacy?.offers?.[offerKey(from, house)]) {
     throw new Error('такого предложения союза нет');
   }
-  const reason = canAlly(game, house, from);
+  const bride = offerBride(game.diplomacy.offers[offerKey(from, house)], from);
+  const reason = canAlly(game, house, from, bride);
   if (reason) throw new Error(reason);
   const next = structuredClone(game);
-  formAlliance(next, from, house, nowMs);
+  formAlliance(next, from, house, nowMs, bride);
   return next;
 }
 
@@ -182,10 +242,12 @@ export function breakAlliance(game, house, other, { nowMs = Date.now() } = {}) {
   if (!areAllies(game, house, other)) throw new Error('союза с этим Домом нет');
   const next = structuredClone(game);
   delete ensure(next).relations[pairKey(house, other)];
+  const price = punishOathbreaker(next, house, other);
   next.state.journal.push({
     kind: 'ALLIANCE_BROKEN',
     house,
     other,
+    ...price,
     at: new Date(nowMs).toISOString()
   });
   stamp(next, nowMs);
@@ -254,11 +316,13 @@ export function answerAiOffers(game, aiHouses, { nowMs = Date.now() } = {}) {
     if (!aiHouses.includes(to) || abandoned(game, to)) continue;
     next ||= structuredClone(game);
     if (!ensure(next).offers[key]) continue;
-    if (canAlly(next, to, from)) {
+    const bride = offerBride(next.diplomacy.offers[key], from);
+    // No House gives or takes a daughter with a known oathbreaker.
+    if (canAlly(next, to, from, bride) || isOathbreaker(next, from)) {
       delete next.diplomacy.offers[key];
       stamp(next, nowMs);
     } else {
-      formAlliance(next, from, to, nowMs);
+      formAlliance(next, from, to, nowMs, bride);
     }
   }
   return next || game;
@@ -275,10 +339,20 @@ export function diplomacyView(game, house, known = null) {
   }
   const offers_in = [];
   const offers_out = [];
-  for (const key of Object.keys(game?.diplomacy?.offers || {})) {
+  const offer_brides = {};
+  for (const [key, offer] of Object.entries(game?.diplomacy?.offers || {})) {
     const [from, to] = key.split('>');
-    if (house && to === house) offers_in.push(from);
-    if (house && from === house) offers_out.push(to);
+    if (house && to === house) { offers_in.push(from); offer_brides[from] = offerBride(offer, from); }
+    if (house && from === house) { offers_out.push(to); offer_brides[to] = offerBride(offer, from); }
+  }
+  const visible = name => !seen || seen.has(name);
+  const marriages = [];
+  for (const [bride, family] of Object.entries(game?.dynasty || {})) {
+    for (const daughter of family.daughters || []) {
+      if (daughter.married_to && visible(bride) && visible(daughter.married_to)) {
+        marriages.push({ bride_house: bride, name: daughter.name, groom_house: daughter.married_to });
+      }
+    }
   }
   const passage_asked_in = [];
   const passage_asked_out = [];
@@ -294,6 +368,13 @@ export function diplomacyView(game, house, known = null) {
     offers_out,
     max_allies: MAX_ALLIES,
     known: known ? [...known] : null,
+    // Whose daughter an offer is about, the marriages made, and who broke his word.
+    offer_brides,
+    marriages,
+    my_daughter: house ? freeDaughter(game, house)?.name || null : null,
+    free_daughters: Object.fromEntries((known || []).map(other => [other, freeDaughter(game, other)?.name || null])),
+    oathbreakers: Object.keys(game?.diplomacy?.oathbreakers || {}).filter(visible),
+    oath_price: { influence: OATH_INFLUENCE, gold: OATH_GOLD },
     passage_asked_in,
     passage_asked_out,
     // Whose roads are open to us, and to whom ours are.

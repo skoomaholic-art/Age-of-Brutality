@@ -259,7 +259,8 @@ export function journalEntryToAudit(entry, map, game) {
 
   if (entry.kind === 'WAR_DECLARED') {
     const how = entry.betrayal
-      ? `Дом ${entry.aggressor} предал союз и поднял оружие на Дом ${entry.target}.`
+      ? `Дом ${entry.aggressor} предал брачный союз и поднял оружие на Дом ${entry.target}. Он прослыл клятвопреступником` +
+        ` (влияние -${Number(entry.influence_lost || 0)}, пеня ${Number(entry.gold_paid || 0)} золота).`
       : entry.cause === 'ENCOUNTER'
         ? `Войска Домов ${entry.aggressor} и ${entry.target} сошлись на дороге, и мира между ними больше нет.`
         : `Дом ${entry.aggressor} пошёл войной на Дом ${entry.target}.`;
@@ -280,8 +281,10 @@ export function journalEntryToAudit(entry, map, game) {
   if (entry.kind === 'ALLIANCE_FORMED') {
     return {
       ...base,
-      message: `Союз: Дома ${entry.houses[0]} и ${entry.houses[1]} скрепили союз. Их войска не тронут друг друга.`,
-      details: { houses: [...entry.houses], at: entry.at || null }
+      message: entry.bride_name
+        ? `Союз: Дом ${entry.bride_house} отдал дочь, ${entry.bride_name}, в семью Дома ${entry.groom_house}. Свадьба сыграна, союз скреплён.`
+        : `Союз: Дома ${entry.houses[0]} и ${entry.houses[1]} скрепили союз. Их войска не тронут друг друга.`,
+      details: { houses: [...entry.houses], bride_house: entry.bride_house || null, bride_name: entry.bride_name || null, groom_house: entry.groom_house || null, at: entry.at || null }
     };
   }
 
@@ -321,7 +324,8 @@ export function journalEntryToAudit(entry, map, game) {
   if (entry.kind === 'ALLIANCE_BROKEN') {
     return {
       ...base,
-      message: `Союз расторгнут: Дом ${entry.house} более не союзник Дому ${entry.other}.`,
+      message: `Союз расторгнут: Дом ${entry.house} разорвал брачный союз с Домом ${entry.other} и прослыл клятвопреступником` +
+        ` (влияние -${Number(entry.influence_lost || 0)}, пеня ${Number(entry.gold_paid || 0)} золота Дому ${entry.other}).`,
       details: { houses: [entry.house, entry.other], at: entry.at || null }
     };
   }

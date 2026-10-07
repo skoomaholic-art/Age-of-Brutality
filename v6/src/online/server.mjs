@@ -60,6 +60,7 @@ import {
   declareWar,
   declineAlliance,
   diplomacyView,
+  freeDaughter,
   offerAlliance
 } from './diplomacy.mjs';
 import { processRounds } from './ai.mjs';
@@ -641,6 +642,42 @@ function publicBootstrap(ctx) {
     paces: Object.fromEntries(
       Object.entries(GAME_PACES).map(([key, pace]) => [key, { ...pace, default: key === DEFAULT_PACE }])
     )
+  };
+}
+
+// The family of a House as its tree shows it: the ruler, his children, the
+// daughters and where they are married, the brides taken in, the bastards.
+function familyView(game, house) {
+  const cards = (characterCatalog.characters || []).filter(card => card.house_pool === house);
+  const live = id => game.state.characters?.[id] || null;
+  const person = card => {
+    const now = live(card.id);
+    return {
+      id: card.id,
+      name: card.name,
+      kind: card.type,
+      role: now?.role || null,
+      alive: now ? Boolean(now.alive) : true,
+      mode: now?.mode || 'RESERVE',
+      health: now?.health || 'HEALTHY',
+      held_by: now?.captivity?.held_by || null
+    };
+  };
+  const daughters = (game.dynasty?.[house]?.daughters || [{ id: `D-${house}-1`, name: freeDaughter(game, house)?.name, married_to: null }])
+    .map(daughter => ({ id: daughter.id, name: daughter.name, married_to: daughter.married_to || null }));
+  const brides = [];
+  for (const [from, family] of Object.entries(game.dynasty || {})) {
+    for (const daughter of family.daughters || []) {
+      if (daughter.married_to === house) brides.push({ id: daughter.id, name: daughter.name, from });
+    }
+  }
+  return {
+    house,
+    ruler: cards.filter(card => card.type === 'Правитель').map(person)[0] || null,
+    children: cards.filter(card => card.type === 'Законный ребёнок').map(person),
+    bastards: cards.filter(card => card.type === 'Бастард').map(person),
+    daughters,
+    brides
   };
 }
 
@@ -1283,7 +1320,8 @@ async function handleGameApi(req, res, url, ctx, subpath) {
         )
       })),
       armies,
-      captives: captivesView(ctx.game, map, house)
+      captives: captivesView(ctx.game, map, house),
+      family: familyView(ctx.game, house)
     });
   }
 
@@ -1394,7 +1432,7 @@ async function handleGameApi(req, res, url, ctx, subpath) {
       mutate: async game => {
         const nowMs = Date.now();
         let next;
-        if (action === 'OFFER_ALLIANCE') next = offerAlliance(game, constants, house, target, { nowMs });
+        if (action === 'OFFER_ALLIANCE') next = offerAlliance(game, constants, house, target, { nowMs, bride: body.bride === target ? target : house });
         else if (action === 'ACCEPT_ALLIANCE') next = acceptAlliance(game, constants, house, target, { nowMs });
         else if (action === 'DECLINE_ALLIANCE') next = declineAlliance(game, house, target, { nowMs });
         else if (action === 'BREAK_ALLIANCE') next = breakAlliance(game, house, target, { nowMs });

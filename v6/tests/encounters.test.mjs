@@ -198,3 +198,33 @@ test('with right of passage warriors enter the host\'s land as guests', async ()
   assert.equal(closed.state.territories[CAPITAL].warriors[HOUSE], 5);
   assert.ok(closed.state.journal.some(e => e.kind === 'GUESTS_EXPELLED'));
 });
+
+test('an alliance is a marriage, and breaking it has a price', async () => {
+  const { breakAlliance, isOathbreaker, freeDaughter, OATH_GOLD, OATH_INFLUENCE } = await import('../src/online/diplomacy.mjs');
+  let game = borderGame(1, 1);
+  // Варкайр asks for the hand of Сайрвен's daughter.
+  game = offerAlliance(game, constants, HOUSE, RIVAL, { nowMs: T0, bride: RIVAL });
+  assert.equal(diplomacyView(game, RIVAL, [HOUSE]).offer_brides[HOUSE], RIVAL);
+  game = acceptAlliance(game, constants, RIVAL, HOUSE, { nowMs: T0 });
+  assert.equal(relationOf(game, HOUSE, RIVAL), RELATION.ALLIANCE);
+  assert.equal(game.dynasty[RIVAL].daughters[0].married_to, HOUSE);
+  assert.equal(freeDaughter(game, RIVAL), null);
+  assert.ok(freeDaughter(game, HOUSE), 'the groom\'s House still has its own daughter');
+  const wedding = game.state.journal.find(e => e.kind === 'ALLIANCE_FORMED');
+  assert.equal(wedding.bride_house, RIVAL);
+
+  const before = { ...game.state.houses[HOUSE] };
+  const rivalGold = game.state.houses[RIVAL].gold;
+  game = breakAlliance(game, HOUSE, RIVAL, { nowMs: T0 });
+  assert.equal(isOathbreaker(game, HOUSE), true);
+  assert.equal(game.state.houses[HOUSE].influence, before.influence - OATH_INFLUENCE);
+  assert.equal(game.state.houses[HOUSE].gold, before.gold - OATH_GOLD);
+  assert.equal(game.state.houses[RIVAL].gold, rivalGold + OATH_GOLD);
+
+  // The daughter stays married: Сайрвен has none left to give, and no AI House weds an oathbreaker.
+  assert.throws(() => offerAlliance(game, constants, RIVAL, HOUSE, { nowMs: T0, bride: RIVAL }), /нет незамужней дочери/);
+  game.contacts[HOUSE].push(THIRD); game.contacts[THIRD] = [HOUSE];
+  let asked = offerAlliance(game, constants, HOUSE, THIRD, { nowMs: T0 });
+  asked = answerAiOffers(asked, [THIRD], { nowMs: T0 });
+  assert.equal(relationOf(asked, HOUSE, THIRD), RELATION.NEUTRAL);
+});
