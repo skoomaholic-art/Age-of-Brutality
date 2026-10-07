@@ -1467,12 +1467,14 @@ function capitalCastle(territoryId, c, owner) {
   return `<image href="/assets/img/${file}.png" x="${c.x - w / 2}" y="${c.y - w * 0.66}" width="${w}" height="${w}"></image>`;
 }
 
-// Cities carry no flag: whole, or overgrown once their realm is abandoned.
+// Cities and villages carry no flag: whole, or overgrown once their realm is abandoned.
 const CITY_SIZE = 26;
 
-function cityFigure(c, owner) {
-  const file = owner && abandonedHouses()[owner] ? 'city-abandoned' : 'city';
-  const w = CITY_SIZE;
+const VILLAGE_SIZE = 19;
+const WILD_SIZE = 16;
+
+function settlementFigure(kind, w, c, owner) {
+  const file = owner && abandonedHouses()[owner] ? kind + '-abandoned' : kind;
   return `<image href="/assets/img/${file}.png" x="${c.x - w / 2}" y="${c.y - w * 0.62}" width="${w}" height="${w}"></image>`;
 }
 
@@ -1617,9 +1619,11 @@ function renderMap() {
     }
 
     if (capital) castles.push(capitalCastle(t.id, c, owner));
-    else if (t.type === 'Город') castles.push(cityFigure(c, owner));
+    else if (t.type === 'Город') castles.push(settlementFigure('city', CITY_SIZE, c, owner));
+    else if (t.type === 'Деревня') castles.push(settlementFigure('village', VILLAGE_SIZE, c, owner));
+    else if (t.type === 'Дикая земля') castles.push(settlementFigure('wild', WILD_SIZE, c, null));
     if (total && owner) {
-      const tx = capital ? c.x + 21 : t.type === 'Город' ? c.x + 14 : c.x + 8.5;
+      const tx = capital ? c.x + 21 : t.type === 'Город' ? c.x + 14 : t.type === 'Деревня' ? c.x + 11 : c.x + 8.5;
       const ty = capital ? c.y - 1 : c.y - 5;
       tokens.push(shieldToken(tx, ty, colors[owner] || '#8a7a5c', total));
     }

@@ -80,6 +80,15 @@ def main():
         px[..., 3] = np.where(px[..., 3] < 24, 0, px[..., 3])  # stray near-transparent specks
         save(px, name + '.png', 200)
 
+    for name in ('village', 'village-abandoned'):
+        px = load(name + '.png')
+        px[..., 3] = np.where(px[..., 3] < 24, 0, px[..., 3])
+        save(px, name + '.png', 160)
+
+    px = load('wild.png')
+    px[..., 3] = np.where(px[..., 3] < 24, 0, px[..., 3])
+    save(px, 'wild.png', 144)
+
 FLAG_CAPTURED = [(668, 40), (1100, 40), (1100, 340), (840, 340), (820, 250), (668, 245)]
 
 if __name__ == '__main__':

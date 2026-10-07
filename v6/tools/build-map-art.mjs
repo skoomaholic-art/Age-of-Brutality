@@ -451,13 +451,13 @@ function settlement(site) {
     // Painted figure placed by the client (online/assets/img/city*.png).
     art += `<ellipse cx="${x}" cy="${f1(y + 2.5)}" rx="10" ry="5" fill="#b9a66a" opacity=".5"/>`;
   } else if (site.type === 'Деревня') {
-    art += house(x - 5.6, y + 2.6, 3.4, 2.4, 1.9) + house(x + 1.8, y + 1.6, 3.6, 2.5, 2);
-    art += house(x - 1.8, y + 5, 3.4, 2.3, 1.8);
+    // Painted figure placed by the client (online/assets/img/village*.png).
+    art += `<ellipse cx="${x}" cy="${f1(y + 2)}" rx="7.5" ry="3.8" fill="#b9a66a" opacity=".45"/>`;
   } else if (site.type === 'Половина острова') {
     art += tower(x - 1.2, y + 3, 2.4, 6) + house(x + 2.2, y + 4, 3.2, 2.2, 1.7);
   } else {
-    // Wild land: a lone hunting lodge.
-    art += house(x - 1.8, y + 3, 3.4, 2.3, 1.9);
+    // Wild land: the hunting lodge is a painted figure placed by the client.
+    art += `<ellipse cx="${x}" cy="${f1(y + 2)}" rx="6.5" ry="3.3" fill="#b9a66a" opacity=".4"/>`;
   }
   return art;
 }
