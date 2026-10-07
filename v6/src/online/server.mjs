@@ -655,7 +655,8 @@ function familyView(game, house) {
     const now = live(card.id);
     return {
       id: card.id,
-      name: card.name,
+      name: now?.name || card.name,
+      appearance: now?.appearance || null,
       kind: card.type,
       role: now?.role || null,
       alive: now ? Boolean(now.alive) : true,
@@ -1324,6 +1325,35 @@ async function handleGameApi(req, res, url, ctx, subpath) {
       captives: captivesView(ctx.game, map, house),
       family: familyView(ctx.game, house)
     });
+  }
+
+  // The player names a member of his House and chooses how he looks.
+  if (req.method === 'POST' && subpath === '/characters/appearance') {
+    const body = await readBody(req);
+    const house = String(body.house || '').trim();
+    await requireHouse(ctx, req, house, { running: false });
+    const result = await serial(ctx, () => runGameCommand(ctx, req, {
+      kind: 'APPEARANCE',
+      status: 200,
+      house,
+      mutate: async game => {
+        const next = structuredClone(game);
+        const character = next.state.characters?.[String(body.character_id || '')];
+        if (!character || character.house !== house) throw new Error('это не человек твоего Дома');
+        const name = String(body.name || '').replace(/\s+/g, ' ').trim().slice(0, 24);
+        if (name.length < 2) throw new Error('имя должно быть не короче двух букв');
+        const look = {};
+        for (const key of ['head', 'eyes', 'brows', 'nose', 'mouth', 'beard', 'hair', 'hat', 'clothes']) {
+          const value = Number(body.appearance?.[key]);
+          look[key] = Number.isInteger(value) && value >= 0 && value <= 40 ? value : 0;
+        }
+        character.name = name;
+        character.appearance = look;
+        next.updated_at = new Date().toISOString();
+        return { game: next, response: { character } };
+      }
+    }));
+    return json(res, result.status, result.response);
   }
 
   if (req.method === 'POST' && subpath === '/characters/assign-army') {
