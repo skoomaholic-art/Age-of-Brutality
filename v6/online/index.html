@@ -214,7 +214,7 @@
       border: 1.5px solid var(--ink); outline: 1px solid var(--vermilion); outline-offset: -6px;
       background: var(--vellum); box-shadow: 6px 6px 0 rgba(43,27,18,.45);
     }
-    .decision-card .miniature img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
+    .decision-card .miniature img { width: 100%; height: auto; max-height: 52vh; object-fit: contain; }
     .decision-from { margin-top: 11px; font-size: 13.5px; font-style: italic; color: var(--ink-soft); }
     .decision-card h3 { margin: 2px 0 0; font-family: 'Vek Gothic', Kurale, Alegreya, serif; font-weight: 400; font-size: 30px; line-height: 1.1; color: var(--vermilion-deep); }
     .decision-card p { margin: 6px 0 0; font-size: 15.5px; line-height: 1.35; }
@@ -391,6 +391,8 @@
     .maker-house b { font-family: Kurale, serif; font-size: 19px; }
     .maker-house span { color: var(--ink-soft); font-style: italic; }
     .house-motto { margin: -4px 0 8px; font-style: italic; color: var(--ink-soft); }
+    .maker-banner { display: grid; grid-template-columns: 70px 1fr; gap: 10px; align-items: center; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--rule); }
+    .banner-mini { display: inline-block; width: 15px; vertical-align: -5px; margin-right: 5px; }
     .maker-foot { grid-column: 1 / -1; display: flex; gap: 8px; justify-content: flex-end; }
     @media (max-width: 640px) { .maker-card { grid-template-columns: 1fr; } }
     .sub-tabs { display: flex; border-bottom: 1.5px solid var(--ink); margin: 2px 2px 0; }
@@ -421,7 +423,7 @@
     .news-item:hover { background: rgba(201,162,58,.18); }
     .news-item { display: grid; grid-template-columns: 84px 1fr; gap: 10px; padding: 8px 4px; border-top: 1px solid var(--rule); }
     .news-item:first-child { border-top: 0; }
-    .news-item img { width: 84px; aspect-ratio: 4 / 3; object-fit: cover; border: 1px solid var(--ink); }
+    .news-item img { width: 84px; aspect-ratio: 4 / 3; object-fit: contain; background: #c9a23a; border: 1px solid var(--ink); }
     .news-item h4 { margin: 0; font-family: 'Vek Gothic', Kurale, serif; font-weight: 400; font-size: 19px; color: var(--vermilion-deep); }
     .news-item p { margin: 2px 0 0; font-size: 13px; line-height: 1.3; }
     .news-item time { font-size: 11.5px; color: var(--ink-soft); }
@@ -768,6 +770,7 @@
       <div class="maker-house"><i id="maker-swatch"></i><b id="maker-house"></b><span id="maker-seat"></span></div>
       <label class="muted" for="maker-motto">Девиз Дома</label>
       <input id="maker-motto" class="maker-name" maxlength="60" placeholder="Например: Наше слово крепче стен">
+      <div class="maker-banner"><div id="maker-flag"></div><div id="maker-flag-rows"></div></div>
     </div>
     <label class="muted" for="maker-name">Имя</label>
     <input id="maker-name" class="maker-name" maxlength="24">
@@ -1115,7 +1118,9 @@ function renderCharacters() {
       '<div class="character-stat"><span>ИНТ</span><b>' + Number(stats.intrigue || 0) + '</b></div>' +
       '<div class="character-stat"><span>УПР</span><b>' + Number(stats.stewardship || 0) + '</b></div>' +
       '</div><div class="character-location">' + escapeHtml(location) + '</div>' +
-      special + actions + '</div>';
+      special + actions +
+      (FACE && character.alive ? '<div class="character-actions"><button data-face="' + escapeHtml(character.id) + '" title="Сменить облик, наряд и имя">Облачить</button></div>' : '') +
+      '</div>';
   }).join('');
 
   document.querySelectorAll('[data-char-army]').forEach(button => {
@@ -1253,6 +1258,58 @@ function renderRounds() {
   }).join('');
 }
 
+// ---------- the standard of a House ----------
+const BANNER_COLORS = ['#b3311f', '#2c4a86', '#3f7048', '#6a4585', '#c0587a', '#2e2826', '#c9a23a', '#f2e6c8', '#d9742a', '#7a8a94'];
+const BANNER_COLOR_NAMES = ['червлень', 'лазурь', 'зелень', 'пурпур', 'роза', 'чернь', 'золото', 'серебро', 'охра', 'сталь'];
+const BANNER_SHAPES = [
+  ['прямое', 'M8 8H56V62H8Z'], ['с косицами', 'M8 8H56V68L32 52L8 68Z'], ['клин', 'M8 8H56V50L32 70L8 50Z'],
+  ['округлое', 'M8 8H56V46Q56 68 32 68Q8 68 8 46Z'], ['языки пламени', 'M8 8H56L49 17L56 26L49 35L56 44L49 53L56 62H8Z'],
+  ['вымпел', 'M8 8H58L8 66Z']
+];
+const BANNER_FIELDS = [
+  ['гладкое', ''], ['рассечённое', '<rect x="32" y="0" width="32" height="80"/>'], ['пересечённое', '<rect x="0" y="36" width="64" height="44"/>'],
+  ['четверти', '<rect x="32" y="0" width="32" height="36"/><rect x="0" y="36" width="32" height="44"/>'],
+  ['скошенное', '<path d="M8 8H56V62Z"/>'], ['крест', '<rect x="27" y="0" width="10" height="80"/><rect x="0" y="27" width="64" height="10"/>'],
+  ['косой крест', '<path d="M8 8l8 0l40 54l-8 0ZM56 8l-8 0l-40 54l8 0Z"/>'],
+  ['полосы', '<rect x="0" y="17" width="64" height="9"/><rect x="0" y="35" width="64" height="9"/><rect x="0" y="53" width="64" height="9"/>'],
+  ['кайма', '<path fill-rule="evenodd" d="M0 0H64V80H0ZM14 14V56H50V14Z"/>']
+];
+const BANNER_EMBLEMS = ['', '⚜', '♜', '☀', '☾', '✚', '★', '♞', '♛', '⚔', '☠', '♥', '⚖', '❦'];
+const BANNER_EMBLEM_NAMES = ['нет', 'лилия', 'башня', 'солнце', 'месяц', 'крест', 'звезда', 'конь', 'корона', 'мечи', 'череп', 'сердце', 'весы', 'лоза'];
+const BANNER_ROWS = [['shape', 'Полотно', BANNER_SHAPES.length], ['field', 'Поле', BANNER_FIELDS.length], ['c1', 'Цвет', 10], ['c2', 'Второй цвет', 10], ['emblem', 'Герб', BANNER_EMBLEMS.length], ['ec', 'Цвет герба', 10]];
+let bannerSeq = 0;
+
+function bannerOf(who) {
+  const saved = snapshot?.game?.house_profiles?.[who]?.banner;
+  if (saved) return saved;
+  const own = Math.max(0, BANNER_COLORS.indexOf(colors[who]));
+  return { shape: 0, field: 0, c1: own, c2: 7, emblem: 1, ec: 6 };
+}
+
+function bannerSvg(b) {
+  const id = 'bn' + (bannerSeq += 1);
+  const shape = BANNER_SHAPES[b.shape % BANNER_SHAPES.length][1];
+  return '<svg viewBox="0 0 64 80" style="display:block;width:100%;height:auto"><defs><clipPath id="' + id + '"><path d="' + shape + '"/></clipPath></defs>' +
+    '<path d="M6 2V78" stroke="#6b4a22" stroke-width="3" stroke-linecap="round"/><circle cx="6" cy="3" r="3" fill="#c9a23a" stroke="#2b1b12" stroke-width=".8"/>' +
+    '<g clip-path="url(#' + id + ')"><rect width="64" height="80" fill="' + BANNER_COLORS[b.c1 % 10] + '"/><g fill="' + BANNER_COLORS[b.c2 % 10] + '">' +
+    BANNER_FIELDS[b.field % BANNER_FIELDS.length][1] + '</g></g>' +
+    '<path d="' + shape + '" fill="none" stroke="#2b1b12" stroke-width="1.6" stroke-linejoin="round"/>' +
+    '<text x="32" y="' + (b.shape === 5 ? 34 : 44) + '" text-anchor="middle" font-size="' + (b.shape === 5 ? 18 : 26) + '" font-family="serif" fill="' + BANNER_COLORS[b.ec % 10] +
+    '" stroke="#2b1b12" stroke-width=".5" paint-order="stroke">' + BANNER_EMBLEMS[b.emblem % BANNER_EMBLEMS.length] + '</text></svg>';
+}
+
+let makerBanner = null;
+
+function drawBannerMaker() {
+  $('maker-flag').innerHTML = bannerSvg(makerBanner);
+  $('maker-flag-rows').innerHTML = BANNER_ROWS.map(([key, label]) => {
+    const v = makerBanner[key];
+    const name = key === 'shape' ? BANNER_SHAPES[v][0] : key === 'field' ? BANNER_FIELDS[v][0] : key === 'emblem' ? BANNER_EMBLEM_NAMES[v] : BANNER_COLOR_NAMES[v];
+    return '<div class="maker-row"><span>' + label + '</span><button data-bstep="-1" data-bkey="' + key + '">‹</button><b>' + name +
+      '</b><button data-bstep="1" data-bkey="' + key + '">›</button></div>';
+  }).join('');
+}
+
 // ---------- portraits ----------
 // A face is put together from painted parts on a 400 x 575 sheet.
 let FACE = null;
@@ -1329,11 +1386,13 @@ function openMaker(character, opening = false) {
   $('maker-house').textContent = 'Дом ' + house;
   $('maker-seat').textContent = 'столица ' + (territoryById(snapshot?.map?.capitals?.[house])?.name || '');
   $('maker-motto').value = characterData?.motto || '';
+  makerBanner = { ...bannerOf(house) };
+  drawBannerMaker();
   $('maker-later').textContent = opening ? 'Начать как есть' : 'Позже';
   $('maker-save').textContent = opening ? 'Начать правление' : 'Да будет таков';
   makerFor = character.id;
   makerLook = { ...lookOf(character) };
-  $('maker-title').textContent = opening ? 'Твой Дом и его правитель' : character.role === 'RULER' ? 'Облик правителя' : 'Облик: ' + character.name;
+  $('maker-title').textContent = opening ? 'Твой Дом и его правитель' : character.role === 'RULER' ? 'Штандарт Дома и облик правителя' : 'Облачение: ' + character.name;
   $('maker-name').value = character.name;
   drawMaker();
   $('maker').classList.add('show');
@@ -1354,7 +1413,19 @@ function setupMaker() {
     makerLook[kind] = value;
     drawMaker();
   });
+  $('maker-flag-rows').addEventListener('click', event => {
+    const button = event.target.closest('[data-bkey]');
+    if (!button) return;
+    const key = button.dataset.bkey;
+    const n = BANNER_ROWS.find(row => row[0] === key)[2];
+    makerBanner[key] = (makerBanner[key] + Number(button.dataset.bstep) + n) % n;
+    drawBannerMaker();
+  });
   $('maker-random').onclick = () => {
+    for (const [key, , n] of BANNER_ROWS) makerBanner[key] = Math.floor(Math.random() * n);
+    if (makerBanner.c2 === makerBanner.c1) makerBanner.c2 = (makerBanner.c1 + 1) % 10;
+    if (makerBanner.ec === makerBanner.c1) makerBanner.ec = (makerBanner.c1 + 6) % 10;
+    drawBannerMaker();
     for (const [kind, , optional] of FACE_PARTS) {
       const n = FACE[kind].length;
       makerLook[kind] = optional && Math.random() < 0.25 ? 0 : 1 + Math.floor(Math.random() * n);
@@ -1368,7 +1439,7 @@ function setupMaker() {
         method: 'POST',
         headers: {'content-type':'application/json'},
         body: JSON.stringify({ house, character_id: makerFor, name: $('maker-name').value, appearance: makerLook,
-          ...($('maker-faction').style.display === 'none' ? {} : { motto: $('maker-motto').value }) })
+          ...($('maker-faction').style.display === 'none' ? {} : { motto: $('maker-motto').value, banner: makerBanner }) })
       });
       $('maker').classList.remove('show');
       await refresh();
@@ -1962,7 +2033,8 @@ function warriorWord(count) {
 function renderFamily() {
   let motto = $('house-motto');
   if (!motto) { motto = document.createElement('div'); motto.id = 'house-motto'; motto.className = 'house-motto'; $('house-title').after(motto); }
-  motto.textContent = characterData?.motto ? '«' + characterData.motto + '»' : '';
+  motto.innerHTML = '<span class="banner-mini" style="width:26px;vertical-align:middle">' + bannerSvg(bannerOf(house)) + '</span>' +
+    escapeHtml(characterData?.motto ? '«' + characterData.motto + '»' : 'Девиз не выбран');
   const family = characterData?.family;
   const box = $('family-tree');
   if (!box || !family) return;
@@ -2365,7 +2437,7 @@ function renderDiplomacy() {
     const wed = (dip.marriages || []).filter(m => [m.bride_house, m.groom_house].includes(other) && [m.bride_house, m.groom_house].includes(house))
       .map(m => '<span>' + escapeHtml(m.name + ' из Дома ' + m.bride_house + ' замужем в Доме ' + m.groom_house) + '</span>').join('');
     sub = wed + sub;
-    return '<div class="dip-row"><span class="dip-name">' + escapeHtml(other) + marked + '</span>' + state + buttons + '</div>' +
+    return '<div class="dip-row"><span class="dip-name"><span class="banner-mini">' + bannerSvg(bannerOf(other)) + '</span>' + escapeHtml(other) + marked + '</span>' + state + buttons + '</div>' +
       (sub ? '<div class="dip-sub">' + sub + '</div>' : '');
   }).join('');
   box.innerHTML = rows + unknownNote(others.length - met.length);

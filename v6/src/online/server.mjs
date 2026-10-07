@@ -1353,7 +1353,15 @@ async function handleGameApi(req, res, url, ctx, subpath) {
         // The House's motto is set together with its ruler at the start.
         if (typeof body.motto === 'string') {
           next.house_profiles ||= {};
-          next.house_profiles[house] = { motto: body.motto.replace(/\s+/g, ' ').trim().slice(0, 60) };
+          const banner = {};
+          for (const key of ['shape', 'field', 'c1', 'c2', 'emblem', 'ec']) {
+            const value = Number(body.banner?.[key]);
+            banner[key] = Number.isInteger(value) && value >= 0 && value <= 40 ? value : 0;
+          }
+          next.house_profiles[house] = {
+            motto: body.motto.replace(/\s+/g, ' ').trim().slice(0, 60),
+            banner: body.banner ? banner : next.house_profiles[house]?.banner || null
+          };
         }
         next.updated_at = new Date().toISOString();
         return { game: next, response: { character } };
