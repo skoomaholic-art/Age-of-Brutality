@@ -2,7 +2,7 @@
 
 V6 is a clean tabletop rules-engine rebuild isolated from the V5.7.2 recovered runtime.
 
-Current milestone: **Core Foundation / NOT PLAYABLE / NOT STABLE**.
+Current milestone: **online prototype, playable from start to automatic finish, partial rules / NOT STABLE**. See `STATUS.md` for what is and is not migrated.
 
 What is already implemented and tested:
 
@@ -27,6 +27,6 @@ cd v6
 npm run check
 ```
 
-No package install is required; the core uses Node.js built-ins only.
+The checks need no package install. The online server needs `npm install` (Firestore client); `npm run dev:local` runs it on an in-memory stand-in instead.
 
-Do not call this version playable until every gate in `GATES.md` is met. Economy, fort construction, commander Fate, diplomacy, dynasty, prisoners, cards, remaining victory, AI strategy, full-game simulation and Arena UI are still migration work.
+The gates in `GATES.md` remain the acceptance contract for a full tabletop-faithful V6. Diplomacy, dynasty, prisoners, cards and the remaining victory rules are still migration work.

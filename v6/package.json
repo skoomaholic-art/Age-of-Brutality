@@ -6,7 +6,8 @@
   "scripts": {
     "validate": "node tools/validate.mjs",
     "test": "node --test",
-    "check": "npm run validate && npm test"
+    "check": "npm run validate && npm test",
+    "dev:local": "node --import ./tools/dev/register-fake-firestore.mjs src/online/server.mjs"
   },
   "engines": {
     "node": ">=20"

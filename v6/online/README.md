@@ -19,13 +19,23 @@ It deliberately does not replace the tabletop V6 rules engine.
 - deterministic PvP combat;
 - failed stale orders do not partially mutate state;
 - reset endpoint for development.
+- six rounds with three actions per House, income at the start of each round;
+- automatic finish after round 6 with the winner taken from the standings;
+- House AI for the unclaimed Houses of a solo game.
 
 ## Run
 
-From the `v6` directory:
+From the `v6` directory, against real Firestore:
 
 ```bash
+npm install
 node src/online/server.mjs
+```
+
+Or locally with an in-memory stand-in for Firestore (nothing is persisted):
+
+```bash
+npm run dev:local
 ```
 
 Open:
@@ -34,24 +44,17 @@ Open:
 http://localhost:8787
 ```
 
-Optional environment variables:
-
-```text
-PORT=8787
-AOB_ONLINE_STATE_FILE=/persistent/path/online-game.json
-```
-
 ## Prototype timing
 
-Current values are intentionally fast for development:
+Current values are intentionally fast for development and are not canon:
 
-- land edge: 30 seconds;
-- direct sea route: 45 seconds.
-
-These are not canon and are isolated in `src/online/orders.mjs`.
+- land segment: 3 seconds, sea segment: 5 seconds (`src/online/orders.mjs`);
+- recruit: 4 seconds, fort: 5 seconds (`src/online/economy.mjs`);
+- multiplayer round deadline: 5 minutes, AI pause between actions: 1.5 seconds
+  (`src/online/rounds.mjs`).
 
 ## Production boundary
 
 This is a vertical slice, not production multiplayer infrastructure.
 
-Before public multiplayer, replace the JSON store with PostgreSQL, add authentication and per-player House ownership, use a transactional worker/queue for due orders, add concurrency locks/idempotency and move the browser client to the final web stack.
+Persistence is Firestore, with authentication and per-player House ownership. Still open before public multiplayer: a transactional worker for due orders and moving the browser client to the final web stack.
