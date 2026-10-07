@@ -1323,6 +1323,7 @@ async function handleGameApi(req, res, url, ctx, subpath) {
       })),
       armies,
       captives: captivesView(ctx.game, map, house),
+      motto: ctx.game.house_profiles?.[house]?.motto || '',
       family: familyView(ctx.game, house)
     });
   }
@@ -1349,6 +1350,11 @@ async function handleGameApi(req, res, url, ctx, subpath) {
         }
         character.name = name;
         character.appearance = look;
+        // The House's motto is set together with its ruler at the start.
+        if (typeof body.motto === 'string') {
+          next.house_profiles ||= {};
+          next.house_profiles[house] = { motto: body.motto.replace(/\s+/g, ' ').trim().slice(0, 60) };
+        }
         next.updated_at = new Date().toISOString();
         return { game: next, response: { character } };
       }

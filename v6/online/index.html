@@ -383,6 +383,14 @@
     .maker-row button { padding: 2px 0; }
     .maker-row b { text-align: center; font-weight: 400; }
     .maker-name { width: 100%; margin: 4px 0 12px; font-size: 18px; font-family: Kurale, serif; }
+    .maker.opening { background: #2b1b12 url('/assets/img/notif-day-change.jpg') center / cover; }
+    .maker.opening::before { content: ''; position: absolute; inset: 0; background: rgba(43,27,18,.72); }
+    .maker.opening .maker-card { position: relative; }
+    .maker-house { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 14px; }
+    .maker-house i { width: 18px; height: 22px; border: 1.5px solid var(--ink); border-radius: 0 0 9px 9px; }
+    .maker-house b { font-family: Kurale, serif; font-size: 19px; }
+    .maker-house span { color: var(--ink-soft); font-style: italic; }
+    .house-motto { margin: -4px 0 8px; font-style: italic; color: var(--ink-soft); }
     .maker-foot { grid-column: 1 / -1; display: flex; gap: 8px; justify-content: flex-end; }
     @media (max-width: 640px) { .maker-card { grid-template-columns: 1fr; } }
     .sub-tabs { display: flex; border-bottom: 1.5px solid var(--ink); margin: 2px 2px 0; }
@@ -756,6 +764,11 @@
   <h3 id="maker-title">Облик правителя</h3>
   <div><div class="portrait-frame"><div id="maker-portrait" class="portrait"></div></div></div>
   <div>
+    <div id="maker-faction" class="maker-faction">
+      <div class="maker-house"><i id="maker-swatch"></i><b id="maker-house"></b><span id="maker-seat"></span></div>
+      <label class="muted" for="maker-motto">Девиз Дома</label>
+      <input id="maker-motto" class="maker-name" maxlength="60" placeholder="Например: Наше слово крепче стен">
+    </div>
     <label class="muted" for="maker-name">Имя</label>
     <input id="maker-name" class="maker-name" maxlength="24">
     <div id="maker-rows"></div>
@@ -1307,11 +1320,20 @@ function drawMaker() {
   }).join('');
 }
 
-function openMaker(character) {
+function openMaker(character, opening = false) {
   if (!FACE || !character) return;
+  // At the start of a game the same window founds the House: motto, then the ruler.
+  $('maker').classList.toggle('opening', opening);
+  $('maker-faction').style.display = character.role === 'RULER' ? '' : 'none';
+  $('maker-swatch').style.background = colors[house] || '#888';
+  $('maker-house').textContent = 'Дом ' + house;
+  $('maker-seat').textContent = 'столица ' + (territoryById(snapshot?.map?.capitals?.[house])?.name || '');
+  $('maker-motto').value = characterData?.motto || '';
+  $('maker-later').textContent = opening ? 'Начать как есть' : 'Позже';
+  $('maker-save').textContent = opening ? 'Начать правление' : 'Да будет таков';
   makerFor = character.id;
   makerLook = { ...lookOf(character) };
-  $('maker-title').textContent = character.role === 'RULER' ? 'Облик правителя' : 'Облик: ' + character.name;
+  $('maker-title').textContent = opening ? 'Твой Дом и его правитель' : character.role === 'RULER' ? 'Облик правителя' : 'Облик: ' + character.name;
   $('maker-name').value = character.name;
   drawMaker();
   $('maker').classList.add('show');
@@ -1345,7 +1367,8 @@ function setupMaker() {
       await api('/api/characters/appearance', {
         method: 'POST',
         headers: {'content-type':'application/json'},
-        body: JSON.stringify({ house, character_id: makerFor, name: $('maker-name').value, appearance: makerLook })
+        body: JSON.stringify({ house, character_id: makerFor, name: $('maker-name').value, appearance: makerLook,
+          ...($('maker-faction').style.display === 'none' ? {} : { motto: $('maker-motto').value }) })
       });
       $('maker').classList.remove('show');
       await refresh();
@@ -1367,7 +1390,7 @@ function offerMaker() {
   const ruler = (characterData?.characters || []).find(item => item.role === 'RULER' && item.alive);
   if (!ruler) return;
   makerAsked = true;
-  if (!ruler.appearance) openMaker(ruler);
+  if (!ruler.appearance) openMaker(ruler, true);
 }
 
 // ---------- the land card: info, hire, build ----------
@@ -1936,6 +1959,9 @@ function warriorWord(count) {
 }
 
 function renderFamily() {
+  let motto = $('house-motto');
+  if (!motto) { motto = document.createElement('div'); motto.id = 'house-motto'; motto.className = 'house-motto'; $('house-title').after(motto); }
+  motto.textContent = characterData?.motto ? '«' + characterData.motto + '»' : '';
   const family = characterData?.family;
   const box = $('family-tree');
   if (!box || !family) return;
