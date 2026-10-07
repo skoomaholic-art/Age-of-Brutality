@@ -1699,12 +1699,12 @@ const server = http.createServer(async (req, res) => {
     const scoped = gamePath(url.pathname);
     if (scoped && scoped.gameId !== 'join') {
       const ctx = await loadContext(scoped.gameId);
-      return handleGameApi(req, res, url, ctx, scoped.subpath);
+      return await handleGameApi(req, res, url, ctx, scoped.subpath);
     }
 
     if (url.pathname.startsWith('/api/')) {
       const subpath = url.pathname.slice('/api'.length);
-      return handleGameApi(req, res, url, defaultContext, subpath);
+      return await handleGameApi(req, res, url, defaultContext, subpath);
     }
 
     return json(res, 404, { error: 'not found' });
