@@ -235,25 +235,35 @@
     .route-card {
       position: absolute;
       z-index: 6;
-      left: 12px;
-      right: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(560px, calc(100% - 24px));
       bottom: 12px;
       border: 1.5px solid var(--ink);
-      padding: 12px;
+      padding: 9px 12px;
       background: rgba(242,230,200,.97);
       box-shadow: 3px 3px 0 rgba(43,27,18,.3);
       display: none;
     }
     .route-card.show { display: block; }
-    .route-line { display: flex; align-items: center; gap: 10px; font-family: Kurale, Alegreya, serif; font-size: 20px; }
-    .route-place { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .route-place.to { text-align: right; }
-    .route-arrow { color: var(--vermilion); font-size: 24px; }
-    .route-meta { color: var(--ink-soft); font-size: 13px; margin: 4px 0 10px; }
+    .route-main { display: flex; align-items: center; gap: 10px; }
+    .route-text { flex: 1; min-width: 0; }
+    .route-line { display: flex; align-items: baseline; gap: 8px; font-family: Kurale, Alegreya, serif; font-size: 18px; }
+    .route-place { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .route-arrow { color: var(--vermilion); font-size: 20px; }
+    .split-row { display: flex; align-items: end; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(43,27,18,.25); }
+    .split-row label { display: grid; gap: 2px; font-size: 12.5px; }
+    .split-count input { width: 76px; }
+    .split-row label span { white-space: nowrap; }
+    .split-row .troop-max { width: auto; flex: none; }
+    .split-commander { flex: 1; min-width: 0; }
+    .split-commander select { width: 100%; }
+    #split-toggle.on { background: var(--ink); color: var(--vellum, #f2e6c8); }
+    .route-meta { color: var(--ink-soft); font-size: 13px; margin: 1px 0 0; }
     .troop-controls { display: grid; grid-template-columns: minmax(0,1fr) 84px 150px; gap: 8px; align-items: end; }
     .troop-controls input { width: 100%; }
     .troop-max { width: 100%; }
-    .primary.big { min-height: 42px; font-size: 16px; }
+    .primary.big { min-height: 38px; font-size: 15px; white-space: nowrap; }
     .selection-legend { display:flex; flex-wrap:wrap; gap:6px 14px; margin-top:7px; }
     .legend-pill { display:inline-flex; align-items:center; gap:6px; font-size:12px; color: var(--ink-soft); }
     .legend-mark { width:14px; height:11px; display:inline-block; background: rgba(63,112,72,.55); border:1.5px dashed var(--white-lead); outline: 1px solid var(--ink-soft); }
@@ -362,9 +372,9 @@
       .map-card { height: 68vh; min-height: 520px; margin: 20px 12px; }
       .map-wrap { padding: 8px; }
       .map-guide { max-width: none; }
-      .route-card { left: 8px; right: 8px; bottom: 8px; }
-      .troop-controls { grid-template-columns: 1fr 74px; }
-      .primary.big { grid-column: 1 / -1; }
+      .route-card { bottom: 8px; width: calc(100% - 16px); }
+      .route-main { flex-wrap: wrap; }
+      .route-text { flex-basis: 100%; }
       header { align-items:flex-start; flex-direction:column; }
       .controls { width:100%; }
       .save-status { width:100%; text-align:left; }
@@ -429,34 +439,34 @@
         <button id="zoom-home" title="Показать всю карту" aria-label="Показать всю карту">⌂</button>
       </div>
       <div id="route-card" class="route-card">
-        <div class="route-line">
-          <span id="from-name" class="route-place">...</span>
-          <span class="route-arrow">→</span>
-          <span id="to-name" class="route-place to">...</span>
+        <div class="route-main">
+          <div class="route-text">
+            <div class="route-line">
+              <span id="from-name" class="route-place">...</span>
+              <span class="route-arrow">→</span>
+              <span id="to-name" class="route-place to">...</span>
+            </div>
+            <div id="route-meta" class="route-meta"></div>
+          </div>
+          <button id="split-toggle" title="Отправить только часть армии">Разделить</button>
+          <button id="send" class="primary big">Отдать приказ</button>
         </div>
-        <div id="route-meta" class="route-meta"></div>
-        <div id="route-mode-row" style="display:none;margin-bottom:10px">
-          <label>
-            <span class="muted">Маршрут</span>
-            <select id="march-mode" style="width:100%;margin-top:4px">
-              <option value="LAND">По суше</option>
-              <option value="SEA">По морю</option>
-            </select>
-          </label>
+        <div id="route-mode-row" style="display:none">
+          <select id="march-mode">
+            <option value="LAND">По суше</option>
+            <option value="SEA">По морю</option>
+          </select>
         </div>
-        <div id="commander-row" style="display:none;margin-bottom:10px">
-          <label>
-            <span class="muted">Командир этой группы</span>
-            <select id="commander" style="width:100%;margin-top:4px"></select>
-          </label>
-        </div>
-        <div class="troop-controls">
-          <label>
-            <span class="muted">3. Сколько воинов отправить</span>
+        <div id="split-row" class="split-row" style="display:none">
+          <label class="split-count">
+            <span class="muted">Сколько воинов идёт</span>
             <input id="warriors" type="number" min="1" value="1" />
           </label>
           <button id="max-warriors" class="troop-max">Все</button>
-          <button id="send" class="primary big">Отдать приказ</button>
+          <label id="commander-row" class="split-commander" style="display:none">
+            <span class="muted">Командир</span>
+            <select id="commander"></select>
+          </label>
         </div>
       </div>
     </div>
@@ -1866,6 +1876,9 @@ function renderCommanderChoice() {
   row.style.display = 'block';
 }
 
+let splitOpen = false;
+let lastSelectionKey = '';
+
 function renderSelection() {
   const card = $('route-card');
 
@@ -1907,10 +1920,20 @@ function renderSelection() {
 
   const preferred = preferredActionForSelection();
   const max = Math.max(...matching.map(a => a.warriors));
-  const current = Number($('warriors').value || 1);
+  // The whole army marches unless the player chooses to split it.
+  const selectionKey = origin + '>' + target;
+  if (selectionKey !== lastSelectionKey) {
+    lastSelectionKey = selectionKey;
+    splitOpen = false;
+    $('warriors').value = max;
+  }
+  const current = splitOpen ? Number($('warriors').value || max) : max;
 
   $('warriors').max = max;
   $('warriors').value = Math.min(Math.max(current, 1), max);
+  $('split-row').style.display = splitOpen ? '' : 'none';
+  $('split-toggle').classList.toggle('on', splitOpen);
+  $('split-toggle').style.display = max > 1 || $('commander-row').style.display !== 'none' ? '' : 'none';
   $('from-name').textContent = o.name;
   $('to-name').textContent = t.name;
 
@@ -1930,16 +1953,15 @@ function renderSelection() {
     .map(id => mapNodeById(id)?.name || id)
     .join(' → ');
 
+  const going = Number($('warriors').value);
   $('route-meta').innerHTML =
-    'Отряд: до ' + max +
-    ' воинов · путь: ' + escapeHtml(modeName) +
-    ' · ' + hops + ' участк.' +
-    ' · ' + formatSpan(seconds * 1000) +
-    (routeNames
-      ? '<br><span class="tiny">' + escapeHtml(routeNames) + '</span>'
-      : '');
-  $('guide-title').textContent = '3. Выбери, сколько воинов отправить';
-  $('guide-sub').textContent = 'Марш полностью выбран. Проверь маршрут внизу карты и отдай приказ.';
+    (going >= max ? 'Вся армия: ' + max : 'Отряд: ' + going + ' из ' + max) +
+    ' · ' + escapeHtml(modeName) +
+    (hops > 1 ? ' · ' + hops + ' перех.' : '') +
+    ' · ' + formatSpan(seconds * 1000);
+  $('route-meta').title = routeNames;
+  $('guide-title').textContent = '3. Отдай приказ';
+  $('guide-sub').textContent = 'Идёт вся армия. Чтобы отправить часть, нажми «Разделить».';
   card.classList.add('show');
 }
 
@@ -2363,7 +2385,16 @@ $('send').addEventListener('click', sendOrder);
 $('max-warriors').addEventListener('click', () => {
   const max = Number($('warriors').max || 1);
   $('warriors').value = max;
+  renderSelection();
 });
+
+$('split-toggle').addEventListener('click', () => {
+  splitOpen = !splitOpen;
+  if (!splitOpen) $('warriors').value = $('warriors').max;
+  renderSelection();
+});
+
+$('warriors').addEventListener('input', renderSelection);
 
 $('reset').addEventListener('click', async () => {
   await api('/api/reset', { method: 'POST' });
