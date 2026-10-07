@@ -198,6 +198,7 @@ button.loading { opacity:.65; cursor:wait; }
 .game-meta { margin-top:3px; color: var(--ink-soft); font-size:15px; line-height:1.4; }
 .game-actions { display:flex; gap:8px; }
 .game-actions button { width:auto; min-width:130px; }
+.game-actions .leave-game { min-width:0; }
 .empty { border:1.5px dashed var(--rule); padding:18px; color: var(--ink-soft); font-style:italic; text-align:center; }
 .code { font-family: Kurale, Alegreya, serif; font-size:44px; letter-spacing:.14em; margin:4px 0 16px; color: var(--vermilion-deep); }
 .house-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
@@ -931,11 +932,50 @@ async function loadMyGames() {
         </div>
         <div class="game-actions">
           <button class="primary" onclick="location.href='${target}'">${action}</button>
+          <button class="leave-game" data-leave="${escapeHtml(item.game_id)}">Удалить</button>
         </div>
       </div>`;
   }).join('');
 
+  $('my-games').querySelectorAll('[data-leave]').forEach(button => {
+    button.onclick = () => leaveGame(
+      games.find(item => item.game_id === button.dataset.leave),
+      button
+    );
+  });
+
   return games;
+}
+
+// Leaving is final. In a running game with other players the House stays on
+// the map as an abandoned realm.
+async function leaveGame(item, button) {
+  if (!item) return;
+  const life = item.lifecycle || {};
+  const name = life.room_name || 'Игра';
+  const others = Number(life.player_count || 0) > 1;
+  const question = life.game_mode === 'SOLO' || !others
+    ? 'Удалить игру «' + name + '» навсегда? Восстановить её будет нельзя.'
+    : life.status === 'RUNNING'
+      ? 'Выйти из игры «' + name + '» навсегда?\n\n' +
+        'Твой Дом останется на карте брошенным государством, остальные игроки получат известие. ' +
+        'Вернуться в эту партию будет нельзя.'
+      : 'Выйти из комнаты «' + name + '»? Твой Дом освободится.';
+  if (!confirm(question)) return;
+
+  try {
+    await withBusy(button, 'Удаляем...', async () => {
+      await request(
+        '/api/games/' + encodeURIComponent(item.game_id) + '/leave',
+        { method:'POST' },
+        item.token || profileToken || localStorage.getItem('aob-token-' + item.game_id)
+      );
+      localStorage.removeItem('aob-token-' + item.game_id);
+    });
+  } catch (error) {
+    alert(friendlyError(error));
+  }
+  await loadHub();
 }
 
 function presenceLabel(presence) {

@@ -37,17 +37,20 @@ function sameCanonicalResult(a, b) {
 
 export function buildVictoryStatus(game, map, constants) {
   const state = game.state;
+  // A realm whose ruler left the game stays on the map but cannot win.
+  const abandoned = game.lifecycle?.abandoned_houses || {};
   const standings = constants.houses
-    .map(house => standing(state, house))
+    .map(house => ({ ...standing(state, house), abandoned: Boolean(abandoned[house]) }))
     .sort(compareStandings);
 
   const final =
     state.phase === 'FINISHED' ||
     game.lifecycle?.status === 'FINISHED';
 
-  const top = standings[0] || null;
+  const contenders = standings.filter(item => !item.abandoned);
+  const top = contenders[0] || null;
   const currentLeaders = top
-    ? standings.filter(item => sameCanonicalResult(item, top)).map(item => item.house)
+    ? contenders.filter(item => sameCanonicalResult(item, top)).map(item => item.house)
     : [];
 
   return {

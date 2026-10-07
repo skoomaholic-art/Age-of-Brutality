@@ -194,6 +194,69 @@ export function assertHouseAccess(game, player, house, constants) {
   return true;
 }
 
+// Works out what happens when a player leaves a game for good.
+//
+// - In a running multiplayer game the player's House becomes an abandoned
+//   realm: nobody controls it, its armies stay where they stand.
+// - If the host leaves, the longest-standing remaining player becomes host.
+// - If no player remains (a solo game, or the last one out), the game is archived.
+//
+// `others` are the remaining player records. Returns the new lifecycle and what
+// changed; it does not touch storage.
+export function planLeave(lifecycle, player, others, nowMs = Date.now()) {
+  const at = new Date(nowMs).toISOString();
+  const next = structuredClone(lifecycle || {});
+  const status = next.status;
+  if (status !== GAME_STATUS.LOBBY && status !== GAME_STATUS.RUNNING && status !== GAME_STATUS.FINISHED) {
+    throw new Error('game is closed');
+  }
+
+  const spectator = player.role === PLAYER_ROLE.SPECTATOR;
+  const house = spectator ? null : player.house || null;
+  const claims = { ...(next.house_claims || {}) };
+  if (house && claims[house] === player.id) delete claims[house];
+  next.house_claims = claims;
+
+  if (spectator) {
+    next.spectator_count = Math.max(0, Number(next.spectator_count || 0) - 1);
+  } else {
+    next.player_count = Math.max(0, Number(next.player_count || 0) - 1);
+  }
+
+  const remaining = others.filter(other => other.role !== PLAYER_ROLE.SPECTATOR);
+  let abandonedHouse = null;
+  let promote = null;
+  let archived = false;
+
+  if (!spectator) {
+    if (remaining.length === 0) {
+      next.status = GAME_STATUS.ARCHIVED;
+      next.archived_at = at;
+      next.finish_reason = next.finish_reason || 'ABANDONED';
+      archived = true;
+    } else {
+      if (status === GAME_STATUS.RUNNING && house) {
+        next.abandoned_houses = {
+          ...(next.abandoned_houses || {}),
+          [house]: { at, display_name: player.display_name || null }
+        };
+        abandonedHouse = house;
+      }
+      if (canAdminister(player) && !remaining.some(canAdminister)) {
+        promote = [...remaining].sort((a, b) =>
+          String(a.joined_at || '').localeCompare(String(b.joined_at || ''))
+        )[0].id;
+      }
+    }
+  }
+
+  return { lifecycle: next, house, abandonedHouse, promote, archived };
+}
+
+export function isAbandoned(game, house) {
+  return Boolean(game?.lifecycle?.abandoned_houses?.[house]);
+}
+
 export function canAdminister(player) {
   return player?.role === PLAYER_ROLE.ADMIN;
 }

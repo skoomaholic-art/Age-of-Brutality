@@ -557,7 +557,7 @@ function errorStatus(error) {
   if (/authentication required|invalid player token|invalid profile session/i.test(message)) return 401;
   if (/admin role required|cannot control|spectator|ownership mismatch|friend request blocked|messages are blocked|game invites are blocked|messages are allowed only between friends|game invites are allowed only between friends|sender is not a member|spectating this private game requires friendship/i.test(message)) return 403;
   if (/game not found|player not found|profile not found|friend request not found|game invite not found|no snapshot found/i.test(message)) return 404;
-  if (/already|claimed|full|closed|not joinable|not in lobby|require all six|needs at least|missing:|only a running game|only a finished game|unique invite|not a public room|not multiplayer|profile login already exists|linked to another profile|players are already friends|friend request already sent|friend is already in this game|game is not accepting invitations|game invite already sent|player is not in game|game is not watchable/i.test(message)) return 409;
+  if (/already|claimed|full|closed|not joinable|not in lobby|require all six|needs at least|game is closed|sandbox game cannot be left|missing:|only a running game|only a finished game|unique invite|not a public room|not multiplayer|profile login already exists|linked to another profile|players are already friends|friend request already sent|friend is already in this game|game is not accepting invitations|game invite already sent|player is not in game|game is not watchable/i.test(message)) return 409;
   if (/Idempotency-Key|unknown|invalid|must be|request body|not running|solo game requires|login must be|password must be|display name must be|invalid avatar|unknown winner house|message must be|conversation requires|profile id required|invite id required|cannot add this profile|cannot block this profile|invalid watch target|character does not belong|only adult|dead character|weakened character|character is not|army must be|capital army already|two army characters|Нельзя назначить|Мёртвый персонаж|Назначить командиром|Ослабленного персонажа|Персонаж сейчас недоступен|Персонаж должен находиться|У Дома уже два персонажа|Армия в столице|Нет свободной армии|Выберите армию Дома|no legal route|stored route is no longer legal|sea waypoint .* is occupied/i.test(message)) return 400;
   if (/stale game state|could not be committed/i.test(message)) return 409;
   if (/no actions left this round|round already ended for this House|round time expired|rounds are not enabled|house does not take part/i.test(message)) return 409;
@@ -841,6 +841,38 @@ async function handleGameApi(req, res, url, ctx, subpath) {
       }
       return {
         ...result,
+        lifecycle: publicLifecycle(ctx.game.lifecycle)
+      };
+    });
+    return json(res, 200, payload);
+  }
+
+  // Leaving is final: the player record is removed and cannot be restored.
+  if (req.method === 'POST' && subpath === '/leave') {
+    const player = await requirePlayer(ctx, req);
+    if (!player) throw new Error('the sandbox game cannot be left');
+
+    const payload = await serial(ctx, async () => {
+      const nowMs = Date.now();
+      const result = await ctx.store.leaveGame(player.id, { nowMs });
+      await refreshContext(ctx);
+
+      if (result.abandoned_house) {
+        ctx.game.state.journal.push({
+          kind: 'HOUSE_ABANDONED',
+          at: new Date(nowMs).toISOString(),
+          house: result.abandoned_house,
+          player_name: result.display_name
+        });
+        ctx.game.updated_at = new Date(nowMs).toISOString();
+        await finalizeGame(ctx, ctx.game, nowMs);
+      }
+
+      return {
+        left: true,
+        game_id: ctx.game.id,
+        abandoned_house: result.abandoned_house,
+        archived: result.archived,
         lifecycle: publicLifecycle(ctx.game.lifecycle)
       };
     });

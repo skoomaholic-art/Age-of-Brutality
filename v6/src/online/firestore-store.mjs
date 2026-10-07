@@ -25,7 +25,8 @@ import {
   playerIdFromToken,
   hashAccessToken,
   safeTokenHashEqual,
-  validateStart
+  validateStart,
+  planLeave
 } from './multiplayer.mjs';
 
 function plain(value) {
@@ -1169,6 +1170,54 @@ export class FirestoreGameStore {
       });
 
       return lifecycle;
+    });
+  }
+
+  // Removes a player from the game for good; see planLeave for the rules.
+  async leaveGame(playerId, { nowMs = Date.now() } = {}) {
+    const gameRef = this.gameRef();
+    const playerRef = this.playerRef(playerId);
+
+    return this.db.runTransaction(async tx => {
+      const [gameDoc, playerDoc, playersSnap] = await Promise.all([
+        tx.get(gameRef),
+        tx.get(playerRef),
+        tx.get(this.playersRef())
+      ]);
+
+      if (!gameDoc.exists) throw new Error('game not found');
+      if (!playerDoc.exists) throw new Error('player not found');
+
+      const game = gameDoc.data();
+      const player = playerDoc.data();
+      const others = playersSnap.docs
+        .map(doc => doc.data())
+        .filter(other => other.id !== playerId);
+
+      const plan = planLeave(game.lifecycle, player, others, nowMs);
+      const nextRevision = Number(game.state_revision || 0) + 1;
+
+      tx.update(gameRef, {
+        lifecycle: plain(plan.lifecycle),
+        updated_at: new Date(nowMs).toISOString(),
+        state_revision: nextRevision
+      });
+      tx.delete(playerRef);
+      if (plan.promote) {
+        tx.update(this.playerRef(plan.promote), { role: PLAYER_ROLE.ADMIN });
+      }
+      if (player.profile_id) {
+        tx.delete(this.profileGamesRef(player.profile_id).doc(this.gameId));
+      }
+
+      return {
+        lifecycle: plan.lifecycle,
+        house: plan.house,
+        abandoned_house: plan.abandonedHouse,
+        archived: plan.archived,
+        promoted_player_id: plan.promote,
+        display_name: player.display_name || null
+      };
     });
   }
 

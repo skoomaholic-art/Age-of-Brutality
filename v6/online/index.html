@@ -192,6 +192,8 @@
       box-shadow: 4px 4px 0 rgba(43,27,18,.35);
     }
     .battle-card.show { display: block; }
+    .battle-card.no-art .miniature { display: none; }
+    .battle-card.no-art h3 { margin-top: 2px; }
     .battle-card h3 { margin: 9px 0 2px; font-family: Kurale, Alegreya, serif; font-weight: 400; font-size: 19px; color: var(--vermilion-deep); }
     .battle-card p { margin: 0; font-size: 13.5px; line-height: 1.35; }
 
@@ -287,6 +289,8 @@
     .standing-house { font-weight:700; }
     .standing-meta { color: var(--ink-soft); font-size: 12px; }
     .standing-exile { color: var(--vermilion); font-size:12px; font-style: italic; }
+    .standing-exile.abandoned { color: var(--ink-soft); }
+    .standing-row:has(.abandoned) .standing-house { color: var(--ink-soft); text-decoration: line-through; text-decoration-color: var(--rule); }
     .status-warning { margin-top:8px; padding:7px 9px; border-left:3px solid var(--gold); background: rgba(201,162,58,.16); font-size:12.5px; font-style: italic; line-height:1.4; color: var(--ink-soft); }
     .status-final { border-left-color: var(--vermilion); background: rgba(179,49,31,.10); color: var(--ink); font-style: normal; font-weight: 700; font-size: 15px; }
     .round-houses { display:grid; gap:2px; margin-top:8px; font-size:13px; }
@@ -396,7 +400,7 @@
       <svg id="map" viewBox="40 30 760 490" role="img" aria-label="Карта Жестокого Века"></svg>
       <div id="battle-card" class="battle-card" role="status" title="Нажми, чтобы закрыть">
         <figure class="miniature"><img src="/assets/img/battle.jpg" alt="" width="560" height="356"></figure>
-        <h3>Битва</h3>
+        <h3 id="battle-title">Битва</h3>
         <p id="battle-text"></p>
       </div>
       <div id="finale" class="finale">
@@ -530,6 +534,20 @@ const colors = {
   'Тасвар': '#c0587a',
   'Айрель': '#6a4585'
 };
+const baseColors = { ...colors };
+// A realm whose ruler left the game is drawn in ash grey.
+const ABANDONED_COLOR = '#8d8a82';
+
+function abandonedHouses() {
+  return snapshot?.game?.lifecycle?.abandoned_houses || {};
+}
+
+function applyAbandonedColors() {
+  const abandoned = abandonedHouses();
+  for (const name of Object.keys(baseColors)) {
+    colors[name] = abandoned[name] ? ABANDONED_COLOR : baseColors[name];
+  }
+}
 
 let snapshot = null;
 let bootstrap = null;
@@ -954,13 +972,13 @@ function renderRounds() {
   $('round-houses').innerHTML = rounds.houses.map(item => {
     // In a game played in days orders are not counted, so there is nothing to tick off.
     const pips = days
-      ? (item.ai ? '' : 'игрок')
+      ? (item.ai || abandonedHouses()[item.house] ? '' : 'игрок')
       : '●'.repeat(item.used) +
         '○'.repeat(Math.max(0, rounds.actions_per_round - item.used));
     const cls = 'round-house' +
       (item.house === house ? ' mine' : '') +
       (item.done ? ' done' : '');
-    const tag = item.ai ? ' · ИИ' : '';
+    const tag = abandonedHouses()[item.house] ? ' · брошено' : item.ai ? ' · ИИ' : '';
     const state = item.passed ? ' · готов' : '';
     return '<div class="' + cls + '"><span>' + escapeHtml(item.house) + tag + state +
       '</span><span class="round-pips">' + pips + '</span></div>';
@@ -987,10 +1005,32 @@ function announceBattles() {
     item.details?.attacker === house || item.details?.defender === house
   );
   const shown = (own.length ? own : fresh).slice(-1)[0];
-  $('battle-text').textContent = String(shown.message || '').replace(/^Битва:\s*/, '');
+  showHerald('Битва', String(shown.message || '').replace(/^Битва:\s*/, ''), true, 10000);
+}
+
+function showHerald(title, text, withMiniature, ms) {
+  $('battle-title').textContent = title;
+  $('battle-text').textContent = text;
+  $('battle-card').classList.toggle('no-art', !withMiniature);
   $('battle-card').classList.add('show');
   clearTimeout(battleTimer);
-  battleTimer = setTimeout(() => $('battle-card').classList.remove('show'), 10000);
+  battleTimer = setTimeout(() => $('battle-card').classList.remove('show'), ms);
+}
+
+// Tells the players when a ruler leaves the game and his realm is abandoned.
+let lastAbandonSeq = null;
+
+function announceAbandoned() {
+  const items = (snapshot?.game?.audit_log || []).filter(item => item.type === 'HOUSE_ABANDONED');
+  const newest = items.reduce((max, item) => Math.max(max, Number(item.seq || 0)), 0);
+  if (lastAbandonSeq === null) {
+    lastAbandonSeq = newest;
+    return;
+  }
+  if (newest <= lastAbandonSeq) return;
+  const shown = items.filter(item => Number(item.seq || 0) > lastAbandonSeq).slice(-1)[0];
+  lastAbandonSeq = newest;
+  showHerald('Брошенное государство', shown.message, false, 16000);
 }
 
 let finaleDismissed = false;
@@ -1068,9 +1108,11 @@ function renderVictory() {
 
   const rows = victory.standings || [];
   $('standings').innerHTML = rows.map((item, index) => {
-    const exile = item.exiled
-      ? '<div class="standing-exile">Изгнание</div>'
-      : '';
+    const exile = item.abandoned
+      ? '<div class="standing-exile abandoned">Брошенное государство</div>'
+      : item.exiled
+        ? '<div class="standing-exile">Изгнание</div>'
+        : '';
     return '<div class="standing-row">' +
       '<div><span class="standing-house">' +
       (index + 1) + '. ' + escapeHtml(item.house) +
@@ -1864,6 +1906,7 @@ async function refresh() {
     ...bootstrap,
     ...live
   };
+  applyAbandonedColors();
 
   const select = $('house');
   const playerBound = snapshot.game.lifecycle?.access_mode === 'PLAYER_BOUND';
@@ -1992,6 +2035,7 @@ async function refresh() {
   renderVictory();
   renderFinale();
   announceBattles();
+  announceAbandoned();
   renderRounds();
   renderHouse();
   renderCharacters();

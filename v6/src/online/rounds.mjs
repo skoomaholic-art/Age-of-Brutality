@@ -71,7 +71,9 @@ export function houseRoundStatus(game, house) {
     };
   }
   const limit = Number(rounds.actions_per_round);
-  const passed = Boolean(rounds.passed?.[house]);
+  // An abandoned realm issues no orders and never holds a round open.
+  const passed = Boolean(rounds.passed?.[house]) ||
+    Boolean(game.lifecycle?.abandoned_houses?.[house]);
   return {
     house,
     used,

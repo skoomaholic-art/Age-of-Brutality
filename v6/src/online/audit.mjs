@@ -158,6 +158,21 @@ export function journalEntryToAudit(entry, map, game) {
     };
   }
 
+  if (entry.kind === 'HOUSE_ABANDONED') {
+    const ruler = entry.player_name ? `, ${entry.player_name},` : '';
+    return {
+      ...base,
+      message:
+        `Дом ${entry.house} постигла смута. Его правитель${ruler} бросил свои земли на произвол судьбы, ` +
+        'и теперь там хозяйничают разбойники и варвары.',
+      details: {
+        house: entry.house,
+        player_name: entry.player_name || null,
+        at: entry.at || null
+      }
+    };
+  }
+
   if (entry.kind === 'STATE_REPAIR') {
     const repairs = Array.isArray(entry.repairs) ? entry.repairs : [];
     return {
