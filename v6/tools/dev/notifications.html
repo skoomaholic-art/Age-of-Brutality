@@ -88,7 +88,8 @@ main { width:min(1500px,100%); margin:0 auto; padding:22px 22px 80px; }
 .win p { margin:0; line-height:1.38; }
 .win .actions { display:flex; gap:8px; flex-wrap:wrap; }
 
-/* Image slot: empty until a picture is loaded. */
+/* Image slot: empty until a picture is loaded. Every window uses the same
+   4:3 slot, the shape of the painted miniatures, so their frames never crop. */
 .slot {
   position:relative; display:grid; place-items:center; width:100%; overflow:hidden; cursor:pointer;
   border:1.5px solid var(--ink); box-shadow:0 0 0 2px var(--white-lead), 0 0 0 3px var(--ink);
@@ -110,7 +111,7 @@ main { width:min(1500px,100%); margin:0 auto; padding:22px 22px 80px; }
 
 /* 1. Herald: a small card in the corner of the map. */
 .herald { max-width:330px; padding:10px; border:1.5px solid var(--ink); background:rgba(242,230,200,.98); box-shadow:4px 4px 0 rgba(43,27,18,.38); }
-.herald .slot { aspect-ratio:16 / 10; }
+.herald .slot { aspect-ratio:4 / 3; }
 .herald h3 { margin-top:11px; font-size:25px; }
 .herald p { margin-top:3px; font-size:14.5px; }
 
@@ -126,14 +127,14 @@ main { width:min(1500px,100%); margin:0 auto; padding:22px 22px 80px; }
 
 /* 3. Finale: the end of the game, centred over the map. */
 .finale { max-width:390px; padding:18px; text-align:center; border:1.5px solid var(--ink); outline:1px solid var(--vermilion); outline-offset:-6px; background:var(--vellum); box-shadow:6px 6px 0 rgba(43,27,18,.45); }
-.finale .slot { width:74%; margin:0 auto; aspect-ratio:1 / 1.08; }
+.finale .slot { aspect-ratio:4 / 3; }
 .finale h3 { margin-top:15px; font-size:36px; }
 .finale p { margin-top:3px; font-size:16.5px; }
 .finale .actions { margin-top:15px; justify-content:center; }
 
 /* 4. Chronicle: the day's news as a leaf of the book. */
 .chronicle { max-width:540px; padding:18px 20px 16px; border:1.5px solid var(--ink); outline:1px solid var(--vermilion); outline-offset:-6px; background:var(--vellum); box-shadow:6px 6px 0 rgba(43,27,18,.42); }
-.chronicle .slot { aspect-ratio:3 / 1; }
+.chronicle .slot { aspect-ratio:4 / 3; }
 .chronicle .day { margin-top:13px; text-align:center; font-size:13.5px; font-style:italic; color:var(--ink-soft); }
 .chronicle h3 { text-align:center; font-size:40px; }
 .chronicle .rule { height:0; border-top:1px solid var(--ink); border-bottom:1px solid var(--ink); padding-top:2px; margin:9px 0 10px; }
