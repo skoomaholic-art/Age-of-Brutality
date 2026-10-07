@@ -8,6 +8,7 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/img/favicon-180.png">
 <style>
 /* Same illuminated-manuscript look as the game screen. */
+@font-face { font-family: 'Vek Gothic'; font-weight: 400; font-display: swap; src: url(/assets/fonts/vek-gothic.woff2) format('woff2'); }
 @font-face { font-family: Kurale; font-weight: 400; font-display: swap; src: url(/assets/fonts/kurale-cyrillic-400-normal.woff2) format('woff2'); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
 @font-face { font-family: Kurale; font-weight: 400; font-display: swap; src: url(/assets/fonts/kurale-latin-400-normal.woff2) format('woff2'); unicode-range: U+0000-00FF, U+2000-206F, U+2190-21FF, U+2212; }
 @font-face { font-family: Alegreya; font-weight: 400; font-display: swap; src: url(/assets/fonts/alegreya-cyrillic-400-normal.woff2) format('woff2'); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
@@ -63,7 +64,7 @@ main { width:min(980px,100%); margin:0 auto; padding:0 16px 60px; }
   border: 2px solid var(--ink); border-top: 0;
   box-shadow: 0 3px 0 var(--gold), 0 5px 0 var(--ink);
 }
-h1 { margin:0; font-family: Kurale, Alegreya, serif; font-weight:400; font-size:52px; line-height:1; text-shadow: 2px 2px 0 rgba(43,27,18,.55); }
+h1 { margin:0; font-family: 'Vek Gothic', Kurale, Alegreya, serif; font-weight:400; font-size:66px; line-height:1; text-shadow: 2px 2px 0 rgba(43,27,18,.55); }
 .lobby-sub { margin-top:6px; font-style:italic; font-size:18px; color:#f3d9c2; }
 .lobby-miniature {
   display:block; width:230px; height:auto; flex:0 0 auto;
@@ -75,7 +76,7 @@ h1 { margin:0; font-family: Kurale, Alegreya, serif; font-weight:400; font-size:
 .brand-mark { width:72px; height:72px; padding:10px; border-radius:50%; background:#14100d; border:2px solid var(--gold); box-shadow:0 0 0 2px var(--ink); flex:0 0 auto; }
 .maker { margin:36px auto 0; text-align:center; }
 .maker img { width:170px; height:auto; padding:14px 18px; background:#14100d; border:1.5px solid var(--ink); box-shadow:3px 3px 0 rgba(43,27,18,.3); }
-h2 { margin:0 0 12px; font-family: Kurale, Alegreya, serif; font-weight:400; font-size:27px; line-height:1.1; color: var(--vermilion-deep); }
+h2 { margin:0 0 12px; font-family: 'Vek Gothic', Kurale, Alegreya, serif; font-weight:400; font-size:34px; line-height:1.1; color: var(--vermilion-deep); }
 h3 { margin:0 0 8px; font-size:19px; font-weight:700; }
 .muted { color: var(--ink-soft); }
 .card {
@@ -103,7 +104,7 @@ button.loading { opacity:.65; cursor:wait; }
 .account-grid { display:grid; grid-template-columns:1fr 1fr; gap:26px; }
 .account-head { display:flex; justify-content:space-between; gap:14px; align-items:center; }
 .account-head button { width:auto; min-width:120px; }
-.account-name { font-family: Kurale, Alegreya, serif; font-size:26px; line-height:1.1; }
+.account-name { font-family: 'Vek Gothic', Kurale, Alegreya, serif; font-size:32px; line-height:1.1; }
 .account-handle { margin-top:2px; color: var(--ink-soft); font-size:14px; font-style:italic; }
 .account-identity { display:flex; gap:14px; align-items:center; }
 .profile-avatar {
@@ -234,7 +235,7 @@ button.loading { opacity:.65; cursor:wait; }
   .room-topbar { flex-direction:column; }
   .room-topbar button { width:100%; }
   .lobby-miniature { display:none; }
-  h1 { font-size:40px; }
+  h1 { font-size:48px; }
 }
 </style>
 </head>

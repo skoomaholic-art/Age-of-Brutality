@@ -9,6 +9,8 @@
   <style>
     /* Illuminated-manuscript theme: parchment, iron-gall ink, vermilion rubrics,
        lapis, verdigris and a gold-leaf ground for the map. */
+    /* Vek Gothic: the project's own blackletter, letters only; digits and punctuation fall back to Kurale. */
+    @font-face { font-family: 'Vek Gothic'; font-weight: 400; font-display: swap; src: url(/assets/fonts/vek-gothic.woff2) format('woff2'); }
     @font-face { font-family: Kurale; font-weight: 400; font-display: swap; src: url(/assets/fonts/kurale-cyrillic-400-normal.woff2) format('woff2'); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
     @font-face { font-family: Kurale; font-weight: 400; font-display: swap; src: url(/assets/fonts/kurale-latin-400-normal.woff2) format('woff2'); unicode-range: U+0000-00FF, U+2000-206F, U+2190-21FF, U+2212; }
     @font-face { font-family: Alegreya; font-weight: 400; font-display: swap; src: url(/assets/fonts/alegreya-cyrillic-400-normal.woff2) format('woff2'); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
@@ -77,7 +79,7 @@
     .brand { display: flex; align-items: center; gap: 12px; }
     /* The maker's mark sits on a dark roundel so the blue reads on the red band. */
     .brand-mark { width: 42px; height: 42px; padding: 6px; border-radius: 50%; background: #14100d; border: 1.5px solid var(--gold); box-shadow: 0 0 0 1.5px var(--ink); }
-    h1 { margin: 0; font-family: Kurale, Alegreya, serif; font-weight: 400; font-size: 30px; line-height: 1; letter-spacing: .01em; text-shadow: 1px 1px 0 rgba(43,27,18,.55); }
+    h1 { margin: 0; font-family: 'Vek Gothic', Kurale, Alegreya, serif; font-weight: 400; font-size: 38px; line-height: 1; letter-spacing: .01em; text-shadow: 1px 1px 0 rgba(43,27,18,.55); }
     .sub { color: #f3d9c2; font-size: 13px; font-style: italic; margin-top: 3px; }
     .spectator-badge {
       display:none; margin-top:7px; width:max-content; border:1.5px solid var(--ink);
@@ -194,7 +196,7 @@
     .battle-card.show { display: block; }
     .battle-card.no-art .miniature { display: none; }
     .battle-card.no-art h3 { margin-top: 2px; }
-    .battle-card h3 { margin: 9px 0 2px; font-family: Kurale, Alegreya, serif; font-weight: 400; font-size: 19px; color: var(--vermilion-deep); }
+    .battle-card h3 { margin: 9px 0 2px; font-family: 'Vek Gothic', Kurale, Alegreya, serif; font-weight: 400; font-size: 25px; color: var(--vermilion-deep); }
     .battle-card p { margin: 0; font-size: 13.5px; line-height: 1.35; }
 
     .finale {
@@ -208,7 +210,7 @@
       background: var(--vellum); box-shadow: 6px 6px 0 rgba(43,27,18,.45);
     }
     .finale-card .miniature img { width: 72%; margin: 0 auto; }
-    .finale-card h3 { margin: 14px 0 2px; font-family: Kurale, Alegreya, serif; font-weight: 400; font-size: 28px; line-height: 1.1; color: var(--vermilion-deep); }
+    .finale-card h3 { margin: 14px 0 2px; font-family: 'Vek Gothic', Kurale, Alegreya, serif; font-weight: 400; font-size: 34px; line-height: 1.1; color: var(--vermilion-deep); }
     .finale-card p { margin: 0 0 14px; font-size: 16px; }
 
     .map-zoom { position: absolute; z-index: 6; right: 12px; top: 12px; display: grid; gap: 5px; }
@@ -275,7 +277,7 @@
       background: var(--vellum);
       box-shadow: 3px 3px 0 rgba(43,27,18,.22);
     }
-    .panel h2 { margin: 0 0 8px; font-family: Kurale, Alegreya, serif; font-weight: 400; font-size: 21px; line-height: 1.1; color: var(--vermilion-deep); }
+    .panel h2 { margin: 0 0 8px; font-family: 'Vek Gothic', Kurale, Alegreya, serif; font-weight: 400; font-size: 27px; line-height: 1.1; color: var(--vermilion-deep); }
     .game-status-grid { display:grid; grid-template-columns:1fr 1fr; gap:0; margin-bottom:10px; border-top:1px solid var(--rule); border-bottom:1px solid var(--rule); }
     .game-status-cell { padding:6px 8px 6px 0; }
     .game-status-cell + .game-status-cell { border-left:1px solid var(--rule); padding-left:10px; }
