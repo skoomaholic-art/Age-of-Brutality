@@ -19,6 +19,7 @@ export function calculateNextDueAt(game) {
 
   for (const job of game.jobs || []) {
     if (job.status === 'PENDING' && job.due_at) candidates.push(job.due_at);
+    if (job.status === 'PENDING' && job.cancel_at) candidates.push(job.cancel_at);
   }
 
   const valid = candidates

@@ -509,12 +509,12 @@ export function buildMapArt(map, options = {}) {
     const stretch = (from, outer, inner) => {
       const d = smoothLine(points.slice(Math.floor(points.length * from)));
       return [
-        `<path d="${d}" fill="none" stroke="#45596a" stroke-width="${outer}" stroke-linecap="round" stroke-linejoin="round"/>`,
-        `<path d="${d}" fill="none" stroke="#8ea5ae" stroke-width="${inner}" stroke-linecap="round" stroke-linejoin="round"/>`
+        `<path d="${d}" fill="none" stroke="#1f4f86" stroke-width="${outer}" stroke-linecap="round" stroke-linejoin="round"/>`,
+        `<path d="${d}" fill="none" stroke="#4f93cf" stroke-width="${inner}" stroke-linecap="round" stroke-linejoin="round"/>`
       ];
     };
-    const tiers = [stretch(0, 1.7, 1), stretch(0.3, 2.5, 1.7), stretch(0.62, 3.4, 2.5)];
-    const ripples = `<path d="${smoothLine(points.slice(Math.floor(points.length * 0.3)))}" fill="none" stroke="#d3dedc" stroke-width=".45" stroke-dasharray="2.2 4" stroke-linecap="round"/>`;
+    const tiers = [stretch(0, 2, 1.25), stretch(0.3, 3, 2.1), stretch(0.62, 4.2, 3.2)];
+    const ripples = `<path d="${smoothLine(points.slice(Math.floor(points.length * 0.3)))}" fill="none" stroke="#bfe0f5" stroke-width=".4" stroke-dasharray="1.4 7.5" stroke-dashoffset="2" stroke-linecap="round" opacity=".8" transform="translate(.35 -.3)"/>`;
     return tiers.map(tier => tier[0]).join('') + tiers.map(tier => tier[1]).join('') + ripples;
   }).join('');
 

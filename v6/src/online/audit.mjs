@@ -173,6 +173,38 @@ export function journalEntryToAudit(entry, map, game) {
     };
   }
 
+  if (entry.kind === 'JOB_SEIZED') {
+    const territory = territoryName(map, entry.territory);
+    const what = entry.job_type === 'RECRUIT' ? 'набранные воины' : 'начатая крепость';
+    return {
+      ...base,
+      message: entry.wasted
+        ? `${territory} захвачен Домом ${entry.captor}: крепость, начатая Домом ${entry.house}, брошена недостроенной.`
+        : `${territory} захвачен Домом ${entry.captor}: ${what}, оплаченные Домом ${entry.house}, достались захватчику.`,
+      details: {
+        house: entry.house,
+        captor: entry.captor,
+        houses: [...entry.houses],
+        job_type: entry.job_type,
+        territory_id: entry.territory,
+        territory,
+        warriors: entry.warriors ?? null,
+        wasted: Boolean(entry.wasted),
+        gold_lost: entry.gold_lost,
+        at: entry.at || null
+      }
+    };
+  }
+
+  if (entry.kind === 'RECRUIT_CANCELLED' || entry.kind === 'FORT_CANCELLED') {
+    const territory = territoryName(map, entry.territory);
+    return {
+      ...base,
+      message: `${entry.house}: ${entry.kind === 'RECRUIT_CANCELLED' ? 'найм' : 'крепость'} в ${territory} - отменено, возвращено ${entry.gold_refunded} золота.`,
+      details: { house: entry.house, territory_id: entry.territory, territory, gold_refunded: entry.gold_refunded, at: entry.at || null }
+    };
+  }
+
   if (entry.kind === 'WAR_DECLARED') {
     const how = entry.betrayal
       ? `Дом ${entry.aggressor} предал союз и поднял оружие на Дом ${entry.target}.`

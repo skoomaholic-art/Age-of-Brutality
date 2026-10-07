@@ -177,24 +177,51 @@ function failAndRefund(next, job, reason, nowMs) {
   });
 }
 
+// A land taken while something was being raised or built there keeps the work:
+// it is finished for the new master, at the expense of the one who paid.
+function seized(next, job, captor, nowMs, extra = {}) {
+  job.seized_by = captor;
+  next.state.journal.push({
+    kind: 'JOB_SEIZED',
+    job_id: job.id,
+    job_type: job.type,
+    house: job.house,
+    captor,
+    houses: [job.house, captor],
+    territory: job.territory,
+    gold_lost: Number(job.gold_paid || 0),
+    at: new Date(nowMs).toISOString(),
+    ...extra
+  });
+}
+
 function resolveRecruit(next, constants, job, nowMs) {
   const territory = next.state.territories[job.territory];
-  if (territory.owner !== job.house) throw new Error('territory changed owner before recruitment completed');
-  if (totalHouseWarriors(next.state, job.house) + job.warriors > constants.house_warrior_cap) {
-    throw new Error('house warrior cap reached before recruitment completed');
-  }
+  const master = territory.owner;
+  if (!master || !next.state.houses[master]) throw new Error('territory has no master to raise warriors for');
+  const taken = master !== job.house;
   const totalHere = Object.values(territory.warriors || {}).reduce((sum, value) => sum + Number(value || 0), 0);
-  if (totalHere + job.warriors > constants.territory_warrior_cap) {
-    throw new Error('territory warrior cap reached before recruitment completed');
+  const room = Math.min(
+    constants.house_warrior_cap - totalHouseWarriors(next.state, master),
+    constants.territory_warrior_cap - totalHere
+  );
+  if (!taken && room < job.warriors) {
+    throw new Error(totalHere + job.warriors > constants.territory_warrior_cap
+      ? 'territory warrior cap reached before recruitment completed'
+      : 'house warrior cap reached before recruitment completed');
   }
-  territory.warriors[job.house] = (territory.warriors[job.house] || 0) + job.warriors;
+  // A captor takes as many of the levy as he has room for; the rest disperse.
+  const raised = Math.max(0, Math.min(job.warriors, room));
+  if (raised > 0) territory.warriors[master] = (territory.warriors[master] || 0) + raised;
+  if (taken) seized(next, job, master, nowMs, { warriors: raised });
   next.state.journal.push({
     kind: 'RECRUIT_COMPLETE',
     job_id: job.id,
-    house: job.house,
+    house: master,
+    paid_by: job.house,
     territory: job.territory,
-    warriors: job.warriors,
-    gold_spent: job.gold_paid,
+    warriors: raised,
+    gold_spent: taken ? 0 : job.gold_paid,
     started_at: job.created_at,
     completed_at: new Date(nowMs).toISOString(),
     planned_duration_ms: Math.max(0, Date.parse(job.due_at) - Date.parse(job.created_at)),
@@ -205,20 +232,29 @@ function resolveRecruit(next, constants, job, nowMs) {
 function resolveFort(next, map, constants, job, nowMs) {
   const territory = next.state.territories[job.territory];
   const meta = map.territories.find(item => item.id === job.territory);
-  if (territory.owner !== job.house) throw new Error('territory changed owner before fort completed');
+  const master = territory.owner;
+  if (!master || !next.state.houses[master]) throw new Error('territory has no master to build for');
+  const taken = master !== job.house;
   if (meta.type === 'Столица') throw new Error('fort cannot be built in a capital');
   if (territory.fort) throw new Error('territory already has a fort');
-  const ownForts = Array.isArray(next.state.houses[job.house].forts) ? next.state.houses[job.house].forts.length : 0;
-  if (ownForts >= constants.economy.own_fort_cap) throw new Error('no own fort tokens available');
+  const ownForts = Array.isArray(next.state.houses[master].forts) ? next.state.houses[master].forts.length : 0;
+  if (ownForts >= constants.economy.own_fort_cap) {
+    if (!taken) throw new Error('no own fort tokens available');
+    // The captor cannot keep one more fort: the half-built walls are abandoned.
+    seized(next, job, master, nowMs, { wasted: true });
+    return;
+  }
   territory.fort = true;
-  if (!Array.isArray(next.state.houses[job.house].forts)) next.state.houses[job.house].forts = [];
-  next.state.houses[job.house].forts.push(job.territory);
+  if (!Array.isArray(next.state.houses[master].forts)) next.state.houses[master].forts = [];
+  next.state.houses[master].forts.push(job.territory);
+  if (taken) seized(next, job, master, nowMs);
   next.state.journal.push({
     kind: 'FORT_COMPLETE',
     job_id: job.id,
-    house: job.house,
+    house: master,
+    paid_by: job.house,
     territory: job.territory,
-    gold_spent: job.gold_paid,
+    gold_spent: taken ? 0 : job.gold_paid,
     started_at: job.created_at,
     completed_at: new Date(nowMs).toISOString(),
     planned_duration_ms: Math.max(0, Date.parse(job.due_at) - Date.parse(job.created_at)),
@@ -258,6 +294,30 @@ export function processEconomy(game, map, constants, nowMs = Date.now(), timing 
     changed = true;
   }
 
+  // Cancellations whose countdown has run out. The gold comes back only if the
+  // land is still ours: a land lost in the meantime keeps the work for its captor.
+  for (const job of next.jobs) {
+    if (job.status !== 'PENDING' || !job.cancel_at || Date.parse(job.cancel_at) > nowMs) continue;
+    if (Date.parse(job.cancel_at) > Date.parse(job.due_at)) continue;
+    if (next.state.territories[job.territory]?.owner !== job.house) {
+      job.cancel_at = null;
+      changed = true;
+      continue;
+    }
+    job.status = 'CANCELLED';
+    job.resolved_at = new Date(nowMs).toISOString();
+    next.state.houses[job.house].gold += Number(job.gold_paid || 0);
+    next.state.journal.push({
+      kind: `${job.type}_CANCELLED`,
+      job_id: job.id,
+      house: job.house,
+      territory: job.territory,
+      gold_refunded: Number(job.gold_paid || 0),
+      at: job.resolved_at
+    });
+    changed = true;
+  }
+
   const due = next.jobs
     .filter(job => job.status === 'PENDING' && Date.parse(job.due_at) <= nowMs)
     .sort((a, b) => Date.parse(a.due_at) - Date.parse(b.due_at) || a.id.localeCompare(b.id));
@@ -282,6 +342,26 @@ export function processEconomy(game, map, constants, nowMs = Date.now(), timing 
 
   if (changed) next.updated_at = new Date(nowMs).toISOString();
   return next;
+}
+
+// Calling a levy or a building off takes a moment: the order is carried out
+// after a countdown, and until then the work can still fall to a captor.
+export const CANCEL_DELAY_MS = 10_000;
+
+export function cancelJob(game, { house, jobId }, { nowMs = Date.now() } = {}) {
+  const next = structuredClone(game);
+  const job = (next.jobs || []).find(item => item.id === jobId);
+  if (!job || job.house !== house) throw new Error('такого найма или стройки у твоего Дома нет');
+  if (job.status !== 'PENDING') throw new Error('эта работа уже завершена');
+  if (job.cancel_at) throw new Error('отмена уже объявлена');
+  if (next.state.territories[job.territory]?.owner !== house) {
+    throw new Error('земля захвачена: работа достанется захватчику');
+  }
+  const cancelAt = nowMs + CANCEL_DELAY_MS;
+  if (cancelAt >= Date.parse(job.due_at)) throw new Error('слишком поздно: работа завершится раньше отмены');
+  job.cancel_at = new Date(cancelAt).toISOString();
+  next.updated_at = new Date(nowMs).toISOString();
+  return { game: next, job };
 }
 
 export function economyView(game, map, constants, house) {

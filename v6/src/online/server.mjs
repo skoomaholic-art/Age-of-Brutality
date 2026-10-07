@@ -28,6 +28,7 @@ import {
 import { normalizeOnlineSeaState } from './sea-navigation.mjs';
 import {
   ONLINE_ECONOMY_TIMING,
+  cancelJob,
   economyView,
   normalizeOnlineEconomy,
   processEconomy
@@ -1411,6 +1412,24 @@ async function handleGameApi(req, res, url, ctx, subpath) {
       mutate: async game => {
         const next = passRound(game, house);
         return { game: next, response: { rounds: roundsView(next) } };
+      }
+    }));
+    return json(res, result.status, result.response);
+  }
+
+  if (req.method === 'POST' && subpath === '/jobs/cancel') {
+    const body = await readBody(req);
+    const house = String(body.house || '').trim();
+    const jobId = String(body.job_id || '').trim();
+    await requireHouse(ctx, req, house);
+
+    const result = await serial(ctx, () => runGameCommand(ctx, req, {
+      kind: 'CANCEL_JOB',
+      status: 200,
+      house,
+      mutate: async game => {
+        const cancelled = cancelJob(game, { house, jobId });
+        return { game: cancelled.game, response: { job: cancelled.job } };
       }
     }));
     return json(res, result.status, result.response);

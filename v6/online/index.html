@@ -346,6 +346,7 @@
     .diplomacy { margin-top:12px; border-top:1px solid rgba(43,27,18,.25); padding-top:8px; font-size:13px; }
     .diplomacy h4 { margin:0 0 6px; font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--vermilion, #a3271c); }
     .unmet { margin-top:5px; font-style:italic; font-size:12.5px; opacity:.8; }
+    .job-cancel { float:right; padding:1px 7px; font-size:12px; }
     .dip-row { display:flex; align-items:center; gap:6px; padding:3px 0; }
     .dip-row .dip-name { flex:1; }
     .dip-row .dip-state { font-style:italic; opacity:.85; }
@@ -1212,6 +1213,16 @@ function newsFor(item) {
   if (item.type === 'MARCH_FAILED' && mine(d.house)) {
     return { rank: 4, art: 'order-failed', title: 'Приказ не выполнен', text: strip(/^[^:]*:\s*/) };
   }
+  if (item.type === 'JOB_SEIZED') {
+    const what = d.job_type === 'RECRUIT' ? 'Набранные воины' : 'Начатая крепость';
+    if (mine(d.house)) {
+      return { rank: 7, art: 'land-lost', title: 'Оплачено тобой, досталось врагу', text: d.territory + ' пал раньше, чем работа была окончена. ' + what + ' теперь служат Дому ' + d.captor + '.' };
+    }
+    if (mine(d.captor) && !d.wasted) {
+      return { rank: 6, art: d.job_type === 'RECRUIT' ? 'recruit-done' : 'fort-built', title: 'Чужой труд, твоя добыча', text: 'В земле ' + d.territory + ' Дом ' + d.house + ' не успел закончить начатое. ' + what + ' достались тебе даром.' };
+    }
+    return null;
+  }
   if (item.type === 'HOUSE_ABANDONED') {
     return { rank: 7, art: 'house-abandoned', title: 'Брошенное государство', text, ms: 16000 };
   }
@@ -2009,9 +2020,17 @@ function renderEconomy() {
       const label = job.type === 'RECRUIT'
         ? `Найм ${job.warriors} воин.`
         : 'Крепость';
-      const status = job.status === 'PENDING' ? timeLeft(job.due_at) : (STATUS_WORDS[job.status] || job.status);
+      const pending = job.status === 'PENDING';
+      const status = job.seized_by
+        ? 'досталось Дому ' + job.seized_by
+        : pending
+          ? (job.cancel_at ? 'отмена через ' + timeLeft(job.cancel_at) : timeLeft(job.due_at))
+          : job.status === 'CANCELLED' ? 'отменено, золото возвращено' : (STATUS_WORDS[job.status] || job.status);
       const error = job.failure_reason ? `<div class="failed">${escapeHtml(job.failure_reason)}</div>` : '';
-      return `<div class="job"><b>${escapeHtml(label)}</b> · ${escapeHtml(territory)}<div class="${cls}">${escapeHtml(status)}</div>${error}</div>`;
+      const cancel = pending && !job.cancel_at
+        ? `<button class="job-cancel" data-cancel-job="${escapeHtml(job.id)}" title="Отмена займёт 10 секунд">Отменить</button>`
+        : '';
+      return `<div class="job"><b>${escapeHtml(label)}</b> · ${escapeHtml(territory)}${cancel}<div class="${cls}">${escapeHtml(status)}</div>${error}</div>`;
     }).join('');
   }
 
@@ -2597,6 +2616,23 @@ $('restore-game').addEventListener('click', async () => {
 });
 
 setupBar();
+
+$('jobs').addEventListener('click', async event => {
+  const button = event.target.closest('[data-cancel-job]');
+  if (!button) return;
+  button.disabled = true;
+  try {
+    await api('/api/jobs/cancel', {
+      method: 'POST',
+      headers: {'content-type':'application/json'},
+      body: JSON.stringify({ house, job_id: button.dataset.cancelJob })
+    });
+    await refresh();
+  } catch (error) {
+    alert(error.message);
+    button.disabled = false;
+  }
+});
 
 $('send').addEventListener('click', sendOrder);
 
