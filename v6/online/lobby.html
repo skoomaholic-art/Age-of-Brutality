@@ -249,6 +249,7 @@ button.loading { opacity:.65; cursor:wait; }
         <div class="lobby-sub">Игровой центр</div>
       </div>
     </div>
+    <a class="to-menu" href="/menu.html">← В главное меню</a>
     <img class="lobby-miniature" src="/assets/img/brawl.jpg" alt="" width="560" height="366">
   </header>
 
@@ -559,7 +560,11 @@ document.addEventListener('click', event => {
   location.href = '/lobby.html';
 });
 </script>
-<style>.brand, .brand-mark, header h1 { cursor: pointer; }</style>
+<style>.brand, .brand-mark, header h1 { cursor: pointer; }
+.lobby-head { position: relative; }
+.to-menu { position: absolute; left: 18px; top: 10px; z-index: 2; padding: 5px 12px; border: 1.5px solid #2b1b12; background: #f2e6c8; color: #2b1b12; font: 15px Kurale, Alegreya, serif; text-decoration: none; box-shadow: 2px 2px 0 rgba(43,27,18,.35); }
+.to-menu:hover { background: #fff6dd; }
+.lobby-head .brand { margin-top: 26px; }</style>
 <script>
 const houses = ['Варкайр','Сайрвен','Ортайн','Эркай','Тасвар','Айрель'];
 const profileAvatars = [

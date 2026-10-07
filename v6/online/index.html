@@ -146,6 +146,8 @@
     .province.target { fill: rgba(179,49,31,.36); stroke: var(--vermilion); stroke-width: 2.8; }
     .province.fogged { fill: rgba(16,17,20,.6); }
     .province.fogged:hover { fill: rgba(16,17,20,.46); }
+    #pixi-layer { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+    #pixi-layer canvas { display: block; width: 100%; height: 100%; }
     .map-clouds { pointer-events: none; transition: opacity 2.4s ease-out, transform 2.4s ease-out; }
     .map-clouds.blown { opacity: 0; transform: translate(26px, -12px); }
     .cloud-drift { animation: cloud-bob 13s ease-in-out infinite alternate; }
@@ -817,6 +819,7 @@
 </div></div>
 <div id="lens" class="lens"><div class="lens-glass"><img id="lens-art" alt=""></div><div id="lens-note" class="lens-note"></div></div>
 
+<script src="/assets/lib/pixi.min.js"></script>
 <script>
 const colors = {
   'Варкайр': '#b3311f',
@@ -2930,9 +2933,147 @@ let mapDragged = false;
 let cloudKey = null;
 let cloudSeq = 0;
 
+// ---------- the PixiJS layer ----------
+// A WebGL canvas over the map, moved and scaled with it. The fog of war lives
+// here: thousands of painted clouds, each bobbing on its own, that the wind
+// carries off when a land is discovered. If WebGL is not to be had, the map
+// falls back to the drawn clouds of the SVG layer.
+const pixiFog = { ready: false, failed: false, clouds: [], key: null, polys: null };
+
+function parseRings(d) {
+  return String(d).split('M').filter(Boolean).map(part =>
+    part.replace('Z', '').split('L').map(pair => pair.trim().split(/[ ,]+/).map(Number)).filter(p => p.length === 2 && !Number.isNaN(p[0])));
+}
+
+function inRings(rings, x, y) {
+  let inside = false;
+  for (const ring of rings) {
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const a = ring[i], b = ring[j];
+      if ((a[1] > y) !== (b[1] > y) && x < ((b[0] - a[0]) * (y - a[1])) / (b[1] - a[1]) + a[0]) inside = !inside;
+    }
+  }
+  return inside;
+}
+
+function setupPixiFog() {
+  if (pixiFog.ready || pixiFog.failed || !window.PIXI || !mapArt) return;
+  try {
+    const host = document.createElement('div');
+    host.id = 'pixi-layer';
+    $('map').after(host);
+    const app = new PIXI.Application({ backgroundAlpha: 0, antialias: true, resizeTo: host, autoDensity: true, resolution: Math.min(2, window.devicePixelRatio || 1) });
+    host.appendChild(app.view);
+    const world = new PIXI.Container();
+    app.stage.addChild(world);
+    pixiFog.app = app;
+    pixiFog.world = world;
+
+    const b = mapArt.bounds;
+    const pad = 420;
+    const textures = [1, 2, 3].map(n => PIXI.Texture.from('/assets/img/menu-cloud-' + n + '.png'));
+    const tints = [0xb9bec6, 0xa2a8b2, 0xcfd3d8, 0x8f96a2];
+    let seed = 11;
+    const random = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+    let row = 0;
+    for (let y = b.y0 - pad; y < b.y1 + pad; y += 19, row += 1) {
+      for (let x = b.x0 - pad + (row % 2 ? 20 : 0); x < b.x1 + pad; x += 40) {
+        const sprite = new PIXI.Sprite(textures[Math.floor(random() * 3)]);
+        sprite.anchor.set(0.5);
+        const w = 96 + random() * 30;
+        sprite.width = w;
+        sprite.height = w * 0.42;
+        if (random() < 0.5) sprite.scale.x *= -1;
+        sprite.tint = tints[Math.floor(random() * tints.length)];
+        const cloud = { sprite, x: x + (random() - 0.5) * 12, y: y + (random() - 0.5) * 6, phase: random() * 6.283, speed: 0.25 + random() * 0.35, on: true, alpha: 1, drift: 0 };
+        sprite.position.set(cloud.x, cloud.y);
+        world.addChild(sprite);
+        pixiFog.clouds.push(cloud);
+      }
+    }
+
+    app.ticker.add(() => {
+      const dt = app.ticker.deltaMS / 1000;
+      const t = performance.now() / 1000;
+      // Keep the canvas in step with the map's view box.
+      const W = app.renderer.width / app.renderer.resolution;
+      const H = app.renderer.height / app.renderer.resolution;
+      const scale = Math.min(W / mapView.w, H / mapView.h);
+      world.scale.set(scale);
+      world.position.set((W - mapView.w * scale) / 2 - mapView.x * scale, (H - mapView.h * scale) / 2 - mapView.y * scale);
+      // Only the clouds in sight are drawn.
+      const vx0 = mapView.x - 70, vx1 = mapView.x + mapView.w + 70, vy0 = mapView.y - 40, vy1 = mapView.y + mapView.h + 40;
+      for (const cloud of pixiFog.clouds) {
+        const target = cloud.on ? 1 : 0;
+        if (cloud.alpha !== target) {
+          cloud.alpha += Math.sign(target - cloud.alpha) * dt / (cloud.on ? 1.2 : 2.2);
+          cloud.alpha = Math.max(0, Math.min(1, cloud.alpha));
+        }
+        // A cloud that has been dismissed sails off with the wind.
+        if (!cloud.on && cloud.alpha > 0) cloud.drift += dt * 26;
+        else if (cloud.on && cloud.drift > 0) cloud.drift = Math.max(0, cloud.drift - dt * 40);
+        const sprite = cloud.sprite;
+        sprite.visible = cloud.alpha > 0.01 && cloud.x + cloud.drift > vx0 && cloud.x < vx1 && cloud.y > vy0 && cloud.y - cloud.drift * 0.35 < vy1;
+        if (!sprite.visible) continue;
+        sprite.alpha = cloud.alpha;
+        sprite.position.set(cloud.x + Math.sin(t * cloud.speed * 0.6 + cloud.phase) * 3 + cloud.drift, cloud.y + Math.sin(t * cloud.speed + cloud.phase) * 2.6 - cloud.drift * 0.35);
+      }
+    });
+    pixiFog.ready = true;
+  } catch (error) {
+    console.warn('PixiJS layer is not available, using the drawn clouds', error);
+    pixiFog.failed = true;
+    document.getElementById('pixi-layer')?.remove();
+  }
+}
+
+// Decides for every cloud whether it still has something to hide.
+function updatePixiFog(explored, art, coords) {
+  const key = explored ? [...explored].sort().join(',') : 'open';
+  if (key === pixiFog.key) return;
+  const first = pixiFog.key === null;
+  pixiFog.key = key;
+  pixiFog.polys ||= Object.fromEntries(Object.entries(art).map(([id, shape]) => [id, parseRings(shape.d)]));
+  const known = [];
+  const hidden = [];
+  const edge = [];
+  if (explored) {
+    for (const [id, rings] of Object.entries(pixiFog.polys)) {
+      if (!explored.has(id)) { hidden.push(rings); continue; }
+      known.push(rings);
+      for (const ring of rings) for (let i = 0; i < ring.length; i += 2) edge.push(ring[i]);
+    }
+    for (const id of explored) if (!art[id] && coords[id]) edge.push([coords[id].x, coords[id].y, 34]);
+  }
+  for (const cloud of pixiFog.clouds) {
+    let on = Boolean(explored);
+    if (on) {
+      if (known.some(rings => inRings(rings, cloud.x, cloud.y))) on = false;
+      else {
+        // Near the edge of the known world the cover thins out: more over open
+        // water, less over a land that is still unknown.
+        const reach = hidden.some(rings => inRings(rings, cloud.x, cloud.y)) ? 13 : 44;
+        for (const p of edge) {
+          const r = p[2] || reach;
+          const dx = p[0] - cloud.x, dy = p[1] - cloud.y;
+          if (dx * dx + dy * dy < r * r) { on = false; break; }
+        }
+      }
+    }
+    cloud.on = on;
+    if (first) { cloud.alpha = on ? 1 : 0; cloud.drift = 0; }
+  }
+}
+
 function updateClouds(explored, art, coords) {
   const layer = document.getElementById('map-clouds');
   if (!layer) return;
+  setupPixiFog();
+  if (pixiFog.ready) {
+    layer.innerHTML = '';
+    updatePixiFog(explored, art, coords);
+    return;
+  }
   const key = explored ? [...explored].sort().join(',') : '';
   if (key === cloudKey) return;
   const first = cloudKey === null;
