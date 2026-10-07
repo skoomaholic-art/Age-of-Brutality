@@ -173,6 +173,66 @@ export function journalEntryToAudit(entry, map, game) {
     };
   }
 
+  if (entry.kind === 'WAR_DECLARED') {
+    const how = entry.betrayal
+      ? `Дом ${entry.aggressor} предал союз и поднял оружие на Дом ${entry.target}.`
+      : entry.cause === 'ENCOUNTER'
+        ? `Войска Домов ${entry.aggressor} и ${entry.target} сошлись на дороге, и мира между ними больше нет.`
+        : `Дом ${entry.aggressor} пошёл войной на Дом ${entry.target}.`;
+    return {
+      ...base,
+      message: `Война: ${how}`,
+      details: {
+        aggressor: entry.aggressor,
+        target: entry.target,
+        houses: [entry.aggressor, entry.target],
+        cause: entry.cause || null,
+        betrayal: Boolean(entry.betrayal),
+        at: entry.at || null
+      }
+    };
+  }
+
+  if (entry.kind === 'ALLIANCE_FORMED') {
+    return {
+      ...base,
+      message: `Союз: Дома ${entry.houses[0]} и ${entry.houses[1]} скрепили союз. Их войска не тронут друг друга.`,
+      details: { houses: [...entry.houses], at: entry.at || null }
+    };
+  }
+
+  if (entry.kind === 'ALLIANCE_BROKEN') {
+    return {
+      ...base,
+      message: `Союз расторгнут: Дом ${entry.house} более не союзник Дому ${entry.other}.`,
+      details: { houses: [entry.house, entry.other], at: entry.at || null }
+    };
+  }
+
+  if (entry.kind === 'FIELD_BATTLE') {
+    const [a, b] = entry.sides;
+    const place = entry.place_node
+      ? `у ${territoryName(map, entry.place_node)}`
+      : `между ${territoryName(map, entry.place_from)} и ${territoryName(map, entry.place_to)}`;
+    const outcome = entry.winner
+      ? `Победил Дом ${entry.winner} и продолжил поход; побеждённые повернули назад.`
+      : 'Никто не взял верх, обе рати повернули назад.';
+    return {
+      ...base,
+      message: `Встречный бой: войска Домов ${a.house} (${a.warriors}) и ${b.house} (${b.warriors}) столкнулись в пути ${place}. ${outcome} Потери: ${a.house} -${a.losses}, ${b.house} -${b.losses}.`,
+      details: {
+        houses: [...entry.houses],
+        winner: entry.winner || null,
+        war_declared: Boolean(entry.war_declared),
+        place_from: entry.place_from || null,
+        place_to: entry.place_to || null,
+        place_node: entry.place_node || null,
+        sides: structuredClone(entry.sides),
+        at: entry.at || null
+      }
+    };
+  }
+
   if (entry.kind === 'STATE_REPAIR') {
     const repairs = Array.isArray(entry.repairs) ? entry.repairs : [];
     return {

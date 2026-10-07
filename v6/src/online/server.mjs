@@ -45,6 +45,16 @@ import {
   startRounds
 } from './rounds.mjs';
 import { applyFog } from './fog.mjs';
+import { processEncounters } from './encounters.mjs';
+import {
+  acceptAlliance,
+  answerAiOffers,
+  breakAlliance,
+  declareWar,
+  declineAlliance,
+  diplomacyView,
+  offerAlliance
+} from './diplomacy.mjs';
 import { processRounds } from './ai.mjs';
 import {
   emitCloudAudit,
@@ -385,7 +395,10 @@ async function tickUnlocked(ctx) {
   if (ctx.game.lifecycle?.status !== GAME_STATUS.RUNNING) return;
 
   const nowMs = Date.now();
-  let processed = processDueOrders(ctx.game, map, constants, nowMs);
+  // Armies that met on the road fight before anyone arrives anywhere.
+  let processed = processEncounters(ctx.game, map, constants, nowMs);
+  processed = answerAiOffers(processed, processed.rounds?.ai_houses || [], { nowMs });
+  processed = processDueOrders(processed, map, constants, nowMs);
   processed = processEconomy(processed, map, constants, nowMs);
   processed = processRounds(processed, map, constants, { nowMs });
   if (
@@ -434,6 +447,8 @@ async function recordRankedResults(ctx, winnerHouses, nowMs) {
 function redactGameForPlayer(game, player) {
   const clientGame = structuredClone(game);
   clientGame.lifecycle = publicLifecycle(clientGame.lifecycle);
+  // Wars and alliances are public; offers reach only the Houses concerned.
+  clientGame.diplomacy = diplomacyView(game, player?.house || null);
 
   clientGame.orders = player?.role === PLAYER_ROLE.SPECTATOR
     ? (clientGame.orders || []).filter(item => item.status !== 'PENDING').slice(-30)
@@ -1223,6 +1238,33 @@ async function handleGameApi(req, res, url, ctx, subpath) {
       mutate: async game => executeCommand(game, map, constants, command)
     }));
 
+    return json(res, result.status, result.response);
+  }
+
+  if (req.method === 'POST' && subpath === '/diplomacy') {
+    const body = await readBody(req);
+    const house = String(body.house || '').trim();
+    const target = String(body.target || '').trim();
+    const action = String(body.action || '').trim().toUpperCase();
+    await requireHouse(ctx, req, house);
+
+    const result = await serial(ctx, () => runGameCommand(ctx, req, {
+      kind: 'DIPLOMACY',
+      status: 200,
+      house,
+      mutate: async game => {
+        const nowMs = Date.now();
+        let next;
+        if (action === 'OFFER_ALLIANCE') next = offerAlliance(game, constants, house, target, { nowMs });
+        else if (action === 'ACCEPT_ALLIANCE') next = acceptAlliance(game, constants, house, target, { nowMs });
+        else if (action === 'DECLINE_ALLIANCE') next = declineAlliance(game, house, target, { nowMs });
+        else if (action === 'BREAK_ALLIANCE') next = breakAlliance(game, house, target, { nowMs });
+        else if (action === 'DECLARE_WAR') next = declareWar(game, constants, house, target, { nowMs });
+        else throw new Error(`unknown diplomacy action ${action}`);
+        next = answerAiOffers(next, next.rounds?.ai_houses || [], { nowMs });
+        return { game: next, response: { diplomacy: diplomacyView(next, house) } };
+      }
+    }));
     return json(res, result.status, result.response);
   }
 

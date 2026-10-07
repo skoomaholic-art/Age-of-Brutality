@@ -1,4 +1,5 @@
 import { roundsNextDueAt } from './rounds.mjs';
+import { nextEncounterAt } from './encounters.mjs';
 
 export function calculateNextDueAt(game) {
   if (game.lifecycle?.status !== 'RUNNING') return null;
@@ -8,6 +9,9 @@ export function calculateNextDueAt(game) {
 
   const roundsDue = roundsNextDueAt(game);
   if (roundsDue) candidates.push(roundsDue);
+
+  const encounterAt = nextEncounterAt(game);
+  if (encounterAt) candidates.push(encounterAt);
 
   for (const order of game.orders || []) {
     if (order.status === 'PENDING' && order.due_at) candidates.push(order.due_at);

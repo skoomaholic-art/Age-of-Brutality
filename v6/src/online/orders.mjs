@@ -13,6 +13,7 @@ import {
   resolveCommanderFate,
   settleCommander
 } from '../core/characters.mjs';
+import { declareWarInPlace } from './diplomacy.mjs';
 import {
   finishSeaLandingBridge,
   isSeaWaypoint
@@ -676,7 +677,16 @@ export function processDueOrders(game, map, constants, nowMs = Date.now()) {
       liveOrder.result = resolved.result;
       liveOrder.failure_reason = null;
 
-      for (let i = journalStart; i < next.state.journal.length; i += 1) {
+      // Taking up arms against a House's land is war (and treachery, if it was an ally).
+      const journalEnd = next.state.journal.length;
+      for (let i = journalStart; i < journalEnd; i += 1) {
+        const entry = next.state.journal[i];
+        if (entry.kind === 'BATTLE' || entry.kind === 'EMPTY_ENEMY_OCCUPATION') {
+          declareWarInPlace(next, entry.attacker, entry.defender, { nowMs, cause: 'ATTACK' });
+        }
+      }
+
+      for (let i = journalStart; i < journalEnd; i += 1) {
         Object.assign(next.state.journal[i], {
           order_id: liveOrder.id,
           started_at: liveOrder.created_at,

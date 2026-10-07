@@ -1,3 +1,4 @@
+import { areAllies } from './diplomacy.mjs';
 import { neutralResistance } from '../core/neutral.mjs';
 import { buildAdjacency } from '../core/map.mjs';
 import { totalHouseWarriors } from '../core/state.mjs';
@@ -117,6 +118,8 @@ function marchCandidates(game, map, constants, house, adjacency) {
     if (!sizes.length) continue;
 
     const owner = state.territories[to].owner ?? null;
+    // An ally's land is not a target.
+    if (owner && owner !== house && areAllies(game, house, owner)) continue;
     const worth = territoryValue(map, constants, house, to);
     const command = warriors => ({ type: 'MARCH', house, from, to, warriors });
 

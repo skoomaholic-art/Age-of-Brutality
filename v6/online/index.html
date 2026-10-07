@@ -296,6 +296,14 @@
     .standing-row:has(.abandoned) .standing-house { color: var(--ink-soft); text-decoration: line-through; text-decoration-color: var(--rule); }
     .status-warning { margin-top:8px; padding:7px 9px; border-left:3px solid var(--gold); background: rgba(201,162,58,.16); font-size:12.5px; font-style: italic; line-height:1.4; color: var(--ink-soft); }
     .status-final { border-left-color: var(--vermilion); background: rgba(179,49,31,.10); color: var(--ink); font-style: normal; font-weight: 700; font-size: 15px; }
+    .diplomacy { margin-top:12px; border-top:1px solid rgba(43,27,18,.25); padding-top:8px; font-size:13px; }
+    .diplomacy h4 { margin:0 0 6px; font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--vermilion, #a3271c); }
+    .dip-row { display:flex; align-items:center; gap:6px; padding:3px 0; }
+    .dip-row .dip-name { flex:1; }
+    .dip-row .dip-state { font-style:italic; opacity:.85; }
+    .dip-row .dip-state.war { color:#a3271c; font-weight:700; font-style:normal; }
+    .dip-row .dip-state.ally { color:#2f6b3c; font-weight:700; font-style:normal; }
+    .dip-row button { padding:2px 7px; font-size:12px; }
     .round-houses { display:grid; gap:2px; margin-top:8px; font-size:13px; }
     .round-house { display:flex; justify-content:space-between; gap:8px; color: var(--ink); }
     .round-house.mine { font-weight:700; }
@@ -471,6 +479,7 @@
           <figcaption>Остальные Дома ещё думают.</figcaption>
         </figure>
         <div id="round-houses" class="round-houses"></div>
+        <div id="diplomacy" class="diplomacy"></div>
       </div>
       <div id="game-status-note" class="status-warning"></div>
       <div id="standings" class="standings"></div>
@@ -1018,6 +1027,89 @@ function showHerald(title, text, withMiniature, ms) {
   $('battle-card').classList.add('show');
   clearTimeout(battleTimer);
   battleTimer = setTimeout(() => $('battle-card').classList.remove('show'), ms);
+}
+
+// Wars, alliances and battles on the road, as the heralds cry them.
+const DIPLOMACY_NEWS = {
+  FIELD_BATTLE: ['Встречный бой', /^Встречный бой:\s*/, true],
+  WAR_DECLARED: ['Война', /^Война:\s*/, false],
+  ALLIANCE_FORMED: ['Союз', /^Союз:\s*/, false],
+  ALLIANCE_BROKEN: ['Союз расторгнут', /^Союз расторгнут:\s*/, false]
+};
+let lastDiplomacySeq = null;
+
+function announceDiplomacy() {
+  const items = (snapshot?.game?.audit_log || []).filter(item => DIPLOMACY_NEWS[item.type]);
+  const newest = items.reduce((max, item) => Math.max(max, Number(item.seq || 0)), 0);
+  if (lastDiplomacySeq === null) { lastDiplomacySeq = newest; return; }
+  if (newest <= lastDiplomacySeq) return;
+  const fresh = items.filter(item => Number(item.seq || 0) > lastDiplomacySeq);
+  lastDiplomacySeq = newest;
+  const own = fresh.filter(item => (item.details?.houses || []).includes(house));
+  const pool = own.length ? own : fresh;
+  // The battle tells more than the declaration of war that came with it.
+  const shown = pool.filter(item => item.type === 'FIELD_BATTLE').slice(-1)[0] || pool.slice(-1)[0];
+  const [title, strip, art] = DIPLOMACY_NEWS[shown.type];
+  showHerald(title, String(shown.message || '').replace(strip, ''), art, 11000);
+}
+
+function relationWith(other) {
+  const key = [house, other].sort().join('::');
+  return snapshot?.game?.diplomacy?.relations?.[key] || 'NEUTRAL';
+}
+
+function renderDiplomacy() {
+  const box = $('diplomacy');
+  if (!box) return;
+  const dip = snapshot?.game?.diplomacy;
+  const running = snapshot?.game?.lifecycle?.status === 'RUNNING';
+  if (!dip || !house || isSpectator || !running) { box.innerHTML = ''; return; }
+  const hasAlly = Object.keys(colors).some(h => h !== house && relationWith(h) === 'ALLIANCE');
+  const rows = Object.keys(colors).filter(h => h !== house).map(other => {
+    const rel = relationWith(other);
+    let state = '<span class="dip-state">нейтралитет</span>';
+    let buttons = '';
+    if (abandonedHouses()[other]) {
+      state = '<span class="dip-state">брошено</span>';
+    } else if (rel === 'WAR') {
+      state = '<span class="dip-state war">война</span>';
+    } else if (rel === 'ALLIANCE') {
+      state = '<span class="dip-state ally">союз</span>';
+      buttons = '<button data-dip="BREAK_ALLIANCE" data-target="' + escapeHtml(other) + '">Расторгнуть</button>';
+    } else if ((dip.offers_in || []).includes(other)) {
+      state = '<span class="dip-state">предлагает союз</span>';
+      buttons = '<button class="primary" data-dip="ACCEPT_ALLIANCE" data-target="' + escapeHtml(other) + '">Принять</button>' +
+        '<button data-dip="DECLINE_ALLIANCE" data-target="' + escapeHtml(other) + '">Отказать</button>';
+    } else if ((dip.offers_out || []).includes(other)) {
+      state = '<span class="dip-state">ждём ответа</span>';
+      buttons = '<button data-dip="DECLINE_ALLIANCE" data-target="' + escapeHtml(other) + '">Отозвать</button>';
+    } else {
+      buttons = (hasAlly ? '' : '<button data-dip="OFFER_ALLIANCE" data-target="' + escapeHtml(other) + '">Союз</button>') +
+        '<button data-dip="DECLARE_WAR" data-target="' + escapeHtml(other) + '">Война</button>';
+    }
+    return '<div class="dip-row"><span class="dip-name">' + escapeHtml(other) + '</span>' + state + buttons + '</div>';
+  }).join('');
+  box.innerHTML = '<h4>Дипломатия</h4>' + rows;
+  box.querySelectorAll('button[data-dip]').forEach(button => {
+    button.onclick = async () => {
+      const action = button.dataset.dip;
+      const target = button.dataset.target;
+      if (action === 'DECLARE_WAR' && !confirm('Объявить войну Дому ' + target + '? Мира в этой партии уже не будет.')) return;
+      if (action === 'BREAK_ALLIANCE' && !confirm('Расторгнуть союз с Домом ' + target + '?')) return;
+      button.disabled = true;
+      try {
+        await api('/api/diplomacy', {
+          method: 'POST',
+          headers: {'content-type':'application/json'},
+          body: JSON.stringify({ house, target, action })
+        });
+        await refresh();
+      } catch (error) {
+        alert(error.message);
+        button.disabled = false;
+      }
+    };
+  });
 }
 
 // Tells the players when a ruler leaves the game and his realm is abandoned.
@@ -2067,6 +2159,8 @@ async function refresh() {
   renderVictory();
   renderFinale();
   announceBattles();
+  announceDiplomacy();
+  renderDiplomacy();
   announceAbandoned();
   renderRounds();
   renderHouse();
