@@ -1345,6 +1345,18 @@ const server = http.createServer(async (req, res) => {
       return text(res, 200, html, 'text/html; charset=utf-8');
     }
 
+    // Static assets (self-hosted fonts). Flat file names only, so no path can escape the folder.
+    const asset = url.pathname.match(/^\/assets\/(fonts)\/([a-z0-9][a-z0-9.-]*\.(woff2))$/);
+    if (req.method === 'GET' && asset) {
+      const file = path.join(v6Root, 'online/assets', asset[1], asset[2]);
+      if (!fs.existsSync(file)) return json(res, 404, { error: 'not found' });
+      res.writeHead(200, {
+        'content-type': 'font/woff2',
+        'cache-control': 'public, max-age=31536000, immutable'
+      });
+      return res.end(fs.readFileSync(file));
+    }
+
     if (req.method === 'POST' && url.pathname === '/api/internal/tick-due') {
       if (!process.env.AOB_INTERNAL_TICK_TOKEN) {
         return json(res, 404, { error: 'internal resolver is not configured' });

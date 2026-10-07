@@ -5,86 +5,152 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Жестокий Век - Online Prototype</title>
   <style>
+    /* Illuminated-manuscript theme: parchment, iron-gall ink, vermilion rubrics,
+       lapis, verdigris and a gold-leaf ground for the map. */
+    @font-face { font-family: Kurale; font-weight: 400; font-display: swap; src: url(/assets/fonts/kurale-cyrillic-400-normal.woff2) format('woff2'); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+    @font-face { font-family: Kurale; font-weight: 400; font-display: swap; src: url(/assets/fonts/kurale-latin-400-normal.woff2) format('woff2'); unicode-range: U+0000-00FF, U+2000-206F, U+2190-21FF, U+2212; }
+    @font-face { font-family: Alegreya; font-weight: 400; font-display: swap; src: url(/assets/fonts/alegreya-cyrillic-400-normal.woff2) format('woff2'); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+    @font-face { font-family: Alegreya; font-weight: 400; font-display: swap; src: url(/assets/fonts/alegreya-latin-400-normal.woff2) format('woff2'); unicode-range: U+0000-00FF, U+2000-206F, U+2190-21FF, U+2212; }
+    @font-face { font-family: Alegreya; font-weight: 700; font-display: swap; src: url(/assets/fonts/alegreya-cyrillic-700-normal.woff2) format('woff2'); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+    @font-face { font-family: Alegreya; font-weight: 700; font-display: swap; src: url(/assets/fonts/alegreya-latin-700-normal.woff2) format('woff2'); unicode-range: U+0000-00FF, U+2000-206F, U+2190-21FF, U+2212; }
+    @font-face { font-family: Alegreya; font-style: italic; font-weight: 400; font-display: swap; src: url(/assets/fonts/alegreya-cyrillic-400-italic.woff2) format('woff2'); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+    @font-face { font-family: Alegreya; font-style: italic; font-weight: 400; font-display: swap; src: url(/assets/fonts/alegreya-latin-400-italic.woff2) format('woff2'); unicode-range: U+0000-00FF, U+2000-206F, U+2190-21FF, U+2212; }
+
     :root {
-      color-scheme: dark;
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #0f1216;
-      color: #ece6d8;
+      color-scheme: light;
+      --parchment: #e6d5ae;
+      --vellum: #f2e6c8;
+      --vellum-deep: #e9dab6;
+      --ink: #2b1b12;
+      --ink-soft: #6a5642;
+      --rule: #a58f6a;
+      --vermilion: #b3311f;
+      --vermilion-deep: #8a2415;
+      --lapis: #2c4a86;
+      --verdigris: #3f7048;
+      --gold: #c9a23a;
+      --gold-light: #e2c468;
+      --white-lead: #fff8e6;
+      font-family: Alegreya, Georgia, 'Times New Roman', serif;
+      font-size: 15px;
+      background: var(--parchment);
+      color: var(--ink);
     }
     * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 30% 20%, #202a31, #0f1216 55%); }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      /* Uneven, foxed parchment. */
+      background:
+        radial-gradient(ellipse at 12% 8%, rgba(255,246,214,.55), transparent 42%),
+        radial-gradient(ellipse at 88% 92%, rgba(120,84,40,.22), transparent 46%),
+        radial-gradient(circle at 70% 18%, rgba(140,100,50,.10), transparent 30%),
+        var(--parchment);
+    }
     button, select, input { font: inherit; }
+    :focus-visible { outline: 2px solid var(--lapis); outline-offset: 2px; }
+
+    /* Header: a painted vermilion band strewn with white-lead trefoils. */
     header {
       display: flex;
       gap: 18px;
       align-items: center;
       justify-content: space-between;
-      padding: 16px 20px;
-      border-bottom: 1px solid #343b42;
-      background: rgba(12,15,18,.92);
+      padding: 12px 20px;
+      color: var(--white-lead);
+      background:
+        radial-gradient(circle, rgba(255,248,230,.5) 1.1px, transparent 1.6px) 0 0 / 44px 44px,
+        radial-gradient(circle, rgba(255,248,230,.5) 1.1px, transparent 1.6px) 5px 0 / 44px 44px,
+        radial-gradient(circle, rgba(255,248,230,.5) 1.1px, transparent 1.6px) 2.5px -4px / 44px 44px,
+        radial-gradient(circle, rgba(255,248,230,.5) 1.1px, transparent 1.6px) 22px 22px / 44px 44px,
+        radial-gradient(circle, rgba(255,248,230,.5) 1.1px, transparent 1.6px) 27px 22px / 44px 44px,
+        radial-gradient(circle, rgba(255,248,230,.5) 1.1px, transparent 1.6px) 24.5px 18px / 44px 44px,
+        linear-gradient(180deg, #a02c1c, var(--vermilion-deep));
+      border-bottom: 3px solid var(--ink);
+      box-shadow: 0 3px 0 var(--gold), 0 5px 0 var(--ink);
       position: sticky;
       top: 0;
       z-index: 10;
     }
-    h1 { margin: 0; font-size: 19px; letter-spacing: .08em; }
-    .sub { color: #aeb7bd; font-size: 12px; margin-top: 4px; }
+    h1 { margin: 0; font-family: Kurale, Alegreya, serif; font-weight: 400; font-size: 30px; line-height: 1; letter-spacing: .01em; text-shadow: 1px 1px 0 rgba(43,27,18,.55); }
+    .sub { color: #f3d9c2; font-size: 13px; font-style: italic; margin-top: 3px; }
     .spectator-badge {
-      display:none; margin-top:7px; width:max-content; border:1px solid #806e3a;
-      border-radius:999px; padding:4px 8px; color:#e9d685; font-size:10px;
-      font-weight:850; letter-spacing:.05em;
+      display:none; margin-top:7px; width:max-content; border:1.5px solid var(--ink);
+      padding:2px 9px; background: var(--gold); color: var(--ink); font-size:12px; font-weight:700;
     }
     .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    .save-status { font-size: 10px; color: #8f9aa1; min-width: 132px; text-align: right; }
+    header .muted { color: #f3d9c2; }
+    .save-status { font-size: 12px; font-style: italic; color: #f3d9c2; min-width: 132px; text-align: right; }
     select, input, button {
-      background: #171d22;
-      color: #ece6d8;
-      border: 1px solid #424b52;
-      border-radius: 8px;
-      padding: 8px 10px;
+      background: var(--vellum);
+      color: var(--ink);
+      border: 1.5px solid var(--ink);
+      border-radius: 2px;
+      padding: 6px 11px;
     }
-    button { cursor: pointer; }
-    button:hover { border-color: #8b9aa4; }
-    button.primary { background: #704528; border-color: #9a6847; }
+    button { cursor: pointer; font-weight: 700; box-shadow: 2px 2px 0 rgba(43,27,18,.35); }
+    button:hover { background: var(--gold-light); }
+    button:active { transform: translate(1px,1px); box-shadow: 1px 1px 0 rgba(43,27,18,.35); }
+    button:disabled { cursor: default; color: var(--ink-soft); background: var(--vellum-deep); border-color: var(--rule); box-shadow: none; transform: none; }
+    button.primary { background: var(--vermilion); border-color: var(--ink); color: var(--white-lead); }
+    button.primary:hover { background: #c93f2a; }
+    button.primary:disabled { background: var(--vellum-deep); color: var(--ink-soft); }
     main {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 340px;
-      min-height: calc(100vh - 74px);
+      grid-template-columns: minmax(0, 1fr) 360px;
+      min-height: calc(100vh - 68px);
     }
-    .map-wrap { min-width: 0; padding: 16px; }
+    .map-wrap { min-width: 0; padding: 18px; }
+
+    /* The map is a miniature: burnished gold ground inside a painted frame. */
     .map-card {
       height: calc(100vh - 108px);
       min-height: 620px;
-      border: 1px solid #323a40;
-      border-radius: 14px;
       overflow: hidden;
-      background: linear-gradient(180deg, #182129, #10171d);
       position: relative;
+      background:
+        radial-gradient(ellipse at 22% 18%, rgba(255,236,160,.55), transparent 38%),
+        radial-gradient(ellipse at 78% 80%, rgba(120,84,20,.30), transparent 44%),
+        radial-gradient(circle at 60% 35%, rgba(255,226,140,.25), transparent 30%),
+        var(--gold);
+      border: 2px solid var(--ink);
+      box-shadow:
+        0 0 0 7px #9a3a26,
+        0 0 0 8.5px var(--ink),
+        0 0 0 10.5px var(--white-lead),
+        0 0 0 12px var(--ink),
+        0 0 0 18px var(--verdigris),
+        0 0 0 20px var(--ink);
+      margin: 20px;
+      height: calc(100vh - 148px);
     }
     svg { width: 100%; height: 100%; display: block; }
-    .land-edge { stroke: #39444c; stroke-width: 1.4; opacity: .8; }
-    .land-edge.active-route { stroke:#ffd45c; stroke-width:2.4; opacity:1; }
-    .moving-army { pointer-events:none; filter:drop-shadow(0 0 5px rgba(0,0,0,.75)); }
-    .moving-army .army-disc { stroke:#fff3cf; stroke-width:1.4; }
-    .moving-army .army-arrow { fill:#11161a; }
-    .moving-army .army-count { fill:#11161a; font-size:7px; font-weight:900; text-anchor:middle; dominant-baseline:central; }
-    .sea-edge { stroke: #557389; stroke-width: 1.2; stroke-dasharray: 6 5; opacity: .7; }
-    .sea-lane-edge { stroke:#4f6e80; stroke-width:1.15; opacity:.78; }
-    .sea-waypoint { fill:#6f93a8; stroke:#b8ccd7; stroke-width:.7; opacity:.88; pointer-events:none; }
-    .sea-waypoint-halo { fill:none; stroke:#4f6e80; stroke-width:.8; opacity:.32; pointer-events:none; }
-    .sea-node { cursor:pointer; transition:.15s ease; }
+    .land-edge { stroke: var(--ink); stroke-width: 1.1; opacity: .62; stroke-linecap: round; }
+    .land-edge.active-route { stroke: var(--vermilion); stroke-width: 3; opacity: 1; }
+    .moving-army { pointer-events:none; filter:drop-shadow(1px 1px 0 rgba(43,27,18,.6)); }
+    .moving-army .army-disc { stroke: var(--ink); stroke-width:1.3; }
+    .moving-army .army-arrow { fill: var(--white-lead); stroke: var(--ink); stroke-width:.5; }
+    .moving-army .army-count { fill: var(--white-lead); font-size:7px; font-weight:700; text-anchor:middle; dominant-baseline:central; }
+    .sea-edge { stroke: var(--lapis); stroke-width: 1.3; stroke-dasharray: 6 5; opacity: .8; }
+    .sea-lane-edge { stroke: var(--lapis); stroke-width:1.4; stroke-dasharray: 1 4; stroke-linecap: round; opacity:.9; }
+    .sea-waypoint { stroke: var(--ink); stroke-width:.8; pointer-events:none; }
+    .sea-waypoint-halo { fill:none; stroke: var(--lapis); stroke-width:.8; opacity:.45; pointer-events:none; }
+    .sea-node { cursor:pointer; transition: opacity .15s ease; }
     .sea-node .selection-ring { fill:none; stroke:transparent; stroke-width:0; pointer-events:none; vector-effect:non-scaling-stroke; }
-    .sea-node.selectable .selection-ring { stroke:#58c7ff; stroke-width:2.5; stroke-dasharray:2 2; }
-    .sea-node.origin .selection-ring { stroke:#ffd45c; stroke-width:3.5; filter:drop-shadow(0 0 5px rgba(255,212,92,.9)); }
-    .sea-node.legal .selection-ring { stroke:#70ef9b; stroke-width:3; stroke-dasharray:3 2; filter:drop-shadow(0 0 4px rgba(112,239,155,.65)); }
-    .sea-node.target .selection-ring { stroke:#fff; stroke-width:4; filter:drop-shadow(0 0 6px rgba(255,255,255,.9)); }
-    .sea-node.dim { opacity:.25; }
-    .sea-node .sea-count { fill:#11161a; font-size:6px; font-weight:900; text-anchor:middle; pointer-events:none; }
-    .sea-lane-edge.active-route { stroke:#ffd45c; stroke-width:2.2; opacity:1; }
-    .sea-waypoint.active-route { fill:#ffd45c; stroke:#fff2b2; opacity:1; }
-    .sea-waypoint-halo.active-route { stroke:#ffd45c; stroke-width:1.5; opacity:.55; }
-    .territory { cursor: pointer; transition: .15s ease; }
-    .territory .territory-body { stroke: #e6ddcb; stroke-width: 1.2; }
-    .territory:hover .territory-body { stroke-width: 2; }
+    .sea-node.selectable .selection-ring { stroke: var(--ink); stroke-width:1.8; stroke-dasharray:2 2; }
+    .sea-node.origin .selection-ring { stroke: var(--white-lead); stroke-width:3.5; filter:drop-shadow(0 0 1.5px var(--ink)); }
+    .sea-node.legal .selection-ring { stroke: var(--lapis); stroke-width:3; stroke-dasharray:3 2; }
+    .sea-node.target .selection-ring { stroke: var(--vermilion); stroke-width:4; }
+    .sea-node.dim { opacity:.3; }
+    .sea-node .sea-count { fill: var(--white-lead); font-size:6px; font-weight:700; text-anchor:middle; pointer-events:none; }
+    .sea-lane-edge.active-route { stroke: var(--vermilion); stroke-width:2.6; stroke-dasharray:none; opacity:1; }
+    .sea-waypoint.active-route { fill: var(--vermilion); opacity:1; }
+    .sea-waypoint-halo.active-route { stroke: var(--vermilion); stroke-width:1.5; opacity:.7; }
+    .territory { cursor: pointer; transition: opacity .15s ease; }
+    .territory .territory-body { stroke: var(--ink); stroke-width: 1.6; }
+    .territory.capital .territory-body { stroke-width: 2.2; }
+    .territory .capital-ring { fill: none; stroke: var(--white-lead); stroke-width: 1.1; pointer-events: none; }
+    .territory:hover .territory-body { stroke-width: 2.6; }
     .territory .selection-ring {
       fill: none;
       stroke: transparent;
@@ -92,35 +158,18 @@
       pointer-events: none;
       vector-effect: non-scaling-stroke;
     }
-    .territory.selectable .selection-ring {
-      stroke: #58c7ff;
-      stroke-width: 3;
-      stroke-dasharray: 3 3;
-    }
-    .territory.origin .selection-ring {
-      stroke: #ffd45c;
-      stroke-width: 5;
-      stroke-dasharray: none;
-      filter: drop-shadow(0 0 6px rgba(255,212,92,.9));
-    }
-    .territory.legal .selection-ring {
-      stroke: #70ef9b;
-      stroke-width: 4;
-      stroke-dasharray: 5 3;
-      filter: drop-shadow(0 0 5px rgba(112,239,155,.65));
-    }
-    .territory.target .selection-ring {
-      stroke: #ffffff;
-      stroke-width: 6;
-      stroke-dasharray: none;
-      filter: drop-shadow(0 0 8px rgba(255,255,255,.95));
-    }
-    .territory.dim { opacity: .30; }
-    .territory text { fill: #e9e2d6; font-size: 9px; pointer-events: none; text-anchor: middle; }
-    .territory.central text.territory-label { font-size: 7px; font-weight: 700; }
-    .territory .count { font-size: 11px; font-weight: 800; }
-    .territory .badge-bg { stroke: none; }
-    .territory .badge { fill: #11161a; font-size: 7px; font-weight: 900; letter-spacing: .04em; }
+    .territory.selectable .selection-ring { stroke: var(--ink); stroke-width: 2; stroke-dasharray: 3 3; }
+    .territory.origin .selection-ring { stroke: var(--white-lead); stroke-width: 5; stroke-dasharray: none; filter: drop-shadow(0 0 1.5px var(--ink)); }
+    .territory.legal .selection-ring { stroke: var(--lapis); stroke-width: 4; stroke-dasharray: 5 3; }
+    .territory.target .selection-ring { stroke: var(--vermilion); stroke-width: 6; stroke-dasharray: none; filter: drop-shadow(0 0 1.5px var(--ink)); }
+    .territory.dim { opacity: .38; }
+    .territory text { font-family: Alegreya, Georgia, serif; pointer-events: none; text-anchor: middle; }
+    .territory text.territory-label { fill: var(--ink); font-size: 9.5px; font-weight: 700; paint-order: stroke; stroke: rgba(226,196,104,.85); stroke-width: 2.4px; stroke-linejoin: round; }
+    .territory.central text.territory-label { font-size: 7.5px; }
+    .territory .count { fill: var(--white-lead); font-size: 12px; font-weight: 700; }
+    .territory .badge-bg { stroke: var(--ink); stroke-width: .8; }
+    .territory .badge { fill: var(--ink); font-size: 7.5px; font-weight: 700; }
+    .territory .badge.on-dark { fill: var(--white-lead); }
     .map-guide {
       position: absolute;
       z-index: 5;
@@ -128,119 +177,132 @@
       top: 12px;
       right: 12px;
       max-width: 560px;
-      border: 1px solid #46515a;
-      border-radius: 12px;
-      padding: 10px 12px;
-      background: rgba(8,12,15,.9);
-      backdrop-filter: blur(10px);
+      border: 1.5px solid var(--ink);
+      padding: 9px 12px;
+      background: rgba(242,230,200,.95);
+      box-shadow: 3px 3px 0 rgba(43,27,18,.3);
       pointer-events: none;
     }
-    .guide-title { font-weight: 850; font-size: 14px; }
-    .guide-sub { color: #aeb7bd; font-size: 11px; margin-top: 3px; }
+    .guide-title { font-family: Kurale, Alegreya, serif; font-size: 19px; line-height: 1.15; color: var(--vermilion-deep); }
+    .guide-sub { color: var(--ink-soft); font-size: 13px; margin-top: 2px; }
     .route-card {
       position: absolute;
       z-index: 6;
       left: 12px;
       right: 12px;
       bottom: 12px;
-      border: 1px solid #52606a;
-      border-radius: 14px;
+      border: 1.5px solid var(--ink);
       padding: 12px;
-      background: rgba(8,12,15,.94);
-      backdrop-filter: blur(12px);
+      background: rgba(242,230,200,.97);
+      box-shadow: 3px 3px 0 rgba(43,27,18,.3);
       display: none;
     }
     .route-card.show { display: block; }
-    .route-line { display: flex; align-items: center; gap: 10px; font-weight: 850; font-size: 15px; }
+    .route-line { display: flex; align-items: center; gap: 10px; font-family: Kurale, Alegreya, serif; font-size: 20px; }
     .route-place { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .route-place.to { text-align: right; }
-    .route-arrow { color: #ffd45c; font-size: 22px; }
-    .route-meta { color: #aeb7bd; font-size: 11px; margin: 6px 0 10px; }
-    .troop-controls { display: grid; grid-template-columns: minmax(0,1fr) 84px 128px; gap: 8px; align-items: end; }
+    .route-arrow { color: var(--vermilion); font-size: 24px; }
+    .route-meta { color: var(--ink-soft); font-size: 13px; margin: 4px 0 10px; }
+    .troop-controls { display: grid; grid-template-columns: minmax(0,1fr) 84px 150px; gap: 8px; align-items: end; }
     .troop-controls input { width: 100%; }
     .troop-max { width: 100%; }
-    .primary.big { min-height: 42px; font-weight: 800; }
-    .selection-legend { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
-    .legend-pill { display:inline-flex; align-items:center; gap:6px; border:1px solid #36414a; border-radius:999px; padding:4px 8px; font-size:10px; color:#aeb7bd; }
-    .legend-mark { width:12px; height:12px; border-radius:50%; display:inline-block; background:#202a31; border:2px solid #58c7ff; }
-    .legend-mark.origin { border-color:#ffd45c; border-width:3px; }
-    .legend-mark.legal { border-color:#70ef9b; border-style:dashed; }
-    .legend-mark.target { border-color:#fff; border-width:3px; box-shadow:0 0 5px rgba(255,255,255,.7); }
+    .primary.big { min-height: 42px; font-size: 16px; }
+    .selection-legend { display:flex; flex-wrap:wrap; gap:6px 14px; margin-top:7px; }
+    .legend-pill { display:inline-flex; align-items:center; gap:6px; font-size:12px; color: var(--ink-soft); }
+    .legend-mark { width:13px; height:13px; border-radius:50%; display:inline-block; background: var(--gold); border:2px dashed var(--ink); }
+    .legend-mark.origin { border: 3px solid var(--white-lead); box-shadow: 0 0 0 1px var(--ink); }
+    .legend-mark.legal { border: 2.5px dashed var(--lapis); }
+    .legend-mark.target { border: 3px solid var(--vermilion); box-shadow: 0 0 0 1px var(--ink); }
+
+    /* Side column: leaves of the same book, ruled in ink with red rubrics. */
     aside {
-      border-left: 1px solid #30383e;
-      background: rgba(14,18,21,.94);
-      padding: 16px;
+      border-left: 2px solid var(--ink);
+      background: linear-gradient(90deg, rgba(120,84,40,.16), transparent 14px);
+      padding: 16px 16px 16px 20px;
       overflow: auto;
-      max-height: calc(100vh - 74px);
+      max-height: calc(100vh - 68px);
     }
     .panel {
-      border: 1px solid #30383e;
-      border-radius: 12px;
-      padding: 12px;
-      margin-bottom: 12px;
-      background: #13191e;
+      border: 1.5px solid var(--ink);
+      outline: 1px solid var(--vermilion);
+      outline-offset: -5px;
+      padding: 14px 14px 12px;
+      margin-bottom: 14px;
+      background: var(--vellum);
+      box-shadow: 3px 3px 0 rgba(43,27,18,.22);
     }
-    .panel h2 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: #bfc7cb; }
-    .game-status-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:8px; }
-    .game-status-cell { background:#0f1519; border-radius:8px; padding:8px; }
-    .game-status-cell span { display:block; font-size:9px; color:#7f8c93; }
-    .game-status-cell b { display:block; margin-top:2px; font-size:12px; }
-    .standings { display:grid; gap:4px; margin-top:8px; }
-    .standing-row { display:grid; grid-template-columns:1fr auto auto; gap:8px; align-items:center; padding:5px 0; border-top:1px solid #253039; font-size:10px; }
+    .panel h2 { margin: 0 0 8px; font-family: Kurale, Alegreya, serif; font-weight: 400; font-size: 21px; line-height: 1.1; color: var(--vermilion-deep); }
+    .game-status-grid { display:grid; grid-template-columns:1fr 1fr; gap:0; margin-bottom:10px; border-top:1px solid var(--rule); border-bottom:1px solid var(--rule); }
+    .game-status-cell { padding:6px 8px 6px 0; }
+    .game-status-cell + .game-status-cell { border-left:1px solid var(--rule); padding-left:10px; }
+    .game-status-cell span { display:block; font-size:12px; font-style: italic; color: var(--ink-soft); }
+    .game-status-cell b { display:block; font-size:16px; }
+    #round-box .game-status-grid { border-top: 0; }
+    #end-round { margin-bottom: 4px; }
+    .standings { display:grid; gap:0; margin-top:8px; }
+    .standing-row { display:grid; grid-template-columns:1fr auto auto; gap:10px; align-items:center; padding:5px 0; border-top:1px solid var(--rule); font-size:13px; }
     .standing-row:first-child { border-top:0; }
     .standing-house { font-weight:700; }
-    .standing-meta { color:#809098; }
-    .standing-exile { color:#d3a16e; font-size:9px; }
-    .status-warning { margin-top:8px; padding:8px; border:1px solid #5b4a2b; border-radius:8px; background:#17140e; font-size:9px; line-height:1.45; color:#d8c49a; }
-    .status-final { border-color:#46634d; background:#101711; color:#a8d9b1; }
-    .round-houses { display:grid; gap:3px; margin-top:8px; font-size:10px; }
-    .round-house { display:flex; justify-content:space-between; gap:8px; color:#aab4b9; }
-    .round-house.mine { color:#f0e6cf; font-weight:600; }
-    .round-house.done { color:#6f7b81; }
-    .round-pips { letter-spacing:2px; white-space:nowrap; }
-    .character-list { display:grid; gap:8px; }
-    .character-card { border:1px solid #2e3940; border-radius:10px; padding:10px; background:#0f1519; }
+    .standing-meta { color: var(--ink-soft); font-size: 12px; }
+    .standing-exile { color: var(--vermilion); font-size:12px; font-style: italic; }
+    .status-warning { margin-top:8px; padding:7px 9px; border-left:3px solid var(--gold); background: rgba(201,162,58,.16); font-size:12.5px; font-style: italic; line-height:1.4; color: var(--ink-soft); }
+    .status-final { border-left-color: var(--vermilion); background: rgba(179,49,31,.10); color: var(--ink); font-style: normal; font-weight: 700; font-size: 15px; }
+    .round-houses { display:grid; gap:2px; margin-top:8px; font-size:13px; }
+    .round-house { display:flex; justify-content:space-between; gap:8px; color: var(--ink); }
+    .round-house.mine { font-weight:700; }
+    .round-house.done { color: var(--ink-soft); }
+    .round-pips { letter-spacing:2px; white-space:nowrap; color: var(--vermilion); }
+    .round-house.done .round-pips { color: var(--ink-soft); }
+    .character-list { display:grid; gap:10px; }
+    .character-card { border-top:1px solid var(--rule); padding:9px 0 2px; }
+    .character-card:first-child { border-top: 0; padding-top: 0; }
     .character-top { display:flex; justify-content:space-between; gap:8px; align-items:flex-start; }
-    .character-name { font-weight:850; font-size:13px; }
-    .character-role { color:#87939a; font-size:10px; margin-top:2px; }
-    .character-mode { border:1px solid #47545c; border-radius:999px; padding:3px 7px; font-size:9px; white-space:nowrap; }
-    .character-mode.army { border-color:#806e3a; color:#e9d685; }
-    .character-mode.court { border-color:#3f6572; color:#8bc7dc; }
-    .character-mode.pending { border-color:#784d4d; color:#ef9f94; }
-    .character-stats { display:grid; grid-template-columns:repeat(6,1fr); gap:4px; margin-top:8px; }
-    .character-stat { background:#171e23; border-radius:6px; padding:5px 3px; text-align:center; }
-    .character-stat span { display:block; color:#77858d; font-size:8px; }
-    .character-stat b { display:block; margin-top:1px; font-size:12px; }
-    .character-location { color:#89969d; font-size:10px; margin-top:7px; }
-    .character-rule { color:#7d898f; font-size:9px; line-height:1.35; margin-top:7px; }
+    .character-name { font-weight:700; font-size:16px; }
+    .character-role { color: var(--ink-soft); font-size:12.5px; font-style: italic; }
+    .character-mode { border:1.5px solid var(--ink); padding:1px 7px; font-size:11.5px; font-weight: 700; white-space:nowrap; background: var(--vellum-deep); }
+    .character-mode.army { background: var(--vermilion); color: var(--white-lead); }
+    .character-mode.court { background: var(--lapis); color: var(--white-lead); }
+    .character-mode.pending { background: var(--gold); color: var(--ink); }
+    .character-stats { display:grid; grid-template-columns:repeat(6,1fr); gap:0; margin-top:8px; border:1px solid var(--rule); }
+    .character-stat { padding:4px 2px; text-align:center; border-left:1px solid var(--rule); }
+    .character-stat:first-child { border-left: 0; }
+    .character-stat span { display:block; color: var(--ink-soft); font-size:10px; }
+    .character-stat b { display:block; font-size:15px; line-height: 1.1; }
+    .character-location { color: var(--ink-soft); font-size:12.5px; margin-top:7px; }
+    .character-rule { color: var(--ink-soft); font-size:12px; font-style: italic; line-height:1.35; margin-top:6px; }
     .character-actions { display:flex; gap:6px; margin-top:8px; }
-    .character-actions button { flex:1; padding:7px 8px; font-size:10px; }
-    .stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
-    .stat { background: #0e1317; border-radius: 8px; padding: 9px; }
-    .stat b { display: block; font-size: 18px; margin-top: 2px; }
-    .muted { color: #8f9aa1; font-size: 12px; }
-    .order { padding: 9px 0; border-top: 1px solid #293138; font-size: 12px; }
+    .character-actions button { flex:1; padding:6px 8px; font-size:13px; }
+    .stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 0; border-top:1px solid var(--rule); }
+    .stat { padding: 6px 8px 0 0; }
+    .stat + .stat { border-left:1px solid var(--rule); padding-left: 10px; }
+    .stat b { display: block; font-family: Kurale, Alegreya, serif; font-weight: 400; font-size: 28px; line-height: 1.1; }
+    .muted { color: var(--ink-soft); font-size: 13px; }
+    .order { padding: 8px 0; border-top: 1px solid var(--rule); font-size: 13.5px; }
     .order:first-child { border-top: 0; }
-    .pending { color: #ffd27a; }
-    .resolved { color: #8adca0; }
-    .failed { color: #ff8d8d; }
-    .journal { font-size: 11px; line-height: 1.45; max-height: 220px; overflow: auto; }
-    .economy-line { display:flex; justify-content:space-between; gap:10px; align-items:center; margin:7px 0; font-size:12px; }
-    .economy-line b { font-size:13px; }
+    .pending { color: #8a5a00; }
+    .resolved { color: var(--verdigris); }
+    .failed { color: var(--vermilion); }
+    .journal { font-size: 13px; line-height: 1.4; max-height: 240px; overflow: auto; }
+    .economy-line { display:flex; justify-content:space-between; gap:10px; align-items:baseline; margin:5px 0; font-size:14px; }
+    .economy-line b { font-size:15px; text-align: right; }
     .economy-actions { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-top:8px; }
-    .economy-actions button { padding:8px 6px; }
+    .economy-actions button { padding:7px 6px; }
     .fort-button { width:100%; margin-top:8px; }
     .jobs { margin-top:10px; }
-    .job { border-top:1px solid #293138; padding:8px 0; font-size:11px; }
+    .job { border-top:1px solid var(--rule); padding:7px 0; font-size:13px; }
     .job:first-child { border-top:0; }
-    .tiny { font-size:10px; color:#79858c; }
+    .tiny { font-size:12px; font-style: italic; color: var(--ink-soft); }
     .move-box { display: none; }
     .move-box.show { display: block; }
     .move-grid { display: grid; grid-template-columns: 1fr 86px; gap: 8px; align-items: end; }
+    @media (prefers-reduced-motion: reduce) {
+      .territory, .sea-node { transition: none; }
+    }
     @media (max-width: 980px) {
       main { grid-template-columns: 1fr; }
-      aside { max-height: none; border-left: 0; border-top: 1px solid #30383e; }
-      .map-card { height: 68vh; min-height: 520px; }
+      aside { max-height: none; border-left: 0; border-top: 2px solid var(--ink); background: none; padding: 16px; }
+      .map-card { height: 68vh; min-height: 520px; margin: 20px 12px; }
+      .map-wrap { padding: 8px; }
       .map-guide { max-width: none; }
       .route-card { left: 8px; right: 8px; bottom: 8px; }
       .troop-controls { grid-template-columns: 1fr 74px; }
@@ -254,8 +316,8 @@
 <body>
 <header>
   <div>
-    <h1>ЖЕСТОКИЙ ВЕК - ONLINE PROTOTYPE</h1>
-    <div class="sub">Persistent vertical slice on the existing V6 rules core</div>
+    <h1>Жестокий Век</h1>
+    <div class="sub">онлайн-прототип на правилах V6</div>
     <div id="spectator-badge" class="spectator-badge">РЕЖИМ НАБЛЮДАТЕЛЯ</div>
   </div>
   <div class="controls">
@@ -276,7 +338,7 @@
   <section class="map-wrap">
     <div class="map-card">
       <div id="map-guide" class="map-guide">
-        <div id="guide-title" class="guide-title">1. Выбери, ОТКУДА идти</div>
+        <div id="guide-title" class="guide-title">1. Выбери, откуда идти</div>
         <div id="guide-sub" class="guide-sub">Цвет внутри круга показывает Дом. Обводка показывает действие.</div>
         <div class="selection-legend">
           <span class="legend-pill"><i class="legend-mark"></i>можно выбрать</span>
@@ -393,12 +455,12 @@
 
 <script>
 const colors = {
-  'Варкайр': '#76454a',
-  'Сайрвен': '#496276',
-  'Ортайн': '#6b623d',
-  'Эркай': '#48684f',
-  'Тасвар': '#775b35',
-  'Айрель': '#665176'
+  'Варкайр': '#b3311f',
+  'Сайрвен': '#2c4a86',
+  'Ортайн': '#2e2826',
+  'Эркай': '#3f7048',
+  'Тасвар': '#c0587a',
+  'Айрель': '#6a4585'
 };
 
 let snapshot = null;
@@ -1049,7 +1111,7 @@ function renderMap() {
     if (origin && id !== origin && !legalTargets.has(id) && id !== target) classes.push('dim');
 
     const active = activeNodes.has(id) ? ' active-route' : '';
-    const fill = owner ? (colors[owner] || '#6f93a8') : '#6f93a8';
+    const fill = owner ? (colors[owner] || '#2c4a86') : '#2c4a86';
     return `
       <g class="${classes.join(' ')}" data-id="${id}" transform="translate(${point.x} ${point.y})">
         <circle class="selection-ring" r="7"></circle>
@@ -1067,16 +1129,17 @@ function renderMap() {
     const r = t.type === 'Столица' ? 16 : 12;
     const classes = ['territory'];
     if (t.is_central_half) classes.push('central');
+    if (t.type === 'Столица') classes.push('capital');
     const ownMovable = owner === house && warriorsAt(t.id, house) > 0;
     if (!origin && ownMovable) classes.push('selectable');
     if (t.id === origin) classes.push('origin');
     if (origin && legalTargets.has(t.id)) classes.push('legal');
     if (t.id === target) classes.push('target');
     if (origin && t.id !== origin && !legalTargets.has(t.id) && t.id !== target) classes.push('dim');
-    const fill = owner ? (colors[owner] || '#59636a') : '#2c353b';
+    const fill = owner ? (colors[owner] || '#8a7a5c') : '#f2e6c8';
     let badge = '';
-    if (t.id === origin) badge = '<rect class="badge-bg" x="-24" y="21" width="48" height="13" rx="5" fill="#ffd45c"></rect><text class="badge" y="30">ОТКУДА</text>';
-    if (t.id === target) badge = '<rect class="badge-bg" x="-21" y="21" width="42" height="13" rx="5" fill="#ffffff"></rect><text class="badge" y="30">ЦЕЛЬ</text>';
+    if (t.id === origin) badge = '<rect class="badge-bg" x="-22" y="21" width="44" height="13" fill="#fff8e6"></rect><text class="badge" y="30.5">откуда</text>';
+    if (t.id === target) badge = '<rect class="badge-bg" x="-16" y="21" width="32" height="13" fill="#b3311f"></rect><text class="badge on-dark" y="30.5">цель</text>';
     const labelY = t.is_central_half
       ? (t.id.endsWith('-A') ? -18 : 27)
       : -18;
@@ -1084,6 +1147,7 @@ function renderMap() {
       <g class="${classes.join(' ')}" data-id="${t.id}" transform="translate(${c.x} ${c.y})">
         <circle class="selection-ring" r="${r + 5}"></circle>
         <circle class="territory-body" r="${r}" fill="${fill}"></circle>
+        ${t.type === 'Столица' ? `<circle class="capital-ring" r="${r - 3.2}"></circle>` : ''}
         <text class="territory-label" y="${labelY}">${escapeHtml(mapLabel(t))}</text>
         <text class="count" y="4">${total || ''}</text>
         ${badge}
@@ -1099,7 +1163,7 @@ function renderMap() {
     .map(order => {
       const pos = movingOrderPosition(order);
       if (!pos) return '';
-      const fill = colors[order.action.house] || '#ffd45c';
+      const fill = colors[order.action.house] || '#2b1b12';
       return `
         <g class="moving-army" data-order-id="${escapeHtml(order.id)}"
           transform="translate(${pos.x} ${pos.y}) rotate(${pos.angle})">
@@ -1276,7 +1340,7 @@ function renderSelection() {
     card.classList.remove('show');
     $('commander-row').style.display = 'none';
     $('selection').textContent = 'Наблюдение за партией без управления Домом.';
-    $('guide-title').textContent = 'РЕЖИМ НАБЛЮДАТЕЛЯ';
+    $('guide-title').textContent = 'Режим наблюдателя';
     $('guide-sub').textContent = 'Карта обновляется автоматически. Ты не можешь отдавать приказы или менять состояние партии.';
     return;
   }
@@ -1284,8 +1348,8 @@ function renderSelection() {
   if (!origin) {
     $('commander-row').style.display = 'none';
     $('selection').textContent = '1. Выбери свою территорию с воинами.';
-    $('guide-title').textContent = '1. Выбери, ОТКУДА идти';
-    $('guide-sub').textContent = 'Голубой пунктирной обводкой отмечены твои территории с воинами.';
+    $('guide-title').textContent = '1. Выбери, откуда идти';
+    $('guide-sub').textContent = 'Чёрной пунктирной обводкой отмечены твои территории с воинами.';
     card.classList.remove('show');
     return;
   }
@@ -1293,11 +1357,11 @@ function renderSelection() {
   const o = mapNodeById(origin);
   const own = warriorsAt(origin, house);
   renderCommanderChoice();
-  $('selection').textContent = `ОТКУДА: ${o.name}. Доступно ${own} воинов.`;
+  $('selection').textContent = `Откуда: ${o.name}. Доступно ${own} воинов.`;
 
   if (!target) {
-    $('guide-title').textContent = `2. Выбери, КУДА идти из ${o.name}`;
-    $('guide-sub').textContent = 'Зелёной пунктирной обводкой отмечены допустимые цели.';
+    $('guide-title').textContent = `2. Выбери, куда идти из ${o.name}`;
+    $('guide-sub').textContent = 'Синей пунктирной обводкой отмечены допустимые цели.';
     card.classList.remove('show');
     return;
   }
@@ -1339,7 +1403,7 @@ function renderSelection() {
     (routeNames
       ? '<br><span class="tiny">' + escapeHtml(routeNames) + '</span>'
       : '');
-  $('guide-title').textContent = '3. Выбери, СКОЛЬКО воинов отправить';
+  $('guide-title').textContent = '3. Выбери, сколько воинов отправить';
   $('guide-sub').textContent = 'Марш полностью выбран. Проверь маршрут внизу карты и отдай приказ.';
   card.classList.add('show');
 }
