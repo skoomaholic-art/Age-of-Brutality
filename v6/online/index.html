@@ -3075,11 +3075,12 @@ function updatePixiFog(explored, art, coords) {
   const known = [];
   const hidden = [];
   const edge = [];
+  const hiddenEdge = [];
   if (explored) {
     for (const [id, rings] of Object.entries(pixiFog.polys)) {
-      if (!explored.has(id)) { hidden.push(rings); continue; }
+      if (!explored.has(id)) { hidden.push(rings); for (const ring of rings) for (const point of ring) hiddenEdge.push(point); continue; }
       known.push(rings);
-      for (const ring of rings) for (let i = 0; i < ring.length; i += 2) edge.push(ring[i]);
+      for (const ring of rings) for (const point of ring) edge.push(point);
     }
     for (const id of explored) if (!art[id] && coords[id]) edge.push([coords[id].x, coords[id].y, 34]);
   }
@@ -3088,13 +3089,21 @@ function updatePixiFog(explored, art, coords) {
     if (on) {
       if (known.some(rings => inRings(rings, cloud.x, cloud.y))) on = false;
       else {
-        // Near the edge of the known world the cover thins out: more over open
-        // water, less over a land that is still unknown.
-        const reach = hidden.some(rings => inRings(rings, cloud.x, cloud.y)) ? 13 : 44;
+        // Clouds lie on every unknown land right up to its border. Over water
+        // they part only where the known shore is nearer than any unknown one.
+        const overHidden = hidden.some(rings => inRings(rings, cloud.x, cloud.y));
+        let near = Infinity;
         for (const p of edge) {
-          const r = p[2] || reach;
-          const dx = p[0] - cloud.x, dy = p[1] - cloud.y;
-          if (dx * dx + dy * dy < r * r) { on = false; break; }
+          const dx = p[0] - cloud.x, dy = p[1] - cloud.y, d = dx * dx + dy * dy;
+          if (p[2] && d < p[2] * p[2]) { near = 0; break; }
+          if (d < near) near = d;
+        }
+        if (near === 0) on = false;
+        else if (overHidden) on = near >= 5 * 5;
+        else if (near < 40 * 40) {
+          let far = Infinity;
+          for (const p of hiddenEdge) { const dx = p[0] - cloud.x, dy = p[1] - cloud.y, d = dx * dx + dy * dy; if (d < far) far = d; }
+          on = !(near < far * 0.6 || near < 9 * 9);
         }
       }
     }
