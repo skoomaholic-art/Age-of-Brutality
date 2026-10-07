@@ -102,17 +102,13 @@
     }
     .map-wrap { min-width: 0; padding: 18px; }
 
-    /* The map is a miniature: burnished gold ground inside a painted frame. */
+    /* The map is a painted miniature inside a red, white and green frame. */
     .map-card {
       height: calc(100vh - 108px);
       min-height: 620px;
       overflow: hidden;
       position: relative;
-      background:
-        radial-gradient(ellipse at 22% 18%, rgba(255,236,160,.55), transparent 38%),
-        radial-gradient(ellipse at 78% 80%, rgba(120,84,20,.30), transparent 44%),
-        radial-gradient(circle at 60% 35%, rgba(255,226,140,.25), transparent 30%),
-        var(--gold);
+      background: #93a5a3;
       border: 2px solid var(--ink);
       box-shadow:
         0 0 0 7px #9a3a26,
@@ -125,57 +121,59 @@
       height: calc(100vh - 148px);
     }
     svg { width: 100%; height: 100%; display: block; }
-    .land-edge { stroke: var(--ink); stroke-width: 1.1; opacity: .62; stroke-linecap: round; }
-    .land-edge.active-route { stroke: var(--vermilion); stroke-width: 3; opacity: 1; }
-    .moving-army { pointer-events:none; filter:drop-shadow(1px 1px 0 rgba(43,27,18,.6)); }
-    .moving-army .army-disc { stroke: var(--ink); stroke-width:1.3; }
-    .moving-army .army-arrow { fill: var(--white-lead); stroke: var(--ink); stroke-width:.5; }
-    .moving-army .army-count { fill: var(--white-lead); font-size:7px; font-weight:700; text-anchor:middle; dominant-baseline:central; }
-    .sea-edge { stroke: var(--lapis); stroke-width: 1.3; stroke-dasharray: 6 5; opacity: .8; }
-    .sea-lane-edge { stroke: var(--lapis); stroke-width:1.4; stroke-dasharray: 1 4; stroke-linecap: round; opacity:.9; }
-    .sea-waypoint { stroke: var(--ink); stroke-width:.8; pointer-events:none; }
-    .sea-waypoint-halo { fill:none; stroke: var(--lapis); stroke-width:.8; opacity:.45; pointer-events:none; }
-    .sea-node { cursor:pointer; transition: opacity .15s ease; }
-    .sea-node .selection-ring { fill:none; stroke:transparent; stroke-width:0; pointer-events:none; vector-effect:non-scaling-stroke; }
-    .sea-node.selectable .selection-ring { stroke: var(--ink); stroke-width:1.8; stroke-dasharray:2 2; }
-    .sea-node.origin .selection-ring { stroke: var(--white-lead); stroke-width:3.5; filter:drop-shadow(0 0 1.5px var(--ink)); }
-    .sea-node.legal .selection-ring { stroke: var(--lapis); stroke-width:3; stroke-dasharray:3 2; }
-    .sea-node.target .selection-ring { stroke: var(--vermilion); stroke-width:4; }
-    .sea-node.dim { opacity:.3; }
-    .sea-node .sea-count { fill: var(--white-lead); font-size:6px; font-weight:700; text-anchor:middle; pointer-events:none; }
-    .sea-lane-edge.active-route { stroke: var(--vermilion); stroke-width:2.6; stroke-dasharray:none; opacity:1; }
-    .sea-waypoint.active-route { fill: var(--vermilion); opacity:1; }
-    .sea-waypoint-halo.active-route { stroke: var(--vermilion); stroke-width:1.5; opacity:.7; }
-    .territory { cursor: pointer; transition: opacity .15s ease; }
-    .territory .territory-body { stroke: var(--ink); stroke-width: 1.6; }
-    .territory.capital .territory-body { stroke-width: 2.2; }
-    .territory .capital-ring { fill: none; stroke: var(--white-lead); stroke-width: 1.1; pointer-events: none; }
-    .territory:hover .territory-body { stroke-width: 2.6; }
-    .territory .selection-ring {
-      fill: none;
-      stroke: transparent;
-      stroke-width: 0;
-      pointer-events: none;
-      vector-effect: non-scaling-stroke;
-    }
-    .territory.selectable .selection-ring { stroke: var(--ink); stroke-width: 2; stroke-dasharray: 3 3; }
-    .territory.origin .selection-ring { stroke: var(--white-lead); stroke-width: 5; stroke-dasharray: none; filter: drop-shadow(0 0 1.5px var(--ink)); }
-    .territory.legal .selection-ring { stroke: var(--lapis); stroke-width: 4; stroke-dasharray: 5 3; }
-    .territory.target .selection-ring { stroke: var(--vermilion); stroke-width: 6; stroke-dasharray: none; filter: drop-shadow(0 0 1.5px var(--ink)); }
-    .territory.dim { opacity: .38; }
-    .territory text { font-family: Alegreya, Georgia, serif; pointer-events: none; text-anchor: middle; }
-    .territory text.territory-label { fill: var(--ink); font-size: 9.5px; font-weight: 700; paint-order: stroke; stroke: rgba(226,196,104,.85); stroke-width: 2.4px; stroke-linejoin: round; }
-    .territory.central text.territory-label { font-size: 7.5px; }
-    .territory .count { fill: var(--white-lead); font-size: 12px; font-weight: 700; }
-    .territory .badge-bg { stroke: var(--ink); stroke-width: .8; }
-    .territory .badge { fill: var(--ink); font-size: 7.5px; font-weight: 700; }
-    .territory .badge.on-dark { fill: var(--white-lead); }
+    #map { cursor: grab; touch-action: none; background: #93a5a3; user-select: none; }
+    #map.panning { cursor: grabbing; }
+
+    /* Realms: a colour wash over the painted land and a bold band along the border. */
+    .realm-wash { opacity: .5; mix-blend-mode: multiply; stroke-width: .9; stroke-linejoin: round; pointer-events: none; }
+    .realm-ring { opacity: .95; stroke-width: .9; stroke-linejoin: round; pointer-events: none; }
+    .province-borders { pointer-events: none; }
+    .province-borders path { fill: none; stroke: #2b1b12; stroke-width: .5; stroke-dasharray: 2.2 1.8; opacity: .6; }
+    .province { fill: transparent; stroke: transparent; stroke-linejoin: round; cursor: pointer; transition: fill .12s ease; }
+    .province:hover { fill: rgba(255,248,230,.18); }
+    .province.selectable { stroke: var(--white-lead); stroke-width: 1.2; stroke-dasharray: 3 2.2; }
+    .province.origin { fill: rgba(255,248,230,.2); stroke: var(--white-lead); stroke-width: 2.6; }
+    .province.legal { fill: rgba(44,74,134,.34); stroke: #172c5c; stroke-width: 1.5; stroke-dasharray: 4 2; }
+    .province.legal:hover { fill: rgba(44,74,134,.5); }
+    .province.target { fill: rgba(179,49,31,.36); stroke: var(--vermilion); stroke-width: 2.8; }
+    .province.dim { fill: rgba(30,20,10,.45); }
+
+    .land-edge.active-route { stroke: var(--vermilion); stroke-width: 2.6; stroke-linecap: round; stroke-dasharray: 5 3; pointer-events: none; }
+    .sea-lane-edge { stroke: #24384d; stroke-width: 1; stroke-dasharray: .4 3.4; stroke-linecap: round; opacity: .85; pointer-events: none; }
+    .sea-lane-edge.active-route { stroke: var(--vermilion); stroke-width: 2.4; stroke-dasharray: 5 3; opacity: 1; }
+    .sea-node { cursor: pointer; }
+    .sea-node .sea-hit { fill: transparent; }
+    .sea-node .sea-waypoint { fill: #24384d; stroke: #cfd9d6; stroke-width: .6; }
+    .sea-node .sea-waypoint.active-route { fill: var(--vermilion); }
+    .sea-node .selection-ring { fill: none; stroke: transparent; }
+    .sea-node.selectable .selection-ring { stroke: var(--white-lead); stroke-width: 1.2; stroke-dasharray: 2 2; }
+    .sea-node.origin .selection-ring { stroke: var(--white-lead); stroke-width: 2.4; }
+    .sea-node.legal .selection-ring { stroke: #172c5c; stroke-width: 1.8; stroke-dasharray: 3 2; fill: rgba(44,74,134,.3); }
+    .sea-node.target .selection-ring { stroke: var(--vermilion); stroke-width: 2.6; fill: rgba(179,49,31,.3); }
+    .sea-node.dim { opacity: .4; }
+
+    .map-ribbons, .map-tokens, .moving-army { pointer-events: none; }
+    .ribbon-body { fill: #f6eed8; stroke: #2b1b12; stroke-width: .45; }
+    .ribbon-tail { fill: #d5c69d; stroke: #2b1b12; stroke-width: .4; stroke-linejoin: round; }
+    .ribbon-mark { fill: var(--vermilion); }
+    .ribbon text { font-family: Alegreya, Georgia, serif; font-weight: 700; font-size: 5.6px; letter-spacing: .3px; text-anchor: middle; fill: var(--ink); }
+    .ribbon-note { font-family: Alegreya, Georgia, serif; font-weight: 700; font-size: 5.4px; text-anchor: middle; fill: var(--white-lead); paint-order: stroke; stroke: var(--ink); stroke-width: 1.6px; stroke-linejoin: round; }
+    .ribbon-note.target { stroke: var(--vermilion-deep); }
+    .army-token .shield { stroke: #2b1b12; stroke-width: .75; stroke-linejoin: round; }
+    .army-token .shield-shine { fill: none; stroke: rgba(255,248,230,.5); stroke-width: .6; stroke-linecap: round; }
+    .army-token text { font-family: Alegreya, Georgia, serif; font-weight: 700; font-size: 6.6px; text-anchor: middle; fill: var(--white-lead); }
+    .moving-army { filter: drop-shadow(.6px .8px 0 rgba(43,27,18,.6)); }
+    .pennant-pole { stroke: #2b1b12; stroke-width: .55; }
+    .pennant { stroke: #2b1b12; stroke-width: .4; stroke-linejoin: round; }
+
+    .map-zoom { position: absolute; z-index: 6; right: 12px; top: 12px; display: grid; gap: 5px; }
+    .map-zoom button { width: 34px; height: 34px; padding: 0; font-size: 19px; line-height: 1; }
     .map-guide {
       position: absolute;
       z-index: 5;
       left: 12px;
       top: 12px;
-      right: 12px;
+      right: 58px;
       max-width: 560px;
       border: 1.5px solid var(--ink);
       padding: 9px 12px;
@@ -209,10 +207,10 @@
     .primary.big { min-height: 42px; font-size: 16px; }
     .selection-legend { display:flex; flex-wrap:wrap; gap:6px 14px; margin-top:7px; }
     .legend-pill { display:inline-flex; align-items:center; gap:6px; font-size:12px; color: var(--ink-soft); }
-    .legend-mark { width:13px; height:13px; border-radius:50%; display:inline-block; background: var(--gold); border:2px dashed var(--ink); }
-    .legend-mark.origin { border: 3px solid var(--white-lead); box-shadow: 0 0 0 1px var(--ink); }
-    .legend-mark.legal { border: 2.5px dashed var(--lapis); }
-    .legend-mark.target { border: 3px solid var(--vermilion); box-shadow: 0 0 0 1px var(--ink); }
+    .legend-mark { width:14px; height:11px; display:inline-block; background: rgba(63,112,72,.55); border:1.5px dashed var(--white-lead); outline: 1px solid var(--ink-soft); }
+    .legend-mark.origin { border: 2.5px solid var(--white-lead); }
+    .legend-mark.legal { background: rgba(44,74,134,.55); border: 1.5px dashed #172c5c; outline: 0; }
+    .legend-mark.target { background: rgba(179,49,31,.55); border: 2.5px solid var(--vermilion); outline: 0; }
 
     /* Side column: leaves of the same book, ruled in ink with red rubrics. */
     aside {
@@ -339,15 +337,20 @@
     <div class="map-card">
       <div id="map-guide" class="map-guide">
         <div id="guide-title" class="guide-title">1. Выбери, откуда идти</div>
-        <div id="guide-sub" class="guide-sub">Цвет внутри круга показывает Дом. Обводка показывает действие.</div>
+        <div id="guide-sub" class="guide-sub">Цвет земли показывает Дом. Колесо мыши меняет масштаб, карту можно тянуть.</div>
         <div class="selection-legend">
-          <span class="legend-pill"><i class="legend-mark"></i>можно выбрать</span>
+          <span class="legend-pill"><i class="legend-mark"></i>твои земли с воинами</span>
           <span class="legend-pill"><i class="legend-mark origin"></i>откуда</span>
           <span class="legend-pill"><i class="legend-mark legal"></i>куда можно</span>
           <span class="legend-pill"><i class="legend-mark target"></i>цель выбрана</span>
         </div>
       </div>
       <svg id="map" viewBox="40 30 760 490" role="img" aria-label="Карта Жестокого Века"></svg>
+      <div class="map-zoom" aria-label="Масштаб карты">
+        <button id="zoom-in" title="Приблизить" aria-label="Приблизить">+</button>
+        <button id="zoom-out" title="Отдалить" aria-label="Отдалить">−</button>
+        <button id="zoom-home" title="Показать всю карту" aria-label="Показать всю карту">⌂</button>
+      </div>
       <div id="route-card" class="route-card">
         <div class="route-line">
           <span id="from-name" class="route-place">...</span>
@@ -1043,17 +1046,146 @@ function updateMovingArmyPositions() {
     if (!order || order.status !== 'PENDING') continue;
     const pos = movingOrderPosition(order);
     if (!pos) continue;
-    node.setAttribute(
-      'transform',
-      'translate(' + pos.x + ' ' + pos.y + ') rotate(' + pos.angle + ')'
-    );
+    node.setAttribute('transform', 'translate(' + pos.x + ' ' + pos.y + ')');
   }
 }
 
-function renderMap() {
+// ---------- painted map ----------
+// The terrain is a static picture (assets/map/terrain.svg). Everything that
+// changes during play is drawn over it: realm colours and borders, selection,
+// sea lanes, name ribbons and armies.
+
+const MAP_HOME = { x: 40, y: 30, w: 760, h: 490 };
+let mapView = { ...MAP_HOME };
+let mapArt = null;
+let mapDragged = false;
+
+function applyMapView() {
+  $('map').setAttribute(
+    'viewBox',
+    [mapView.x, mapView.y, mapView.w, mapView.h].map(n => n.toFixed(2)).join(' ')
+  );
+}
+
+function clampMapView() {
+  const bounds = mapArt?.bounds || { x0: -160, y0: -110, x1: 1000, y1: 660 };
+  const ratio = MAP_HOME.h / MAP_HOME.w;
+  mapView.w = Math.max(150, Math.min(bounds.x1 - bounds.x0, mapView.w));
+  mapView.h = mapView.w * ratio;
+  mapView.x = Math.max(bounds.x0, Math.min(bounds.x1 - mapView.w, mapView.x));
+  mapView.y = Math.max(bounds.y0, Math.min(bounds.y1 - mapView.h, mapView.y));
+}
+
+function mapPointFromEvent(event) {
   const svg = $('map');
+  const point = svg.createSVGPoint();
+  point.x = event.clientX;
+  point.y = event.clientY;
+  return point.matrixTransform(svg.getScreenCTM().inverse());
+}
+
+// Zooms by `factor` keeping the map point under `anchor` where it is.
+function zoomMap(factor, anchor = null) {
+  const focus = anchor || { x: mapView.x + mapView.w / 2, y: mapView.y + mapView.h / 2 };
+  const before = mapView.w;
+  mapView.w *= factor;
+  clampMapView();
+  const applied = mapView.w / before;
+  mapView.x = focus.x - (focus.x - mapView.x) * applied;
+  mapView.y = focus.y - (focus.y - mapView.y) * applied;
+  mapView.h = mapView.w * (MAP_HOME.h / MAP_HOME.w);
+  clampMapView();
+  applyMapView();
+}
+
+function setupMapScaffold() {
+  const svg = $('map');
+  if (svg.dataset.ready || !mapArt) return;
+  const b = mapArt.bounds;
+  svg.innerHTML =
+    '<defs>' +
+    '<filter id="realm-ring" x="-10%" y="-10%" width="120%" height="120%">' +
+    '<feMorphology in="SourceAlpha" operator="erode" radius="2.4" result="inner"/>' +
+    '<feComposite in="SourceGraphic" in2="inner" operator="out"/>' +
+    '</filter>' +
+    '</defs>' +
+    `<image href="/assets/map/terrain.svg" x="${b.x0}" y="${b.y0}" width="${b.x1 - b.x0}" height="${b.y1 - b.y0}" preserveAspectRatio="none"></image>` +
+    '<g id="map-live"></g>';
+  svg.dataset.ready = '1';
+  applyMapView();
+
+  svg.addEventListener('wheel', event => {
+    event.preventDefault();
+    zoomMap(event.deltaY > 0 ? 1.18 : 1 / 1.18, mapPointFromEvent(event));
+  }, { passive: false });
+
+  let drag = null;
+  svg.addEventListener('pointerdown', event => {
+    if (event.button !== 0) return;
+    drag = { x: event.clientX, y: event.clientY, view: { ...mapView }, moved: false };
+    mapDragged = false;
+  });
+  window.addEventListener('pointermove', event => {
+    if (!drag) return;
+    const dx = event.clientX - drag.x;
+    const dy = event.clientY - drag.y;
+    if (!drag.moved && Math.hypot(dx, dy) < 5) return;
+    drag.moved = true;
+    mapDragged = true;
+    const scale = mapView.w / svg.getBoundingClientRect().width;
+    const fit = Math.max(
+      scale,
+      mapView.h / svg.getBoundingClientRect().height
+    );
+    mapView.x = drag.view.x - dx * fit;
+    mapView.y = drag.view.y - dy * fit;
+    clampMapView();
+    applyMapView();
+    svg.classList.add('panning');
+  });
+  window.addEventListener('pointerup', () => {
+    drag = null;
+    svg.classList.remove('panning');
+    // Let the click that ends a drag pass by without selecting a province.
+    setTimeout(() => { mapDragged = false; }, 0);
+  });
+
+  $('zoom-in').addEventListener('click', () => zoomMap(1 / 1.35));
+  $('zoom-out').addEventListener('click', () => zoomMap(1.35));
+  $('zoom-home').addEventListener('click', () => {
+    mapView = { ...MAP_HOME };
+    applyMapView();
+  });
+}
+
+function shieldToken(x, y, color, count, scale = 1) {
+  return `<g class="army-token" transform="translate(${x} ${y}) scale(${scale})">` +
+    `<path class="shield" d="M-4.8 -5.4H4.8V.8Q4.8 4.9 0 6.4Q-4.8 4.9 -4.8 .8Z" fill="${color}"></path>` +
+    '<path class="shield-shine" d="M-3.4 -4H3.4"></path>' +
+    `<text y="2.3">${count}</text>` +
+    '</g>';
+}
+
+function nameRibbon(x, y, label, capital) {
+  const text = label.toUpperCase();
+  const half = Math.max(9, text.length * 2.1 + (capital ? 5 : 2.6));
+  const mark = capital ? `<path class="ribbon-mark" d="M${-half + 2.2} 0l1.8 -2.2l1.8 2.2l-1.8 2.2Z"></path>` : '';
+  return `<g class="ribbon" transform="translate(${x} ${y})">` +
+    `<path class="ribbon-tail" d="M${-half - 3.8} -2.6H${-half + 1}V4.8H${-half - 3.8}l1.8 -3.7ZM${half + 3.8} -2.6H${half - 1}V4.8H${half + 3.8}l-1.8 -3.7Z"></path>` +
+    `<path class="ribbon-body" d="M${-half} -4.2H${half}V4.2H${-half}Z"></path>` +
+    mark +
+    `<text x="${capital ? 2.4 : 0}" y="2.1">${escapeHtml(text)}</text>` +
+    '</g>';
+}
+
+function renderMap() {
+  setupMapScaffold();
+  const live = document.getElementById('map-live');
+  if (!live) return;
+
   const state = snapshot.game.state;
   const coords = snapshot.map.coordinates;
+  const art = mapArt.provinces;
   const legalTargets = new Set(
     legal.filter(a => !origin || a.from === origin).map(a => a.to)
   );
@@ -1068,32 +1200,37 @@ function renderMap() {
   }
   const activeNodes = new Set(activePath);
 
-  const lines = [];
-  for (const [a,b] of snapshot.map.land_edges) {
-    const active = activeEdges.has(routeEdgeKey(a,b))
-      ? ' active-route'
-      : '';
-    lines.push(`<line class="land-edge${active}" x1="${coords[a].x}" y1="${coords[a].y}" x2="${coords[b].x}" y2="${coords[b].y}" />`);
+  // Realm colours: a wash over the land and a bold band along the outer border.
+  const byOwner = {};
+  for (const t of snapshot.map.territories) {
+    const owner = state.territories[t.id].owner;
+    if (!owner || !art[t.id]) continue;
+    (byOwner[owner] = byOwner[owner] || []).push(art[t.id].d);
   }
+  const realms = Object.entries(byOwner).map(([owner, paths]) => {
+    const color = colors[owner] || '#8a7a5c';
+    const shapes = paths.map(d => `<path d="${d}"></path>`).join('');
+    return `<g class="realm-wash" fill="${color}" stroke="${color}">${shapes}</g>` +
+      `<g class="realm-ring" fill="${color}" stroke="${color}" filter="url(#realm-ring)">${shapes}</g>`;
+  });
 
+  const routeCoords = routeCoordinates();
   const seaWaypoints = snapshot.map.sea_waypoints || {};
-  const routeCoords = { ...coords, ...seaWaypoints };
   const laneEdges = snapshot.map.sea_lane_edges?.length
     ? snapshot.map.sea_lane_edges
     : snapshot.map.sea_edges;
 
-
+  const lines = [];
   for (const [a,b] of laneEdges) {
     const from = routeCoords[a];
     const to = routeCoords[b];
     if (!from || !to) continue;
-    const baseClass = snapshot.map.sea_lane_edges?.length
-      ? 'sea-lane-edge'
-      : 'sea-edge';
-    const active = activeEdges.has(routeEdgeKey(a,b))
-      ? ' active-route'
-      : '';
-    lines.push(`<line class="${baseClass}${active}" x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" />`);
+    const active = activeEdges.has(routeEdgeKey(a,b)) ? ' active-route' : '';
+    lines.push(`<line class="sea-lane-edge${active}" x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" />`);
+  }
+  for (const [a,b] of snapshot.map.land_edges) {
+    if (!activeEdges.has(routeEdgeKey(a,b))) continue;
+    lines.push(`<line class="land-edge active-route" x1="${coords[a].x}" y1="${coords[a].y}" x2="${coords[b].x}" y2="${coords[b].y}" />`);
   }
 
   const waypointNodes = Object.entries(seaWaypoints).map(([id,point]) => {
@@ -1111,48 +1248,60 @@ function renderMap() {
     if (origin && id !== origin && !legalTargets.has(id) && id !== target) classes.push('dim');
 
     const active = activeNodes.has(id) ? ' active-route' : '';
-    const fill = owner ? (colors[owner] || '#2c4a86') : '#2c4a86';
     return `
       <g class="${classes.join(' ')}" data-id="${id}" transform="translate(${point.x} ${point.y})">
-        <circle class="selection-ring" r="7"></circle>
-        <circle class="sea-waypoint-halo${active}" r="5"></circle>
-        <circle class="sea-waypoint${active}" r="${total ? 5 : 2.3}" fill="${fill}"></circle>
-        <text class="sea-count" y="2">${total || ''}</text>
+        <circle class="sea-hit" r="9"></circle>
+        <circle class="selection-ring" r="8"></circle>
+        <circle class="sea-waypoint${active}" r="2.6"></circle>
+        ${total ? shieldToken(0, -1, colors[owner] || '#2c4a86', total, 0.9) : ''}
       </g>`;
   });
-  const nodes = snapshot.map.territories.map(t => {
+
+  const borders = [];
+  const zones = [];
+  const ribbons = [];
+  const tokens = [];
+  for (const t of snapshot.map.territories) {
+    const shape = art[t.id];
+    if (!shape) continue;
     const s = state.territories[t.id];
     const owner = s.owner;
     const rawTotal = Object.values(s.warriors || {}).reduce((a,b) => a + Number(b || 0), 0);
     const total = Math.max(0, rawTotal - pendingOutgoingAt(t.id, owner));
     const c = coords[t.id];
-    const r = t.type === 'Столица' ? 16 : 12;
-    const classes = ['territory'];
-    if (t.is_central_half) classes.push('central');
-    if (t.type === 'Столица') classes.push('capital');
+    const capital = t.type === 'Столица';
+
+    const classes = ['province'];
     const ownMovable = owner === house && warriorsAt(t.id, house) > 0;
     if (!origin && ownMovable) classes.push('selectable');
     if (t.id === origin) classes.push('origin');
     if (origin && legalTargets.has(t.id)) classes.push('legal');
     if (t.id === target) classes.push('target');
     if (origin && t.id !== origin && !legalTargets.has(t.id) && t.id !== target) classes.push('dim');
-    const fill = owner ? (colors[owner] || '#8a7a5c') : '#f2e6c8';
-    let badge = '';
-    if (t.id === origin) badge = '<rect class="badge-bg" x="-22" y="21" width="44" height="13" fill="#fff8e6"></rect><text class="badge" y="30.5">откуда</text>';
-    if (t.id === target) badge = '<rect class="badge-bg" x="-16" y="21" width="32" height="13" fill="#b3311f"></rect><text class="badge on-dark" y="30.5">цель</text>';
-    const labelY = t.is_central_half
-      ? (t.id.endsWith('-A') ? -18 : 27)
-      : -18;
-    return `
-      <g class="${classes.join(' ')}" data-id="${t.id}" transform="translate(${c.x} ${c.y})">
-        <circle class="selection-ring" r="${r + 5}"></circle>
-        <circle class="territory-body" r="${r}" fill="${fill}"></circle>
-        ${t.type === 'Столица' ? `<circle class="capital-ring" r="${r - 3.2}"></circle>` : ''}
-        <text class="territory-label" y="${labelY}">${escapeHtml(mapLabel(t))}</text>
-        <text class="count" y="4">${total || ''}</text>
-        ${badge}
-      </g>`;
-  });
+
+    borders.push(`<path d="${shape.d}"></path>`);
+    zones.push(`<path class="${classes.join(' ')}" data-id="${t.id}" d="${shape.d}"><title>${escapeHtml(t.name)} · ${escapeHtml(t.type)}</title></path>`);
+
+    let note = '';
+    if (t.id === origin) note = 'откуда';
+    if (t.id === target) note = 'цель';
+    const labelY = c.y + (capital ? 17.5 : t.type === 'Город' ? 14.5 : 13);
+    ribbons.push(nameRibbon(c.x, labelY, mapLabel(t), capital));
+    if (note) {
+      ribbons.push(`<text class="ribbon-note ${t.id === target ? 'target' : ''}" x="${c.x}" y="${labelY + 10.6}">${note}</text>`);
+    }
+
+    if (capital && owner) {
+      const flag = colors[owner] || '#8a7a5c';
+      tokens.push(`<path class="pennant-pole" d="M${c.x} ${c.y - 6.4}v-7.4"></path>` +
+        `<path class="pennant" d="M${c.x} ${c.y - 13.8}l6.4 1.9l-6.4 1.9Z" fill="${flag}"></path>`);
+    }
+    if (total && owner) {
+      const tx = capital ? c.x + 15 : c.x + 8.5;
+      const ty = capital ? c.y - 4 : c.y - 5;
+      tokens.push(shieldToken(tx, ty, colors[owner] || '#8a7a5c', total));
+    }
+  }
 
   const movingArmies = (snapshot.game.orders || [])
     .filter(order =>
@@ -1164,22 +1313,26 @@ function renderMap() {
       const pos = movingOrderPosition(order);
       if (!pos) return '';
       const fill = colors[order.action.house] || '#2b1b12';
-      return `
-        <g class="moving-army" data-order-id="${escapeHtml(order.id)}"
-          transform="translate(${pos.x} ${pos.y}) rotate(${pos.angle})">
-          <circle class="army-disc" r="7" fill="${fill}"></circle>
-          <path class="army-arrow" d="M 2 -3 L 7 0 L 2 3 Z"></path>
-          <text class="army-count" x="-1" y="0">${Number(order.action.warriors || 0)}</text>
-        </g>`;
+      return `<g class="moving-army" data-order-id="${escapeHtml(order.id)}" transform="translate(${pos.x} ${pos.y})">` +
+        shieldToken(0, 0, fill, Number(order.action.warriors || 0), 1.1) +
+        '</g>';
     });
 
-  svg.innerHTML =
+  live.innerHTML =
+    realms.join('') +
+    `<g class="province-borders">${borders.join('')}</g>` +
+    zones.join('') +
     lines.join('') +
     waypointNodes.join('') +
-    nodes.join('') +
+    `<g class="map-ribbons">${ribbons.join('')}</g>` +
+    `<g class="map-tokens">${tokens.join('')}</g>` +
     movingArmies.join('');
-  svg.querySelectorAll('.territory, .sea-node').forEach(node => {
-    node.addEventListener('click', () => selectTerritory(node.dataset.id));
+
+  live.querySelectorAll('.province, .sea-node').forEach(node => {
+    node.addEventListener('click', () => {
+      if (mapDragged) return;
+      selectTerritory(node.dataset.id);
+    });
   });
 }
 
@@ -1349,7 +1502,7 @@ function renderSelection() {
     $('commander-row').style.display = 'none';
     $('selection').textContent = '1. Выбери свою территорию с воинами.';
     $('guide-title').textContent = '1. Выбери, откуда идти';
-    $('guide-sub').textContent = 'Чёрной пунктирной обводкой отмечены твои территории с воинами.';
+    $('guide-sub').textContent = 'Светлым пунктиром обведены твои земли с воинами.';
     card.classList.remove('show');
     return;
   }
@@ -1361,7 +1514,7 @@ function renderSelection() {
 
   if (!target) {
     $('guide-title').textContent = `2. Выбери, куда идти из ${o.name}`;
-    $('guide-sub').textContent = 'Синей пунктирной обводкой отмечены допустимые цели.';
+    $('guide-sub').textContent = 'Синим отмечены земли, куда можно дойти.';
     card.classList.remove('show');
     return;
   }
@@ -1536,6 +1689,7 @@ async function refresh() {
 
   if (!bootstrap) {
     bootstrap = await api('/api/bootstrap');
+    mapArt = await fetch('/assets/map/provinces.json').then(res => res.json());
     const build = bootstrap.build || {};
     $('build-info').textContent = build.commit
       ? 'сборка ' + String(build.commit).slice(0, 7)
