@@ -50,6 +50,7 @@ import { applyFog, knownHouses, recordExploration, recordLandHistory } from './f
 import { generateMap, MAX_HOUSES, MIN_HOUSES } from './mapgen.mjs';
 import { processEncounters } from './encounters.mjs';
 import { expelGuests } from './guests.mjs';
+import { agentsView, attachSpy, hireSpy, processAgents, wayfarersView } from './agents.mjs';
 import { captiveAction, captivesView, processCharacters } from './fate.mjs';
 import {
   acceptAlliance,
@@ -502,6 +503,7 @@ async function tickUnlocked(ctx) {
   processed = processRounds(processed, map, constants, { nowMs });
   processed = processCharacters(processed, map, constants, { nowMs });
   processed = expelGuests(processed, map, constants, nowMs);
+  processed = processAgents(processed, map, { nowMs });
   processed = recordExploration(processed, map, constants.houses, nowMs);
   processed = recordLandHistory(processed, nowMs);
   if (
@@ -609,6 +611,7 @@ async function publicState(ctx, player = null) {
     game: redactGameForPlayer(ctx.game, player),
     lobby,
     rounds: roundsView(ctx.game),
+    wayfarers: wayfarersView(ctx.game, map),
     victory: buildVictoryStatus(ctx.game, map, constants)
   };
 }
@@ -1324,6 +1327,7 @@ async function handleGameApi(req, res, url, ctx, subpath) {
       armies,
       captives: captivesView(ctx.game, map, house),
       motto: ctx.game.house_profiles?.[house]?.motto || '',
+      agents: agentsView(ctx.game, house),
       family: familyView(ctx.game, house)
     });
   }
@@ -1507,6 +1511,26 @@ async function handleGameApi(req, res, url, ctx, subpath) {
       mutate: async game => {
         const next = passRound(game, house);
         return { game: next, response: { rounds: roundsView(next) } };
+      }
+    }));
+    return json(res, result.status, result.response);
+  }
+
+  if (req.method === 'POST' && subpath === '/agents') {
+    const body = await readBody(req);
+    const house = String(body.house || '').trim();
+    await requireHouse(ctx, req, house);
+    const result = await serial(ctx, () => runGameCommand(ctx, req, {
+      kind: 'AGENT',
+      status: 200,
+      house,
+      mutate: async game => {
+        if (String(body.action).toUpperCase() === 'HIRE') {
+          const next = hireSpy(game, constants, house);
+          return { game: next, response: { agents: agentsView(next, house) } };
+        }
+        const sent = attachSpy(game, map, { house, agentId: body.agent_id, band: body.band, target: String(body.target || '') });
+        return { game: sent.game, response: { agent: sent.agent } };
       }
     }));
     return json(res, result.status, result.response);

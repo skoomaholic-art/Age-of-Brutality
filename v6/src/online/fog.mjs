@@ -22,6 +22,8 @@ export function visiblePositions(state, map, house) {
   for (const [id, node] of Object.entries(state.sea_nodes || {})) {
     if (node.owner === house) own.add(id);
   }
+  // A spy in place sees the land he watches and what lies around it.
+  for (const id of Object.keys(state.spy_sight?.[house] || {})) own.add(id);
   // Where our warriors camp as guests, they see as far as at home.
   for (const [id, byHouse] of Object.entries(state.guests || {})) {
     if (Number(byHouse?.[house] || 0) > 0) own.add(id);
@@ -121,6 +123,8 @@ const PRIVATE_EVENTS = new Set([
   'RECRUIT_CANCELLED',
   'FORT_CANCELLED',
   'COMMANDER_RECOVERED',
+  'SPY_ARRIVED',
+  'SPY_RETURNED',
   'GUEST_MARCH',
   'ROUND_ACTION_REFUNDED'
 ]);
@@ -184,6 +188,8 @@ export function applyFog(clientGame, map, house) {
   delete clientGame.contacts;
 
   delete clientGame.exploration;
+  delete clientGame.agents;
+  if (state.spy_sight) state.spy_sight = { [house]: state.spy_sight[house] || {} };
   // The past of lands never seen is unknown too.
   for (const id of Object.keys(clientGame.land_history || {})) {
     if (!explored.has(id)) delete clientGame.land_history[id];

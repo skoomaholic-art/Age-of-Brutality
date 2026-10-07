@@ -225,6 +225,17 @@ export function journalEntryToAudit(entry, map, game) {
     };
   }
 
+  if (entry.kind === 'SPY_ARRIVED' || entry.kind === 'SPY_RETURNED') {
+    const territory = territoryName(map, entry.territory);
+    return {
+      ...base,
+      message: entry.kind === 'SPY_ARRIVED'
+        ? `Шпион на месте: ${entry.agent_name} вошёл в ${territory} с путниками и шлёт вести.`
+        : `Шпион вернулся: ${entry.agent_name} ушёл из ${territory} с другими путниками и снова при дворе.`,
+      details: { house: entry.house, agent_name: entry.agent_name, territory_id: entry.territory, territory, at: entry.at || null }
+    };
+  }
+
   if (entry.kind === 'JOB_SEIZED') {
     const territory = territoryName(map, entry.territory);
     const what = entry.job_type === 'RECRUIT' ? 'набранные воины' : 'начатая крепость';

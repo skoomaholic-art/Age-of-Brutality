@@ -1,6 +1,7 @@
 import { roundsNextDueAt } from './rounds.mjs';
 import { nextEncounterAt } from './encounters.mjs';
 import { nextCharacterDueAt } from './fate.mjs';
+import { nextAgentDueAt } from './agents.mjs';
 
 export function calculateNextDueAt(game) {
   if (game.lifecycle?.status !== 'RUNNING') return null;
@@ -10,6 +11,9 @@ export function calculateNextDueAt(game) {
 
   const roundsDue = roundsNextDueAt(game);
   if (roundsDue) candidates.push(roundsDue);
+
+  const agentAt = nextAgentDueAt(game);
+  if (agentAt) candidates.push(agentAt);
 
   const characterAt = nextCharacterDueAt(game);
   if (characterAt) candidates.push(characterAt);

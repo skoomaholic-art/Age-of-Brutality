@@ -597,7 +597,7 @@
         </div>
         <div class="bar-pane" data-pane="characters"></div>
         <div class="bar-pane" data-pane="armies"><div class="panel"><h2>Армии</h2><div id="armies-list" class="muted">Нет армий.</div></div></div>
-        <div class="bar-pane" data-pane="agents"><div class="panel"><h2>Агенты</h2><div class="muted">Разведчиков и шпионов у твоего Дома пока нет: эта служба ещё не учреждена.</div></div></div>
+        <div class="bar-pane" data-pane="agents"><div class="panel"><h2>Агенты</h2><div id="agents-list" class="muted">Шпионов нет.</div></div></div>
         <div class="bar-pane" data-pane="provinces"><div class="panel"><h2>Провинции</h2><div id="provinces-list" class="muted">Нет земель.</div></div></div>
         <div class="bar-pane" data-pane="orders"></div>
         <div class="bar-pane" data-pane="stats"></div>
@@ -1500,6 +1500,7 @@ function renderLand() {
     tab.classList.toggle('on', tab.dataset.land === landTab);
   });
   const body = $('land-body');
+  if (body.contains(document.activeElement) && document.activeElement.tagName === 'SELECT') return;
   const seen = !snapshot.game.visibility?.fog || (snapshot.game.visibility.visible || []).includes(landId);
   const built = (st.fort ? '<span>Крепость</span>' : '') + (t.type === 'Столица' ? '<span>Замок правителя</span>' : '');
   if (landTab === 'info') {
@@ -1514,14 +1515,16 @@ function renderLand() {
       '<div class="row"><span>Постройки</span><b>' + (st.fort ? 'крепость' : 'нет') + '</b></div>' +
       '<div class="row"><span>Исконно</span><b>' + escapeHtml(t.house_sector && colors[t.house_sector] ? 'земля Дома ' + t.house_sector : t.house_sector || 'вольная земля') + '</b></div>' +
       '<div class="row"><span>Прежде владели</span><b>' + escapeHtml(past.length ? past.join(', ') : 'никто') + '</b></div>' +
-      '<div class="lore">' + escapeHtml(LAND_LORE[Math.abs(hash) % LAND_LORE.length]) + '</div>';
+      '<div class="lore">' + escapeHtml(LAND_LORE[Math.abs(hash) % LAND_LORE.length]) + '</div>' + guestsBlock(mine);
     return;
   }
   const jobs = (economy?.jobs || []).filter(job => job.territory === landId && job.status === 'PENDING');
   if (landTab === 'hire') {
     const here = warriorsAt(landId, house);
     const queue = jobs.filter(job => job.type === 'RECRUIT').map(job => '<span>+' + job.warriors + ' · ' + escapeHtml(timeLeft(job.due_at)) + '</span>').join('');
-    body.innerHTML = '<div class="row"><span>Стоит здесь</span><b>' + here + ' ' + warriorWord(here) + '</b></div>' +
+    const spies = characterData?.agents;
+    const spyRow = spies ? '<button class="wide" data-hire-spy ' + (spies.list.length >= spies.max ? 'disabled' : '') + '>Шпион · ' + spies.cost + ' золота (' + spies.list.length + ' из ' + spies.max + ')</button>' : '';
+    body.innerHTML = '<div class="row"><span>Стоит здесь</span><b>' + here + ' ' + warriorWord(here) + '</b></div>' + spyRow +
       (queue ? '<div class="built">Набираются: ' + queue + '</div>' : '') +
       '<div class="acts">' + [1, 2, 3].map(n => '<button data-land-hire="' + n + '">+' + n + '<br><span class="tiny">' + n + ' зол.</span></button>').join('') + '</div>';
     return;
@@ -1532,6 +1535,33 @@ function renderLand() {
     '<button class="wide" data-land-fort ' + (fortNote ? 'disabled' : '') + '>' + (fortNote || 'Крепость · 3 золота') + '</button>' +
     '<button class="wide" disabled>Тайный приказ · скоро</button>' +
     '<button class="wide" disabled>Порт · скоро</button>';
+}
+
+// Wayfarers resting in this land; with a free spy one of them can take him along.
+function guestsBlock(mine) {
+  const here = buildWayfarers().filter(band => { const now = wayfarerNow(band); return now.resting && now.from === landId; });
+  if (!here.length) return '<div class="row" style="margin-top:6px"><span>Путники</span><b>никого</b></div>';
+  const idle = (characterData?.agents?.list || []).some(agent => agent.status === 'IDLE');
+  return '<div class="built" style="margin-top:8px">Сейчас здесь гостят:</div>' + here.map(band => {
+    const kind = WAYFARERS[band.kind];
+    const stops = [...new Set(band.path)].filter(id => id !== landId);
+    const pick = mine && idle
+      ? '<select data-spy-target="' + band.id + '" style="width:100%;margin-top:4px">' + stops.map(id => '<option value="' + id + '">' + escapeHtml(mapNodeById(id)?.name || id) + '</option>').join('') + '</select>' +
+        '<button class="wide" data-spy-band="' + band.id + '">Примкнуть шпиона к группе</button>'
+      : mine ? '<div class="tiny">Свободного шпиона нет: нанять можно во вкладке «Нанять».</div>' : '';
+    return '<div class="captive-row"><b>' + kind.name + '</b><div class="tiny">идут дальше в ' + escapeHtml(mapNodeById(wayfarerNow(band).to)?.name || '') + '</div>' + pick + '</div>';
+  }).join('');
+}
+
+async function agentCommand(body) {
+  try {
+    const data = await api('/api/agents', { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({ house, ...body }) });
+    await refresh();
+    return data;
+  } catch (error) {
+    alert(error.message);
+    return null;
+  }
 }
 
 async function landCommand(path, body) {
@@ -1554,6 +1584,23 @@ function setupLand() {
     const hire = event.target.closest('[data-land-hire]');
     if (hire) landCommand('/api/recruit', { warriors: Number(hire.dataset.landHire) });
     if (event.target.closest('[data-land-fort]')) landCommand('/api/fort', {});
+    if (event.target.closest('[data-hire-spy]')) agentCommand({ action: 'HIRE' });
+    const join = event.target.closest('[data-spy-band]');
+    if (join) {
+      const band = Number(join.dataset.spyBand);
+      const targetId = $('land-body').querySelector('[data-spy-target="' + band + '"]').value;
+      agentCommand({ action: 'ATTACH', band, target: targetId }).then(data => {
+        if (!data?.agent) return;
+        const kind = WAYFARERS[buildWayfarers().find(item => item.id === band).kind];
+        showDecision({
+          key: 'spy-sent', art: 'intrigue-exposed', from: 'Твой Тайный приказ', title: 'Шпион в пути',
+          text: data.agent.name + ' примкнул к группе «' + kind.name + '» и выйдет вместе с ней. Группа идёт своей дорогой, через деревни и города, и придёт в ' +
+            (mapNodeById(data.agent.target)?.name || '') + ' через ' + timeLeft(data.agent.arrive_at) + '.',
+          terms: 'На месте он откроет тебе эту землю и её соседей на полдня, потом вернётся с другими путниками.',
+          buttons: [{ label: 'Ступай с богом', primary: true }]
+        });
+      });
+    }
   });
 }
 
@@ -1822,35 +1869,14 @@ const WAYFARERS = [
 ];
 let wayfarers = null;
 
+// The bands and their rounds come from the server, so all players agree.
 function buildWayfarers() {
-  const map = snapshot?.map;
-  if (!map?.land_edges?.length) return [];
-  const near = {};
-  for (const [a, b] of map.land_edges) { (near[a] ||= []).push(b); (near[b] ||= []).push(a); }
-  const towns = map.territories.filter(t => near[t.id] && t.type !== 'Дикая земля' && t.type !== 'Половина острова').map(t => t.id);
-  let seed = 7;
-  for (const ch of String(snapshot.game.id || '')) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
-  const random = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
-  const count = Math.max(3, Math.round(map.territories.length / 6));
-  const out = [];
-  for (let k = 0; k < count && towns.length; k += 1) {
-    // There and back again: a walk of a few lands from one settlement.
-    const path = [towns[Math.floor(random() * towns.length)]];
-    const steps = 3 + Math.floor(random() * 4);
-    for (let i = 0; i < steps; i += 1) {
-      const options = near[path[path.length - 1]].filter(id => id !== path[path.length - 2]);
-      if (!options.length) break;
-      path.push(options[Math.floor(random() * options.length)]);
-    }
-    if (path.length < 2) continue;
-    out.push({ kind: k % WAYFARERS.length, line: Math.floor(random() * 3), path: [...path, ...path.slice(1, -1).reverse()], offset: random(), rest: 0.45 + random() * 0.2 });
-  }
-  return out;
+  return snapshot?.wayfarers?.bands || [];
 }
 
 // Where a band is now: between two lands of its round, or resting in one.
 function wayfarerNow(band) {
-  const legMs = Math.max(45000, Number(snapshot?.rounds?.day_ms || 600000) / 7);
+  const legMs = Number(snapshot?.wayfarers?.leg_ms || 85000);
   const t = Date.now() / legMs + band.offset * band.path.length;
   const leg = Math.floor(t) % band.path.length;
   const from = band.path[leg];
@@ -1862,7 +1888,7 @@ function wayfarerNow(band) {
 function renderWayfarers() {
   const layer = document.getElementById('map-npc');
   if (!layer || !snapshot?.map) return;
-  wayfarers ||= buildWayfarers();
+  wayfarers = buildWayfarers();
   const coords = snapshot.map.coordinates;
   layer.innerHTML = wayfarers.map((band, index) => {
     const now = wayfarerNow(band);
@@ -1931,11 +1957,14 @@ function lensFor(node) {
 function setupLens() {
   const lens = $('lens');
   const svg = $('map');
-  svg.addEventListener('pointermove', event => {
+  // A click on a standard pins the glass open until the next click elsewhere.
+  let pinned = false;
+  const viewAt = event => {
     const node = event.target.closest?.('.army-token');
     const npc = event.target.closest?.('.npc');
-    const view = svg.classList.contains('panning') ? null : npc ? wayfarerLens(Number(npc.dataset.npc)) : node ? lensFor(node) : null;
-    if (!view) { lens.classList.remove('show'); return; }
+    return npc ? wayfarerLens(Number(npc.dataset.npc)) : node ? lensFor(node) : null;
+  };
+  const show = (view, event) => {
     const src = view.host || '/assets/img/notif-' + view.art + '.jpg';
     if ($('lens-art').getAttribute('src') !== src) $('lens-art').src = src;
     $('lens-art').className = view.host ? 'host' + (view.moving ? ' marching' : '') : '';
@@ -1948,14 +1977,22 @@ function setupLens() {
     y = Math.max(8, Math.min(innerHeight - h - 8, y));
     lens.style.left = x + 'px';
     lens.style.top = y + 'px';
+  };
+  svg.addEventListener('pointermove', event => {
+    const view = svg.classList.contains('panning') ? null : viewAt(event);
+    if (view) show(view, event);
+    else if (!pinned) lens.classList.remove('show');
   });
-  svg.addEventListener('pointerleave', () => lens.classList.remove('show'));
-  // A click on an army is a click on the land it stands on.
+  svg.addEventListener('pointerleave', () => { if (!pinned) lens.classList.remove('show'); });
   svg.addEventListener('click', event => {
+    if (mapDragged) return;
+    const view = viewAt(event);
+    pinned = Boolean(view);
+    if (view) show(view, event); else lens.classList.remove('show');
+    // A click on an army is also a click on the land it stands on.
     const node = event.target.closest?.('.army-token[data-lens-at]');
-    if (node && !mapDragged) selectTerritory(node.dataset.lensAt);
+    if (node) selectTerritory(node.dataset.lensAt);
   });
-  svg.addEventListener('pointerdown', () => lens.classList.remove('show'));
 }
 
 // ---------- the bar over the map ----------
@@ -2093,6 +2130,16 @@ function renderFinders() {
       '</b><span class="num">' + count + ' ' + warriorWord(count) + '</span><span>в походе</span><span>ещё ' + escapeHtml(timeLeft(order.due_at)) + '</span></div>');
   }
   $('armies-list').innerHTML = rows.length ? rows.join('') : 'Нет армий.';
+  const spies = characterData?.agents?.list || [];
+  $('agents-list').innerHTML = spies.length
+    ? spies.map(agent => {
+        const where = agent.status === 'TRAVEL' ? 'идёт с путниками в ' + (mapNodeById(agent.target)?.name || '') + ', ещё ' + timeLeft(agent.arrive_at)
+          : agent.status === 'WATCH' ? 'следит за землёй ' + (mapNodeById(agent.target)?.name || '') + ', ещё ' + timeLeft(agent.until)
+          : 'при дворе, ждёт приказа';
+        return '<div class="find-row"' + (agent.target ? ' data-find="' + escapeHtml(agent.target) + '"' : '') + '><b>' + escapeHtml(agent.name) +
+          '</b><span class="num">дел: ' + Number(agent.missions || 0) + '</span><span>шпион</span><span>' + escapeHtml(where) + '</span></div>';
+      }).join('')
+    : 'Шпионов нет. Нанять можно в своей земле: вкладка «Нанять». Потом открой землю, где гостят путники, и отправь шпиона с ними.';
 
   const lands = (snapshot.map.territories || []).filter(t => state.territories[t.id]?.owner === house);
   $('provinces-list').innerHTML = lands.length
@@ -2242,6 +2289,12 @@ function newsFor(item) {
   }
   if (item.type === 'GUESTS_EXPELLED' && (d.houses || []).includes(house)) {
     return { rank: 6, art: 'deal-failed', title: mine(d.house) ? 'Гостям указали на дверь' : 'Гости ушли', text: strip(/^Гости ушли:\s*/), ok: mine(d.house) ? 'Уходим' : 'Скатертью дорога' };
+  }
+  if (item.type === 'SPY_ARRIVED' && mine(d.house)) {
+    return { rank: 6, art: 'intrigue-exposed', title: 'Шпион на месте', text: strip(/^Шпион на месте:\s*/) + ' Земля ' + d.territory + ' и её соседи открыты тебе.', ok: 'Смотрим в оба' };
+  }
+  if (item.type === 'SPY_RETURNED' && mine(d.house)) {
+    return { rank: 3, art: 'commander-returned', title: 'Шпион вернулся', text: strip(/^Шпион вернулся:\s*/), ok: 'Добрая служба' };
   }
   if (item.type === 'JOB_SEIZED') {
     const what = d.job_type === 'RECRUIT' ? 'Набранные воины' : 'Начатая крепость';
