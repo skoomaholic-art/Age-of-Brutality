@@ -1747,10 +1747,6 @@ function showDecision(spec) {
   decisionKey = spec.key;
   $('decision-art').src = '/assets/img/notif-' + spec.art + '.jpg';
   $('lens').classList.remove('show');
-  let herald = document.getElementById('decision-herald');
-  if (!herald) { herald = document.createElement('div'); herald.id = 'decision-herald'; herald.className = 'decision-herald'; $('decision-art').closest('.decision-card').appendChild(herald); }
-  const [heraldMood, heraldHand] = heraldFor(spec.art);
-  herald.innerHTML = liveBust(4, heraldMood, heraldHand);
   $('decision-from').textContent = spec.from || '';
   $('decision-title').textContent = spec.title;
   $('decision-text').textContent = spec.text;
