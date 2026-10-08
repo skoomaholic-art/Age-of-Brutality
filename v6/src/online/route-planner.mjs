@@ -109,7 +109,8 @@ export function findOnlineRoute(
   house,
   from,
   to,
-  timing
+  timing,
+  { free = false } = {}
 ) {
   if (!constants.houses.includes(house)) return null;
   if (from === to) return null;
@@ -121,7 +122,8 @@ export function findOnlineRoute(
   const owner=onlinePositionOwner(state,from);
   // A march starts from our own land or fleet, or from a camp of our guests.
   const camped=owner!==house && guestWarriors(state,from,house)>0;
-  if ((owner!==house && !camped) || onlinePositionWarriors(state,from,house)<1) return null;
+  // An army already out on the road (`free`) may set off from any crossroads.
+  if (!free && ((owner!==house && !camped) || onlinePositionWarriors(state,from,house)<1)) return null;
 
   const dist=new Map([[from,0]]);
   const hops=new Map([[from,0]]);

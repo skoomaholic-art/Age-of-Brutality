@@ -23,7 +23,9 @@ const CROSSROADS_WINDOW = 0.25;
 
 // Where the army is and when: [{ node, at }] from the first step to the last.
 export function orderTimeline(order) {
-  const segments = order.action?.route_segments || [];
+  // An army camped on the road is not walking anywhere.
+  if (order.halted) return [];
+  const segments = order.travel_segments?.length ? order.travel_segments : (order.action?.route_segments || []);
   const start = Date.parse(order.created_at);
   const end = Date.parse(order.due_at);
   if (!segments.length || !Number.isFinite(start) || !Number.isFinite(end) || end <= start) {

@@ -403,6 +403,15 @@
     .land-card { position: absolute; z-index: 6; left: 12px; bottom: 12px; width: min(300px, calc(100% - 24px)); display: none;
       border: 1.5px solid var(--ink); background: rgba(242,230,200,.98); box-shadow: 4px 4px 0 rgba(43,27,18,.38); }
     .land-card.show { display: block; }
+    .field-card { z-index: 7; padding: 10px 12px; left: auto; right: 12px; }
+    .map-card:has(#field-card.show) #land-card { display: none; }
+    .field-card .land-head { display: flex; justify-content: space-between; align-items: center; font-family: Kurale, serif; font-size: 18px; }
+    .field-status { margin-top: 4px; font-size: 14px; color: var(--ink-soft); }
+    .field-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .field-actions button.on { background: var(--vermilion); color: var(--white-lead); }
+    .field-halt { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; }
+    .field-hint { margin-top: 6px; font-size: 13px; font-style: italic; color: var(--vermilion-deep); }
+    .field-hint:empty { display: none; }
     .land-head { display: flex; align-items: baseline; gap: 8px; padding: 8px 10px 4px; }
     .land-head b { font-family: 'Vek Gothic', Kurale, serif; font-weight: 400; font-size: 23px; color: var(--vermilion-deep); }
     .land-head span { flex: 1; font-size: 12.5px; font-style: italic; color: var(--ink-soft); }
@@ -785,6 +794,14 @@
         <button id="zoom-out" title="Отдалить" aria-label="Отдалить">−</button>
         <button id="zoom-home" title="Показать всю карту" aria-label="Показать всю карту">⌂</button>
       </div>
+      <div id="field-card" class="land-card field-card">
+        <div class="land-head"><b id="field-title">Войско</b><button id="field-close" title="Закрыть">×</button></div>
+        <div id="field-status" class="field-status"></div>
+        <div id="field-actions" class="field-actions"></div>
+        <label class="field-halt"><span class="muted">Новой цели — встать</span>
+          <select id="field-ratio"><option value="">у цели</option><option value="0.75">на ¾ пути</option><option value="0.5">на полпути</option><option value="0.25">на ¼ пути</option></select></label>
+        <div id="field-hint" class="field-hint"></div>
+      </div>
       <div id="route-card" class="route-card">
         <div class="route-main">
           <div class="route-text">
@@ -810,6 +827,15 @@
             <input id="warriors" type="number" min="1" value="1" />
           </label>
           <button id="max-warriors" class="troop-max">Все</button>
+          <label class="split-count">
+            <span class="muted">Где встать</span>
+            <select id="halt-ratio">
+              <option value="">у цели</option>
+              <option value="0.75">на ¾ пути</option>
+              <option value="0.5">на полпути</option>
+              <option value="0.25">на ¼ пути</option>
+            </select>
+          </label>
           <label id="commander-row" class="split-commander" style="display:none">
             <span class="muted">Воевода</span>
             <select id="commander"></select>
@@ -2256,6 +2282,8 @@ function setupLens() {
     pinned = Boolean(view);
     if (view) show(view, event); else lens.classList.remove('show');
     // A click on an army is also a click on the land it stands on.
+    const marching = event.target.closest?.('.army-token[data-lens-order]');
+    if (marching) { openField(marching.dataset.lensOrder); return; }
     const node = event.target.closest?.('.army-token[data-lens-at]');
     if (node) selectTerritory(node.dataset.lensAt);
   });
@@ -3154,7 +3182,9 @@ function movingOrderPosition(order, nowMs = Date.now()) {
   if (path.length < 2) return null;
 
   const coords = routeCoordinates();
-  const segments = Array.isArray(order.action.route_segments) &&
+  const segments = order.travel_segments?.length
+    ? order.travel_segments
+    : Array.isArray(order.action.route_segments) &&
     order.action.route_segments.length
       ? order.action.route_segments
       : path.slice(0,-1).map((from,index) => ({
@@ -3165,17 +3195,19 @@ function movingOrderPosition(order, nowMs = Date.now()) {
         }));
 
   const created = Date.parse(order.created_at);
-  const elapsed = Math.max(
-    0,
-    Math.min(Number(order.duration_ms || 0), nowMs - created)
-  );
+  const elapsed = order.halted
+    ? Number(order.halted.progress_ms || 0)
+    : Math.max(0, Math.min(Number(order.duration_ms || 0), nowMs - created));
+  // The stretches of an old order are scaled to its actual duration.
+  const planned = segments.reduce((sum, s) => sum + Number(s.duration_ms || 0), 0) || 1;
+  const stretch = Number(order.duration_ms || planned) / planned;
 
   let remaining = elapsed;
   let chosen = segments[segments.length - 1];
   let local = 1;
 
   for (const segment of segments) {
-    const duration = Math.max(1,Number(segment.duration_ms || 1));
+    const duration = Math.max(1,Number(segment.duration_ms || 1) * stretch);
     if (remaining <= duration) {
       chosen = segment;
       local = remaining / duration;
@@ -3950,6 +3982,15 @@ function drawPixiMap(scene, key) {
     if (order.status !== 'PENDING' || !Array.isArray(order.action?.path) || order.action.path.length < 2) continue;
     const s = shieldGraphic(colors[order.action.house] || '#2b1b12', Number(order.action.warriors || 0), 1.1);
     s.orderId = order.id;
+    // A camp on the road: a small tent behind the shield.
+    if (order.halted) {
+      const tent = new PIXI.Graphics();
+      tent.lineStyle({ width: 0.6, color: INK });
+      tent.beginFill(0xf2e6c8); tent.drawPolygon([-11, 5, -6.5, -3, -2, 5]); tent.endFill();
+      tent.moveTo(-6.5, -3); tent.lineTo(-6.5, -6);
+      tent.beginFill(hex(colors[order.action.house])); tent.drawPolygon([-6.5, -6, -3.5, -5.2, -6.5, -4.4]); tent.endFill();
+      s.addChildAt(tent, 0);
+    }
     pixiMap.movers.addChild(s);
   }
   movePixiArmies();
@@ -4159,7 +4200,7 @@ function renderMap() {
 
   pixiScene = null;
   // The SVG is rebuilt only when something on it has changed.
-  const svgKey = JSON.stringify([usePixi, origin, target, house, [...legalTargets], explored ? [...explored] : null, state.territories, state.sea_nodes, state.guests, (snapshot.game.orders || []).filter(o => o.status === 'PENDING').map(o => [o.id, o.action?.warriors]), activePath, abandonedHouses()]);
+  const svgKey = JSON.stringify([usePixi, origin, target, house, [...legalTargets], explored ? [...explored] : null, state.territories, state.sea_nodes, state.guests, (snapshot.game.orders || []).filter(o => o.status === 'PENDING').map(o => [o.id, o.action?.warriors, Boolean(o.halted), o.action?.to]), activePath, abandonedHouses()]);
   if (usePixi) drawPixiMap(scene, svgKey);
   updateClouds(explored, art, coords);
   if (svgKey === lastSvgKey) return;
@@ -4433,8 +4474,81 @@ function renderSelection() {
   card.classList.add('show');
 }
 
+
+// ---------- an army on the road ----------
+// Click a marching army: stop it where it stands, set it going again, turn it
+// home, or point it at another land; it sets off from the very spot.
+let fieldOrderId = null;
+let fieldRedirect = null;
+
+function fieldOrder() {
+  return (snapshot?.game?.orders || []).find(o => o.id === fieldOrderId && o.status === 'PENDING') || null;
+}
+
+function openField(orderId) {
+  const order = (snapshot?.game?.orders || []).find(o => o.id === orderId);
+  if (!order || order.action?.house !== house || isSpectator) return;
+  fieldOrderId = orderId;
+  fieldRedirect = null;
+  $('land-card')?.classList.remove('show');
+  renderField();
+  $('field-card').classList.add('show');
+}
+
+function closeField() {
+  fieldOrderId = null;
+  fieldRedirect = null;
+  $('field-card').classList.remove('show');
+}
+
+async function fieldDo(action, extra = {}) {
+  await api('/api/orders/field', { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({ house, order_id: fieldOrderId, action, ...extra }) });
+  await refresh();
+  renderField();
+}
+
+async function redirectField(id) {
+  const ratio = Number($('field-ratio').value) || null;
+  fieldRedirect = null;
+  try { await fieldDo('REDIRECT', { target: id, halt_ratio: ratio }); $('field-hint').textContent = ''; }
+  catch (error) { $('field-hint').textContent = sayError(error); }
+}
+
+function renderField() {
+  const order = fieldOrder();
+  if (!order) { if (fieldOrderId) closeField(); return; }
+  const a = order.action;
+  const goal = mapNodeById(order.travel_to || a.to)?.name || a.to;
+  const homeName = mapNodeById(a.from)?.name || a.from;
+  $('field-title').textContent = 'Войско · ' + a.warriors + ' воин.';
+  const left = Math.max(0, Math.round((Date.parse(order.due_at) - Date.now()) / 1000));
+  $('field-status').textContent = order.halted
+    ? 'Стоит лагерем на дороге. Шло к: ' + (order.return_home ? homeName + ' (домой)' : goal) + '.'
+    : order.halt_at_progress_ms != null
+      ? 'Идёт к ' + goal + ', встанет лагерем на полдороге через ' + left + ' сек.'
+      : 'Идёт ' + (order.return_home ? 'домой, в ' + homeName : 'к ' + goal) + ', ещё ' + left + ' сек.';
+  const box = $('field-actions');
+  box.innerHTML = '';
+  const add = (label, run, on = false) => {
+    const b = document.createElement('button');
+    b.textContent = label;
+    if (on) b.className = 'on';
+    b.onclick = async () => { b.disabled = true; try { await run(); } catch (error) { $('field-hint').textContent = sayError(error); } b.disabled = false; };
+    box.appendChild(b);
+  };
+  if (order.halted) add('Продолжить путь', () => fieldDo('RESUME'));
+  else add('Встать лагерем', () => fieldDo('HALT'));
+  if (!order.return_home) add('Повернуть домой', () => fieldDo('REDIRECT', { target: a.from }));
+  add(fieldRedirect ? 'Выбери землю на карте…' : 'Новая цель', async () => {
+    fieldRedirect = fieldRedirect ? null : fieldOrderId;
+    $('field-hint').textContent = fieldRedirect ? 'Нажми на землю, куда вести войско. Пойдёт с того места, где стоит.' : '';
+    renderField();
+  }, Boolean(fieldRedirect));
+}
+
 async function selectTerritory(id) {
   if (isSpectator) return;
+  if (fieldRedirect) { await redirectField(id); return; }
 
   const owner = nodeOwner(id);
   const movable = warriorsAt(id, house);
@@ -4508,9 +4622,11 @@ async function sendOrder(confirmed = false) {
     headers: {'content-type':'application/json'},
     body: JSON.stringify({
       ...action,
-      commander_id: commanderId
+      commander_id: commanderId,
+      halt_ratio: Number($('halt-ratio').value) || null
     })
   });
+  $('halt-ratio').value = '';
 
   origin = null;
   target = null;
@@ -4902,6 +5018,8 @@ const placeStatus = () => { const status = document.querySelector('.bar-status')
 placeStatus(); phoneLayout.addEventListener('change', placeStatus);
 // A phone opens on the player's own capital as soon as the map is known.
 const homeWatch = setInterval(() => { if (homeShown || !phoneLayout.matches) return clearInterval(homeWatch); if (snapshot?.map?.capitals && $('map').dataset.ready) goHome(); }, 400);
+$('field-close').onclick = closeField;
+setInterval(() => { if (fieldOrderId) renderField(); }, 1000);
 setupLens();
 setupLand();
 setupMaker();

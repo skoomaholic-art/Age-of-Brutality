@@ -23,7 +23,11 @@ import {
   ONLINE_TIMING,
   enumerateOnlineMarches,
   listQueueableMarches,
-  processDueOrders
+  processDueOrders,
+  haltOrder,
+  resumeOrder,
+  redirectOrder,
+  setHaltPoint
 } from './orders.mjs';
 import { normalizeOnlineSeaState } from './sea-navigation.mjs';
 import {
@@ -1611,7 +1615,39 @@ async function handleGameApi(req, res, url, ctx, subpath) {
       kind: command.type,
       status: 201,
       house: command.house,
-      mutate: async game => executeCommand(game, map, constants, command)
+      mutate: async game => {
+        const done = executeCommand(game, map, constants, command);
+        // "Stop part of the way": the army makes camp on the road at that share of it.
+        const ratio = Number(body.halt_ratio);
+        if (ratio > 0 && ratio < 1 && done?.game && done.response?.order?.id) {
+          const order = done.game.orders.find(item => item.id === done.response.order.id);
+          if (order) setHaltPoint(order, ratio, Date.now());
+        }
+        return done;
+      }
+    }));
+    return json(res, result.status, result.response);
+  }
+
+  if (req.method === 'POST' && subpath === '/orders/field') {
+    const body = await readBody(req);
+    const house = String(body.house || '').trim();
+    const orderId = String(body.order_id || '');
+    const action = String(body.action || '').toUpperCase();
+    await requireHouse(ctx, req, house);
+    const result = await serial(ctx, () => runGameCommand(ctx, req, {
+      kind: 'FIELD_ORDER',
+      status: 200,
+      house,
+      mutate: async game => {
+        const nowMs = Date.now();
+        let next;
+        if (action === 'HALT') next = haltOrder(game, house, orderId, { nowMs });
+        else if (action === 'RESUME') next = resumeOrder(game, house, orderId, { nowMs });
+        else if (action === 'REDIRECT') next = redirectOrder(game, map, constants, house, orderId, String(body.target || ''), { nowMs, halt_ratio: body.halt_ratio ?? null });
+        else throw new Error(`unknown field action ${action}`);
+        return { game: next, response: { ok: true } };
+      }
     }));
     return json(res, result.status, result.response);
   }
@@ -2242,7 +2278,8 @@ const server = http.createServer(async (req, res) => {
 
 setInterval(() => {
   for (const ctx of contexts.values()) {
-    serial(ctx, () => tickUnlocked(ctx)).catch(error => {
+    // Each game ticks under its own map (generated maps differ from the classic one).
+    serial(ctx, () => { enterGameScope(ctx.game); return tickUnlocked(ctx); }).catch(error => {
       console.error(`background tick failed for ${ctx.gameId}`, error);
     });
   }

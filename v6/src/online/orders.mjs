@@ -756,6 +756,25 @@ export function processDueOrders(game, map, constants, nowMs = Date.now()) {
 
   for (const dueOrder of due) {
     const liveOrder = next.orders.find(order => order.id === dueOrder.id);
+    // An army told to stop part of the way makes camp on the road.
+    if (liveOrder.halt_at_progress_ms != null && !liveOrder.halted) {
+      liveOrder.halted = { progress_ms: Number(liveOrder.halt_at_progress_ms), at: new Date(nowMs).toISOString() };
+      delete liveOrder.halt_at_progress_ms;
+      liveOrder.due_at = FIELD_FOREVER;
+      continue;
+    }
+    // An army turned back home simply comes back: its warriors never left the books there.
+    if (liveOrder.return_home) {
+      liveOrder.status = 'RESOLVED';
+      liveOrder.resolved_at = new Date(nowMs).toISOString();
+      liveOrder.result = { kind: 'RETURNED_HOME' };
+      if (liveOrder.commander_id) next.state = settleCommander(next.state, liveOrder.commander_id, liveOrder.action.from);
+      next.state.journal.push({
+        kind: 'MARCH_RETURNED', order_id: liveOrder.id, house: liveOrder.action.house, territory: liveOrder.action.from,
+        warriors: liveOrder.action.warriors, at: liveOrder.resolved_at
+      });
+      continue;
+    }
     try {
       const journalStart = next.state.journal.length;
       const resolved = resolveOrder(
@@ -829,4 +848,136 @@ export function processDueOrders(game, map, constants, nowMs = Date.now()) {
 
 export function isSameAction(a, b) {
   return actionKey(a) === actionKey(b);
+}
+
+
+// ---------- armies in the field ----------
+// A march can be stopped on the road, set going again, or turned to another
+// goal from wherever the army stands. The army keeps its warriors on the books
+// of the land it left; only its way across the map changes.
+export const FIELD_FOREVER = '9999-12-31T00:00:00.000Z';
+
+export function travelSegments(order) {
+  return order.travel_segments?.length ? order.travel_segments : (order.action?.route_segments || []);
+}
+
+export function orderProgressMs(order, nowMs) {
+  if (order.halted) return Number(order.halted.progress_ms || 0);
+  return Math.max(0, Math.min(Number(order.duration_ms || 0), nowMs - Date.parse(order.created_at)));
+}
+
+// The stretch of road the army is on and how far along it.
+export function orderPlace(order, nowMs) {
+  const segments = travelSegments(order);
+  const total = segments.reduce((sum, s) => sum + Number(s.duration_ms || 0), 0) || 1;
+  // Old orders scale the planned stretches to their actual duration.
+  const factor = Number(order.duration_ms || total) / total;
+  let left = orderProgressMs(order, nowMs);
+  for (let index = 0; index < segments.length; index += 1) {
+    const length = Math.max(1, Number(segments[index].duration_ms || 0) * factor);
+    if (left <= length || index === segments.length - 1) {
+      return { index, segment: segments[index], local: Math.max(0, Math.min(1, left / length)), length };
+    }
+    left -= length;
+  }
+  return null;
+}
+
+function ownMarch(game, house, orderId) {
+  const order = (game.orders || []).find(item => item.id === orderId);
+  if (!order || order.status !== 'PENDING') throw new Error('такого похода нет');
+  if (order.action?.house !== house) throw new Error('это не твоё войско');
+  return order;
+}
+
+export function haltOrder(game, house, orderId, { nowMs = Date.now() } = {}) {
+  const next = structuredClone(game);
+  const order = ownMarch(next, house, orderId);
+  if (order.halted) throw new Error('войско уже стоит лагерем');
+  order.halted = { progress_ms: orderProgressMs(order, nowMs), at: new Date(nowMs).toISOString() };
+  delete order.halt_at_progress_ms;
+  order.due_at = FIELD_FOREVER;
+  next.updated_at = new Date(nowMs).toISOString();
+  return next;
+}
+
+export function resumeOrder(game, house, orderId, { nowMs = Date.now() } = {}) {
+  const next = structuredClone(game);
+  const order = ownMarch(next, house, orderId);
+  if (!order.halted) throw new Error('войско и так в пути');
+  const start = nowMs - Number(order.halted.progress_ms || 0);
+  order.created_at = new Date(start).toISOString();
+  order.due_at = new Date(start + Number(order.duration_ms || 0)).toISOString();
+  delete order.halted;
+  next.updated_at = new Date(nowMs).toISOString();
+  return next;
+}
+
+// Sets the army going to `target` from the very spot where it stands: on to the
+// next crossroads or back to the last one, whichever is quicker.
+export function redirectOrder(game, map, constants, house, orderId, target, { nowMs = Date.now(), halt_ratio = null } = {}) {
+  const next = structuredClone(game);
+  const order = ownMarch(next, house, orderId);
+  const place = orderPlace(order, nowMs);
+  if (!place) throw new Error('не понять, где стоит войско');
+  const origin = order.action.from;
+  const home = target === origin;
+  if (!home) {
+    const legal = enumerateOnlineMarches(next.state, map, constants, house, ONLINE_TIMING)
+      .some(action => action.from === origin && action.to === target && action.warriors === order.action.warriors);
+    if (!legal) throw new Error('туда этому войску дороги нет');
+  }
+  const scale = timeScale(next);
+  const seg = place.segment;
+  const length = place.length;
+  const choices = [
+    { pivot: seg.to, lead: { ...seg, duration_ms: Math.round(length) }, offset: place.local * length },
+    { pivot: seg.from, lead: { ...seg, from: seg.to, to: seg.from, duration_ms: Math.round(length) }, offset: (1 - place.local) * length }
+  ];
+  let best = null;
+  for (const choice of choices) {
+    let rest = [];
+    if (choice.pivot !== target) {
+      const route = findOnlineRoute(next.state, map, constants, house, choice.pivot, target, ONLINE_TIMING, { free: true });
+      if (!route) continue;
+      rest = route.segments.map(segment => ({ ...segment, duration_ms: Math.round(Number(segment.duration_ms || 0) * scale) }));
+    }
+    const cost = (length - choice.offset) + rest.reduce((sum, s) => sum + s.duration_ms, 0);
+    if (!best || cost < best.cost) best = { ...choice, rest, cost };
+  }
+  if (!best) throw new Error('туда этому войску дороги нет');
+
+  if (!home) {
+    const hydrated = hydrateOnlineRoute(next.state, map, constants, { ...order.action, to: target, path: null }, ONLINE_TIMING);
+    order.action = { ...scaleRoute(hydrated, scale), warriors: order.action.warriors, commander_id: order.action.commander_id };
+    order.return_home = false;
+  } else {
+    order.return_home = true;
+  }
+  order.travel_segments = [best.lead, ...best.rest];
+  const total = order.travel_segments.reduce((sum, s) => sum + Number(s.duration_ms || 0), 0);
+  const start = nowMs - best.offset;
+  order.created_at = new Date(start).toISOString();
+  order.duration_ms = total;
+  order.due_at = new Date(start + total).toISOString();
+  order.travel_to = target;
+  delete order.halted;
+  delete order.halt_at_progress_ms;
+  if (halt_ratio != null) setHaltPoint(order, halt_ratio, nowMs);
+  for (const army of Object.values(next.state.armies || {})) {
+    if (army.moving_order_id === order.id) army.to = target;
+  }
+  next.updated_at = new Date(nowMs).toISOString();
+  return next;
+}
+
+// Stop at a share of the whole way (0 < ratio < 1) and make camp on the road.
+export function setHaltPoint(order, ratio, nowMs = Date.now()) {
+  const share = Number(ratio);
+  if (!(share > 0 && share < 1)) return order;
+  const at = Math.round(Number(order.duration_ms || 0) * share);
+  const done = orderProgressMs(order, nowMs);
+  order.halt_at_progress_ms = Math.max(done, at);
+  order.due_at = new Date(Date.parse(order.created_at) + order.halt_at_progress_ms).toISOString();
+  return order;
 }
