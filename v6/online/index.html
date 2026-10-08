@@ -151,6 +151,11 @@
     .province.fogged { fill: rgba(16,17,20,.6); }
     .province.fogged:hover { fill: rgba(16,17,20,.46); }
     #pixi-layer { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+    /* With the WebGL map the SVG is only an invisible sheet for clicks and the glass. */
+    #map.pixi-on > image, #map.pixi-on #map-clouds { display: none; }
+    #map.pixi-on .province, #map.pixi-on .province:hover { fill: transparent !important; stroke: transparent !important; }
+    #map.pixi-on .army-token, #map.pixi-on .npc, #map.pixi-on .sea-node .sea-waypoint, #map.pixi-on .sea-node .selection-ring { opacity: 0; }
+    #map.pixi-on .moving-army { filter: none; }
     #pixi-layer canvas { display: block; width: 100%; height: 100%; }
     .map-clouds { pointer-events: none; transition: opacity 2.4s ease-out, transform 2.4s ease-out; }
     .map-clouds.blown { opacity: 0; transform: translate(26px, -12px); }
@@ -603,7 +608,9 @@
       .map-bar { top: auto; bottom: 0; height: 54px; border-bottom: 0; border-top: 2px solid var(--ink); box-shadow: 0 -3px 0 rgba(43,27,18,.25); scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; padding-bottom: env(safe-area-inset-bottom); }
       .map-bar button.bar-tab { font-size: 16px; padding: 0 16px; min-width: 64px; flex: 0 0 auto; scroll-snap-align: start; }
       #bar-full { display: none; }
-      .bar-drop { top: auto !important; bottom: 54px !important; left: 0 !important; right: 0 !important; width: auto !important; max-width: none !important; max-height: 62% !important; border-radius: 14px 14px 0 0; }
+      .bar-drop { top: auto !important; bottom: 54px !important; left: 0 !important; right: 0 !important; width: auto !important; max-width: none !important; max-height: 62% !important; border-radius: 14px 14px 0 0; overflow: hidden !important; flex-direction: column; }
+      .bar-drop.show { display: flex !important; }
+      .bar-drop .bar-pane.on { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
       .bar-drop button, .land-card button, .route-card button, .decision-card button { min-height: 44px; font-size: 16px; }
       .map-zoom { top: 40px; right: 8px; gap: 8px; }
       .map-zoom button { width: 46px; height: 46px; font-size: 24px; }
@@ -2026,6 +2033,7 @@ function renderWayfarers() {
   if (!layer || !snapshot?.map) return;
   wayfarers = buildWayfarers();
   const coords = snapshot.map.coordinates;
+  const pixiBands = [];
   layer.innerHTML = wayfarers.map((band, index) => {
     const now = wayfarerNow(band);
     // They are seen only on lands the House has explored.
@@ -2036,10 +2044,11 @@ function renderWayfarers() {
     const x = a.x + (b.x - a.x) * now.along + (now.resting ? -9 : 0);
     const y = a.y + (b.y - a.y) * now.along + (now.resting ? 9 : 0);
     // On the map they are a plain white standard; who they are shows in the glass.
+    pixiBands.push({ x, y });
     return `<g class="npc" data-npc="${index}" transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(.8)">` +
       '<path class="shield" d="M-4.8 -5.4H4.8V.8Q4.8 4.9 0 6.4Q-4.8 4.9 -4.8 .8Z" fill="#f7f0dc"></path>' +
       '<path d="M-3.4 -4H3.4" fill="none" stroke="rgba(43,27,18,.25)" stroke-width=".6"></path></g>';
-  }).join('');
+  }).join('');  drawPixiWayfarers(pixiBands);
 }
 
 function wayfarerLens(index) {
@@ -3031,12 +3040,21 @@ function setupPixiFog() {
     const host = document.createElement('div');
     host.id = 'pixi-layer';
     $('map').after(host);
-    const app = new PIXI.Application({ backgroundAlpha: 0, antialias: true, resizeTo: host, autoDensity: true, resolution: Math.min(2, window.devicePixelRatio || 1) });
+    const coarse = matchMedia('(pointer: coarse)').matches;
+    const app = new PIXI.Application({ backgroundAlpha: 0, antialias: !coarse, resizeTo: host, autoDensity: true, resolution: Math.min(coarse ? 1.5 : 2, window.devicePixelRatio || 1), powerPreference: 'high-performance' });
     host.appendChild(app.view);
     const world = new PIXI.Container();
     app.stage.addChild(world);
     pixiFog.app = app;
     pixiFog.world = world;
+    setupPixiMap(app, world);
+    // The clouds are many: they are painted into one picture, a few times a
+    // second or whenever the view moves, and that picture is laid over the map.
+    const fogLayer = new PIXI.Container();
+    const fogTexture = PIXI.RenderTexture.create({ width: 16, height: 16, resolution: coarse ? 1 : Math.min(1.5, window.devicePixelRatio || 1) });
+    const fogSprite = new PIXI.Sprite(fogTexture);
+    app.stage.addChild(fogSprite);
+    let fogView = '', fogClock = 0;
 
     const b = mapArt.bounds;
     const pad = 420;
@@ -3054,7 +3072,7 @@ function setupPixiFog() {
       sprite.tint = tints[Math.floor(random() * tints.length)];
       const cloud = { sprite, far: size > 1, reach: 70 * size, x: x + (random() - 0.5) * 12 * size, y: y + (random() - 0.5) * 6 * size, phase: random() * 6.283, speed: 0.25 + random() * 0.35, on: true, alpha: 1, drift: 0 };
       sprite.position.set(cloud.x, cloud.y);
-      world.addChild(sprite);
+      fogLayer.addChild(sprite);
       pixiFog.clouds.push(cloud);
     };
     // Far beyond the lands the sky is closed with bigger, sparser clouds, so a
@@ -3080,24 +3098,39 @@ function setupPixiFog() {
       const scale = Math.min(W / mapView.w, H / mapView.h);
       world.scale.set(scale);
       world.position.set((W - mapView.w * scale) / 2 - mapView.x * scale, (H - mapView.h * scale) / 2 - mapView.y * scale);
+      // The cover is repainted when the view moves, when clouds come or go,
+      // and otherwise only about eight times a second for their slow bobbing.
+      const view = [W, H, world.scale.x.toFixed(4), world.position.x.toFixed(1), world.position.y.toFixed(1)].join();
+      fogClock += dt;
+      const fading = pixiFog.clouds.some(c => c.alpha !== (c.on ? 1 : 0));
+      if (view === fogView && !fading && fogClock < 0.125) return;
+      const step = Math.max(dt, fogClock);
+      fogClock = 0;
+      if (view !== fogView) {
+        fogView = view;
+        if (fogTexture.width !== Math.ceil(W) || fogTexture.height !== Math.ceil(H)) fogTexture.resize(Math.ceil(W), Math.ceil(H));
+      }
+      fogLayer.scale.copyFrom(world.scale);
+      fogLayer.position.copyFrom(world.position);
       // Only the clouds in sight are drawn.
       const ex = (W / scale - mapView.w) / 2, ey = (H / scale - mapView.h) / 2;
       const vx0 = mapView.x - ex - 140, vx1 = mapView.x + mapView.w + ex + 140, vy0 = mapView.y - ey - 80, vy1 = mapView.y + mapView.h + ey + 80;
       for (const cloud of pixiFog.clouds) {
         const target = cloud.on ? 1 : 0;
         if (cloud.alpha !== target) {
-          cloud.alpha += Math.sign(target - cloud.alpha) * dt / (cloud.on ? 1.2 : 2.2);
+          cloud.alpha += Math.sign(target - cloud.alpha) * step / (cloud.on ? 1.2 : 2.2);
           cloud.alpha = Math.max(0, Math.min(1, cloud.alpha));
         }
         // A cloud that has been dismissed sails off with the wind.
-        if (!cloud.on && cloud.alpha > 0) cloud.drift += dt * 26;
-        else if (cloud.on && cloud.drift > 0) cloud.drift = Math.max(0, cloud.drift - dt * 40);
+        if (!cloud.on && cloud.alpha > 0) cloud.drift += step * 26;
+        else if (cloud.on && cloud.drift > 0) cloud.drift = Math.max(0, cloud.drift - step * 40);
         const sprite = cloud.sprite;
         sprite.visible = cloud.alpha > 0.01 && cloud.x + cloud.drift > vx0 && cloud.x < vx1 && cloud.y > vy0 && cloud.y - cloud.drift * 0.35 < vy1;
         if (!sprite.visible) continue;
         sprite.alpha = cloud.alpha;
         sprite.position.set(cloud.x + Math.sin(t * cloud.speed * 0.6 + cloud.phase) * 3 + cloud.drift, cloud.y + Math.sin(t * cloud.speed + cloud.phase) * 2.6 - cloud.drift * 0.35);
       }
+      app.renderer.render(fogLayer, { renderTexture: fogTexture, clear: true });
     });
     pixiFog.ready = true;
   } catch (error) {
@@ -3373,6 +3406,7 @@ function capitalCastle(territoryId, c, owner) {
   else if (owner && founder && owner !== founder) file = `capital-captured-${slug}`;
   else if (!owner) file = 'capital-abandoned';
   const w = CASTLE_SIZE;
+  pixiScene?.castles.push({ file, x: c.x - w / 2, y: c.y - w * 0.66, w });
   return `<image href="/assets/img/${file}.png" x="${c.x - w / 2}" y="${c.y - w * 0.66}" width="${w}" height="${w}"></image>`;
 }
 
@@ -3385,6 +3419,7 @@ const ISLAND_SIZE = 18;
 
 function settlementFigure(kind, w, c, owner) {
   const file = owner && abandonedHouses()[owner] ? kind + '-abandoned' : kind;
+  pixiScene?.castles.push({ file, x: c.x - w / 2, y: c.y - w * 0.62, w });
   return `<image href="/assets/img/${file}.png" x="${c.x - w / 2}" y="${c.y - w * 0.62}" width="${w}" height="${w}"></image>`;
 }
 
@@ -3392,6 +3427,7 @@ function settlementFigure(kind, w, c, owner) {
 // of warriors on a small shield. A host on the march steps along and faces the
 // way it goes; one that stands shifts its weight now and then.
 function shieldToken(x, y, color, count, scale = 1, lens = '', who = null, moving = false, faceRight = false) {
+  if (pixiScene && !moving) pixiScene.tokens.push({ x: x + (pixiScene.dx || 0), y: y + (pixiScene.dy || 0), color, count, scale });
   const slug = who && abandonedHouses()[who] ? 'abandoned' : HOUSE_SLUGS[who];
   // The map is redrawn often: the animation picks up where the clock is, not from its start.
   const figure = false
@@ -3407,6 +3443,7 @@ function shieldToken(x, y, color, count, scale = 1, lens = '', who = null, movin
 }
 
 function nameRibbon(x, y, label, capital) {
+  pixiScene?.ribbons.push({ x, y, label: label.toUpperCase(), capital });
   const text = label.toUpperCase();
   const half = Math.max(9, text.length * 2.1 + (capital ? 5 : 2.6));
   const mark = capital ? `<path class="ribbon-mark" d="M${-half + 2.2} 0l1.8 -2.2l1.8 2.2l-1.8 2.2Z"></path>` : '';
@@ -3420,10 +3457,313 @@ function nameRibbon(x, y, label, capital) {
 
 let exploredNow = null;
 
+// ---------- the map on the WebGL layer ----------
+// Everything visible on the map is drawn by PixiJS: the painted terrain, the
+// realms, castles, ribbons, lanes and armies. The SVG beneath stays only as an
+// invisible sheet that catches clicks and the hover of the glass.
+const pixiMap = { ready: false, layer: null, scene: null, hover: null, hoverId: null, movers: null, npc: null, key: null, fonts: false };
+let pixiScene = null;
+let lastSvgKey = null;
+const INK = 0x2b1b12;
+const hex = value => parseInt(String(value || '#8a7a5c').replace('#', '').slice(0, 6), 16);
+
+function setupPixiMap(app, world) {
+  const b = mapArt.bounds;
+  const layer = new PIXI.Container();
+  world.addChild(layer);
+  // The terrain is painted once into a large picture; moving it costs nothing.
+  const tw = b.x1 - b.x0, th = b.y1 - b.y0;
+  const limit = matchMedia('(pointer: coarse)').matches ? 3072 : 4096;
+  const scale = Math.max(1, Math.min(3, limit / Math.max(tw, th)));
+  const terrain = new PIXI.Sprite(PIXI.Texture.EMPTY);
+  terrain.position.set(b.x0, b.y0);
+  layer.addChild(terrain);
+  // The painting has no size of its own: it is given one and baked to a canvas.
+  fetch(mapArtBase + 'terrain.svg').then(res => res.text()).then(text => {
+    const w = Math.round(tw * scale), h = Math.round(th * scale);
+    const sized = text.replace('<svg ', `<svg width="${w}" height="${h}" preserveAspectRatio="none" `);
+    const url = URL.createObjectURL(new Blob([sized], { type: 'image/svg+xml' }));
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      terrain.texture = PIXI.Texture.from(canvas);
+      terrain.width = tw;
+      terrain.height = th;
+    };
+    img.src = url;
+  }).catch(error => console.warn('terrain', error));
+  pixiMap.scene = new PIXI.Container();
+  pixiMap.hover = new PIXI.Graphics();
+  pixiMap.movers = new PIXI.Container();
+  pixiMap.npc = new PIXI.Container();
+  layer.addChild(pixiMap.scene, pixiMap.hover, pixiMap.npc, pixiMap.movers);
+  pixiMap.layer = layer;
+  pixiMap.ready = true;
+  document.fonts?.ready.then(() => { pixiMap.fonts = true; pixiMap.key = null; lastSvgKey = null; if (snapshot) renderMap(); });
+  // The glass and the hover follow the invisible sheet underneath.
+  $('map').addEventListener('pointerover', event => {
+    const id = event.target.closest?.('.province')?.dataset.id || null;
+    if (id !== pixiMap.hoverId) { pixiMap.hoverId = id; drawPixiHover(); }
+  });
+  $('map').addEventListener('pointerleave', () => { pixiMap.hoverId = null; drawPixiHover(); });
+  app.ticker.add(movePixiArmies);
+}
+
+function provinceRings(id) {
+  pixiFog.polys ||= Object.fromEntries(Object.entries(mapArt.provinces).map(([key, shape]) => [key, parseRings(shape.d)]));
+  return pixiFog.polys[id] || [];
+}
+
+function fillRings(g, rings) {
+  for (const ring of rings) if (ring.length > 2) g.drawPolygon(ring.flat());
+}
+
+// A dashed (or dotted) line along a run of points.
+function dashedLine(g, pts, dash, gap, closed = false) {
+  const points = closed ? [...pts, pts[0]] : pts;
+  let on = true, left = dash;
+  for (let i = 0; i < points.length - 1; i += 1) {
+    let [x0, y0] = points[i];
+    const [x1, y1] = points[i + 1];
+    let length = Math.hypot(x1 - x0, y1 - y0);
+    const ux = (x1 - x0) / (length || 1), uy = (y1 - y0) / (length || 1);
+    while (length > 0) {
+      const step = Math.min(left, length);
+      const nx = x0 + ux * step, ny = y0 + uy * step;
+      if (on) { g.moveTo(x0, y0); g.lineTo(nx, ny); }
+      x0 = nx; y0 = ny; length -= step; left -= step;
+      if (left <= 1e-6) { on = !on; left = on ? dash : gap; }
+    }
+  }
+}
+
+function provinceStyle(g, rings, cls) {
+  const has = name => cls.includes(name);
+  let fill = null, line = null, dash = null;
+  if (has('fogged')) fill = [0x101114, 0.6];
+  if (has('dim')) fill = [0x1e140a, 0.45];
+  if (has('selectable')) { line = [0xfff8e6, 1.2]; dash = [3, 2.2]; }
+  if (has('origin')) { fill = [0xfff8e6, 0.2]; line = [0xfff8e6, 2.6]; dash = null; }
+  if (has('legal')) { fill = [0x2c4a86, 0.34]; line = [0x172c5c, 1.5]; dash = [4, 2]; }
+  if (has('target')) { fill = [0xb3311f, 0.36]; line = [0xb3311f, 2.8]; dash = null; }
+  if (fill) { g.lineStyle(0); g.beginFill(fill[0], fill[1]); fillRings(g, rings); g.endFill(); }
+  if (line) {
+    g.lineStyle({ width: line[1], color: line[0], join: PIXI.LINE_JOIN.ROUND, cap: PIXI.LINE_CAP.ROUND });
+    for (const ring of rings) {
+      if (dash) dashedLine(g, ring, dash[0], dash[1], true);
+      else g.drawPolygon(ring.flat());
+    }
+  }
+}
+
+function drawPixiHover() {
+  const g = pixiMap.hover;
+  if (!g) return;
+  g.clear();
+  if (!pixiMap.hoverId) return;
+  const node = document.querySelector(`#map .province[data-id="${pixiMap.hoverId}"]`);
+  const cls = node ? [...node.classList] : [];
+  const tone = cls.includes('fogged') ? [0xfff8e6, 0.12] : cls.includes('legal') ? [0x2c4a86, 0.18] : [0xfff8e6, 0.18];
+  g.beginFill(tone[0], tone[1]);
+  fillRings(g, provinceRings(pixiMap.hoverId));
+  g.endFill();
+}
+
+const pixiTextCache = new Map();
+function pixiText(text, size, color, bold = true, stroke = null) {
+  const t = new PIXI.Text(text, {
+    fontFamily: 'Alegreya, Georgia, serif', fontWeight: bold ? '700' : '400', fontSize: size * 10, fill: color,
+    letterSpacing: 3, stroke: stroke || '#000000', strokeThickness: stroke ? 16 : 0, lineJoin: 'round'
+  });
+  t.scale.set(0.1);
+  t.anchor.set(0.5, 0.5);
+  t.resolution = 1.5;
+  return t;
+}
+
+function shieldGraphic(color, count, scale) {
+  const box = new PIXI.Container();
+  const g = new PIXI.Graphics();
+  g.lineStyle({ width: 0.75, color: INK, join: PIXI.LINE_JOIN.ROUND });
+  g.beginFill(hex(color));
+  g.moveTo(-4.8, -5.4); g.lineTo(4.8, -5.4); g.lineTo(4.8, 0.8);
+  g.quadraticCurveTo(4.8, 4.9, 0, 6.4); g.quadraticCurveTo(-4.8, 4.9, -4.8, 0.8); g.closePath();
+  g.endFill();
+  g.lineStyle({ width: 0.6, color: 0xfff8e6, alpha: 0.5, cap: PIXI.LINE_CAP.ROUND });
+  g.moveTo(-3.4, -4); g.lineTo(3.4, -4);
+  box.addChild(g);
+  if (count !== null) {
+    const label = pixiText(String(count), 6.6, 0xfff8e6);
+    label.position.set(0, 0.3);
+    box.addChild(label);
+  }
+  box.scale.set(scale);
+  return box;
+}
+
+function ribbonGraphic(r) {
+  const box = new PIXI.Container();
+  const half = Math.max(9, r.label.length * 2.1 + (r.capital ? 5 : 2.6));
+  const g = new PIXI.Graphics();
+  g.lineStyle({ width: 0.4, color: INK, join: PIXI.LINE_JOIN.ROUND });
+  g.beginFill(0xd5c69d);
+  g.drawPolygon([-half - 3.8, -2.6, -half + 1, -2.6, -half + 1, 4.8, -half - 3.8, 4.8, -half - 2, 1.1]);
+  g.drawPolygon([half + 3.8, -2.6, half - 1, -2.6, half - 1, 4.8, half + 3.8, 4.8, half + 2, 1.1]);
+  g.endFill();
+  g.lineStyle({ width: 0.45, color: INK });
+  g.beginFill(0xf6eed8); g.drawRect(-half, -4.2, half * 2, 8.4); g.endFill();
+  if (r.capital) { g.lineStyle(0); g.beginFill(0xb3311f); g.drawPolygon([-half + 2.2, 0, -half + 4, -2.2, -half + 5.8, 0, -half + 4, 2.2]); g.endFill(); }
+  box.addChild(g);
+  const label = pixiText(r.label, 5.6, INK);
+  label.position.set(r.capital ? 2.4 : 0, 0.1);
+  box.addChild(label);
+  box.position.set(r.x, r.y);
+  return box;
+}
+
+const pixiTextureCache = new Map();
+const pixiTexture = file => {
+  if (!pixiTextureCache.has(file)) pixiTextureCache.set(file, PIXI.Texture.from('/assets/img/' + file + '.png'));
+  return pixiTextureCache.get(file);
+};
+
+function drawPixiMap(scene, key) {
+  if (key === pixiMap.key) return;
+  pixiMap.key = key;
+  const old = pixiMap.scene.removeChildren();
+  for (const child of old) child.destroy({ children: true });
+
+  // Realm colours: a wash over the land and a bold band inside its outer border.
+  const wash = new PIXI.Graphics();
+  wash.alpha = 0.5;
+  wash.blendMode = PIXI.BLEND_MODES.MULTIPLY;
+  const rings = new PIXI.Container();
+  for (const [owner, ids] of Object.entries(scene.realms)) {
+    const color = hex(colors[owner]);
+    const all = ids.map(provinceRings);
+    wash.beginFill(color);
+    for (const r of all) fillRings(wash, r);
+    wash.endFill();
+    // The outer border is every edge the realm does not share with itself.
+    const seen = new Map();
+    const edgeKey = (a, b) => { const p = a[0].toFixed(1) + ',' + a[1].toFixed(1), q = b[0].toFixed(1) + ',' + b[1].toFixed(1); return p < q ? p + '|' + q : q + '|' + p; };
+    for (const r of all) for (const ring of r) for (let i = 0; i < ring.length; i += 1) {
+      const k = edgeKey(ring[i], ring[(i + 1) % ring.length]);
+      seen.set(k, (seen.get(k) || 0) + 1);
+    }
+    const band = new PIXI.Graphics();
+    band.lineStyle({ width: 4.8, color, alpha: 0.95, join: PIXI.LINE_JOIN.ROUND, cap: PIXI.LINE_CAP.ROUND });
+    for (const r of all) for (const ring of r) for (let i = 0; i < ring.length; i += 1) {
+      const a = ring[i], b = ring[(i + 1) % ring.length];
+      if (seen.get(edgeKey(a, b)) > 1) continue;
+      band.moveTo(a[0], a[1]); band.lineTo(b[0], b[1]);
+    }
+    const mask = new PIXI.Graphics();
+    mask.beginFill(0xffffff);
+    for (const r of all) fillRings(mask, r);
+    mask.endFill();
+    band.mask = mask;
+    rings.addChild(band, mask);
+  }
+
+  const borders = new PIXI.Graphics();
+  borders.lineStyle({ width: 0.5, color: INK, alpha: 0.6 });
+  const states = new PIXI.Graphics();
+  for (const p of scene.provinces) {
+    const r = provinceRings(p.id);
+    for (const ring of r) dashedLine(borders, ring, 2.2, 1.8, true);
+    provinceStyle(states, r, p.cls);
+  }
+
+  const castles = new PIXI.Container();
+  for (const c of scene.castles) {
+    const s = new PIXI.Sprite(pixiTexture(c.file));
+    s.position.set(c.x, c.y);
+    s.width = c.w;
+    s.height = c.w;
+    castles.addChild(s);
+  }
+
+  const lanes = new PIXI.Graphics();
+  for (const lane of scene.lanes) {
+    if (lane.active) continue;
+    lanes.lineStyle(0);
+    lanes.beginFill(0x24384d, 0.85);
+    const length = Math.hypot(lane.b.x - lane.a.x, lane.b.y - lane.a.y);
+    for (let d = 0; d <= length; d += 3.8) lanes.drawCircle(lane.a.x + (lane.b.x - lane.a.x) * d / length, lane.a.y + (lane.b.y - lane.a.y) * d / length, 0.5);
+    lanes.endFill();
+  }
+  lanes.lineStyle({ width: 2.5, color: 0xb3311f, cap: PIXI.LINE_CAP.ROUND });
+  for (const lane of [...scene.lanes.filter(l => l.active), ...scene.routes]) dashedLine(lanes, [[lane.a.x, lane.a.y], [lane.b.x, lane.b.y]], 5, 3);
+
+  const nodes = new PIXI.Graphics();
+  for (const w of scene.waypoints) {
+    const has = name => w.cls.includes(name);
+    if (has('legal') || has('target')) { nodes.lineStyle(0); nodes.beginFill(has('target') ? 0xb3311f : 0x2c4a86, 0.3); nodes.drawCircle(w.x, w.y, 8); nodes.endFill(); }
+    const ring = has('target') ? [0xb3311f, 2.6] : has('legal') ? [0x172c5c, 1.8] : has('origin') ? [0xfff8e6, 2.4] : has('selectable') ? [0xfff8e6, 1.2] : null;
+    if (ring) { nodes.lineStyle(ring[1], ring[0]); nodes.drawCircle(w.x, w.y, 8); }
+    nodes.lineStyle(0.6, 0xcfd9d6);
+    nodes.beginFill(w.active ? 0xb3311f : 0x24384d, has('dim') ? 0.4 : 1);
+    nodes.drawCircle(w.x, w.y, 2.6);
+    nodes.endFill();
+  }
+
+  const labels = new PIXI.Container();
+  for (const r of scene.ribbons) labels.addChild(ribbonGraphic(r));
+  for (const n of scene.notes) {
+    const t = pixiText(n.text, 5.4, 0xfff8e6, true, n.target ? '#7d2217' : '#2b1b12');
+    t.position.set(n.x, n.y - 1.6);
+    labels.addChild(t);
+  }
+  const tokens = new PIXI.Container();
+  for (const tk of scene.tokens) {
+    const s = shieldGraphic(tk.color, tk.count, tk.scale);
+    s.position.set(tk.x, tk.y);
+    tokens.addChild(s);
+  }
+  pixiMap.scene.addChild(wash, rings, borders, states, castles, lanes, nodes, labels, tokens);
+
+  // Hosts on the march: one figure per order, moved every frame.
+  for (const child of pixiMap.movers.removeChildren()) child.destroy({ children: true });
+  for (const order of snapshot.game.orders || []) {
+    if (order.status !== 'PENDING' || !Array.isArray(order.action?.path) || order.action.path.length < 2) continue;
+    const s = shieldGraphic(colors[order.action.house] || '#2b1b12', Number(order.action.warriors || 0), 1.1);
+    s.orderId = order.id;
+    pixiMap.movers.addChild(s);
+  }
+  movePixiArmies();
+  drawPixiHover();
+}
+
+function movePixiArmies() {
+  if (!pixiMap.movers || !snapshot) return;
+  for (const s of pixiMap.movers.children) {
+    const order = (snapshot.game.orders || []).find(item => item.id === s.orderId);
+    const pos = order && order.status === 'PENDING' ? movingOrderPosition(order) : null;
+    s.visible = Boolean(pos);
+    if (pos) s.position.set(pos.x, pos.y);
+  }
+}
+
+function drawPixiWayfarers(list) {
+  if (!pixiMap.npc) return;
+  for (const child of pixiMap.npc.removeChildren()) child.destroy({ children: true });
+  for (const w of list) {
+    const s = shieldGraphic('#f7f0dc', null, 0.8);
+    s.position.set(w.x, w.y);
+    pixiMap.npc.addChild(s);
+  }
+}
+
 function renderMap() {
   setupMapScaffold();
   const live = document.getElementById('map-live');
   if (!live) return;
+  setupPixiFog();
+  const usePixi = pixiFog.ready && pixiMap.ready;
 
   const state = snapshot.game.state;
   const coords = snapshot.map.coordinates;
@@ -3458,10 +3798,12 @@ function renderMap() {
 
   // Realm colours: a wash over the land and a bold band along the outer border.
   const byOwner = {};
+  const realmIds = {};
   for (const t of snapshot.map.territories) {
     const owner = state.territories[t.id].owner;
     if (!owner || !art[t.id]) continue;
     (byOwner[owner] = byOwner[owner] || []).push(art[t.id].d);
+    (realmIds[owner] = realmIds[owner] || []).push(t.id);
   }
   const realms = Object.entries(byOwner).map(([owner, paths]) => {
     const color = colors[owner] || '#8a7a5c';
@@ -3476,16 +3818,20 @@ function renderMap() {
     ? snapshot.map.sea_lane_edges
     : snapshot.map.sea_edges;
 
+  // The same picture is described once more for the WebGL layer.
+  const scene = pixiScene = { realms: realmIds, provinces: [], castles: [], lanes: [], routes: [], waypoints: [], ribbons: [], notes: [], tokens: [], dx: 0, dy: 0 };
   const lines = [];
   for (const [a,b] of laneEdges) {
     const from = routeCoords[a];
     const to = routeCoords[b];
     if (!from || !to) continue;
     const active = activeEdges.has(routeEdgeKey(a,b)) ? ' active-route' : '';
+    scene.lanes.push({ a: from, b: to, active: Boolean(active) });
     lines.push(`<line class="sea-lane-edge${active}" x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" />`);
   }
   for (const [a,b] of snapshot.map.land_edges) {
     if (!activeEdges.has(routeEdgeKey(a,b))) continue;
+    scene.routes.push({ a: coords[a], b: coords[b] });
     lines.push(`<line class="land-edge active-route" x1="${coords[a].x}" y1="${coords[a].y}" x2="${coords[b].x}" y2="${coords[b].y}" />`);
   }
 
@@ -3504,13 +3850,16 @@ function renderMap() {
     if (origin && id !== origin && !legalTargets.has(id) && id !== target) classes.push('dim');
 
     const active = activeNodes.has(id) ? ' active-route' : '';
-    return `
+    if (scene) { scene.waypoints.push({ x: point.x, y: point.y, cls: classes, active: Boolean(active) }); scene.dx = point.x; scene.dy = point.y; }
+    const html = `
       <g class="${classes.join(' ')}" data-id="${id}" transform="translate(${point.x} ${point.y})">
         <circle class="sea-hit" r="9"></circle>
         <circle class="selection-ring" r="8"></circle>
         <circle class="sea-waypoint${active}" r="2.6"></circle>
         ${total ? shieldToken(0, -1, colors[owner] || '#2c4a86', total, 0.9, `data-lens-at="${id}"`, owner) : ''}
       </g>`;
+    if (scene) scene.dx = scene.dy = 0;
+    return html;
   });
 
   focusOnHome();
@@ -3539,6 +3888,7 @@ function renderMap() {
     if (origin && t.id !== origin && !legalTargets.has(t.id) && t.id !== target) classes.push('dim');
     if (fogVisible && owner !== house) classes.push('fogged');
 
+    scene.provinces.push({ id: t.id, cls: classes });
     borders.push(`<path d="${shape.d}"></path>`);
     zones.push(`<path class="${classes.join(' ')}" data-id="${t.id}" d="${shape.d}"><title>${escapeHtml(t.name)} · ${escapeHtml(t.type)}</title></path>`);
 
@@ -3548,6 +3898,7 @@ function renderMap() {
     const labelY = c.y + (capital ? 20.5 : t.type === 'Город' ? 15.5 : 13);
     ribbons.push(nameRibbon(c.x, labelY, mapLabel(t), capital));
     if (note) {
+      scene.notes.push({ x: c.x, y: labelY + 10.6, text: note, target: t.id === target });
       ribbons.push(`<text class="ribbon-note ${t.id === target ? 'target' : ''}" x="${c.x}" y="${labelY + 10.6}">${note}</text>`);
     }
 
@@ -3588,8 +3939,17 @@ function renderMap() {
         '</g>';
     });
 
-  live.innerHTML =
-    realms.join('') +
+  pixiScene = null;
+  // The SVG is rebuilt only when something on it has changed.
+  const svgKey = JSON.stringify([usePixi, origin, target, house, [...legalTargets], explored ? [...explored] : null, state.territories, state.sea_nodes, state.guests, (snapshot.game.orders || []).filter(o => o.status === 'PENDING').map(o => [o.id, o.action?.warriors]), activePath, abandonedHouses()]);
+  if (usePixi) drawPixiMap(scene, svgKey);
+  updateClouds(explored, art, coords);
+  if (svgKey === lastSvgKey) return;
+  lastSvgKey = svgKey;
+  $('map').classList.toggle('pixi-on', usePixi);
+  live.innerHTML = usePixi
+    ? zones.join('') + waypointNodes.join('') + `<g class="map-tokens">${tokens.join('')}</g>` + movingArmies.join('')
+    : realms.join('') +
     `<g class="province-borders">${borders.join('')}</g>` +
     zones.join('') +
     `<g class="map-castles">${castles.join('')}</g>` +
@@ -3598,7 +3958,6 @@ function renderMap() {
     `<g class="map-ribbons">${ribbons.join('')}</g>` +
     `<g class="map-tokens">${tokens.join('')}</g>` +
     movingArmies.join('');
-  updateClouds(explored, art, coords);
 
   live.querySelectorAll('.province, .sea-node').forEach(node => {
     node.addEventListener('click', () => {
