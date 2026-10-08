@@ -578,7 +578,10 @@ html[data-view] #hub > section { display: none !important; }
 html[data-view="profile"] #hub > [data-view~="profile"], html[data-view="social"] #hub > [data-view~="social"],
 html[data-view="games"] #hub > [data-view~="games"], html[data-view="rooms"] #hub > [data-view~="rooms"],
 html[data-view="new"] #hub > [data-view~="new"] { display: block !important; }
-html[data-view="social"] #social-card[style*="none"] { display: none !important; }</style>
+html[data-view="social"] #social-card[style*="none"] { display: none !important; }
+/* Without a profile nothing can be started: the sign-in card comes first in every section. */
+html[data-view]:not(.signed-in) #hub > #account-card { display: block !important; }
+html[data-view]:not(.signed-in) #hub > #account-card::after { content: 'Сначала войдите или создайте профиль — без него игру не начать.'; display: block; margin-top: 10px; color: #9c2c1e; font-weight: 700; }</style>
 <script>
 const houses = ['Варкайр','Сайрвен','Ортайн','Эркай','Тасвар','Айрель'];
 const profileAvatars = [
@@ -688,6 +691,7 @@ async function saveAvatarSelection() {
 function renderAccount() {
   const signedIn = Boolean(activeProfile && profileToken);
   $('account-signed-out').style.display = signedIn ? 'none' : 'block';
+  document.documentElement.classList.toggle('signed-in', signedIn);
   $('account-signed-in').style.display = signedIn ? 'block' : 'none';
   $('social-card').style.display = signedIn ? 'block' : 'none';
 
