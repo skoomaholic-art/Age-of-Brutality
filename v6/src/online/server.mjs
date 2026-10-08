@@ -62,7 +62,12 @@ import {
   declineAlliance,
   diplomacyView,
   freeDaughter,
-  offerAlliance
+  offerAlliance,
+  proposeDeal,
+  acceptDeal,
+  declineDeal,
+  answerAiDeals,
+  dealsView
 } from './diplomacy.mjs';
 import { processRounds } from './ai.mjs';
 import {
@@ -498,6 +503,7 @@ async function tickUnlocked(ctx) {
   // Armies that met on the road fight before anyone arrives anywhere.
   let processed = processEncounters(ctx.game, map, constants, nowMs);
   processed = answerAiOffers(processed, processed.rounds?.ai_houses || [], { nowMs });
+  processed = answerAiDeals(processed, map, constants, processed.rounds?.ai_houses || [], { nowMs });
   processed = processDueOrders(processed, map, constants, nowMs);
   processed = processEconomy(processed, map, constants, nowMs);
   processed = processRounds(processed, map, constants, { nowMs });
@@ -553,11 +559,14 @@ function redactGameForPlayer(game, player) {
   const clientGame = structuredClone(game);
   clientGame.lifecycle = publicLifecycle(clientGame.lifecycle);
   // Wars and alliances are public; offers reach only the Houses concerned.
-  clientGame.diplomacy = diplomacyView(
-    game,
-    player?.house || null,
-    player?.house ? knownHouses(game, player.house, constants.houses) : null
-  );
+  clientGame.diplomacy = {
+    ...diplomacyView(
+      game,
+      player?.house || null,
+      player?.house ? knownHouses(game, player.house, constants.houses) : null
+    ),
+    ...dealsView(game, map, player?.house || null)
+  };
 
   clientGame.orders = player?.role === PLAYER_ROLE.SPECTATOR
     ? (clientGame.orders || []).filter(item => item.status !== 'PENDING').slice(-30)
@@ -1489,11 +1498,21 @@ async function handleGameApi(req, res, url, ctx, subpath) {
         else if (action === 'REQUEST_PASSAGE') next = requestPassage(game, constants, house, target, { nowMs });
         else if (action === 'GRANT_PASSAGE') next = answerPassage(game, constants, house, target, true, { nowMs });
         else if (action === 'DENY_PASSAGE' || action === 'REVOKE_PASSAGE') next = answerPassage(game, constants, house, target, false, { nowMs });
+        else if (action === 'PROPOSE_DEAL') next = proposeDeal(game, constants, map, house, target, { give: body.give, take: body.take }, { nowMs });
+        else if (action === 'ACCEPT_DEAL') next = acceptDeal(game, constants, map, house, target, { nowMs });
+        else if (action === 'DECLINE_DEAL') next = declineDeal(game, house, target, { nowMs });
+        else if (action === 'WITHDRAW_DEAL') next = declineDeal(game, house, target, { nowMs, withdraw: true });
         else throw new Error(`unknown diplomacy action ${action}`);
+        const journalBefore = next.state.journal.length;
         next = answerAiOffers(next, next.rounds?.ai_houses || [], { nowMs });
+        next = answerAiDeals(next, map, constants, next.rounds?.ai_houses || [], { nowMs });
+        // A House led by the AI answers a letter at once: the answer goes back with the reply.
+        const answer = action === 'PROPOSE_DEAL'
+          ? next.state.journal.slice(journalBefore).find(entry => ['DEAL_MADE', 'DEAL_REJECTED'].includes(entry.kind) && entry.from === house && entry.to === target) || null
+          : null;
         // Guests whose welcome has just ended are led home at once.
         next = expelGuests(next, map, constants, nowMs);
-        return { game: next, response: { diplomacy: diplomacyView(next, house, knownHouses(next, house, constants.houses)) } };
+        return { game: next, response: { diplomacy: diplomacyView(next, house, knownHouses(next, house, constants.houses)), answer: answer ? { accepted: answer.kind === 'DEAL_MADE', reason: answer.reason || null, at: answer.at } : null } };
       }
     }));
     return json(res, result.status, result.response);

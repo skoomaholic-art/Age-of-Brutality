@@ -222,6 +222,38 @@
     }
     .finale.show { display: grid; }
     /* A window that waits for the player's answer. */
+    /* The letter of a deal: one parchment torn in two halves with a seal between. */
+    .deal { position: absolute; inset: 0; z-index: 10; display: none; place-items: center; padding: 14px; background: rgba(43,27,18,.5); }
+    .deal.show { display: grid; }
+    .deal-letter { width: min(760px, 100%); max-height: 100%; overflow: auto; padding: 20px 22px 18px; background: #efe1bb radial-gradient(circle at 30% 20%, rgba(255,250,230,.6), transparent 60%); border: 2px solid var(--ink); outline: 2px solid #c9a23a; outline-offset: -8px; box-shadow: 8px 10px 0 rgba(43,27,18,.45); }
+    .deal-letter h3 { margin: 0 0 12px; text-align: center; font-family: 'Vek Gothic', Kurale, serif; font-weight: 400; font-size: 30px; color: var(--vermilion-deep); }
+    .deal-halves { display: grid; grid-template-columns: 1fr 44px 1fr; align-items: stretch; }
+    .deal-half { padding: 10px 12px; background: rgba(255,250,232,.55); border: 1px solid rgba(43,27,18,.35); }
+    .deal-half:first-child { border-right: 2px dashed rgba(43,27,18,.45); }
+    .deal-half:last-child { border-left: 2px dashed rgba(43,27,18,.45); }
+    .deal-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .deal-head h4 { margin: 0; font-family: Kurale, serif; font-weight: 400; font-size: 18px; color: var(--ink); }
+    .deal-seal { align-self: center; justify-self: center; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: radial-gradient(circle at 35% 30%, #d0463a, #8c1f15 70%); color: #f5d98a; font-size: 20px; box-shadow: 0 2px 0 rgba(43,27,18,.5); }
+    .deal-row { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 6px; padding: 6px 0; border-top: 1px solid rgba(43,27,18,.15); font-size: 15px; cursor: pointer; }
+    .deal-row:first-child { border-top: 0; }
+    .deal-row.off { opacity: .45; cursor: default; }
+    .deal-row input[type=checkbox] { width: 18px; height: 18px; accent-color: #9c2c1e; }
+    .deal-row input[type=number] { width: 70px; }
+    .deal-row select { max-width: 160px; }
+    .deal-empty { margin-top: 6px; font-size: 13px; font-style: italic; color: var(--ink-soft); }
+    .deal-half:has(input[type=checkbox]:checked) .deal-empty { display: none; }
+    .deal-list { margin: 0; padding-left: 18px; font-size: 16px; line-height: 1.5; }
+    .deal-note { margin-top: 12px; font-size: 14px; font-style: italic; color: var(--ink-soft); }
+    .deal-note.good { font-style: normal; font-weight: 700; color: #2e5a35; }
+    .deal-note.bad { font-style: normal; font-weight: 700; color: var(--vermilion-deep); }
+    .deal-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; justify-content: center; }
+    @media (max-width: 640px) {
+      .deal-halves { grid-template-columns: 1fr; }
+      .deal-seal { margin: -10px auto; position: relative; z-index: 1; }
+      .deal-half:first-child { border-right: 1px solid rgba(43,27,18,.35); border-bottom: 2px dashed rgba(43,27,18,.45); }
+      .deal-half:last-child { border-left: 1px solid rgba(43,27,18,.35); }
+      .deal-row { font-size: 16px; padding: 9px 0; }
+    }
     .decision { position: absolute; inset: 0; z-index: 9; display: none; place-items: center; padding: 16px; background: rgba(43,27,18,.45); }
     .decision.show { display: grid; }
     .decision-card {
@@ -726,6 +758,18 @@
           <div id="decision-terms" class="decision-terms"></div>
           <div id="decision-extra" class="decision-extra"></div>
           <div id="decision-actions" class="decision-actions"></div>
+        </div>
+      </div>
+      <div id="deal" class="deal">
+        <div class="deal-letter">
+          <h3 id="deal-title">Письмо</h3>
+          <div class="deal-halves">
+            <section class="deal-half"><div class="deal-head"><span id="deal-banner-left" class="banner-mini"></span><h4 id="deal-give-title"></h4></div><div id="deal-give"></div></section>
+            <div class="deal-seal" aria-hidden="true">⚜</div>
+            <section class="deal-half"><div class="deal-head"><span id="deal-banner-right" class="banner-mini"></span><h4 id="deal-take-title"></h4></div><div id="deal-take"></div></section>
+          </div>
+          <div id="deal-note" class="deal-note"></div>
+          <div id="deal-actions" class="deal-actions"></div>
         </div>
       </div>
       <div id="finale" class="finale">
@@ -2577,6 +2621,17 @@ function newsFor(item) {
     if (d.betrayal) return { rank: involved ? 8 : 5, art: 'pact-broken', title: 'Клятва нарушена', text: strip(/^Война:\s*/) };
     return { rank: involved ? 7 : 4, art: 'war-declared', title: mine(d.target) ? 'Тебе объявлена война' : 'Война', text: strip(/^Война:\s*/) };
   }
+  if (item.type === 'DEAL_MADE' || item.type === 'DEAL_REJECTED') {
+    if (!(d.houses || []).includes(house)) return null;
+    // The sender of a letter to an AI House has read the answer on the letter itself.
+    if (d.from === house && dealAnswered.has(d.to + '@' + d.at)) return null;
+  }
+  if (item.type === 'DEAL_MADE') {
+    return { rank: 6, art: 'deal-made', title: 'Договор скреплён', text: item.message, ok: 'Да будет так' };
+  }
+  if (item.type === 'DEAL_REJECTED') {
+    return { rank: 5, art: 'deal-failed', title: 'Письмо вернули', text: item.message, ok: 'Запомним' };
+  }
   if (item.type === 'ALLIANCE_FORMED') {
     return { rank: 6, art: 'marriage-offer', title: 'Свадьба сыграна', text: strip(/^Союз:\s*/), ok: 'Совет да любовь' };
   }
@@ -2704,6 +2759,159 @@ function relationWith(other) {
   return snapshot?.game?.diplomacy?.relations?.[key] || 'NEUTRAL';
 }
 
+// ---------- the letter of a deal ----------
+// Two halves of one parchment, as at the courts of old: on the left what our
+// House gives, on the right what it asks in return. An empty half means
+// "without conditions".
+let dealState = null;
+const dealAnswered = new Set();
+const dealSeen = new Set();
+
+function landsOf(owner) {
+  const capitals = new Set(Object.values(snapshot?.map?.capitals || {}));
+  return (snapshot?.map?.territories || [])
+    .filter(t => snapshot.game.state.territories[t.id]?.owner === owner && !capitals.has(t.id))
+    .filter(t => owner === house || !exploredNow || exploredNow.has(t.id))
+    .map(t => ({ id: t.id, name: t.name, type: t.type }));
+}
+
+function dealItemText(item) {
+  if (item.type === 'GOLD') return item.amount + ' золота';
+  if (item.type === 'PASSAGE') return 'право прохода и постоя';
+  if (item.type === 'MARRIAGE') return 'дочь в жёны — брачный союз';
+  if (item.type === 'LAND') return 'землю ' + (item.name || mapNodeById(item.territory)?.name || item.territory);
+  return '';
+}
+
+function dealHalfForm(side, other) {
+  const dip = snapshot.game.diplomacy || {};
+  const giver = side === 'give' ? house : other;
+  const taker = side === 'give' ? other : house;
+  const daughter = side === 'give' ? dip.my_daughter : dip.free_daughters?.[other];
+  const allied = relationWith(other) === 'ALLIANCE' || gameHouses().some(h => h !== house && relationWith(h) === 'ALLIANCE');
+  const roadsOpen = side === 'give' ? (dip.passage_to || []).includes(other) : (dip.passage_from || []).includes(other);
+  const lands = landsOf(giver);
+  const gold = Number(snapshot.game.state.houses[house]?.gold || 0);
+  const row = (key, label, control = '', off = '') =>
+    '<label class="deal-row' + (off ? ' off' : '') + '"' + (off ? ' title="' + escapeHtml(off) + '"' : '') + '>' +
+    '<input type="checkbox" data-side="' + side + '" data-item="' + key + '"' + (off ? ' disabled' : '') + '>' +
+    '<span>' + label + '</span>' + control + '</label>';
+  return row('MARRIAGE', side === 'give' ? 'Отдать дочь' + (daughter ? ', ' + escapeHtml(daughter) : '') : 'Руку их дочери' + (daughter ? ', ' + escapeHtml(daughter) : ''), '',
+      !daughter ? 'Незамужней дочери нет' : allied ? 'Союз уже есть: второго не бывает' : '') +
+    row('GOLD', 'Золото', '<input type="number" min="1" max="' + (side === 'give' ? gold : 999) + '" value="' + Math.max(1, Math.min(5, side === 'give' ? gold : 5)) + '" data-amount="' + side + '">',
+      side === 'give' && gold < 1 ? 'В казне пусто' : '') +
+    row('PASSAGE', side === 'give' ? 'Открыть мои дороги' : 'Открыть их дороги', '', roadsOpen ? 'Дороги уже открыты' : '') +
+    row('LAND', 'Землю', '<select data-land="' + side + '">' + lands.map(l => '<option value="' + escapeHtml(l.id) + '">' + escapeHtml(l.name + ' · ' + l.type) + '</option>').join('') + '</select>',
+      lands.length ? '' : 'Земель, кроме столицы, нет') +
+    '<div class="deal-empty">Ничего не отмечено — без условий.</div>';
+}
+
+function dealHalfRead(items) {
+  return items.length
+    ? '<ul class="deal-list">' + items.map(item => '<li>' + escapeHtml(dealItemText(item)) + '</li>').join('') + '</ul>'
+    : '<div class="deal-empty show">Без условий.</div>';
+}
+
+function readDealForm() {
+  const half = side => {
+    const items = [];
+    for (const box of document.querySelectorAll('#deal input[type=checkbox][data-side="' + side + '"]')) {
+      if (!box.checked) continue;
+      const type = box.dataset.item;
+      if (type === 'GOLD') items.push({ type, amount: Number(document.querySelector('#deal [data-amount="' + side + '"]').value) });
+      else if (type === 'LAND') items.push({ type, territory: document.querySelector('#deal [data-land="' + side + '"]').value });
+      else items.push({ type });
+    }
+    return items;
+  };
+  return { give: half('give'), take: half('take') };
+}
+
+function openDeal(other, incoming = null) {
+  togglePane(null);
+  dealState = { other, incoming };
+  const mineName = house, theirName = other;
+  $('deal-title').textContent = incoming ? 'Письмо от Дома ' + other : 'Письмо Дому ' + other;
+  $('deal-give-title').textContent = incoming ? 'Дом ' + theirName + ' даёт' : 'Дом ' + mineName + ' предлагает';
+  $('deal-take-title').textContent = incoming ? 'Взамен просит у тебя' : 'Взамен просит у Дома ' + theirName;
+  $('deal-give').innerHTML = incoming ? dealHalfRead(incoming.give) : dealHalfForm('give', other);
+  $('deal-take').innerHTML = incoming ? dealHalfRead(incoming.take) : dealHalfForm('take', other);
+  $('deal-banner-left').innerHTML = bannerSvg(bannerOf(incoming ? other : house));
+  $('deal-banner-right').innerHTML = bannerSvg(bannerOf(incoming ? house : other));
+  $('deal-note').textContent = incoming
+    ? 'Скрепишь печатью — всё отдаётся и берётся сразу. Свадьба делает Дома союзниками.'
+    : 'Дом под рукой ИИ ответит сразу, живой правитель — когда прочтёт. Свадьба делает Дома союзниками; нарушивший союз слывёт клятвопреступником.';
+  $('deal-note').className = 'deal-note';
+  // A marriage is one per letter: ticking one half clears the other.
+  document.querySelectorAll('#deal input[data-item="MARRIAGE"]').forEach(box => box.addEventListener('change', () => {
+    if (box.checked) document.querySelectorAll('#deal input[data-item="MARRIAGE"]').forEach(o => { if (o !== box) o.checked = false; });
+  }));
+  // Changing an amount or a land ticks its box.
+  document.querySelectorAll('#deal [data-amount], #deal [data-land]').forEach(control => control.addEventListener('input', () => {
+    const box = control.closest('.deal-row')?.querySelector('input[type=checkbox]');
+    if (box && !box.disabled) box.checked = true;
+  }));
+  const actions = $('deal-actions');
+  actions.innerHTML = '';
+  const button = (label, primary, run) => {
+    const b = document.createElement('button');
+    b.textContent = label;
+    if (primary) b.className = 'primary';
+    b.onclick = async () => {
+      b.disabled = true;
+      try { await run(); } catch (error) { $('deal-note').textContent = sayError(error); $('deal-note').className = 'deal-note bad'; }
+      b.disabled = false;
+    };
+    actions.appendChild(b);
+  };
+  const send = action => api('/api/diplomacy', { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({ house, target: other, action, ...(action === 'PROPOSE_DEAL' ? readDealForm() : {}) }) });
+  if (incoming) {
+    button('Скрепить печатью', true, async () => { await send('ACCEPT_DEAL'); closeDeal(); await refresh(); });
+    button('Вернуть без печати', false, async () => { await send('DECLINE_DEAL'); closeDeal(); await refresh(); });
+    button('Позже', false, async () => closeDeal());
+  } else {
+    button('Отправить гонца', true, async () => {
+      const reply = await send('PROPOSE_DEAL');
+      await refresh();
+      if (reply?.answer) {
+        dealAnswered.add(other + '@' + (reply.answer.at || ''));
+        $('deal-note').textContent = reply.answer.accepted
+          ? 'Дом ' + other + ' скрепил договор печатью. Всё исполнено.'
+          : 'Дом ' + other + ' вернул письмо без печати' + (reply.answer.reason ? ': ' + reply.answer.reason : '.');
+        $('deal-note').className = 'deal-note ' + (reply.answer.accepted ? 'good' : 'bad');
+        actions.innerHTML = '';
+        button(reply.answer.accepted ? 'Славно' : 'Переписать письмо', true, async () => reply.answer.accepted ? closeDeal() : openDeal(other));
+        if (!reply.answer.accepted) button('Закрыть', false, async () => closeDeal());
+      } else {
+        $('deal-note').textContent = 'Гонец ускакал. Ответ придёт вестью.';
+        $('deal-note').className = 'deal-note good';
+        actions.innerHTML = '';
+        button('Закрыть', true, async () => closeDeal());
+      }
+    });
+    button('Порвать письмо', false, async () => closeDeal());
+  }
+  $('deal').classList.add('show');
+}
+
+function closeDeal() {
+  dealState = null;
+  $('deal').classList.remove('show');
+}
+
+// A letter that has come in opens by itself once.
+function pumpDeals() {
+  const dip = snapshot?.game?.diplomacy;
+  if (!dip || dealState || $('decision').classList.contains('show')) return;
+  for (const deal of dip.deals_in || []) {
+    const key = deal.from + '@' + deal.at;
+    if (dealSeen.has(key)) continue;
+    dealSeen.add(key);
+    openDeal(deal.from, deal);
+    return;
+  }
+}
+
 function renderDiplomacy() {
   const box = $('diplomacy');
   if (!box) return;
@@ -2723,7 +2931,13 @@ function renderDiplomacy() {
       state = '<span class="dip-state war">война</span>';
     } else if (rel === 'ALLIANCE') {
       state = '<span class="dip-state ally">союз</span>';
-      buttons = '<button data-dip="BREAK_ALLIANCE" data-target="' + escapeHtml(other) + '">Расторгнуть</button>';
+      buttons = '<button data-marry="' + escapeHtml(other) + '">Переговоры</button><button data-dip="BREAK_ALLIANCE" data-target="' + escapeHtml(other) + '">Расторгнуть</button>';
+    } else if ((dip.deals_in || []).some(d => d.from === other)) {
+      state = '<span class="dip-state">прислал письмо</span>';
+      buttons = '<button class="primary" data-read="' + escapeHtml(other) + '">Прочесть</button>';
+    } else if ((dip.deals_out || []).some(d => d.to === other)) {
+      state = '<span class="dip-state">письмо в пути</span>';
+      buttons = '<button data-dip="WITHDRAW_DEAL" data-target="' + escapeHtml(other) + '">Отозвать</button>';
     } else if ((dip.offers_in || []).includes(other)) {
       state = '<span class="dip-state">предлагает союз</span>';
       buttons = '<button class="primary" data-dip="ACCEPT_ALLIANCE" data-target="' + escapeHtml(other) + '">Принять</button>' +
@@ -2732,7 +2946,7 @@ function renderDiplomacy() {
       state = '<span class="dip-state">ждём ответа</span>';
       buttons = '<button data-dip="DECLINE_ALLIANCE" data-target="' + escapeHtml(other) + '">Отозвать</button>';
     } else {
-      buttons = (hasAlly ? '' : '<button data-marry="' + escapeHtml(other) + '">Брачный союз</button>') +
+      buttons = '<button class="primary" data-marry="' + escapeHtml(other) + '">Переговоры</button>' +
         '<button data-dip="DECLARE_WAR" data-target="' + escapeHtml(other) + '">Бросить перчатку</button>';
     }
     // Right of passage, both ways.
@@ -2758,8 +2972,12 @@ function renderDiplomacy() {
   }).join('');
   box.innerHTML = rows + unknownNote(others.length - met.length);
   box.querySelectorAll('button[data-marry]').forEach(button => {
-    button.onclick = () => { togglePane(null); showDecision(marriageWindow(button.dataset.marry)); };
+    button.onclick = () => openDeal(button.dataset.marry);
   });
+  box.querySelectorAll('button[data-read]').forEach(button => {
+    button.onclick = () => { const deal = (dip.deals_in || []).find(d => d.from === button.dataset.read); if (deal) openDeal(deal.from, deal); };
+  });
+  pumpDeals();
   box.querySelectorAll('button[data-dip]').forEach(button => {
     button.onclick = async () => {
       const action = button.dataset.dip;

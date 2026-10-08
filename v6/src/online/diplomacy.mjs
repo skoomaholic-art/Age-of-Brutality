@@ -382,3 +382,207 @@ export function diplomacyView(game, house, known = null) {
     passage_to: [...(passage[house] || [])]
   };
 }
+
+// ---------- deals ----------
+// A deal is a letter in two halves, as at the courts of old: what one House
+// gives and what it asks in return. Each half holds any of: a marriage (the
+// giver's daughter goes to the other House and the two become allies), gold,
+// the right of passage through the giver's lands, or one of the giver's lands.
+// An empty half means "without conditions".
+export const DEAL_LIMIT_GOLD = 999;
+const LAND_WORTH = { 'Город': 9, 'Деревня': 5, 'Дикая земля': 3, 'Половина острова': 4 };
+
+function cleanHalf(items) {
+  if (!Array.isArray(items)) return [];
+  const out = [];
+  const seen = new Set();
+  for (const raw of items.slice(0, 8)) {
+    const type = String(raw?.type || '').toUpperCase();
+    if (type === 'GOLD') {
+      const amount = Math.floor(Number(raw.amount));
+      if (!(amount > 0)) continue;
+      if (seen.has('GOLD')) continue;
+      out.push({ type, amount: Math.min(DEAL_LIMIT_GOLD, amount) });
+    } else if (type === 'PASSAGE' || type === 'MARRIAGE') {
+      if (seen.has(type)) continue;
+      out.push({ type });
+    } else if (type === 'LAND') {
+      const territory = String(raw.territory || '');
+      if (!territory || seen.has('LAND:' + territory)) continue;
+      seen.add('LAND:' + territory);
+      out.push({ type, territory });
+      continue;
+    } else continue;
+    seen.add(type);
+  }
+  return out;
+}
+
+// Can `giver` hand these items over to `taker` right now? Returns a reason or null.
+function halfProblem(game, map, giver, taker, items) {
+  const purse = game.state.houses[giver];
+  for (const item of items) {
+    if (item.type === 'GOLD' && Number(purse?.gold || 0) < item.amount) return `у Дома ${giver} нет ${item.amount} золота`;
+    if (item.type === 'PASSAGE' && hasPassage(game.state, giver, taker)) return `дороги Дома ${giver} уже открыты Дому ${taker}`;
+    if (item.type === 'LAND') {
+      const land = game.state.territories[item.territory];
+      const name = map?.territories?.find(t => t.id === item.territory)?.name || item.territory;
+      if (!land || land.owner !== giver) return `земля ${name} не принадлежит Дому ${giver}`;
+      if (Object.values(map?.capitals || {}).includes(item.territory)) return 'столицу не отдают по договору';
+    }
+  }
+  return null;
+}
+
+function dealProblem(game, map, from, to, deal) {
+  const marriages = [...deal.give, ...deal.take].filter(item => item.type === 'MARRIAGE');
+  if (marriages.length > 1) return 'в одном договоре может быть только одна свадьба';
+  if (!deal.give.length && !deal.take.length) return 'договор пуст';
+  if (relationOf(game, from, to) === RELATION.WAR) return 'с этим Домом идёт война';
+  if (marriages.length) {
+    const bride = deal.give.some(item => item.type === 'MARRIAGE') ? from : to;
+    const reason = canAlly(game, from, to, bride);
+    if (reason) return reason;
+  }
+  return halfProblem(game, map, from, to, deal.give) || halfProblem(game, map, to, from, deal.take);
+}
+
+function handOver(game, map, constants, giver, taker, items, nowMs) {
+  for (const item of items) {
+    if (item.type === 'GOLD') {
+      game.state.houses[giver].gold = Number(game.state.houses[giver].gold || 0) - item.amount;
+      game.state.houses[taker].gold = Number(game.state.houses[taker].gold || 0) + item.amount;
+    } else if (item.type === 'PASSAGE') {
+      setPassage(game, giver, taker, true);
+    } else if (item.type === 'MARRIAGE') {
+      formAlliance(game, giver, taker, nowMs, giver);
+    } else if (item.type === 'LAND') {
+      const land = game.state.territories[item.territory];
+      // The giver's garrison goes home to the capital, as many as find room there.
+      const leaving = Number(land.warriors?.[giver] || 0);
+      if (land.warriors) delete land.warriors[giver];
+      const capitalId = map?.capitals?.[giver];
+      const capital = capitalId && game.state.territories[capitalId];
+      if (leaving && capital && capital.owner === giver) {
+        const here = Object.values(capital.warriors || {}).reduce((sum, value) => sum + Number(value || 0), 0);
+        const room = Math.max(0, Number(constants?.territory_warrior_cap || 99) - here);
+        capital.warriors ||= {};
+        capital.warriors[giver] = Number(capital.warriors[giver] || 0) + Math.min(leaving, room);
+      }
+      land.owner = taker;
+    }
+  }
+}
+
+function describeHalf(items, map) {
+  return items.map(item => {
+    if (item.type === 'GOLD') return { type: 'GOLD', amount: item.amount };
+    if (item.type === 'LAND') return { type: 'LAND', territory: item.territory, name: map?.territories?.find(t => t.id === item.territory)?.name || item.territory };
+    return { type: item.type };
+  });
+}
+
+export function proposeDeal(game, constants, map, from, to, { give = [], take = [] } = {}, { nowMs = Date.now() } = {}) {
+  assertHouses(game, constants, from, to);
+  const deal = { give: cleanHalf(give), take: cleanHalf(take) };
+  const reason = dealProblem(game, map, from, to, deal);
+  if (reason) throw new Error(reason);
+  const next = structuredClone(game);
+  const diplomacy = ensure(next);
+  diplomacy.deals ||= {};
+  diplomacy.deals[offerKey(from, to)] = { ...deal, at: new Date(nowMs).toISOString() };
+  stamp(next, nowMs);
+  return next;
+}
+
+export function acceptDeal(game, constants, map, house, from, { nowMs = Date.now() } = {}) {
+  assertHouses(game, constants, house, from);
+  const deal = game?.diplomacy?.deals?.[offerKey(from, house)];
+  if (!deal) throw new Error('такого договора нет');
+  const reason = dealProblem(game, map, from, house, deal);
+  if (reason) throw new Error(reason);
+  const next = structuredClone(game);
+  delete ensure(next).deals[offerKey(from, house)];
+  handOver(next, map, constants, from, house, deal.give, nowMs);
+  handOver(next, map, constants, house, from, deal.take, nowMs);
+  next.state.journal.push({
+    kind: 'DEAL_MADE', from, to: house, houses: [from, house],
+    give: describeHalf(deal.give, map), take: describeHalf(deal.take, map),
+    at: new Date(nowMs).toISOString()
+  });
+  stamp(next, nowMs);
+  return next;
+}
+
+export function declineDeal(game, house, from, { nowMs = Date.now(), reason = null, withdraw = false } = {}) {
+  const next = structuredClone(game);
+  const deals = ensure(next).deals ||= {};
+  const key = withdraw ? offerKey(house, from) : offerKey(from, house);
+  if (!deals[key]) return game;
+  delete deals[key];
+  if (!withdraw) {
+    next.state.journal.push({ kind: 'DEAL_REJECTED', from, to: house, houses: [from, house], reason, at: new Date(nowMs).toISOString() });
+  }
+  stamp(next, nowMs);
+  return next;
+}
+
+// How a House led by the AI weighs a letter: what it gets against what it gives.
+function itemWorth(game, map, item, receiver, giver) {
+  if (item.type === 'GOLD') return item.amount;
+  if (item.type === 'PASSAGE') return 1;
+  if (item.type === 'LAND') {
+    const type = map?.territories?.find(t => t.id === item.territory)?.type;
+    return LAND_WORTH[type] || 4;
+  }
+  return 0;
+}
+
+export function aiVerdict(game, map, from, to) {
+  const deal = game?.diplomacy?.deals?.[offerKey(from, to)];
+  if (!deal) return null;
+  const marriage = [...deal.give, ...deal.take].some(item => item.type === 'MARRIAGE');
+  if (marriage && isOathbreaker(game, from)) return { accept: false, reason: 'не породнится с клятвопреступником' };
+  const problem = dealProblem(game, map, from, to, deal);
+  if (problem) return { accept: false, reason: problem };
+  let gain = 0;
+  for (const item of deal.give) gain += itemWorth(game, map, item, to, from);
+  // Giving away is weighed heavier than taking: land most of all, roads hardly at all.
+  for (const item of deal.take) {
+    if (item.type === 'LAND') gain -= itemWorth(game, map, item, from, to) * 2;
+    else if (item.type === 'PASSAGE') gain -= 0;
+    else gain -= itemWorth(game, map, item, from, to);
+  }
+  // An alliance is worth having; a daughter given away is worth a little gold.
+  if (marriage) gain += 3 + (deal.take.some(item => item.type === 'MARRIAGE') ? -1 : 1);
+  if (gain >= 0) return { accept: true, reason: null };
+  return { accept: false, reason: `сочли договор невыгодным: не хватает примерно ${Math.ceil(-gain)} золота` };
+}
+
+export function answerAiDeals(game, map, constants, aiHouses, { nowMs = Date.now() } = {}) {
+  const keys = Object.keys(game?.diplomacy?.deals || {});
+  if (!keys.length || !aiHouses?.length) return game;
+  let next = game;
+  for (const key of keys) {
+    const [from, to] = key.split('>');
+    if (!aiHouses.includes(to) || abandoned(next, to)) continue;
+    const verdict = aiVerdict(next, map, from, to);
+    if (!verdict) continue;
+    next = verdict.accept
+      ? acceptDeal(next, constants, map, to, from, { nowMs })
+      : declineDeal(next, to, from, { nowMs, reason: verdict.reason });
+  }
+  return next;
+}
+
+export function dealsView(game, map, house) {
+  const deals_in = [];
+  const deals_out = [];
+  for (const [key, deal] of Object.entries(game?.diplomacy?.deals || {})) {
+    const [from, to] = key.split('>');
+    const view = { give: describeHalf(deal.give, map), take: describeHalf(deal.take, map), at: deal.at };
+    if (to === house) deals_in.push({ from, ...view });
+    if (from === house) deals_out.push({ to, ...view });
+  }
+  return { deals_in, deals_out };
+}

@@ -289,6 +289,21 @@ export function journalEntryToAudit(entry, map, game) {
     };
   }
 
+  if (entry.kind === 'DEAL_MADE' || entry.kind === 'DEAL_REJECTED') {
+    const say = items => (items || []).map(item =>
+      item.type === 'GOLD' ? `${item.amount} золота`
+        : item.type === 'PASSAGE' ? 'право прохода'
+          : item.type === 'MARRIAGE' ? 'дочь в жёны'
+            : item.type === 'LAND' ? `землю ${item.name || item.territory}` : '').filter(Boolean).join(', ') || 'ничего';
+    return {
+      ...base,
+      message: entry.kind === 'DEAL_MADE'
+        ? `Договор скреплён печатями: Дом ${entry.from} даёт ${say(entry.give)}, Дом ${entry.to} даёт ${say(entry.take)}.`
+        : `Дом ${entry.to} вернул письмо Дома ${entry.from} без печати${entry.reason ? ': ' + entry.reason : ''}.`,
+      details: { houses: [entry.from, entry.to], from: entry.from, to: entry.to, give: entry.give || [], take: entry.take || [], reason: entry.reason || null, at: entry.at || null }
+    };
+  }
+
   if (entry.kind === 'ALLIANCE_FORMED') {
     return {
       ...base,
