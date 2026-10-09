@@ -34,6 +34,7 @@ import { normalizeOnlineSeaState } from './sea-navigation.mjs';
 import { raiseLevy, startDrill, buildYard, buildPort, processRanks, ranksView } from './levy.mjs';
 import { buildBridge, burnBridge, seedCrossings, BRIDGE } from './bridges.mjs';
 import { processHordes, seedHeart } from './heart.mjs';
+import { devAction, devAllowed, devFastForward } from './dev.mjs';
 import { NO_LIMIT, buildGrowth, hireUnits, retrainUnits, seedPopulation, unitsView, upkeepOf } from './units.mjs';
 import { applyCaptureChoice, choiceOutcomes, seedOrder } from './order.mjs';
 import { startRide, processRiders, ridersOf } from './riders.mjs';
@@ -531,6 +532,8 @@ async function tickUnlocked(ctx) {
   let processed = processEncounters(ctx.game, map, constants, nowMs);
   processed = answerAiOffers(processed, processed.rounds?.ai_houses || [], { nowMs });
   processed = answerAiDeals(processed, map, constants, processed.rounds?.ai_houses || [], { nowMs });
+  // Developer mode: the developer's buildings and hires finish at once.
+  processed = devFastForward(processed, nowMs);
   processed = processDueOrders(processed, map, constants, nowMs);
   processed = processEconomy(processed, map, constants, nowMs);
   processed = processRanks(processed, map, nowMs);
@@ -647,13 +650,17 @@ function redactGameForPlayer(game, player) {
 
     // Fog of war while a game played in days is running. A finished game is
     // shown in full; spectators have no House and see everything.
+    // The developer may lift the fog in his own solo game.
+    const devReveal = game.dev?.reveal && game.dev.house === ownHouse;
     if (
       ownHouse &&
+      !devReveal &&
       game.rounds?.mode === 'days' &&
       game.lifecycle?.status === GAME_STATUS.RUNNING
     ) {
       applyFog(clientGame, map, ownHouse);
     }
+    clientGame.dev = game.dev?.house === ownHouse ? { reveal: Boolean(game.dev.reveal), instant: Boolean(game.dev.instant) } : null;
   }
 
   return clientGame;
@@ -1713,6 +1720,21 @@ async function handleGameApi(req, res, url, ctx, subpath) {
               : buildYard(game, map, house, { nowMs });
         return { game: next, response: { ok: true } };
       }
+    }));
+    return json(res, result.status, result.response);
+  }
+
+  // Developer mode (solo games, developer key only).
+  if (req.method === 'POST' && subpath === '/dev') {
+    const body = await readBody(req);
+    const house = String(body.house || '').trim();
+    await requireHouse(ctx, req, house);
+    if (!devAllowed(ctx.game, body.key)) return json(res, 403, { error: 'режим разработчика недоступен' });
+    const result = await serial(ctx, () => runGameCommand(ctx, req, {
+      kind: 'DEV',
+      status: 200,
+      house,
+      mutate: async game => ({ game: devAction(game, house, String(body.action || '').toUpperCase(), body.value, { nowMs: Date.now() }), response: { ok: true } })
     }));
     return json(res, result.status, result.response);
   }
