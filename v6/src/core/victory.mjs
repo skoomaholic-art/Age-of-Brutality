@@ -56,7 +56,7 @@ export function buildVictoryStatus(game, map, constants) {
   return {
     status: final ? 'FINISHED' : 'RUNNING',
     round: Number(state.round || 1),
-    max_rounds: Number(constants.rounds || 6),
+    max_rounds: Number(game.rounds?.max || constants.rounds || 6),
     phase: state.phase || null,
     canonical_end_condition: 'AFTER_DYNASTY_ROUND_6',
     standings,

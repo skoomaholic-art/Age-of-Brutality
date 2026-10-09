@@ -562,6 +562,7 @@
     #end-round { margin-bottom: 4px; }
     .standings { display:grid; gap:0; margin-top:8px; }
     .standing-row { display:grid; grid-template-columns:1fr auto auto; gap:10px; align-items:center; padding:5px 0; border-top:1px solid var(--rule); font-size:13px; }
+    .standing-row.heart-row { grid-template-columns:1fr auto; background: rgba(201,162,58,.16); padding:6px 8px; border:1px solid rgba(201,162,58,.6); border-radius:3px; }
     .standing-row:first-child { border-top:0; }
     .standing-house { font-weight:700; }
     .standing-meta { color: var(--ink-soft); font-size: 12px; }
@@ -1854,6 +1855,28 @@ function yardButton() {
   return '<button class="wide" data-yard>Учебный двор · ' + view.yard_gold + ' золота</button>';
 }
 
+// A free land in a game of the Heart: its wild guard, its ring and the glory for taking it.
+function wildRows(id) {
+  const state = snapshot.game.state;
+  const heart = state.heart;
+  const guards = state.wild_guards?.[id];
+  const ring = heart?.rings?.[id] || 1;
+  const isHeart = heart?.territory === id;
+  const known = guards !== undefined;
+  const glory = state.wild_taken?.[id] ? 0 : isHeart ? 5 : ring;
+  return '<div class="row"><span>Стража</span><b>' + (known ? guards + ' ' + warriorWord(guards) + ' вольных людей' : 'неизвестно') + '</b></div>' +
+    '<div class="row"><span>Удалённость</span><b>' + (isHeart ? 'Сердце земель' : ring + '-е кольцо от столиц') + '</b></div>' +
+    '<div class="row"><span>За взятие</span><b>' + (glory ? '+' + glory + ' славы' : 'слава уже взята') + '</b></div>' +
+    (known ? '<div class="row"><span>Чтобы взять</span><b>от ' + menToTake(guards) + ' ' + warriorWord(menToTake(guards)) + '</b></div>' : '') +
+    (isHeart ? '<div class="tiny">Кто держит Сердце, тот каждый рассвет получает славу: 3, потом 4, 5 и дальше. Набравший ' + heart.target + ' славы побеждает.</div>' : '');
+}
+
+// The same count as on the server: more than the guard with the share of fortune, and someone left standing.
+function menToTake(guards) {
+  for (let n = 1; n <= 40; n += 1) if (n + 3 > guards && n - Math.ceil(guards / 2) > 0) return n;
+  return 41;
+}
+
 function renderLand() {
   const card = $('land-card');
   const t = landId ? territoryById(landId) : null;
@@ -1879,7 +1902,9 @@ function renderLand() {
     body.innerHTML =
       '<div class="row"><span>Хозяин</span><b>' + escapeHtml(st.owner ? 'Дом ' + st.owner : 'ничья земля') + '</b></div>' +
       '<div class="row"><span>Платит хозяину</span><b>+' + Number(t.gold_income || 0) + ' золота с рассветом</b></div>' + bonus +
-      '<div class="row"><span>Стража</span><b>' + (seen ? garrison + ' ' + warriorWord(garrison) : 'неизвестно') + '</b></div>' +
+      (st.owner || !snapshot.game.state.wild_guards
+        ? '<div class="row"><span>Стража</span><b>' + (seen ? garrison + ' ' + warriorWord(garrison) : 'неизвестно') + '</b></div>'
+        : wildRows(landId)) +
       (seen && garrison ? '<div class="row"><span>Из них</span><b>' + escapeHtml(describeRanks(rankComp(landId, st.owner))) + '</b></div>' : '') +
       '<div class="row"><span>Возведено</span><b>' + ([st.fort ? 'крепость' : '', hasPort(landId) ? 'порт' : ''].filter(Boolean).join(', ') || 'нет') + '</b></div>' +
       '<div class="row"><span>Исконно</span><b>' + escapeHtml(t.house_sector && colors[t.house_sector] ? 'земля Дома ' + t.house_sector : t.house_sector || 'вольная земля') + '</b></div>' +
@@ -2496,7 +2521,8 @@ const TALMUD = [
   ['О шпионах и путниках', 'По дорогам ходят шуты, паломники, крестьяне и беглые ратники под белым штандартом. Наняв шпиона, открой свою землю, где гостят путники, и вели ему примкнуть к ним: он уйдёт их дорогой и, дойдя до названной земли, откроет тебе её и соседей на полдня.'],
   ['О стекле хрониста', 'Наведи перст на штандарт рати или путников, и в круглом стекле увидишь, кто идёт, сколько их и кто ведёт. Коснись штандарта, и стекло останется открытым.'],
   ['О брошенных державах', 'Правитель, покинувший век до срока, бросает свои земли. Они сереют, победить такой Дом уже не может, а земли его достаются тому, кто придёт первым.'],
-  ['О победе', 'Славу считают в очках победы: за выигранные битвы, взятые и удержанные чужие столицы и величину державы. У кого их больше к исходу шестого дня, тот и пережил жестокий век.']
+  ['О победе', 'Славу считают в очках победы: за выигранные битвы, взятые и удержанные чужие столицы и величину державы. У кого их больше к исходу шестого дня, тот и пережил жестокий век.'],
+  ['О Сердце земель', 'В новых веках вольные земли не пусты: их стерегут вольные люди. У самой столицы их горстка, а чем дальше к середине мира, тем их больше. Число стражи видно на сером щите и в грамоте земли. Бьются с ними без костей, как в любой битве, и павшие с обеих сторон не встают. Первому взявшему вольную землю достаётся слава по её удалённости: одна за ближнее кольцо, и больше за каждое следующее. В самой середине лежит Сердце земель за крепкими стенами, его стережёт дюжина. Кто держит Сердце, тот с каждым рассветом получает славу, и всё больше: три, четыре, пять. Кто первым наберёт нужную славу, тот и победил. Если не наберёт никто, век кончится после восьмого дня. Вольная стража со временем подрастает, если её не тревожить.']
 ];
 
 // What the server says in the tongue of clerks, said as a herald would.
@@ -3323,7 +3349,14 @@ function renderVictory() {
   }
 
   const rows = (victory.standings || []).filter(item => isKnownHouse(item.house));
-  $('standings').innerHTML = rows.map((item, index) => {
+  const heart = snapshot.game.state.heart;
+  const heartName = heart ? (territoryById(heart.territory)?.name || '') : '';
+  const heartNote = heart
+    ? '<div class="standing-row heart-row"><div><span class="standing-house">♛ Сердце земель: ' + escapeHtml(heartName) + '</span>' +
+      '<div class="standing-meta">' + (heart.holder ? 'Держит Дом ' + escapeHtml(heart.holder) + ', ' + heart.streak + '-й рассвет' : 'Пока ничьё: стерегут вольные люди') + '</div></div>' +
+      '<div class="standing-meta">Победа: ' + heart.target + ' славы.<br>Каждый рассвет с Сердцем: +' + (2 + (heart.holder ? heart.streak + 1 : 1)) + ' и больше</div></div>'
+    : '';
+  $('standings').innerHTML = heartNote + rows.map((item, index) => {
     const exile = item.abandoned
       ? '<div class="standing-exile abandoned">Брошенное государство</div>'
       : item.exiled
@@ -3349,7 +3382,8 @@ function renderHouse() {
   $('house-title').textContent = house;
   $('gold').textContent = state.gold;
   $('influence').textContent = state.influence;
-  $('vp').textContent = state.victory_points;
+  const heart = snapshot.game.state.heart;
+  $('vp').textContent = heart ? state.victory_points + '/' + heart.target : state.victory_points;
 }
 
 function mapLabel(t) {
@@ -3920,8 +3954,8 @@ function shieldToken(x, y, color, count, scale = 1, lens = '', who = null, movin
     '</g></g>';
 }
 
-function nameRibbon(x, y, label, capital) {
-  pixiScene?.ribbons.push({ x, y, label: label.toUpperCase(), capital });
+function nameRibbon(x, y, label, capital, heart = false) {
+  pixiScene?.ribbons.push({ x, y, label: label.toUpperCase(), capital, heart });
   const text = label.toUpperCase();
   const half = Math.max(9, text.length * 2.1 + (capital ? 5 : 2.6));
   const mark = capital ? `<path class="ribbon-mark" d="M${-half + 2.2} 0l1.8 -2.2l1.8 2.2l-1.8 2.2Z"></path>` : '';
@@ -4163,7 +4197,7 @@ function ribbonGraphic(r) {
   g.drawPolygon([half + 3.8, -2.6, half - 1, -2.6, half - 1, 4.8, half + 3.8, 4.8, half + 2, 1.1]);
   g.endFill();
   g.lineStyle({ width: 0.45, color: INK });
-  g.beginFill(0xf6eed8); g.drawRect(-half, -4.2, half * 2, 8.4); g.endFill();
+  g.beginFill(r.heart ? 0xf3dc8a : 0xf6eed8); g.drawRect(-half, -4.2, half * 2, 8.4); g.endFill();
   if (r.capital) { g.lineStyle(0); g.beginFill(0xb3311f); g.drawPolygon([-half + 2.2, 0, -half + 4, -2.2, -half + 5.8, 0, -half + 4, 2.2]); g.endFill(); }
   box.addChild(g);
   const label = pixiText(r.label, 5.6, INK);
@@ -4289,6 +4323,24 @@ function drawPixiMap(scene, key) {
   lanes.lineStyle({ width: 2.5, color: 0xb3311f, cap: PIXI.LINE_CAP.ROUND });
   for (const lane of [...scene.lanes.filter(l => l.active), ...scene.routes]) dashedLine(lanes, [[lane.a.x, lane.a.y], [lane.b.x, lane.b.y]], 5, 3);
 
+  // The Heart of the Lands: a golden ring and a crown above it.
+  if (scene.heart) {
+    const ring = new PIXI.Graphics();
+    ring.lineStyle({ width: 2.2, color: 0xc9a23a, alpha: 0.95 });
+    ring.drawCircle(scene.heart.x, scene.heart.y, 17);
+    ring.lineStyle({ width: 0.7, color: INK, alpha: 0.8 });
+    ring.drawCircle(scene.heart.x, scene.heart.y, 18.4);
+    ring.drawCircle(scene.heart.x, scene.heart.y, 15.6);
+    const crown = new PIXI.Graphics();
+    const cx = scene.heart.x, cy = scene.heart.y - 21;
+    crown.lineStyle({ width: 0.6, color: INK });
+    crown.beginFill(0xe2b93b);
+    crown.drawPolygon([cx - 5, cy + 3, cx - 5, cy - 2, cx - 2.5, cy + 0.5, cx, cy - 3.5, cx + 2.5, cy + 0.5, cx + 5, cy - 2, cx + 5, cy + 3]);
+    crown.endFill();
+    castles.addChildAt(ring, 0);
+    castles.addChild(crown);
+  }
+
   // Rivers on the roads: a bridge, a bridge being built, or a sign that one is needed.
   const bridges = new PIXI.Container();
   for (const b of scene.bridges || []) bridges.addChild(bridgeGraphic(b));
@@ -4368,7 +4420,7 @@ function battleSpots() {
   const now = Date.now();
   const out = [];
   for (const item of snapshot?.game?.audit_log || []) {
-    if (item.type !== 'BATTLE' && item.type !== 'FIELD_BATTLE') continue;
+    if (item.type !== 'BATTLE' && item.type !== 'FIELD_BATTLE' && item.type !== 'WILD_BATTLE') continue;
     const d = item.details || {};
     const at = Date.parse(d.completed_at || d.at || '');
     if (!Number.isFinite(at) || now - at > BATTLE_SHOW_MS || now < at - 5000) continue;
@@ -4582,7 +4634,7 @@ function renderMap() {
     : snapshot.map.sea_edges;
 
   // The same picture is described once more for the WebGL layer.
-  const scene = pixiScene = { realms: realmIds, ports: [], provinces: [], castles: [], lanes: [], routes: [], waypoints: [], ribbons: [], notes: [], tokens: [], bridges: [], dx: 0, dy: 0 };
+  const scene = pixiScene = { heart: null, realms: realmIds, ports: [], provinces: [], castles: [], lanes: [], routes: [], waypoints: [], ribbons: [], notes: [], tokens: [], bridges: [], dx: 0, dy: 0 };
   const lines = [];
   // Where ports are built, the sea net shows only as far as it is known. A
   // shore with a port joins it fully; any other shore faintly, for landing only.
@@ -4683,7 +4735,15 @@ function renderMap() {
     if (t.id === origin) note = 'откуда';
     if (t.id === target) note = 'цель';
     const labelY = c.y + (capital ? 20.5 : t.type === 'Город' ? 15.5 : 13);
-    ribbons.push(nameRibbon(c.x, labelY, mapLabel(t), capital));
+    const isHeart = state.heart?.territory === t.id;
+    ribbons.push(nameRibbon(c.x, labelY, mapLabel(t), capital, isHeart));
+    if (isHeart) scene.heart = { x: c.x, y: c.y };
+    // The wild guard of a free land: a grey shield with its number, where it is known.
+    const guards = !owner ? Number(state.wild_guards?.[t.id] || 0) : 0;
+    if (guards > 0 && (!explored || explored.has(t.id))) {
+      const gx = t.type === 'Город' ? c.x + 14 : t.type === 'Деревня' ? c.x + 11 : c.x + 8.5;
+      tokens.push(shieldToken(gx, c.y - 5, '#8d877a', guards, 0.85, '', null));
+    }
     if (note) {
       scene.notes.push({ x: c.x, y: labelY + 10.6, text: note, target: t.id === target });
       ribbons.push(`<text class="ribbon-note ${t.id === target ? 'target' : ''}" x="${c.x}" y="${labelY + 10.6}">${note}</text>`);
@@ -4742,7 +4802,7 @@ function renderMap() {
 
   pixiScene = null;
   // The SVG is rebuilt only when something on it has changed.
-  const svgKey = JSON.stringify([usePixi, origin, target, house, [...legalTargets], explored ? [...explored] : null, state.territories, state.sea_nodes, state.guests, state.armies, state.bridges || null, (snapshot.game.orders || []).filter(o => o.status === 'PENDING').map(o => [o.id, o.action?.warriors, Boolean(o.halted), o.action?.to]), activePath, abandonedHouses()]);
+  const svgKey = JSON.stringify([usePixi, origin, target, house, [...legalTargets], explored ? [...explored] : null, state.territories, state.sea_nodes, state.guests, state.armies, state.bridges || null, state.wild_guards || null, state.heart?.territory || null, (snapshot.game.orders || []).filter(o => o.status === 'PENDING').map(o => [o.id, o.action?.warriors, Boolean(o.halted), o.action?.to]), activePath, abandonedHouses()]);
   if (usePixi) drawPixiMap(scene, svgKey);
   // Known waters clear too: sea waypoints have no painted shape, only a point.
   updateClouds(explored, art, { ...coords, ...(snapshot.map.sea_waypoints || {}) });

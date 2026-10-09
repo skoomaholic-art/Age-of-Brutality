@@ -94,7 +94,9 @@ export function journalEntryToAudit(entry, map, game) {
         : '';
     return {
       ...base,
-      message: `Век окончен.${outcome}`,
+      message: entry.reason === 'HEART'
+        ? `Век окончен: Дом ${winners[0] || '—'} набрал славу, держа Сердце земель.${outcome}`
+        : `Век окончен.${outcome}`,
       details: {
         game_id: entry.game_id || game.id,
         reason: entry.reason || null,
@@ -541,6 +543,41 @@ export function journalEntryToAudit(entry, map, game) {
         reason: entry.reason,
         ...timingFields(entry)
       }
+    };
+  }
+
+  if (entry.kind === 'WILD_BATTLE') {
+    const to = territoryName(map, entry.to);
+    return {
+      ...base,
+      message: entry.success
+        ? `Вольные люди в земле ${to} разбиты: земля наша. Пало наших ${entry.losses}, стражи было ${entry.guards}.${entry.glory ? ` Слава +${entry.glory}.` : ''}`
+        : `Приступ на вольную землю ${to} отбит. Пало наших ${entry.losses}, стражи полегло ${entry.guard_losses}, осталось ${entry.guards_left}.`,
+      details: {
+        house: entry.house,
+        from_id: entry.from,
+        territory_id: entry.to,
+        to,
+        success: entry.success,
+        guards: entry.guards,
+        guards_left: entry.guards_left,
+        losses: entry.losses,
+        glory: entry.glory,
+        order_id: entry.order_id || null,
+        at: entry.at || null,
+        ...timingFields(entry)
+      }
+    };
+  }
+
+  if (entry.kind === 'HEART_TAKEN' || entry.kind === 'HEART_HELD') {
+    const where = territoryName(map, entry.territory);
+    return {
+      ...base,
+      message: entry.kind === 'HEART_TAKEN'
+        ? `Сердце земель, ${where}, в руках Дома ${entry.house}${entry.previous ? ` (прежде держал Дом ${entry.previous})` : ''}. Каждый рассвет, что он его держит, приносит ему всё больше славы.`
+        : `Дом ${entry.house} держит Сердце земель ${entry.streak}-й рассвет: слава +${entry.glory}, всего ${entry.total} из ${entry.target}.`,
+      details: { house: entry.house, territory_id: entry.territory, streak: entry.streak || null, glory: entry.glory || null, total: entry.total || null, target: entry.target || null, at: entry.at || null }
     };
   }
 

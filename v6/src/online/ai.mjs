@@ -2,6 +2,7 @@ import { areAllies } from './diplomacy.mjs';
 import { neutralResistance } from '../core/neutral.mjs';
 import { buildAdjacency } from '../core/map.mjs';
 import { aiBridgeChoice, buildBridge } from './bridges.mjs';
+import { menToTakeWild, ringGlory } from './heart.mjs';
 import { totalHouseWarriors } from '../core/state.mjs';
 import { resolvePendingCapitalHold } from '../core/scoring.mjs';
 import { commandersAt } from '../core/characters.mjs';
@@ -124,6 +125,23 @@ function marchCandidates(game, map, constants, house, adjacency) {
     const worth = territoryValue(map, constants, house, to);
     const command = warriors => ({ type: 'MARCH', house, from, to, warriors });
 
+    // A game of the Heart: the wild guard must be beaten; deeper lands give more glory,
+    // and the Heart most of all.
+    if (owner === null && state.wild_guards) {
+      const guards = Number(state.wild_guards[to] || 0);
+      const need = menToTakeWild(guards);
+      const warriors = sizes.find(count => count >= need);
+      if (!warriors) continue;
+      const glory = state.wild_taken?.[to] ? 0 : ringGlory(state, to);
+      const heart = state.heart?.territory === to ? 6 : 0;
+      out.push({
+        kind: 'CAPTURE_NEUTRAL',
+        value: worth + glory * 1.2 + heart - Math.ceil(guards / 2) * 0.5 - warriors * 0.1,
+        command: command(warriors)
+      });
+      continue;
+    }
+
     if (owner === null) {
       let resistance;
       try {
@@ -156,7 +174,7 @@ function marchCandidates(game, map, constants, house, adjacency) {
       }
       const outlook = battleOutlook(warriors, defenders);
       if (!outlook.wins) continue;
-      const capital = territoryMeta(map, to)?.type === 'Столица' ? 4 : 0;
+      const capital = territoryMeta(map, to)?.type === 'Столица' ? 4 : state.heart?.territory === to ? 6 : 0;
       const firstBattle = hasAchievement(state, house, 'VP-W2') ? 0 : 4;
       out.push({
         kind: 'ATTACK',

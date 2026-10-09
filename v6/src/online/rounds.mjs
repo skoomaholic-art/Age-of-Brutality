@@ -1,6 +1,7 @@
 import { applyIncomePulse } from '../core/economy.mjs';
 import { applyCourtDawn } from './court.mjs';
 import { applySeaToll } from './sea-toll.mjs';
+import { heartDawn } from './heart.mjs';
 import { buildVictoryStatus } from '../core/victory.mjs';
 
 // Online adaptation of the tabletop round structure (Rules §4), in two modes.
@@ -104,6 +105,8 @@ function beginRound(next, map, constants, number, nowMs, timing) {
   next.state = income.state;
   // Men long out at sea sicken and drown: the toll of the sea, every dawn.
   applySeaToll(next.state, nowMs);
+  // A game of the Heart: the wild guard grows back, the Heart pays its holder.
+  rounds.heart_reached = number > 1 ? heartDawn(next, map, constants, nowMs) : [];
 
   // A game day starts exactly when the previous one ended, even if the server
   // noticed late, so the days keep their length.
@@ -172,7 +175,8 @@ export function startRounds(game, map, constants, {
     mode: days ? 'days' : 'rounds',
     pace: days ? paceKey : null,
     number: 0,
-    max: Number(constants.rounds),
+    // A game of the Heart runs longer: the road to the centre takes time.
+    max: Number(next.state.heart?.days || constants.rounds),
     actions_per_round: days ? null : Number(constants.actions_per_round),
     houses: [...constants.houses],
     ai_houses: aiHouses,
@@ -290,14 +294,14 @@ export function roundComplete(game, nowMs = Date.now()) {
   return game.rounds.houses.every(house => houseRoundStatus(game, house).done);
 }
 
-function finishByRoundLimit(next, map, constants, nowMs) {
+function finishByRoundLimit(next, map, constants, nowMs, reason = 'ROUND_LIMIT') {
   const at = iso(nowMs);
   next.state.phase = FINISHED;
   next.lifecycle = {
     ...(next.lifecycle || {}),
     status: FINISHED,
     finished_at: at,
-    finish_reason: 'ROUND_LIMIT'
+    finish_reason: reason
   };
 
   const victory = buildVictoryStatus(next, map, constants);
@@ -312,7 +316,7 @@ function finishByRoundLimit(next, map, constants, nowMs) {
     kind: 'GAME_FINISHED',
     at,
     game_id: next.id,
-    reason: 'ROUND_LIMIT',
+    reason,
     winner_house: winners.length === 1 ? winners[0] : null,
     winners,
     standings: victory.standings
@@ -337,6 +341,8 @@ export function advanceRound(game, map, constants, {
     finishByRoundLimit(next, map, constants, nowMs);
   } else {
     beginRound(next, map, constants, rounds.number + 1, nowMs, timing);
+    // Someone has gathered the glory needed: the age ends at this dawn.
+    if (next.rounds.heart_reached?.length) finishByRoundLimit(next, map, constants, nowMs, 'HEART');
   }
   return next;
 }

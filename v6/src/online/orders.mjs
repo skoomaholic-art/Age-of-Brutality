@@ -17,6 +17,7 @@ import { declareWarInPlace, hasPassage } from './diplomacy.mjs';
 import { headsLost, ranksForMarch, settleMarchRanks, strengthOf } from './ranks.mjs';
 import { rulerLeadBonus } from './court.mjs';
 import { fightOnLand, joinersAgainst } from './melee.mjs';
+import { heartMode, ringGlory, wildBattle } from './heart.mjs';
 import { fateDice, recoveryMs, settleFate } from './fate.mjs';
 import {
   finishSeaLandingBridge,
@@ -618,6 +619,22 @@ function resolveOrder(state,map,constants,gameId,order,nowMs,recovery) {
         commander_id:order.commander_id || null
       }
     };
+  }
+
+  // A game of the Heart: free lands are held by the wild guard and must be fought for.
+  if(destination==='NEUTRAL' && heartMode(state)) {
+    const commander=order.commander_id ? state.characters?.[order.commander_id] || null : null;
+    const resolved=wildBattle(resolutionState,resolutionMap,constants,resolutionAction,{
+      ranks:order.action.ranks,
+      commander,
+      glory:ringGlory(state,action.to),
+      nowMs
+    });
+    resolved.state=finalize(resolved.state);
+    resolved.state=settleCommander(resolved.state,order.commander_id,resolved.result.success ? action.to : action.from);
+    resolved.result.route_path=[...action.path];
+    resolved.result.commander_id=order.commander_id || null;
+    return resolved;
   }
 
   if(destination==='NEUTRAL') {

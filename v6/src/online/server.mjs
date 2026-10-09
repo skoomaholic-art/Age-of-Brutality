@@ -33,6 +33,7 @@ import {
 import { normalizeOnlineSeaState } from './sea-navigation.mjs';
 import { raiseLevy, startDrill, buildYard, buildPort, processRanks, ranksView } from './levy.mjs';
 import { buildBridge, seedCrossings, BRIDGE } from './bridges.mjs';
+import { seedHeart, HEART_HOUSE_CAP } from './heart.mjs';
 import { startRide, processRiders, ridersOf } from './riders.mjs';
 import { courtEffects } from './court.mjs';
 import {
@@ -151,13 +152,14 @@ const scopeCache = new Map();
 function scopeForSpec(spec) {
   if (!spec || spec.kind !== 'generated') return {};
   // Games made before shapes existed keep their wheel (no shape in the key).
-  const key = JSON.stringify(spec.shape ? [spec.seed, spec.houses, spec.shape, spec.warp, spec.sea || null] : [spec.seed, spec.houses]);
+  const key = JSON.stringify(spec.shape ? [spec.seed, spec.houses, spec.shape, spec.warp, spec.sea || null, spec.heart || null] : [spec.seed, spec.houses]);
   if (!scopeCache.has(key)) {
     if (scopeCache.size > 200) scopeCache.delete(scopeCache.keys().next().value);
     scopeCache.set(key, {
       key,
       map: generateMap(classicMap, baseConstants, { houses: spec.houses, seed: spec.seed, shape: spec.shape || 'wheel', warp: spec.warp || 'none', seaMesh: spec.sea === 'mesh' || spec.sea === 'mesh-free', homePorts: spec.sea !== 'mesh-free' }),
-      constants: { ...baseConstants, houses: [...spec.houses] }
+      // A game of the Heart lets a House keep a bigger host.
+      constants: { ...baseConstants, houses: [...spec.houses], ...(spec.heart ? { house_warrior_cap: HEART_HOUSE_CAP } : {}) }
     });
   }
   return scopeCache.get(key);
@@ -190,7 +192,7 @@ function mapSpecFrom(body, { defaultHouses }) {
   const shape = MAP_SHAPES.includes(body.shape) ? body.shape : chance.shape;
   const warp = MAP_WARPS.includes(body.warp) ? body.warp : chance.warp;
   // New games: a net of sea points over all the water, and ports to be built.
-  return { kind: 'generated', seed, houses, shape, warp, sea: 'mesh-free' };
+  return { kind: 'generated', seed, houses, shape, warp, sea: 'mesh-free', heart: true };
 }
 
 const mapArtCache = new Map();
@@ -861,6 +863,8 @@ async function createMultiplayerGame(body, profile = null) {
     game.lifecycle.houses = [...mapSpec.houses];
     // Where roads meet rivers: no crossing there until a bridge is built.
     seedCrossings(game.state, map, (await mapArtFor(scopeForSpec(mapSpec))).crossings);
+    // The Heart of the Lands: the wild guard on free lands, the centre to hold.
+    if (mapSpec.heart) seedHeart(game, map);
   }
 
   const ctx = {
@@ -925,6 +929,8 @@ async function createSoloGame(body, profile = null) {
     game.lifecycle.houses = [...mapSpec.houses];
     // Where roads meet rivers: no crossing there until a bridge is built.
     seedCrossings(game.state, map, (await mapArtFor(scopeForSpec(mapSpec))).crossings);
+    // The Heart of the Lands: the wild guard on free lands, the centre to hold.
+    if (mapSpec.heart) seedHeart(game, map);
   }
 
   const ctx = {
