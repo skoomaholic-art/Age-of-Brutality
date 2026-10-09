@@ -172,6 +172,8 @@ export function buildMapArt(map, options = {}) {
   const massIndex = new Map(masses.map((mass, index) => [mass, index]));
   const smallMass = new Set(sites.filter(site => site.small).map(site => massIndex.get(site.mass)));
   const segments = map.land_edges.map(([a, b]) => ({ a: siteById.get(a), b: siteById.get(b) }));
+  const linked = new Set(map.land_edges.flat());
+  const lonely = new Set(sites.filter(site => !site.small && !linked.has(site.id)).map(site => site.id));
 
   const landBox = {
     x0: Math.min(...sites.map(s => s.x)) - 70, x1: Math.max(...sites.map(s => s.x)) + 70,
@@ -209,7 +211,8 @@ export function buildMapArt(map, options = {}) {
       // The islands are small: the same swell would weld neighbouring islands together.
       let depth = best + (smallMass.has(bestMass) ? rough * 0.4 : rough);
       for (const site of sites) {
-        const keep = (site.small ? 9 : 12) - Math.hypot(x - site.x, y - site.y);
+        // A land with no road to any other is an islet: it gets a shore of its own.
+        const keep = (site.small ? 9 : lonely.has(site.id) ? 28 + rough * 0.4 : 12) - Math.hypot(x - site.x, y - site.y);
         if (keep > depth) {
           depth = keep;
           bestMass = massIndex.get(site.mass);

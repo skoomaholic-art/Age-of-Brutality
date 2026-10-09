@@ -1571,7 +1571,7 @@ for (const prefix of ['solo', 'public', 'private']) {
   const shape = document.createElement('select');
   shape.id = prefix + '-shape';
   shape.className = pace.className;
-  shape.innerHTML = [['', 'Случайный'], ['wheel', 'Материк'], ['peninsulas', 'Полуострова'], ['archipelago', 'Архипелаг'], ['inland', 'Внутреннее море']]
+  shape.innerHTML = [['', 'Случайный'], ['wheel', 'Материк'], ['peninsulas', 'Полуострова'], ['archipelago', 'Архипелаг'], ['inland', 'Внутреннее море'], ['atoll', 'Кольцо островов'], ['lake-isle', 'Остров в озере'], ['fjords', 'Фьорды'], ['shattered', 'Россыпь островов']]
     .map(([value, name]) => '<option value="' + value + '">' + name + '</option>').join('');
   select.addEventListener('change', () => { shape.disabled = select.value === 'classic'; });
   pace.after(label, select, shapeLabel, shape);

@@ -33,6 +33,8 @@ const CASES = [];
 for (let count = 2; count <= 6; count += 1) CASES.push([count, 'wheel', 'none']);
 MAP_SHAPES.forEach((shape, i) => [3, 4, 6].forEach((count, j) => CASES.push([count, shape, MAP_WARPS[(i + j) % MAP_WARPS.length]])));
 CASES.push([2, 'archipelago', 'stretch'], [2, 'inland', 'crescent']);
+for (const shape of MAP_SHAPES) for (const count of [2, 3, 5]) for (const warp of ['spiral', 'hourglass', 'ripple', 'zigzag', 'shear', 'teardrop']) if ((count + warp.length + shape.length) % 4 === 0) CASES.push([count, shape, warp]);
+for (const shape of MAP_SHAPES) CASES.push([2, shape, 'none'], [5, shape, 'none']);
 
 for (const [count, shape, warp] of CASES) {
   test(`a map for ${count} Houses (${shape}, ${warp}) is fair and whole`, () => {
