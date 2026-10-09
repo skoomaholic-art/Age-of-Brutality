@@ -57,7 +57,7 @@ function graph(map, timing) {
   return out;
 }
 
-function canPassThrough(state,map,house,node,destination) {
+export function canPassThrough(state,map,house,node,destination) {
   if (node === destination) return true;
 
   if (isSeaWaypoint(map,node)) {
@@ -68,6 +68,19 @@ function canPassThrough(state,map,house,node,destination) {
   const owner = onlinePositionOwner(state,node);
   // Our own land, or the land of a House that gave us right of passage.
   return owner === house || Boolean(owner && state.passage?.[owner]?.includes(house));
+}
+
+// On maps where ports are built, a fleet sets out only from a land with a
+// port; landing on any shore is always possible.
+export function portOpen(state,map,id) {
+  if(!map.buildable_ports) return true;
+  return Boolean(state.territories?.[id]?.port) || (map.starting_ports || []).includes(id);
+}
+
+function seaStepAllowed(state,map,from,to,mode) {
+  if(mode!=='SEA' || !map.buildable_ports) return true;
+  if(isSeaWaypoint(map,from)) return true;
+  return portOpen(state,map,from);
 }
 
 function destinationAllowed(state,map,house,to) {
@@ -156,6 +169,7 @@ export function findOnlineRoute(
       const next=edge.to;
       if(visited.has(next)) continue;
       if(!canPassThrough(state,map,house,next,to)) continue;
+      if(!seaStepAllowed(state,map,current,next,edge.mode)) continue;
 
       const candidate=best+edge.duration_ms;
       const candidateHops=bestHops+1;
@@ -200,6 +214,8 @@ export function findOnlineRoute(
   };
 }
 
+// Every route from one place at once (the same roads findOnlineRoute would
+// choose): a land that cannot be passed through is reached as a goal only.
 export function listReachableOnlineRoutes(
   state,
   map,
@@ -208,18 +224,70 @@ export function listReachableOnlineRoutes(
   from,
   timing
 ) {
-  const nodes=[
-    ...Object.keys(state.territories || {}),
-    ...Object.keys(map.sea_waypoints || {})
-  ];
+  if (!constants.houses.includes(house)) return [];
+  const g=graph(map,timing);
+  if (!g.has(from)) return [];
+  const owner=onlinePositionOwner(state,from);
+  const camped=owner!==house && guestWarriors(state,from,house)>0;
+  if ((owner!==house && !camped) || onlinePositionWarriors(state,from,house)<1) return [];
+
+  const dist=new Map([[from,0]]);
+  const hops=new Map([[from,0]]);
+  const previous=new Map();
+  const visited=new Set();
+  const leaf=new Set();
+  while(true) {
+    let current=null;
+    let best=Infinity;
+    let bestHops=Infinity;
+    for(const [node,value] of dist) {
+      if(visited.has(node)) continue;
+      const h=hops.get(node) || 0;
+      if(value<best || (value===best && h<bestHops) || (value===best && h===bestHops && String(node)<String(current))) {
+        current=node; best=value; bestHops=h;
+      }
+    }
+    if(current===null) break;
+    visited.add(current);
+    if(leaf.has(current)) continue;
+    for(const edge of g.get(current) || []) {
+      const next=edge.to;
+      if(visited.has(next)) continue;
+      if(!seaStepAllowed(state,map,current,next,edge.mode)) continue;
+      const passable=canPassThrough(state,map,house,next,null);
+      const candidate=best+edge.duration_ms;
+      const candidateHops=bestHops+1;
+      const known=dist.get(next);
+      const knownHops=hops.get(next) ?? Infinity;
+      const prev=previous.get(next);
+      if(
+        known===undefined ||
+        candidate<known ||
+        (candidate===known && candidateHops<knownHops) ||
+        (candidate===known && candidateHops===knownHops && String(current)<String(prev?.from || ''))
+      ) {
+        dist.set(next,candidate);
+        hops.set(next,candidateHops);
+        previous.set(next,{from:current,mode:edge.mode,duration_ms:edge.duration_ms});
+        if(passable) leaf.delete(next); else leaf.add(next);
+      }
+    }
+  }
 
   const out=[];
-  for(const to of nodes) {
-    if(to===from) continue;
-    const route=findOnlineRoute(
-      state,map,constants,house,from,to,timing
-    );
-    if(route) out.push(route);
+  for(const to of dist.keys()) {
+    if(to===from || !destinationAllowed(state,map,house,to)) continue;
+    const segments=reconstruct(previous,from,to);
+    if(!segments?.length) continue;
+    out.push({
+      from,
+      to,
+      path:[from,...segments.map(segment=>segment.to)],
+      segments,
+      hops:segments.length,
+      duration_ms:segments.reduce((sum,segment)=>sum+segment.duration_ms,0),
+      mode:routeMode(segments)
+    });
   }
 
   return out.sort((a,b) =>

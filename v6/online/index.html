@@ -349,6 +349,9 @@
     .route-line { display: flex; align-items: baseline; gap: 8px; font-family: Kurale, Alegreya, serif; font-size: 18px; }
     .route-place { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .route-arrow { color: var(--vermilion); font-size: 20px; }
+    .via-row { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 13px; }
+    .via-row button.on { background: var(--vermilion); color: var(--white-lead); }
+    .via-text { flex: 1; font-style: italic; color: var(--ink-soft); }
     .split-row { display: flex; align-items: end; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(43,27,18,.25); }
     .split-row label { display: grid; gap: 2px; font-size: 12.5px; }
     .split-count input { width: 76px; }
@@ -821,6 +824,11 @@
           <button id="split-toggle" title="Отправить только часть армии">Разделить</button>
           <button id="send" class="primary big">Выступать</button>
         </div>
+        <div class="via-row">
+          <button id="via-toggle" title="Проложить свой путь: нажимай на земли и морские точки по дороге">Свой путь</button>
+          <span id="via-text" class="via-text"></span>
+          <button id="via-clear" title="Сбросить свой путь">×</button>
+        </div>
         <div id="route-mode-row" style="display:none">
           <select id="march-mode">
             <option value="LAND">По суше</option>
@@ -981,6 +989,9 @@ let snapshot = null;
 let bootstrap = null;
 let house = null;
 let origin = null;
+// A way of the player's own: the points the army goes through, in order.
+let viaPoints = [];
+let viaPick = false;
 let target = null;
 let legal = [];
 let marchModePreference = null;
@@ -1767,6 +1778,19 @@ function drillBlock() {
     '<div class="acts"><button data-drill-all>Учить всех</button><button class="primary" data-drill-go>Начать учения</button></div></div>';
 }
 
+function hasPort(id) {
+  const st = snapshot.game.state.territories[id];
+  return Boolean(st?.port) || (snapshot.map.starting_ports || []).includes(id);
+}
+
+function portButton(t, st) {
+  if (!snapshot.map.buildable_ports) return '<button class="wide" disabled>' + ((snapshot.map.ports || []).includes(t.id) ? 'Порт стоит издавна' : 'Земля не выходит к воде') + '</button>';
+  if (hasPort(t.id)) return '<button class="wide" disabled>Порт стоит: отсюда выходят в море</button>';
+  if (!(snapshot.map.ports || []).includes(t.id)) return '<button class="wide" disabled>Порт · земля не выходит к воде</button>';
+  if (st.port_ready_at) return '<button class="wide" disabled>Порт строится · ' + escapeHtml(timeLeft(st.port_ready_at)) + '</button>';
+  return '<button class="wide" data-land-port>Построить порт · 4 золота</button>';
+}
+
 function yardButton() {
   const view = snapshot.game.ranks_view;
   if (!view) return '';
@@ -1804,7 +1828,7 @@ function renderLand() {
       '<div class="row"><span>Платит хозяину</span><b>+' + Number(t.gold_income || 0) + ' золота с рассветом</b></div>' + bonus +
       '<div class="row"><span>Стража</span><b>' + (seen ? garrison + ' ' + warriorWord(garrison) : 'неизвестно') + '</b></div>' +
       (seen && garrison ? '<div class="row"><span>Из них</span><b>' + escapeHtml(describeRanks(rankComp(landId, st.owner))) + '</b></div>' : '') +
-      '<div class="row"><span>Возведено</span><b>' + (st.fort ? 'крепость' : 'нет') + '</b></div>' +
+      '<div class="row"><span>Возведено</span><b>' + ([st.fort ? 'крепость' : '', hasPort(landId) ? 'порт' : ''].filter(Boolean).join(', ') || 'нет') + '</b></div>' +
       '<div class="row"><span>Исконно</span><b>' + escapeHtml(t.house_sector && colors[t.house_sector] ? 'земля Дома ' + t.house_sector : t.house_sector || 'вольная земля') + '</b></div>' +
       '<div class="row"><span>Прежде владели</span><b>' + escapeHtml(past.length ? past.join(', ') : 'никто') + '</b></div>' +
       '<div class="lore">' + escapeHtml(LAND_LORE[Math.abs(hash) % LAND_LORE.length]) + '</div>' + guestsBlock(mine);
@@ -1828,7 +1852,7 @@ function renderLand() {
     '<button class="wide" data-land-fort ' + (fortNote ? 'disabled' : '') + '>' + (fortNote || 'Возвести крепость · 3 золота') + '</button>' +
     (t.type === 'Столица' ? yardButton() : '') +
     '<button class="wide" disabled>Тайный приказ · мастера ещё не прибыли</button>' +
-    '<button class="wide" disabled>Порт · мастера ещё не прибыли</button>';
+    portButton(t, st);
 }
 
 // Wayfarers resting in this land; with a free spy one of them can take him along.
@@ -1893,6 +1917,7 @@ function setupLand() {
     }
     if (event.target.closest('[data-drill-go]')) landCommand('/api/drill', { counts: readCounts('drill') });
     if (event.target.closest('[data-yard]')) landCommand('/api/yard', {});
+    if (event.target.closest('[data-land-port]')) landCommand('/api/port', {});
     if (event.target.closest('[data-hire-spy]')) agentCommand({ action: 'HIRE' });
     const join = event.target.closest('[data-spy-band]');
     if (join) {
@@ -4093,6 +4118,11 @@ function drawPixiMap(scene, key) {
     t.position.set(n.x, n.y - 1.6);
     labels.addChild(t);
   }
+  for (const p of scene.ports || []) {
+    const anchor = pixiText('⚓', 7, 0x1f3550, true, '#f2e6c8');
+    anchor.position.set(p.x, p.y);
+    labels.addChild(anchor);
+  }
   const tokens = new PIXI.Container();
   for (const tk of scene.tokens) {
     const s = shieldGraphic(tk.color, tk.count, tk.scale);
@@ -4226,12 +4256,23 @@ function renderMap() {
     : snapshot.map.sea_edges;
 
   // The same picture is described once more for the WebGL layer.
-  const scene = pixiScene = { realms: realmIds, provinces: [], castles: [], lanes: [], routes: [], waypoints: [], ribbons: [], notes: [], tokens: [], dx: 0, dy: 0 };
+  const scene = pixiScene = { realms: realmIds, ports: [], provinces: [], castles: [], lanes: [], routes: [], waypoints: [], ribbons: [], notes: [], tokens: [], dx: 0, dy: 0 };
   const lines = [];
+  // Where ports are built, the sea net shows only as far as it is known, and a
+  // shore joins it only through its port.
+  const seaKnown = id => !snapshot.map.buildable_ports || !explored || explored.has(id);
+  const laneShown = (a, b) => {
+    if (!snapshot.map.buildable_ports) return true;
+    const wa = Boolean(seaWaypoints[a]), wb = Boolean(seaWaypoints[b]);
+    if (wa && wb) return seaKnown(a) && seaKnown(b);
+    const land = wa ? b : a, water = wa ? a : b;
+    return seaKnown(water) && hasPort(land);
+  };
   for (const [a,b] of laneEdges) {
     const from = routeCoords[a];
     const to = routeCoords[b];
     if (!from || !to) continue;
+    if (!laneShown(a, b) && !activeEdges.has(routeEdgeKey(a,b))) continue;
     const active = activeEdges.has(routeEdgeKey(a,b)) ? ' active-route' : '';
     scene.lanes.push({ a: from, b: to, active: Boolean(active) });
     lines.push(`<line class="sea-lane-edge${active}" x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" />`);
@@ -4242,7 +4283,7 @@ function renderMap() {
     lines.push(`<line class="land-edge active-route" x1="${coords[a].x}" y1="${coords[a].y}" x2="${coords[b].x}" y2="${coords[b].y}" />`);
   }
 
-  const waypointNodes = Object.entries(seaWaypoints).map(([id,point]) => {
+  const waypointNodes = Object.entries(seaWaypoints).filter(([id]) => seaKnown(id)).map(([id,point]) => {
     const seaState = state.sea_nodes?.[id] || {owner:null, warriors:{}};
     const owner = seaState.owner;
     const rawTotal = Object.values(seaState.warriors || {})
@@ -4296,6 +4337,7 @@ function renderMap() {
     if (fogVisible && owner !== house) classes.push('fogged');
 
     scene.provinces.push({ id: t.id, cls: classes });
+    if (snapshot.map.buildable_ports && hasPort(t.id) && (!explored || explored.has(t.id))) scene.ports.push({ x: c.x - 13, y: c.y + 6 });
     borders.push(`<path d="${shape.d}"></path>`);
     zones.push(`<path class="${classes.join(' ')}" data-id="${t.id}" d="${shape.d}"><title>${escapeHtml(t.name)} · ${escapeHtml(t.type)}</title></path>`);
 
@@ -4539,6 +4581,12 @@ let lastSelectionKey = '';
 
 function renderSelection() {
   const card = $('route-card');
+  $('via-toggle').classList.toggle('on', viaPick);
+  $('via-toggle').textContent = viaPick ? 'Готово' : 'Свой путь';
+  $('via-text').textContent = viaPick
+    ? (viaPoints.length ? 'через ' + viaPoints.map(id => mapNodeById(id)?.name || 'море').join(' → ') : 'Нажимай на земли и морские точки по пути')
+    : viaPoints.length ? 'через ' + viaPoints.map(id => mapNodeById(id)?.name || 'море').join(' → ') : 'кратчайшей дорогой';
+  $('via-clear').style.display = viaPoints.length ? '' : 'none';
 
   if (isSpectator) {
     origin = null;
@@ -4698,6 +4746,14 @@ function renderField() {
 async function selectTerritory(id) {
   if (isSpectator) return;
   if (fieldRedirect) { await redirectField(id); return; }
+  if (viaPick && origin && target && id !== origin && id !== target) {
+    if (!exploredNow || exploredNow.has(id)) viaPoints.push(id);
+    renderSelection();
+    return;
+  }
+  // A new origin or goal starts the way afresh.
+  viaPoints = [];
+  viaPick = false;
 
   const owner = nodeOwner(id);
   const movable = warriorsAt(id, house);
@@ -4772,10 +4828,13 @@ async function sendOrder(confirmed = false) {
     body: JSON.stringify({
       ...action,
       commander_id: commanderId,
-      halt_ratio: Number($('halt-ratio').value) || null
+      halt_ratio: Number($('halt-ratio').value) || null,
+      via: viaPoints
     })
   });
   $('halt-ratio').value = '';
+  viaPoints = [];
+  viaPick = false;
 
   origin = null;
   target = null;
@@ -5168,6 +5227,8 @@ placeStatus(); phoneLayout.addEventListener('change', placeStatus);
 // A phone opens on the player's own capital as soon as the map is known.
 const homeWatch = setInterval(() => { if (homeShown || !phoneLayout.matches) return clearInterval(homeWatch); if (snapshot?.map?.capitals && $('map').dataset.ready) goHome(); }, 400);
 $('field-close').onclick = closeField;
+$('via-toggle').onclick = () => { viaPick = !viaPick; renderSelection(); };
+$('via-clear').onclick = () => { viaPoints = []; viaPick = false; renderSelection(); };
 setInterval(() => { if (fieldOrderId) renderField(); }, 1000);
 setupLens();
 setupLand();

@@ -360,6 +360,7 @@ export function nextRanksDueAt(game) {
   const times = [];
   for (const list of Object.values(game.drills || {})) for (const drill of list) times.push(drill.due_at);
   for (const yard of Object.values(game.yards || {})) if (!yard.announced) times.push(yard.ready_at);
+  for (const land of Object.values(game.state?.territories || {})) if (land.port_ready_at) times.push(land.port_ready_at);
   return times.sort()[0] || null;
 }
 

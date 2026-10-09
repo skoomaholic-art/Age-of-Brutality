@@ -118,7 +118,7 @@ export function mapPlan(count, shape = 'wheel') {
   return { houses: count, shape, ringRadius, innerRing, islandPairs, borderlands, lands };
 }
 
-export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'wheel', warp = 'none' } = {}) {
+export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'wheel', warp = 'none', seaMesh = false } = {}) {
   if (!MAP_SHAPES.includes(shape)) shape = 'wheel';
   if (!MAP_WARPS.includes(warp)) warp = 'none';
   if (houses.length === 2 && FOR_TWO[shape]) shape = FOR_TWO[shape];
@@ -465,6 +465,73 @@ export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'whe
     islandBonus[key] = pair;
   }
 
+  // Open water everywhere: a net of sea points over all the water, and every
+  // shore that can reach it may build a port. Lands only become ports when a
+  // port is built (or at the start, the harbour of every home).
+  let startingPorts = null;
+  if (seaMesh) {
+    const landSegs = [...edges].map(key => key.split('|')).map(([a, b]) => [sites.find(s => s.id === a).pos, sites.find(s => s.id === b).pos]);
+    const sitePts = sites.map(s => s.pos);
+    const clearance = p => Math.min(
+      ...landSegs.map(([a, b]) => toSegment(p, a, b)),
+      ...sitePts.map(q => dist(p, q))
+    );
+    const lineClear = (a, b, need) => {
+      const n = Math.max(2, Math.ceil(dist(a, b) / 8));
+      for (let k = 0; k <= n; k += 1) {
+        const p = { x: a.x + (b.x - a.x) * k / n, y: a.y + (b.y - a.y) * k / n };
+        if (clearance(p) < need) return false;
+      }
+      return true;
+    };
+    const outer = Math.max(...Object.values(waypoints).map(p => Math.hypot(p.x, p.y)));
+    const sector = (2 * Math.PI) / count;
+    const meshPts = [];
+    for (let r = 40; r <= outer + 1; r += 62) {
+      const steps = Math.max(1, Math.round((sector * r) / 66));
+      for (let j = 0; j < steps; j += 1) {
+        const a = angles[0] + (j + (Math.round(r / 62) % 2 ? 0.5 : 0)) * (sector / steps);
+        for (let i = 0; i < count; i += 1) {
+          const p = polar(r, a + i * sector);
+          if (clearance(p) < 54) continue;
+          if (Object.values(waypoints).some(q => dist(p, q) < 40)) continue;
+          meshPts.push(p);
+        }
+      }
+    }
+    meshPts.forEach((p, k) => { waypoints[`M-N${k + 1}`] = p; });
+    const ids = Object.keys(waypoints);
+    const lanesSet = new Set(lanes.map(([a, b]) => [a, b].sort().join('|')));
+    for (let i = 0; i < ids.length; i += 1) {
+      for (let j = i + 1; j < ids.length; j += 1) {
+        const a = waypoints[ids[i]], b = waypoints[ids[j]];
+        const d = dist(a, b);
+        if (d > 100) continue;
+        const key = [ids[i], ids[j]].sort().join('|');
+        if (lanesSet.has(key) || !lineClear(a, b, 36)) continue;
+        lanesSet.add(key);
+        lanes.push([ids[i], ids[j]]);
+      }
+    }
+    // Every shore with a clear run to open water close by may hold a port.
+    for (const s of sites) {
+      const near = ids
+        .map(id => ({ id, d: dist(s.pos, waypoints[id]) }))
+        .filter(({ id, d }) => d <= 105 && !sites.some(t => t !== s && toSegment(t.pos, s.pos, waypoints[id]) < 36))
+        .sort((x, y) => x.d - y.d || (x.id < y.id ? -1 : 1))
+        .slice(0, 2);
+      for (const { id } of near) {
+        const key = [s.id, id].sort().join('|');
+        if (lanesSet.has(key)) continue;
+        lanesSet.add(key);
+        lanes.push([s.id, id]);
+      }
+      if (near.length) ports.add(s.id);
+    }
+    // The harbour of every home is there from the start: the settlement facing the sea.
+    startingPorts = houses.map((_, i) => petal(i, 0)).filter(id => ports.has(id));
+  }
+
   // Bend the whole picture; the roads stay as they are.
   if (warp !== 'none') {
     const shaper = seeded(((Number(seed) || 1) ^ 0x2f3a9d) >>> 0);
@@ -574,6 +641,7 @@ export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'whe
     seed: Number(seed) || 1,
     shape,
     warp,
+    ...(seaMesh ? { buildable_ports: true, starting_ports: startingPorts } : {}),
     houses: [...houses],
     plan,
     territories,

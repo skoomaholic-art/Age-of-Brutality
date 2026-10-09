@@ -31,7 +31,14 @@ export function visiblePositions(state, map, house) {
 
   const seen = new Set(own);
   addNeighbours(seen, map.land_edges, own);
-  addNeighbours(seen, map.sea_lane_edges, own);
+  if (!map.buildable_ports) {
+    addNeighbours(seen, map.sea_lane_edges, own);
+    return seen;
+  }
+  // Where ports are built, the open water shows only from a port or a fleet.
+  const lookouts = new Set([...own].filter(id =>
+    map.sea_waypoints?.[id] || state.territories?.[id]?.port || (map.starting_ports || []).includes(id)));
+  addNeighbours(seen, map.sea_lane_edges, lookouts);
   return seen;
 }
 

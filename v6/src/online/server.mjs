@@ -27,10 +27,11 @@ import {
   haltOrder,
   resumeOrder,
   redirectOrder,
-  setHaltPoint
+  setHaltPoint,
+  setViaRoute
 } from './orders.mjs';
 import { normalizeOnlineSeaState } from './sea-navigation.mjs';
-import { raiseLevy, startDrill, buildYard, processRanks, ranksView } from './levy.mjs';
+import { raiseLevy, startDrill, buildYard, buildPort, processRanks, ranksView } from './levy.mjs';
 import { startRide, processRiders, ridersOf } from './riders.mjs';
 import {
   ONLINE_ECONOMY_TIMING,
@@ -147,12 +148,12 @@ const scopeCache = new Map();
 function scopeForSpec(spec) {
   if (!spec || spec.kind !== 'generated') return {};
   // Games made before shapes existed keep their wheel (no shape in the key).
-  const key = JSON.stringify(spec.shape ? [spec.seed, spec.houses, spec.shape, spec.warp] : [spec.seed, spec.houses]);
+  const key = JSON.stringify(spec.shape ? [spec.seed, spec.houses, spec.shape, spec.warp, spec.sea || null] : [spec.seed, spec.houses]);
   if (!scopeCache.has(key)) {
     if (scopeCache.size > 200) scopeCache.delete(scopeCache.keys().next().value);
     scopeCache.set(key, {
       key,
-      map: generateMap(classicMap, baseConstants, { houses: spec.houses, seed: spec.seed, shape: spec.shape || 'wheel', warp: spec.warp || 'none' }),
+      map: generateMap(classicMap, baseConstants, { houses: spec.houses, seed: spec.seed, shape: spec.shape || 'wheel', warp: spec.warp || 'none', seaMesh: spec.sea === 'mesh' }),
       constants: { ...baseConstants, houses: [...spec.houses] }
     });
   }
@@ -185,7 +186,8 @@ function mapSpecFrom(body, { defaultHouses }) {
   const chance = pickMapShape(houses.length, seed);
   const shape = MAP_SHAPES.includes(body.shape) ? body.shape : chance.shape;
   const warp = MAP_WARPS.includes(body.warp) ? body.warp : chance.warp;
-  return { kind: 'generated', seed, houses, shape, warp };
+  // New games: a net of sea points over all the water, and ports to be built.
+  return { kind: 'generated', seed, houses, shape, warp, sea: 'mesh' };
 }
 
 const mapArtCache = new Map();
@@ -651,6 +653,10 @@ function publicBootstrap(ctx) {
       sea_waypoints: map.sea_waypoints || {},
       sea_lane_edges: map.sea_lane_edges || [],
       ports: map.ports,
+      buildable_ports: Boolean(map.buildable_ports),
+      starting_ports: map.starting_ports || [],
+      shape: map.shape || null,
+      warp: map.warp || null,
       capitals: map.capitals,
       generated: Boolean(map.generated),
       seed: map.seed || null,
@@ -1623,19 +1629,19 @@ async function handleGameApi(req, res, url, ctx, subpath) {
       house: command.house,
       mutate: async game => {
         const done = executeCommand(game, map, constants, command);
+        const order = done?.game && done.response?.order?.id ? done.game.orders.find(item => item.id === done.response.order.id) : null;
+        // A way of the player's own: by the points he picked.
+        if (order && Array.isArray(body.via) && body.via.length) setViaRoute(done.game, map, constants, order, body.via, Date.now());
         // "Stop part of the way": the army makes camp on the road at that share of it.
         const ratio = Number(body.halt_ratio);
-        if (ratio > 0 && ratio < 1 && done?.game && done.response?.order?.id) {
-          const order = done.game.orders.find(item => item.id === done.response.order.id);
-          if (order) setHaltPoint(order, ratio, Date.now());
-        }
+        if (order && ratio > 0 && ratio < 1) setHaltPoint(order, ratio, Date.now());
         return done;
       }
     }));
     return json(res, result.status, result.response);
   }
 
-  if (req.method === 'POST' && ['/levy', '/drill', '/yard'].includes(subpath)) {
+  if (req.method === 'POST' && ['/levy', '/drill', '/yard', '/port'].includes(subpath)) {
     const body = await readBody(req);
     const house = String(body.house || '').trim();
     await requireHouse(ctx, req, house);
@@ -1647,7 +1653,8 @@ async function handleGameApi(req, res, url, ctx, subpath) {
         const nowMs = Date.now();
         const next = subpath === '/levy' ? raiseLevy(game, map, constants, house, body.counts, { nowMs })
           : subpath === '/drill' ? startDrill(game, map, house, body.counts, { nowMs })
-            : buildYard(game, map, house, { nowMs });
+            : subpath === '/port' ? buildPort(game, map, house, String(body.territory || ''), { nowMs })
+              : buildYard(game, map, house, { nowMs });
         return { game: next, response: { ok: true } };
       }
     }));

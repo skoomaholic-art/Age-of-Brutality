@@ -36,10 +36,12 @@ CASES.push([2, 'archipelago', 'stretch'], [2, 'inland', 'crescent']);
 for (const shape of MAP_SHAPES) for (const count of [2, 3, 5]) for (const warp of ['spiral', 'hourglass', 'ripple', 'zigzag', 'shear', 'teardrop']) if ((count + warp.length + shape.length) % 4 === 0) CASES.push([count, shape, warp]);
 for (const shape of MAP_SHAPES) CASES.push([2, shape, 'none'], [5, shape, 'none']);
 
-for (const [count, shape, warp] of CASES) {
-  test(`a map for ${count} Houses (${shape}, ${warp}) is fair and whole`, () => {
+for (const shape of MAP_SHAPES) for (const count of [2, 4, 6]) CASES.push([count, shape, MAP_WARPS[(count + shape.length) % MAP_WARPS.length], true]);
+
+for (const [count, shape, warp, seaMesh] of CASES) {
+  test(`a map for ${count} Houses (${shape}, ${warp}${seaMesh ? ', open sea' : ''}) is fair and whole`, () => {
     const houses = constants.houses.slice(0, count);
-    const map = generateMap(base, constants, { houses, seed: 100 + count, shape, warp });
+    const map = generateMap(base, constants, { houses, seed: 100 + count, shape, warp, seaMesh: Boolean(seaMesh) });
     const ids = new Set(map.territories.map(t => t.id));
     assert.equal(ids.size, map.territories.length, 'ids are unique');
     assert.equal(map.territories.length, mapPlan(count, map.shape).lands);

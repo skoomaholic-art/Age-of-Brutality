@@ -116,6 +116,25 @@ export function buildYard(game, map, house, { nowMs = Date.now() } = {}) {
   return next;
 }
 
+// A port on a shore: from here fleets set out into the open water.
+export const PORT = Object.freeze({ gold: 4, dayShare: 1 / 3 });
+export function buildPort(game, map, house, territory, { nowMs = Date.now() } = {}) {
+  if (!map.buildable_ports) throw new Error('на этой карте порты уже стоят где положено');
+  const land = game.state.territories[territory];
+  if (!land || land.owner !== house) throw new Error('порт строят только на своей земле');
+  if (!(map.ports || []).includes(territory)) throw new Error('эта земля не выходит к воде');
+  if (land.port || (map.starting_ports || []).includes(territory)) throw new Error('порт здесь уже есть');
+  if (land.port_ready_at) throw new Error('порт уже строится');
+  if (Number(game.state.houses[house].gold || 0) < PORT.gold) throw new Error(`нужно ${PORT.gold} золота`);
+  const next = structuredClone(game);
+  next.state.houses[house].gold -= PORT.gold;
+  const dayMsValue = Number(next.rounds?.round_duration_ms) > 0 ? Number(next.rounds.round_duration_ms) : 24 * 3600_000;
+  next.state.territories[territory].port_ready_at = new Date(nowMs + Math.round(dayMsValue * PORT.dayShare)).toISOString();
+  next.state.territories[territory].port_builder = house;
+  next.updated_at = new Date(nowMs).toISOString();
+  return next;
+}
+
 // The clock: drills end, yards are finished, the ranks follow the heads.
 export function processRanks(game, map, nowMs = Date.now()) {
   let next = null;
@@ -139,6 +158,15 @@ export function processRanks(game, map, nowMs = Date.now()) {
       g.state.ranks[capital][house] = comp;
       g.state.journal.push({ kind: 'DRILL_DONE', house, houses: [house], counts: drill.counts, risen, risen_text: describeComp(risen), at: new Date(nowMs).toISOString() });
     }
+  }
+  for (const [id, land] of Object.entries(game.state.territories || {})) {
+    if (!land.port_ready_at || Date.parse(land.port_ready_at) > nowMs) continue;
+    const g = edit();
+    const here = g.state.territories[id];
+    delete here.port_ready_at;
+    here.port = true;
+    g.state.journal.push({ kind: 'PORT_BUILT', house: here.owner, builder: here.port_builder || here.owner, territory: id, houses: [here.owner].filter(Boolean), at: new Date(nowMs).toISOString() });
+    delete here.port_builder;
   }
   for (const [house, yard] of Object.entries(game.yards || {})) {
     if (yard.announced || Date.parse(yard.ready_at) > nowMs) continue;

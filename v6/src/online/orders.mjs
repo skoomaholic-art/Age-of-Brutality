@@ -21,6 +21,7 @@ import {
   isSeaWaypoint
 } from './sea-navigation.mjs';
 import {
+  canPassThrough,
   findOnlineRoute,
   listReachableOnlineRoutes,
   guestWarriors,
@@ -990,5 +991,33 @@ export function setHaltPoint(order, ratio, nowMs = Date.now()) {
   const done = orderProgressMs(order, nowMs);
   order.halt_at_progress_ms = Math.max(done, at);
   order.due_at = new Date(Date.parse(order.created_at) + order.halt_at_progress_ms).toISOString();
+  return order;
+}
+
+// "Через точки": the army goes to its goal by the points the player picked,
+// leg by leg along the roads and sea lanes, and only then to the goal.
+export function setViaRoute(game, map, constants, order, via, nowMs = Date.now()) {
+  const house = order.action.house;
+  const chain = [order.action.from];
+  for (const id of (Array.isArray(via) ? via : []).map(String).slice(0, 8)) {
+    if (id && id !== chain[chain.length - 1] && id !== order.action.to) chain.push(id);
+  }
+  if (chain.length === 1) return order;
+  chain.push(order.action.to);
+  for (const id of chain.slice(1, -1)) {
+    if (!canPassThrough(game.state, map, house, id, null)) throw new Error('через чужую землю без права прохода не пройти');
+  }
+  const scale = timeScale(game);
+  const segments = [];
+  for (let i = 0; i < chain.length - 1; i += 1) {
+    const route = findOnlineRoute(game.state, map, constants, house, chain[i], chain[i + 1], ONLINE_TIMING, { free: true });
+    if (!route) throw new Error('по этим точкам дороги нет');
+    segments.push(...route.segments.map(segment => ({ ...segment, duration_ms: Math.round(Number(segment.duration_ms || 0) * scale) })));
+  }
+  const total = segments.reduce((sum, segment) => sum + segment.duration_ms, 0);
+  order.travel_segments = segments;
+  order.travel_via = chain.slice(1, -1);
+  order.duration_ms = total;
+  order.due_at = new Date(Date.parse(order.created_at) + total).toISOString();
   return order;
 }

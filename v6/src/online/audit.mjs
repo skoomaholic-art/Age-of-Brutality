@@ -299,6 +299,14 @@ export function journalEntryToAudit(entry, map, game) {
     };
   }
 
+  if (entry.kind === 'PORT_BUILT') {
+    return {
+      ...base,
+      message: `Порт построен: ${territoryName(map, entry.territory)} (Дом ${entry.house}). Из него корабли выходят в открытое море.`,
+      details: { house: entry.house, territory: entry.territory, at: entry.at || null }
+    };
+  }
+
   if (entry.kind === 'RIDER_SENT' || entry.kind === 'RIDER_CAPTURED' || entry.kind === 'RIDER_TURNED_BACK') {
     const to = territoryName(map, entry.to || entry.territory);
     return {
