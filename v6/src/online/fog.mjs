@@ -117,7 +117,7 @@ export function knownHouses(game, house, houses) {
 
 // What other Houses do in private: their marches, levies and building.
 const PRIVATE_EVENTS = new Set([
-  'LEVY_RAISED', 'DRILL_DONE', 'YARD_BUILT', 'RIDER_SENT', 'SEA_TOLL', 'BRIDGE_STARTED', 'WILD_BATTLE', 'UNITS_HIRED', 'UNITS_RETRAINED', 'GROWTH_BUILT', 'HEART_SPIED',
+  'LEVY_RAISED', 'DRILL_DONE', 'YARD_BUILT', 'RIDER_SENT', 'SEA_TOLL', 'BRIDGE_STARTED', 'WILD_BATTLE', 'UNITS_HIRED', 'UNITS_RETRAINED', 'GROWTH_BUILT', 'HEART_SPIED', 'DESERTION',
   'MARCH_QUEUED',
   'MARCH',
   'ROUTE_MARCH',
@@ -168,6 +168,8 @@ export function applyFog(clientGame, map, house) {
   }
   // The wild guard of lands never seen is not known.
   for (const id of Object.keys(state.wild_guards || {})) {
+    // The Hearts are known to all: their guard is no secret.
+    if (state.heart?.candidates?.includes(id)) continue;
     if (!explored.has(id) && !seen.has(id)) delete state.wild_guards[id];
   }
 

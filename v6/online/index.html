@@ -916,6 +916,7 @@
         <div class="stat"><span class="muted">Золото</span><b id="gold">0</b></div>
         <div class="stat"><span class="muted">Влияние</span><b id="influence">0</b></div>
         <div class="stat"><span class="muted">Слава</span><b id="vp">0</b></div>
+        <div class="stat" id="upkeep-stat" hidden><span class="muted">Войску с рассветом</span><b id="upkeep">0</b></div>
       </div>
     </div>
 
@@ -1815,11 +1816,12 @@ function hireBlock(id) {
   const rows = view.kinds.map(k => {
     const ok = k.where <= level;
     return '<div class="rank-row' + (ok ? '' : ' off') + '"><span><b>' + escapeHtml(k.name) + '</b> · сила ' + k.power + (k.guard ? ' (+' + k.guard + ' в обороне)' : '') +
-      '<br><span class="tiny">' + k.gold + ' зол. за голову' + (ok ? '' : ' · ' + KIND_WHERE[k.where]) + '</span></span>' +
+      '<br><span class="tiny">' + k.gold + ' зол. за голову, содержание ' + k.upkeep + ' с рассветом' + (ok ? '' : ' · ' + KIND_WHERE[k.where]) + '</span></span>' +
       '<input type="number" min="0" max="' + people + '" value="0" data-hire-kind="' + k.index + '" ' + (ok ? '' : 'disabled') + '></div>';
   }).join('');
   return '<div class="rank-box"><div class="rank-head">Нанять войска</div>' +
-    '<div class="tiny">Людей в земле: <b>' + people + '</b>. Каждый нанятый — один из них. Новые люди прибывают, только если здесь есть ' + (level ? 'ярмарка' : 'поля') + '.</div>' +
+    '<div class="tiny">Людей в земле: <b>' + people + '</b>. Каждый нанятый — один из них. Новые люди прибывают, только если здесь есть ' + (level ? 'ярмарка' : 'поля') + '.' +
+    (snapshot.game.upkeep ? ' Всё войско сейчас стоит <b>' + snapshot.game.upkeep.gold + '</b> золота с рассветом; не заплатишь — неоплаченные разойдутся.' : '') + '</div>' +
     rows + '<div class="acts"><span class="tiny" data-hire-total>0 золота</span><button class="primary" data-hire-go>Нанять</button></div></div>';
 }
 function retrainBlock(id) {
@@ -1912,11 +1914,11 @@ function bridgeRows(id, canBuild) {
     const other = territoryById(c.a === id ? c.b : c.a)?.name || '';
     const bridge = bridgeOf(key);
     const label = 'Дорога на ' + escapeHtml(other);
-    if (bridge?.built) return '<div class="row"><span>' + label + '</span><b>мост стоит</b></div>';
+    if (bridge?.built) return '<div class="row"><span>' + label + '</span><b>мост стоит' + (canBuild ? ' <button data-bridge-burn="' + escapeHtml(key) + '">Сжечь</button>' : '') + '</b></div>';
     if (bridge?.ready_at) return '<div class="row"><span>' + label + '</span><b>мост строится · ' + escapeHtml(timeLeft(bridge.ready_at)) + '</b></div>';
     if (!canBuild) return '<div class="row"><span>' + label + '</span><b>моста нет, не пройти</b></div>';
     return '<button class="wide" data-bridge-build="' + escapeHtml(key) + '">Мост на дороге на ' + escapeHtml(other) + ' · ' + cost.gold + ' золота</button>';
-  }).join('') + '<div class="tiny">Без моста реку не перейти. Мост ставят со своего берега, и ходят по нему все.</div></div>';
+  }).join('') + '<div class="tiny">Без моста реку не перейти. Мост ставят со своего берега, и ходят по нему все. Свой мост можно сжечь, чтобы задержать врага или Орду: та ищет брод и теряет время.</div></div>';
 }
 
 function yardButton() {
@@ -2181,6 +2183,8 @@ function setupLand() {
     if (event.target.closest('[data-growth]')) landCommand('/api/growth', {});
     const fateOpen = event.target.closest('[data-fate-open]');
     if (fateOpen) { fateLater.delete(fateOpen.dataset.fateOpen); $('fate').dataset.key = ''; renderFate(); }
+    const burn = event.target.closest('[data-bridge-burn]');
+    if (burn) landCommand('/api/bridge-burn', { key: burn.dataset.bridgeBurn });
     const bridgeButton = event.target.closest('[data-bridge-build]');
     if (bridgeButton) landCommand('/api/bridge', { key: bridgeButton.dataset.bridgeBuild });
     if (event.target.closest('[data-hire-spy]')) agentCommand({ action: 'HIRE' });
@@ -2706,8 +2710,9 @@ const TALMUD = [
   ['О стекле хрониста', 'Наведи перст на штандарт рати или путников, и в круглом стекле увидишь, кто идёт, сколько их и кто ведёт. Коснись штандарта, и стекло останется открытым.'],
   ['О брошенных державах', 'Правитель, покинувший век до срока, бросает свои земли. Они сереют, победить такой Дом уже не может, а земли его достаются тому, кто придёт первым.'],
   ['О победе', 'Славу считают в очках победы: за выигранные битвы, взятые и удержанные чужие столицы и величину державы. У кого их больше к исходу шестого дня, тот и пережил жестокий век.'],
-  ['О людях, порядке и бунтах', 'В новых веках у каждой земли свои люди. Всякий нанятый воин берётся из них, и сами по себе они не прибывают: нужны поля в деревне или ярмарка в городе. Войск можно держать сколько угодно, лишь бы хватало золота и людей. Деревня даёт крестьян, копейщиков и лучников, город ещё ратников и конных сержантов, а рыцарей набирают только в столице. Побывавший в бою отряд получает звезду опыта, до трёх, и каждая прибавляет ему силы. У каждой своей земли есть порядок. Земля в беспорядках даёт лишь половину золота, а на грани бунта, когда людей много, а гарнизон мал, поднимается на рассвете и уходит к вольным людям. Взяв землю, ты решаешь её судьбу: взять с миром, обложить данью или разграбить. Чем больше берёшь, тем ниже порядок.'],
-  ['О Сердце земель', 'В новых веках вольные земли не пусты: их стерегут вольные люди. У самой столицы их горстка, а чем дальше к середине мира, тем их больше. Число стражи видно на сером щите и в грамоте земли. Бьются с ними без костей, как в любой битве, и павшие с обеих сторон не встают. Первому взявшему вольную землю достаётся слава по её удалённости: одна за ближнее кольцо, и больше за каждое следующее. Где Сердце земель, не знает никто. На рассвете третьего дня являются несколько Сердец за крепкими стенами, по одному на Дом без одного. Встают они подальше от тех, кто успел разрастись, и поближе к тем, кто сидел дома. Истинное лишь одно. Шпион, дошедший до Сердца или до соседней с ним земли, узнает правду. С каждым рассветом летописцы раскрывают всем ещё одно ложное. Кто возьмёт ложное, разбудит Орду: она пойдёт на его столицу через его земли, в каждой взятой оставляя часть своих всадников, и дойдёт ослабевшей, если земель на пути много. Кто держит истинное Сердце, тот с каждым рассветом получает славу, и всё больше: три, четыре, пять. Кто первым наберёт нужную славу, тот и победил. Если не наберёт никто, век кончится после восьмого дня. Вольная стража со временем подрастает, если её не тревожить.']
+  ['О людях, порядке и бунтах', 'В новых веках у каждой земли свои люди. Всякий нанятый воин берётся из них, и сами по себе они не прибывают: нужны поля в деревне или ярмарка в городе. Войск можно держать сколько угодно, лишь бы хватало золота и людей. Деревня даёт крестьян, копейщиков и лучников, город ещё ратников и конных сержантов, а рыцарей набирают только в столице. Побывавший в бою отряд получает звезду опыта, до трёх, и каждая прибавляет ему силы. У каждой своей земли есть порядок. Земля в беспорядках даёт лишь половину золота, а на грани бунта, когда людей много, а гарнизон мал, поднимается на рассвете и уходит к вольным людям. Взяв землю, ты решаешь её судьбу: взять с миром, обложить данью или разграбить. Чем больше берёшь, тем ниже порядок. Войско надо кормить: каждый рассвет крестьянин стоит четверть монеты, рыцарь две. Не хватит золота, и неоплаченные разойдутся по домам, самые дешёвые первыми, из самых больших отрядов. Ушедшие в поход остаются при знамени.'],
+  ['О мире', 'Воюющие Дома могут заключить мир письмом: в «Дипломатии» у врага есть кнопка «Предложить мир». К миру можно приложить золото или земли, чтобы враг согласился охотнее. С миром начинается перемирие на два дня, и кто нарушит его нападением, прослывёт клятвопреступником, как предавший союз. Во время перемирия войска на дорогах расходятся без боя.'],
+  ['О Сердце земель', 'В новых веках вольные земли не пусты: их стерегут вольные люди. У самой столицы их горстка, а чем дальше к середине мира, тем их больше. Число стражи видно на сером щите и в грамоте земли. Бьются с ними без костей, как в любой битве, и павшие с обеих сторон не встают. Первому взявшему вольную землю достаётся слава по её удалённости: одна за ближнее кольцо, и больше за каждое следующее. Где Сердце земель, не знает никто. На рассвете третьего дня являются несколько Сердец за крепкими стенами, по одному на Дом без одного. Встают они подальше от тех, кто успел разрастись, и поближе к тем, кто сидел дома. Истинное лишь одно. Шпион, дошедший до Сердца или до соседней с ним земли, узнает правду. С каждым рассветом летописцы раскрывают всем ещё одно ложное. Кто возьмёт ложное, разбудит Орду: она пойдёт на его столицу через его земли, в каждой взятой оставляя часть своих всадников, и дойдёт ослабевшей, если земель на пути много. Кто держит истинное Сердце, тот с каждым рассветом получает славу, и всё больше: три, четыре, пять. Кто первым наберёт нужную славу, тот и победил. Чем дольше истинное Сердце стоит ничьим, тем хуже всем: если до рассвета шестого дня его никто не возьмёт, Орда вырвется из всех ложных Сердец разом, поделит силы и пойдёт на столицы всех Домов, а истинное Сердце откроется всем. Свой мост можно сжечь: Орда встанет у реки искать брод. Если не наберёт никто, век кончится после восьмого дня. Вольная стража со временем подрастает, если её не тревожить.']
 ];
 
 // What the server says in the tongue of clerks, said as a herald would.
@@ -3238,6 +3243,7 @@ function dealItemText(item) {
   if (item.type === 'GOLD') return item.amount + ' золота';
   if (item.type === 'PASSAGE') return 'право прохода и постоя';
   if (item.type === 'MARRIAGE') return 'дочь в жёны — брачный союз';
+  if (item.type === 'PEACE') return 'мир и перемирие на ' + (snapshot.game.diplomacy?.truce_days || 2) + ' дня';
   if (item.type === 'LAND') return 'землю ' + (item.name || mapNodeById(item.territory)?.name || item.territory);
   return '';
 }
@@ -3255,11 +3261,14 @@ function dealHalfForm(side, other) {
     '<label class="deal-row' + (off ? ' off' : '') + '"' + (off ? ' title="' + escapeHtml(off) + '"' : '') + '>' +
     '<input type="checkbox" data-side="' + side + '" data-item="' + key + '"' + (off ? ' disabled' : '') + '>' +
     '<span>' + label + '</span>' + control + '</label>';
-  return row('MARRIAGE', side === 'give' ? 'Отдать дочь' + (daughter ? ', ' + escapeHtml(daughter) : '') : 'Руку их дочери' + (daughter ? ', ' + escapeHtml(daughter) : ''), '',
-      !daughter ? 'Незамужней дочери нет' : allied ? 'Союз уже есть: второго не бывает' : '') +
+  const war = relationWith(other) === 'WAR';
+  // At war a letter can only bring peace (with gold or lands to sweeten it).
+  const peaceRow = side === 'give' && war ? row('PEACE', 'Мир и перемирие на ' + (dip.truce_days || 2) + ' дня', '') : '';
+  return peaceRow + row('MARRIAGE', side === 'give' ? 'Отдать дочь' + (daughter ? ', ' + escapeHtml(daughter) : '') : 'Руку их дочери' + (daughter ? ', ' + escapeHtml(daughter) : ''), '',
+      war ? 'Во время войны свадеб не играют' : !daughter ? 'Незамужней дочери нет' : allied ? 'Союз уже есть: второго не бывает' : '') +
     row('GOLD', 'Золото', '<input type="number" min="1" max="' + (side === 'give' ? gold : 999) + '" value="' + Math.max(1, Math.min(5, side === 'give' ? gold : 5)) + '" data-amount="' + side + '">',
       side === 'give' && gold < 1 ? 'В казне пусто' : '') +
-    row('PASSAGE', side === 'give' ? 'Открыть мои дороги' : 'Открыть их дороги', '', roadsOpen ? 'Дороги уже открыты' : '') +
+    row('PASSAGE', side === 'give' ? 'Открыть мои дороги' : 'Открыть их дороги', '', war ? 'Только после мира' : roadsOpen ? 'Дороги уже открыты' : '') +
     row('LAND', 'Землю', '<select data-land="' + side + '">' + lands.map(l => '<option value="' + escapeHtml(l.id) + '">' + escapeHtml(l.name + ' · ' + l.type) + '</option>').join('') + '</select>',
       lands.length ? '' : 'Земель, кроме столицы, нет') +
     '<div class="deal-empty">Ничего не отмечено — без условий.</div>';
@@ -3382,12 +3391,25 @@ function renderDiplomacy() {
   const hasAlly = met.some(h => relationWith(h) === 'ALLIANCE');
   const rows = met.map(other => {
     const rel = relationWith(other);
-    let state = '<span class="dip-state">ни мира, ни войны</span>';
+    const truce = dip.truces?.[other];
+    let state = truce
+      ? '<span class="dip-state ally">перемирие до ' + escapeHtml(new Date(truce).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })) + '</span>'
+      : '<span class="dip-state">ни мира, ни войны</span>';
     let buttons = '';
     if (abandonedHouses()[other]) {
       state = '<span class="dip-state">брошено</span>';
     } else if (rel === 'WAR') {
       state = '<span class="dip-state war">война</span>';
+      // A letter about peace may come and go even in war.
+      if ((dip.deals_in || []).some(d => d.from === other)) {
+        state = '<span class="dip-state war">война · прислал письмо</span>';
+        buttons = '<button class="primary" data-read="' + escapeHtml(other) + '">Прочесть</button>';
+      } else if ((dip.deals_out || []).some(d => d.to === other)) {
+        state = '<span class="dip-state war">война · письмо о мире в пути</span>';
+        buttons = '<button data-dip="WITHDRAW_DEAL" data-target="' + escapeHtml(other) + '">Отозвать</button>';
+      } else {
+        buttons = '<button class="primary" data-peace="' + escapeHtml(other) + '">Предложить мир</button>';
+      }
     } else if (rel === 'ALLIANCE') {
       state = '<span class="dip-state ally">союз</span>';
       buttons = '<button data-marry="' + escapeHtml(other) + '">Переговоры</button><button data-dip="BREAK_ALLIANCE" data-target="' + escapeHtml(other) + '">Расторгнуть</button>';
@@ -3432,6 +3454,13 @@ function renderDiplomacy() {
   box.innerHTML = rows + unknownNote(others.length - met.length);
   box.querySelectorAll('button[data-marry]').forEach(button => {
     button.onclick = () => openDeal(button.dataset.marry);
+  });
+  box.querySelectorAll('button[data-peace]').forEach(button => {
+    button.onclick = () => {
+      openDeal(button.dataset.peace);
+      const peace = document.querySelector('#deal input[data-item="PEACE"]');
+      if (peace) peace.checked = true;
+    };
   });
   box.querySelectorAll('button[data-read]').forEach(button => {
     button.onclick = () => { const deal = (dip.deals_in || []).find(d => d.from === button.dataset.read); if (deal) openDeal(deal.from, deal); };
@@ -3540,7 +3569,8 @@ function renderVictory() {
     ? 'Сердца земель явятся на рассвете дня ' + heart.appear_day + '. Где — не знает никто.'
     : heart.territory
       ? (heart.holder ? 'Истинное Сердце — ' + escapeHtml(heartName) + '. Держит Дом ' + escapeHtml(heart.holder) + ', ' + heart.streak + '-й рассвет' : 'Истинное Сердце — ' + escapeHtml(heartName) + ', пока ничьё')
-      : 'Явились Сердца: ' + heart.candidates.length + ', истинное одно. Ложных раскрыто: ' + (heart.revealed || []).length + '. Каждый рассвет летописцы раскрывают ещё одно.';
+      : 'Явились Сердца: ' + heart.candidates.length + ', истинное одно. Ложных раскрыто: ' + (heart.revealed || []).length + '. Каждый рассвет летописцы раскрывают ещё одно.' +
+        (Number(snapshot.game.state.round || 0) >= heart.appear_day + 2 ? ' <b>Отсчёт пошёл: если истинное не взять, на рассвете дня ' + (heart.appear_day + 3) + ' Орда вырвется на все столицы.</b>' : ' Если до рассвета дня ' + (heart.appear_day + 3) + ' истинное никто не возьмёт, Орда вырвется на все столицы.');
   const heartNote = heart
     ? '<div class="standing-row heart-row"><div><span class="standing-house">♛ Сердце земель</span>' +
       '<div class="standing-meta">' + heartState + '</div></div>' +
@@ -3574,6 +3604,9 @@ function renderHouse() {
   $('influence').textContent = state.influence;
   const heart = snapshot.game.state.heart;
   $('vp').textContent = heart ? state.victory_points + '/' + heart.target : state.victory_points;
+  const upkeep = snapshot.game.upkeep;
+  $('upkeep-stat').hidden = !upkeep;
+  if (upkeep) $('upkeep').textContent = '−' + upkeep.gold + ' зол. (' + upkeep.heads + ' ' + warriorWord(upkeep.heads) + ')';
 }
 
 function mapLabel(t) {

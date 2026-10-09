@@ -2,7 +2,7 @@ import { applyIncomePulse } from '../core/economy.mjs';
 import { applyCourtDawn } from './court.mjs';
 import { applySeaToll } from './sea-toll.mjs';
 import { heartDawn } from './heart.mjs';
-import { populationDawn } from './units.mjs';
+import { populationDawn, upkeepDawn } from './units.mjs';
 import { orderDawn } from './order.mjs';
 import { buildVictoryStatus } from '../core/victory.mjs';
 
@@ -111,6 +111,8 @@ function beginRound(next, map, constants, number, nowMs, timing) {
   rounds.heart_reached = number > 1 ? heartDawn(next, map, constants, nowMs, number) : [];
   // Lands with fields or a fair gain people.
   if (number > 1) populationDawn(next.state, map);
+  // The troops are paid; the unpaid desert.
+  if (number > 1) upkeepDawn(next, map, nowMs);
   // Order settles, open choices fall to mercy, lands in deep disorder rise.
   if (number > 1) orderDawn(next.state, map, constants, nowMs);
 

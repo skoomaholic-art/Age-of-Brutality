@@ -281,7 +281,9 @@ export function journalEntryToAudit(entry, map, game) {
   }
 
   if (entry.kind === 'WAR_DECLARED') {
-    const how = entry.betrayal
+    const how = entry.truce_broken
+      ? `Дом ${entry.aggressor} нарушил перемирие с Домом ${entry.target}. Он прослыл клятвопреступником (влияние -${Number(entry.influence_lost || 0)}, пеня ${Number(entry.gold_paid || 0)} золота).`
+      : entry.betrayal
       ? `Дом ${entry.aggressor} предал брачный союз и поднял оружие на Дом ${entry.target}. Он прослыл клятвопреступником` +
         ` (влияние -${Number(entry.influence_lost || 0)}, пеня ${Number(entry.gold_paid || 0)} золота).`
       : entry.cause === 'ENCOUNTER'
@@ -298,6 +300,14 @@ export function journalEntryToAudit(entry, map, game) {
         betrayal: Boolean(entry.betrayal),
         at: entry.at || null
       }
+    };
+  }
+
+  if (entry.kind === 'BRIDGE_BURNT') {
+    return {
+      ...base,
+      message: `Дом ${entry.house} сжёг мост на дороге ${territoryName(map, entry.a)} — ${territoryName(map, entry.b)}. Там теперь не пройти, пока мост не отстроят.`,
+      details: { house: entry.house, a: entry.a, b: entry.b, territory_id: entry.a, at: entry.at || null }
     };
   }
 
@@ -338,6 +348,15 @@ export function journalEntryToAudit(entry, map, game) {
         ? `Бунт в земле ${where}! Люди поднялись против Дома ${entry.house}: земля отпала к вольным людям (их ${entry.rebels}).${entry.garrison ? ` Гарнизон ${entry.retreat_to ? `отошёл в ${territoryName(map, entry.retreat_to)}` : 'разбежался'}.` : ''}`
         : `Дом ${entry.house} ${words[entry.choice] || 'решил судьбу'} землю ${where}.${entry.gold ? ` Взято ${entry.gold} золота.` : ''}${entry.people_lost ? ` Людей потеряно: ${entry.people_lost}.` : ''} Порядок: ${entry.order}.`,
       details: { house: entry.house, territory_id: entry.territory, choice: entry.choice || null, at: entry.at || null }
+    };
+  }
+
+  if (entry.kind === 'DESERTION') {
+    return {
+      ...base,
+      visibility: 'PRIVATE',
+      message: `Казна не смогла заплатить войску: нужно было ${entry.owed} золота, нашлось ${entry.paid}. Неоплаченные разошлись по домам: ${entry.deserted} человек.`,
+      details: { house: entry.house, at: entry.at || null }
     };
   }
 
@@ -387,11 +406,20 @@ export function journalEntryToAudit(entry, map, game) {
     };
   }
 
+  if (entry.kind === 'PEACE_MADE') {
+    return {
+      ...base,
+      message: `Мир: Дома ${entry.houses[0]} и ${entry.houses[1]} сложили оружие. Перемирие до ${new Date(entry.until).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}: кто нарушит, прослывёт клятвопреступником.`,
+      details: { houses: entry.houses, until: entry.until, at: entry.at || null }
+    };
+  }
+
   if (entry.kind === 'DEAL_MADE' || entry.kind === 'DEAL_REJECTED') {
     const say = items => (items || []).map(item =>
       item.type === 'GOLD' ? `${item.amount} золота`
         : item.type === 'PASSAGE' ? 'право прохода'
           : item.type === 'MARRIAGE' ? 'дочь в жёны'
+            : item.type === 'PEACE' ? 'мир'
             : item.type === 'LAND' ? `землю ${item.name || item.territory}` : '').filter(Boolean).join(', ') || 'ничего';
     return {
       ...base,
@@ -614,12 +642,23 @@ export function journalEntryToAudit(entry, map, game) {
     };
   }
 
+  if (entry.kind === 'HORDE_COUNTDOWN' || entry.kind === 'HORDE_UNLEASHED') {
+    return {
+      ...base,
+      message: entry.kind === 'HORDE_COUNTDOWN'
+        ? `Недоброе знамение: истинное Сердце никто не взял. На рассвете дня ${entry.day} Орда вырвется из всех ложных Сердец и пойдёт на столицы всех Домов.`
+        : `Орда вырвалась из ложных Сердец! На каждую столицу идут ${entry.men} всадников. Истинное Сердце открылось всем: ${territoryName(map, entry.territory)}.`,
+      details: { territory_id: entry.territory || null, at: entry.at || null }
+    };
+  }
+
   if (entry.kind.startsWith('HORDE_')) {
     const where = territoryName(map, entry.territory);
     const messages = {
       HORDE_AWAKENED: `Дом ${entry.house} взял ложное Сердце в земле ${where} и разбудил Орду! ${entry.men} всадников идут на его столицу${entry.toward ? `, ${territoryName(map, entry.toward)}` : ''}.`,
       HORDE_TOOK: `Орда взяла землю ${where} у Дома ${entry.house}. Там остались ${entry.stayed} её всадников, дальше идут ${entry.men}.`,
       HORDE_BROKEN: `Орда разбита у земли ${where}: Дом ${entry.house} выстоял.`,
+      HORDE_FORDING: `Орда встала у реки возле земли ${where}: моста нет, всадники ищут брод.`,
       HORDE_SPENT: `Орда выдохлась у земли ${where}: остатки осели там.`
     };
     return {

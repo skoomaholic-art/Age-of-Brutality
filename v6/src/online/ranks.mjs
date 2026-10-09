@@ -11,15 +11,16 @@
 // `order.action.ranks`.
 
 // The kinds of troops, weakest first. `gold` is the price of one man,
+// `upkeep` what he costs each dawn (games with people),
 // `where` the least settlement that can raise them (0 village, 1 town,
 // 2 capital), `guard` what each adds when holding a land (archers on walls).
 export const RANKS = Object.freeze([
-  { key: 'krestiane', name: 'Крестьяне', one: 'крестьянин', few: 'крестьянина', many: 'крестьян', power: 1, gold: 1, where: 0, guard: 0 },
-  { key: 'kopeyshiki', name: 'Копейщики', one: 'копейщик', few: 'копейщика', many: 'копейщиков', power: 2, gold: 2, where: 0, guard: 0 },
-  { key: 'luchniki', name: 'Лучники', one: 'лучник', few: 'лучника', many: 'лучников', power: 2, gold: 3, where: 0, guard: 1 },
-  { key: 'ratniki', name: 'Ратники', one: 'ратник', few: 'ратника', many: 'ратников', power: 3, gold: 5, where: 1, guard: 0 },
-  { key: 'serzhanty', name: 'Конные сержанты', one: 'конный сержант', few: 'конных сержанта', many: 'конных сержантов', power: 4, gold: 7, where: 1, guard: 0 },
-  { key: 'rytsari', name: 'Рыцари', one: 'рыцарь', few: 'рыцаря', many: 'рыцарей', power: 6, gold: 10, where: 2, guard: 0 }
+  { key: 'krestiane', name: 'Крестьяне', one: 'крестьянин', few: 'крестьянина', many: 'крестьян', power: 1, gold: 1, where: 0, guard: 0, upkeep: 0.25 },
+  { key: 'kopeyshiki', name: 'Копейщики', one: 'копейщик', few: 'копейщика', many: 'копейщиков', power: 2, gold: 2, where: 0, guard: 0, upkeep: 0.5 },
+  { key: 'luchniki', name: 'Лучники', one: 'лучник', few: 'лучника', many: 'лучников', power: 2, gold: 3, where: 0, guard: 1, upkeep: 0.5 },
+  { key: 'ratniki', name: 'Ратники', one: 'ратник', few: 'ратника', many: 'ратников', power: 3, gold: 5, where: 1, guard: 0, upkeep: 1 },
+  { key: 'serzhanty', name: 'Конные сержанты', one: 'конный сержант', few: 'конных сержанта', many: 'конных сержантов', power: 4, gold: 7, where: 1, guard: 0, upkeep: 1.5 },
+  { key: 'rytsari', name: 'Рыцари', one: 'рыцарь', few: 'рыцаря', many: 'рыцарей', power: 6, gold: 10, where: 2, guard: 0, upkeep: 2 }
 ]);
 const N = RANKS.length;
 

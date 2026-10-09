@@ -95,13 +95,17 @@ export function declareWarInPlace(game, a, b, { nowMs = Date.now(), cause = 'ATT
   diplomacy.passage_requests ||= {};
   delete diplomacy.passage_requests[offerKey(a, b)];
   delete diplomacy.passage_requests[offerKey(b, a)];
-  const price = before === RELATION.ALLIANCE ? punishOathbreaker(game, a, b) : {};
+  // Breaking an alliance or a truce makes an oathbreaker.
+  const truceBroken = before !== RELATION.ALLIANCE && inTruce(game, a, b, nowMs);
+  const price = before === RELATION.ALLIANCE || truceBroken ? punishOathbreaker(game, a, b) : {};
+  if (truceBroken) delete ensure(game).truces[pairKey(a, b)];
   game.state.journal.push({
     kind: 'WAR_DECLARED',
     aggressor: a,
     target: b,
     cause,
-    betrayal: before === RELATION.ALLIANCE,
+    betrayal: before === RELATION.ALLIANCE || truceBroken,
+    truce_broken: truceBroken,
     ...price,
     at: new Date(nowMs).toISOString()
   });
@@ -380,7 +384,12 @@ export function diplomacyView(game, house, known = null) {
     passage_asked_out,
     // Whose roads are open to us, and to whom ours are.
     passage_from: Object.keys(passage).filter(host => passage[host].includes(house)),
-    passage_to: [...(passage[house] || [])]
+    passage_to: [...(passage[house] || [])],
+    // Truces of this House: until when it may not attack (or be attacked) without breaking its word.
+    truces: Object.fromEntries(Object.entries(game?.diplomacy?.truces || {})
+      .filter(([key, until]) => key.split('::').includes(house) && Date.parse(until) > Date.now())
+      .map(([key, until]) => [key.split('::').find(name => name !== house), until])),
+    truce_days: TRUCE_DAYS
   };
 }
 
@@ -404,7 +413,7 @@ function cleanHalf(items) {
       if (!(amount > 0)) continue;
       if (seen.has('GOLD')) continue;
       out.push({ type, amount: Math.min(DEAL_LIMIT_GOLD, amount) });
-    } else if (type === 'PASSAGE' || type === 'MARRIAGE') {
+    } else if (type === 'PASSAGE' || type === 'MARRIAGE' || type === 'PEACE') {
       if (seen.has(type)) continue;
       out.push({ type });
     } else if (type === 'LAND') {
@@ -439,13 +448,45 @@ function dealProblem(game, map, from, to, deal) {
   const marriages = [...deal.give, ...deal.take].filter(item => item.type === 'MARRIAGE');
   if (marriages.length > 1) return 'в одном договоре может быть только одна свадьба';
   if (!deal.give.length && !deal.take.length) return 'договор пуст';
-  if (relationOf(game, from, to) === RELATION.WAR) return 'с этим Домом идёт война';
+  const peace = [...deal.give, ...deal.take].some(item => item.type === 'PEACE');
+  const atWar = relationOf(game, from, to) === RELATION.WAR;
+  if (atWar && !peace) return 'с этим Домом идёт война: сначала мир';
+  if (peace && !atWar) return 'мир заключают только с тем, с кем воюют';
+  if (atWar && (marriages.length || [...deal.give, ...deal.take].some(item => item.type === 'PASSAGE'))) return 'свадьба и право прохода — только после мира';
   if (marriages.length) {
     const bride = deal.give.some(item => item.type === 'MARRIAGE') ? from : to;
     const reason = canAlly(game, from, to, bride);
     if (reason) return reason;
   }
   return halfProblem(game, map, from, to, deal.give) || halfProblem(game, map, to, from, deal.take);
+}
+
+// ---------- peace ----------
+// Peace ends a war and opens a truce of TRUCE_DAYS game days. Whoever breaks
+// the truce by attacking is an oathbreaker, as if he broke an alliance.
+export const TRUCE_DAYS = 2;
+
+function dayLength(game) {
+  return Number(game.rounds?.round_duration_ms) > 0 ? Number(game.rounds.round_duration_ms) : 24 * 3600_000;
+}
+
+export function truceUntil(game, a, b) {
+  return game?.diplomacy?.truces?.[pairKey(a, b)] || null;
+}
+
+export function inTruce(game, a, b, nowMs = Date.now()) {
+  const until = truceUntil(game, a, b);
+  return Boolean(until && Date.parse(until) > nowMs);
+}
+
+function makePeace(game, a, b, nowMs) {
+  const diplomacy = ensure(game);
+  if (diplomacy.relations[pairKey(a, b)] !== RELATION.WAR) return;
+  delete diplomacy.relations[pairKey(a, b)];
+  diplomacy.truces ||= {};
+  const until = new Date(nowMs + TRUCE_DAYS * dayLength(game)).toISOString();
+  diplomacy.truces[pairKey(a, b)] = until;
+  game.state.journal.push({ kind: 'PEACE_MADE', houses: [a, b], until, at: new Date(nowMs).toISOString() });
 }
 
 function handOver(game, map, constants, giver, taker, items, nowMs) {
@@ -455,6 +496,8 @@ function handOver(game, map, constants, giver, taker, items, nowMs) {
       game.state.houses[taker].gold = Number(game.state.houses[taker].gold || 0) + item.amount;
     } else if (item.type === 'PASSAGE') {
       setPassage(game, giver, taker, true);
+    } else if (item.type === 'PEACE') {
+      makePeace(game, giver, taker, nowMs);
     } else if (item.type === 'MARRIAGE') {
       formAlliance(game, giver, taker, nowMs, giver);
     } else if (item.type === 'LAND') {
@@ -539,6 +582,13 @@ function itemWorth(game, map, item, receiver, giver) {
   return 0;
 }
 
+function hostTotal(game, house) {
+  let n = 0;
+  for (const t of Object.values(game.state.territories || {})) n += Number(t.warriors?.[house] || 0);
+  for (const node of Object.values(game.state.sea_nodes || {})) n += Number(node.warriors?.[house] || 0);
+  return n;
+}
+
 export function aiVerdict(game, map, from, to) {
   const deal = game?.diplomacy?.deals?.[offerKey(from, to)];
   if (!deal) return null;
@@ -553,6 +603,11 @@ export function aiVerdict(game, map, from, to) {
     if (item.type === 'LAND') gain -= itemWorth(game, map, item, from, to) * 2;
     else if (item.type === 'PASSAGE') gain -= 0;
     else gain -= itemWorth(game, map, item, from, to);
+  }
+  // Peace: welcome when the AI is not the stronger, costly when it is winning.
+  if ([...deal.give, ...deal.take].some(item => item.type === 'PEACE')) {
+    const mine = hostTotal(game, to), theirs = hostTotal(game, from);
+    gain += mine <= theirs * 1.2 ? 4 : -Math.ceil((mine - theirs) / 2);
   }
   // An alliance is worth having; a daughter given away is worth a little gold.
   if (marriage) gain += 3 + (deal.take.some(item => item.type === 'MARRIAGE') ? -1 : 1);

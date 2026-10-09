@@ -50,6 +50,24 @@ export function buildBridge(game, map, house, key, { nowMs = Date.now() } = {}) 
   return next;
 }
 
+// A House burns a bridge from its own bank: no one crosses there until it is
+// built again. Useful against an enemy, or to hold up the Horde at the river.
+export function burnBridge(game, map, house, key, { nowMs = Date.now() } = {}) {
+  const crossing = game.state.river_crossings?.[key];
+  if (!crossing) throw new Error('здесь нет реки');
+  const bridge = game.state.bridges?.[key];
+  if (!bridge?.built && !bridge?.ready_at) throw new Error('моста здесь нет');
+  const ownA = game.state.territories?.[crossing.a]?.owner === house;
+  const ownB = game.state.territories?.[crossing.b]?.owner === house;
+  if (!ownA && !ownB) throw new Error('жечь мост можно только со своего берега');
+  const next = structuredClone(game);
+  delete next.state.bridges[key];
+  const owners = [crossing.a, crossing.b].map(id => next.state.territories?.[id]?.owner).filter(Boolean);
+  next.state.journal.push({ kind: 'BRIDGE_BURNT', house, houses: [...new Set([house, ...owners])], a: crossing.a, b: crossing.b, at: new Date(nowMs).toISOString() });
+  next.updated_at = new Date(nowMs).toISOString();
+  return next;
+}
+
 // The clock: bridges under construction are finished. Returns the same game when nothing changed.
 export function processBridges(game, nowMs = Date.now()) {
   let next = null;

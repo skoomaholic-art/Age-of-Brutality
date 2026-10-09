@@ -32,9 +32,9 @@ import {
 } from './orders.mjs';
 import { normalizeOnlineSeaState } from './sea-navigation.mjs';
 import { raiseLevy, startDrill, buildYard, buildPort, processRanks, ranksView } from './levy.mjs';
-import { buildBridge, seedCrossings, BRIDGE } from './bridges.mjs';
+import { buildBridge, burnBridge, seedCrossings, BRIDGE } from './bridges.mjs';
 import { processHordes, seedHeart } from './heart.mjs';
-import { NO_LIMIT, buildGrowth, hireUnits, retrainUnits, seedPopulation, unitsView } from './units.mjs';
+import { NO_LIMIT, buildGrowth, hireUnits, retrainUnits, seedPopulation, unitsView, upkeepOf } from './units.mjs';
 import { applyCaptureChoice, choiceOutcomes, seedOrder } from './order.mjs';
 import { startRide, processRiders, ridersOf } from './riders.mjs';
 import { courtEffects } from './court.mjs';
@@ -613,6 +613,7 @@ function redactGameForPlayer(game, player) {
     .map(([id, pending]) => [id, { ...pending, outcomes: choiceOutcomes(game.state, id) }]));
   // Troop kinds and their prices (games of the Heart).
   clientGame.units_view = unitsView(game, map, player?.house);
+  clientGame.upkeep = player?.house && game.state?.population ? upkeepOf(game.state, map, player.house) : null;
   // What a bridge over a river costs and how long it takes.
   clientGame.bridge_cost = { gold: BRIDGE.gold, ms: Math.round((Number(game.rounds?.round_duration_ms) > 0 ? Number(game.rounds.round_duration_ms) : 24 * 3600_000) * BRIDGE.dayShare) };
   // What each lord of one's own House gives at court and with an army.
@@ -1685,7 +1686,7 @@ async function handleGameApi(req, res, url, ctx, subpath) {
     return json(res, result.status, result.response);
   }
 
-  if (req.method === 'POST' && ['/levy', '/drill', '/yard', '/port', '/bridge', '/hire', '/retrain', '/growth', '/capture-choice'].includes(subpath)) {
+  if (req.method === 'POST' && ['/levy', '/drill', '/yard', '/port', '/bridge', '/hire', '/retrain', '/growth', '/capture-choice', '/bridge-burn'].includes(subpath)) {
     const body = await readBody(req);
     const house = String(body.house || '').trim();
     await requireHouse(ctx, req, house);
@@ -1699,6 +1700,7 @@ async function handleGameApi(req, res, url, ctx, subpath) {
           : subpath === '/drill' ? startDrill(game, map, house, body.counts, { nowMs })
             : subpath === '/port' ? buildPort(game, map, house, String(body.territory || ''), { nowMs })
               : subpath === '/bridge' ? buildBridge(game, map, house, String(body.key || ''), { nowMs })
+              : subpath === '/bridge-burn' ? burnBridge(game, map, house, String(body.key || ''), { nowMs })
                 : subpath === '/hire' ? hireUnits(game, map, house, String(body.territory || ''), body.counts, { nowMs })
                   : subpath === '/retrain' ? retrainUnits(game, map, house, String(body.territory || ''), body.from, body.to, body.count, { nowMs })
                     : subpath === '/growth' ? buildGrowth(game, map, house, String(body.territory || ''), { nowMs })

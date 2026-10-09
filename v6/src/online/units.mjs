@@ -180,10 +180,81 @@ export function unitsView(game, map, house) {
   const state = game.state;
   if (!state.population) return null;
   return {
-    kinds: RANKS.map((rank, i) => ({ index: i, name: rank.name, power: rank.power, gold: rank.gold, guard: rank.guard, where: rank.where })),
+    kinds: RANKS.map((rank, i) => ({ index: i, name: rank.name, power: rank.power, gold: rank.gold, guard: rank.guard, where: rank.where, upkeep: rank.upkeep })),
     growth_gold: PEOPLE.growthGold,
     growth_per_dawn: PEOPLE.growth
   };
+}
+
+// ---------- upkeep ----------
+// Every dawn a House pays for its troops: a peasant a quarter of a gold piece,
+// a knight two. What it cannot pay, it pays in men: the unpaid desert, the
+// cheapest first, from the biggest hosts, never men already on the march.
+
+function positions(state) {
+  const out = [];
+  for (const [id, t] of Object.entries(state.territories || {})) for (const [house, n] of Object.entries(t.warriors || {})) if (Number(n) > 0) out.push({ key: id, house, heads: Number(n), kind: 'LAND' });
+  for (const [id, node] of Object.entries(state.sea_nodes || {})) for (const [house, n] of Object.entries(node.warriors || {})) if (Number(n) > 0) out.push({ key: id, house, heads: Number(n), kind: 'SEA' });
+  for (const [id, byHouse] of Object.entries(state.guests || {})) for (const [house, n] of Object.entries(byHouse || {})) if (Number(n) > 0) out.push({ key: `g:${id}`, land: id, house, heads: Number(n), kind: 'GUEST' });
+  return out;
+}
+
+export function upkeepOf(state, map, house) {
+  let total = 0, heads = 0;
+  for (const p of positions(state)) {
+    if (p.house !== house) continue;
+    const comp = compAt(state, map, p.key, house);
+    comp.forEach((n, i) => { total += n * RANKS[i].upkeep; heads += n; });
+  }
+  return { gold: Math.ceil(total - 1e-9), heads };
+}
+
+export function upkeepDawn(game, map, nowMs = Date.now()) {
+  const state = game.state;
+  if (!state.population) return;
+  reconcileRanks(state, map);
+  for (const house of Object.keys(state.houses || {})) {
+    const { gold } = upkeepOf(state, map, house);
+    if (!gold) continue;
+    const purse = Number(state.houses[house].gold || 0);
+    if (purse >= gold) {
+      state.houses[house].gold = purse - gold;
+      continue;
+    }
+    state.houses[house].gold = 0;
+    let unpaid = gold - purse;
+    let deserted = 0;
+    // Men already on the march stay with their banner.
+    const marching = {};
+    for (const order of game.orders || []) {
+      if (order.status === 'PENDING' && order.action?.house === house) marching[order.action.from] = Number(marching[order.action.from] || 0) + Number(order.action.warriors || 0);
+    }
+    const hosts = positions(state).filter(p => p.house === house).sort((a, b) => b.heads - a.heads || (a.key < b.key ? -1 : 1));
+    for (const p of hosts) {
+      if (unpaid <= 0) break;
+      const free = p.heads - Number(marching[p.land || p.key] || 0);
+      if (free <= 0) continue;
+      const comp = compAt(state, map, p.key, house);
+      let gone = 0;
+      for (let i = 0; i < comp.length && unpaid > 0 && gone < free; i += 1) {
+        while (comp[i] > 0 && unpaid > 0 && gone < free) { comp[i] -= 1; gone += 1; unpaid -= RANKS[i].upkeep; }
+      }
+      if (!gone) continue;
+      deserted += gone;
+      const left = p.heads - gone;
+      const holder = p.kind === 'LAND' ? state.territories[p.key].warriors : p.kind === 'SEA' ? state.sea_nodes[p.key].warriors : state.guests[p.land];
+      if (left > 0) holder[house] = left; else delete holder[house];
+      state.ranks[p.key] ||= {};
+      state.ranks[p.key][house] = comp;
+      if (p.kind === 'SEA') {
+        const afloat = Object.keys(holder).filter(h => Number(holder[h] || 0) > 0);
+        state.sea_nodes[p.key].owner = afloat.length === 1 ? afloat[0] : null;
+      }
+      if (p.kind === 'GUEST' && !Object.keys(state.guests[p.land]).length) delete state.guests[p.land];
+    }
+    state.journal.push({ kind: 'DESERTION', house, houses: [house], owed: gold, paid: purse, deserted, at: iso(nowMs) });
+  }
+  reconcileRanks(state, map);
 }
 
 // For the AI: what to hire where, with about half of its gold.
@@ -192,7 +263,10 @@ export function aiHireChoice(game, map, house) {
   if (!state.population) return null;
   const gold = Number(state.houses[house]?.gold || 0);
   if (gold < 6) return null;
-  const budget = Math.floor(gold * 0.6);
+  // Keep enough for two dawns of upkeep.
+  const upkeep = upkeepOf(state, map, house).gold;
+  const budget = Math.floor(Math.max(0, gold - upkeep * 2) * 0.6);
+  if (budget < 2) return null;
   const lands = Object.entries(state.territories)
     .filter(([id, t]) => t.owner === house && Number(state.population[id] || 0) > 0)
     .map(([id]) => id)

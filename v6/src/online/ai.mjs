@@ -1,4 +1,4 @@
-import { areAllies } from './diplomacy.mjs';
+import { areAllies, inTruce } from './diplomacy.mjs';
 import { neutralResistance } from '../core/neutral.mjs';
 import { buildAdjacency } from '../core/map.mjs';
 import { aiBridgeChoice, buildBridge } from './bridges.mjs';
@@ -121,8 +121,9 @@ function marchCandidates(game, map, constants, house, adjacency) {
     if (!sizes.length) continue;
 
     const owner = state.territories[to].owner ?? null;
-    // An ally's land is not a target.
+    // An ally's land is not a target, nor a land of a House at truce.
     if (owner && owner !== house && areAllies(game, house, owner)) continue;
+    if (owner && owner !== house && inTruce(game, house, owner, Date.parse(game.updated_at || 0) || Date.now())) continue;
     const worth = territoryValue(map, constants, house, to);
     const command = warriors => ({ type: 'MARCH', house, from, to, warriors });
 

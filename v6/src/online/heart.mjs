@@ -35,6 +35,9 @@ export const HEART = Object.freeze({
   appearDay: 3,
   maxDecoys: 3,
   hordeMen: 24,
+  // If nobody takes the true Heart, the chroniclers warn on day appear+2 and
+  // on the next dawn the Horde breaks out of every decoy at once.
+  countdownDays: 2,
   // The Horde takes a step every eighth of a game day.
   hordeStepShare: 1 / 8
 });
@@ -337,6 +340,13 @@ export function heartDawn(game, map, constants, nowMs = Date.now(), day = null) 
     }
   }
 
+  // Nobody has taken the true Heart: the longer it stands empty, the worse for all.
+  if (day !== null && heart.candidates.length && !heart.territory) {
+    const breakDay = heart.appear_day + HEART.countdownDays + 1;
+    if (day === breakDay - 1) state.journal.push({ kind: 'HORDE_COUNTDOWN', day: breakDay, at: iso(nowMs) });
+    if (day >= breakDay) unleash(game, map, nowMs);
+  }
+
   const holder = heart.truth ? state.territories[heart.truth]?.owner || null : null;
   if (holder && holder === heart.holder) heart.streak += 1;
   else heart.streak = holder ? 1 : 0;
@@ -358,6 +368,30 @@ export function heartDawn(game, map, constants, nowMs = Date.now(), day = null) 
 }
 
 // ---------- the Horde ----------
+
+// The Hearts stood untaken too long: the Horde breaks out of every decoy at
+// once and shares itself out among all the Houses, each part marching on a
+// capital. The true Heart is shown to all.
+function unleash(game, map, nowMs) {
+  const state = game.state;
+  const heart = state.heart;
+  const abandoned = game.lifecycle?.abandoned_houses || {};
+  const houses = Object.keys(state.houses || {}).filter(h => !abandoned[h] && map.capitals?.[h] && state.territories[map.capitals[h]]?.owner === h);
+  const decoys = heart.candidates.filter(id => id !== heart.truth && !heart.woken.includes(id));
+  heart.territory = heart.truth;
+  heart.revealed = heart.candidates.filter(id => id !== heart.truth);
+  if (!decoys.length || !houses.length) return;
+  const total = HEART.hordeMen * decoys.length;
+  const share = Math.max(3, Math.floor(total / houses.length));
+  // Which part goes where is up to the Horde: the order is shuffled by the game.
+  const order = [...houses].sort((a, b) => hash(`${game.id}:${a}`) - hash(`${game.id}:${b}`));
+  order.forEach((house, i) => {
+    const horde = spawnHorde(game, map, decoys[i % decoys.length], house, nowMs, share);
+    horde.started = true;
+  });
+  heart.woken.push(...decoys);
+  state.journal.push({ kind: 'HORDE_UNLEASHED', territory: heart.truth, decoys, houses: order, men: share, at: iso(nowMs) });
+}
 
 function dayMs(game) {
   return Number(game.rounds?.round_duration_ms) > 0 ? Number(game.rounds.round_duration_ms) : 24 * 3600_000;
@@ -387,7 +421,7 @@ function roadBetween(map, from, to) {
   return [from];
 }
 
-function spawnHorde(game, map, decoy, house, nowMs) {
+function spawnHorde(game, map, decoy, house, nowMs, men = HEART.hordeMen) {
   const state = game.state;
   const capital = map.capitals?.[house];
   const path = capital ? roadBetween(map, decoy, capital) : [decoy];
@@ -396,13 +430,14 @@ function spawnHorde(game, map, decoy, house, nowMs) {
     id: `H${state.hordes.length + 1}-${decoy}`,
     against: house,
     path,
-    step: 0,
-    men: HEART.hordeMen,
+    started: false,
+    men,
     at: decoy,
     next_at: iso(nowMs)
   };
   state.hordes.push(horde);
   state.journal.push({ kind: 'HORDE_AWAKENED', house, houses: [house], territory: decoy, men: horde.men, toward: capital, at: iso(nowMs) });
+  return horde;
 }
 
 // The Horde strikes a land of the House it hunts.
@@ -451,7 +486,69 @@ function hordeStrikes(game, map, constants, horde, land, nowMs) {
   });
 }
 
-// The Horde marches: one land a step, only the hunted House's lands are struck.
+// The Horde's road from where it stands to the hunted capital. A river with
+// no bridge is crossed by a ford, which costs the Horde FORD_STEPS waiting.
+export const FORD_STEPS = 2;
+function hordeRoad(state, map, from, to) {
+  const near = new Map();
+  for (const [a, b] of map.land_edges || []) {
+    const key = [a, b].sort().join('|');
+    const ford = state.river_crossings?.[key] && !state.bridges?.[key]?.built;
+    const w = ford ? 1 + FORD_STEPS : 1;
+    (near.get(a) || near.set(a, []).get(a)).push([b, w]);
+    (near.get(b) || near.set(b, []).get(b)).push([a, w]);
+  }
+  const dist = new Map([[from, 0]]);
+  const prev = new Map();
+  const queue = [from];
+  while (queue.length) {
+    queue.sort((x, y) => dist.get(x) - dist.get(y) || (x < y ? -1 : 1));
+    const at = queue.shift();
+    if (at === to) break;
+    for (const [next, w] of near.get(at) || []) {
+      const d = dist.get(at) + w;
+      if (d < (dist.get(next) ?? Infinity)) { dist.set(next, d); prev.set(next, at); queue.push(next); }
+    }
+  }
+  if (!dist.has(to)) return roadBetween(map, from, to);
+  const path = [];
+  for (let at = to; at !== undefined; at = prev.get(at)) { path.unshift(at); if (at === from) break; }
+  return path;
+}
+
+function fordAhead(state, a, b) {
+  const key = [a, b].sort().join('|');
+  return Boolean(state.river_crossings?.[key] && !state.bridges?.[key]?.built);
+}
+
+// The Horde marches a land a step and strikes only the hunted House's lands.
+// A burnt or missing bridge holds it up at the river for a while.
+function hordeStep(next, map, constants, horde, at) {
+  const state = next.state;
+  if (!horde.started) {
+    horde.started = true;
+    if (state.territories[horde.at]?.owner === horde.against) hordeStrikes(next, map, constants, horde, horde.at, at);
+    return;
+  }
+  const capital = map.capitals?.[horde.against];
+  const road = capital ? hordeRoad(state, map, horde.at, capital) : [horde.at];
+  horde.path = road;
+  const ahead = road[1];
+  if (!ahead) {
+    horde.done = true;
+    return;
+  }
+  if (fordAhead(state, horde.at, ahead) && Number(horde.ford || 0) < FORD_STEPS) {
+    if (!horde.ford) state.journal.push({ kind: 'HORDE_FORDING', house: horde.against, houses: [horde.against], territory: horde.at, men: horde.men, at: iso(at) });
+    horde.ford = Number(horde.ford || 0) + 1;
+    return;
+  }
+  horde.ford = 0;
+  horde.at = ahead;
+  if (state.territories[ahead]?.owner === horde.against) hordeStrikes(next, map, constants, horde, ahead, at);
+  if (ahead === capital) horde.done = true;
+}
+
 export function processHordes(game, map, constants, nowMs = Date.now()) {
   const hordes = game.state?.hordes || [];
   if (!hordes.some(h => h.men > 0 && Date.parse(h.next_at) <= nowMs)) return game;
@@ -459,17 +556,15 @@ export function processHordes(game, map, constants, nowMs = Date.now()) {
   const state = next.state;
   for (const horde of state.hordes) {
     while (horde.men > 0 && Date.parse(horde.next_at) <= nowMs) {
-      const land = horde.path[horde.step];
-      horde.at = land;
-      if (land && state.territories[land]?.owner === horde.against) hordeStrikes(next, map, constants, horde, land, Date.parse(horde.next_at));
-      horde.step += 1;
-      if (horde.men > 0 && (horde.step >= horde.path.length || horde.men < 3)) {
-        state.journal.push({ kind: 'HORDE_SPENT', house: horde.against, houses: [horde.against], territory: land, men: horde.men, at: iso(nowMs) });
-        // What is left of it settles where it stopped.
-        if (land && !state.territories[land]?.owner) state.wild_guards[land] = Number(state.wild_guards[land] || 0) + horde.men;
+      const at = Date.parse(horde.next_at);
+      hordeStep(next, map, constants, horde, at);
+      if (horde.men > 0 && (horde.done || horde.men < 3)) {
+        state.journal.push({ kind: 'HORDE_SPENT', house: horde.against, houses: [horde.against], territory: horde.at, men: horde.men, at: iso(at) });
+        // What is left of it settles where it stopped, if the land is free.
+        if (!state.territories[horde.at]?.owner) state.wild_guards[horde.at] = Number(state.wild_guards[horde.at] || 0) + horde.men;
         horde.men = 0;
       }
-      horde.next_at = iso(Date.parse(horde.next_at) + Math.round(dayMs(next) * HEART.hordeStepShare));
+      horde.next_at = iso(at + Math.round(dayMs(next) * HEART.hordeStepShare));
     }
   }
   state.hordes = state.hordes.filter(h => h.men > 0);

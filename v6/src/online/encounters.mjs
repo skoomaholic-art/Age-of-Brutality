@@ -14,7 +14,7 @@ import {
   settleCommander
 } from '../core/characters.mjs';
 import { fateDice, recoveryMs, settleFate } from './fate.mjs';
-import { areAllies, declareWarInPlace, hasPassage } from './diplomacy.mjs';
+import { areAllies, declareWarInPlace, hasPassage, truceUntil } from './diplomacy.mjs';
 import { headsLost, loseOnRoad, strengthOf } from './ranks.mjs';
 import { rulerLeadBonus } from './court.mjs';
 
@@ -102,6 +102,9 @@ export function nextEncounter(game) {
         hasPassage(game.state, b.action.house, a.action.house)) continue;
       const met = meeting(a, b);
       if (!met) continue;
+      // Houses at truce pass each other on the road.
+      const truce = truceUntil(game, a.action.house, b.action.house);
+      if (truce && Date.parse(truce) > met.at) continue;
       if (!best || met.at < best.at || (met.at === best.at && a.id < best.a.id)) {
         best = { ...met, a, b };
       }

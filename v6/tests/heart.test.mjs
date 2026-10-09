@@ -163,3 +163,36 @@ test('chooseHearts never puts two Hearts side by side', () => {
   const picked = chooseHearts(game, map);
   for (const a of picked) for (const b of picked) if (a !== b) assert.ok(!adjacency.get(a).has(b));
 });
+
+test('if nobody takes the true Heart, the Horde breaks out of every decoy on all the capitals and the Heart is shown', () => {
+  const game = withHearts();
+  const day = HEART.appearDay + HEART.countdownDays + 1;
+  heartDawn(game, map, constants, 20, day - 1);
+  assert.ok(game.state.journal.some(e => e.kind === 'HORDE_COUNTDOWN'));
+  assert.equal(game.state.hordes.length, 0);
+  heartDawn(game, map, constants, 30, day);
+  assert.equal(game.state.heart.territory, game.state.heart.truth, 'the true Heart is shown to all');
+  const targets = game.state.hordes.map(h => h.against).sort();
+  assert.deepEqual(targets, [...houses].sort(), 'one part on every capital');
+  assert.ok(game.state.journal.some(e => e.kind === 'HORDE_UNLEASHED'));
+});
+
+test('a river with no bridge holds the Horde up at the ford', () => {
+  let game = withHearts();
+  const { candidates, truth } = game.state.heart;
+  const decoy = candidates.find(id => id !== truth);
+  game.state.territories[decoy].owner = H;
+  game.state.territories[decoy].warriors = { [H]: 1 };
+  delete game.state.wild_guards[decoy];
+  heartOnCapture(game, map, decoy, H, 100);
+  // Every road out of the decoy crosses a river with no bridge.
+  game.state.river_crossings = {};
+  for (const [a, b] of map.land_edges.filter(e => e.includes(decoy))) game.state.river_crossings[[a, b].sort().join('|')] = { a, b, x: 0, y: 0 };
+  game.state.bridges = {};
+  const step = Math.round(800_000 * HEART.hordeStepShare);
+  game = processHordes(game, map, constants, 100);
+  const at = game.state.hordes[0]?.at;
+  game = processHordes(game, map, constants, 100 + step);
+  assert.equal(game.state.hordes[0]?.at, at, 'waiting at the river');
+  assert.ok(game.state.journal.some(e => e.kind === 'HORDE_FORDING'));
+});
