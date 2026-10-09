@@ -967,7 +967,7 @@
         </label>
       </div>
       <div id="manage-info" class="muted" style="margin-top:8px"></div>
-      <div class="economy-actions">
+      <div class="economy-actions" id="old-recruit">
         <button data-recruit="1">+1 воин<br><span class="tiny">1 золото</span></button>
         <button data-recruit="2">+2 воина<br><span class="tiny">2 золота</span></button>
         <button data-recruit="3">+3 воина<br><span class="tiny">3 золота</span></button>
@@ -2027,10 +2027,11 @@ function levyBlock() {
   const lands = (snapshot.map.territories || []).filter(x => ['Деревня', 'Город', 'Столица'].includes(x.type) && snapshot.game.state.territories[x.id]?.owner === house).length;
   const total = view.levy.reduce((sum, kind) => sum + kind.available * kind.gold, 0);
   const people = view.levy.reduce((sum, kind) => sum + kind.available, 0);
-  const rows = view.levy.map((kind, rank) =>
-    '<div class="rank-row"><span><b>' + kind.available + ' ' + RANK_WORDS[rank][kind.available === 1 ? 1 : kind.available >= 2 && kind.available <= 4 ? 2 : 3] + '</b> · сила ' + (rank + 1) +
-    '<br><span class="tiny">' + LEVY_FROM[rank] + ' · ' + kind.gold + ' зол. за голову</span></span>' +
-    '<input type="number" min="0" max="' + kind.available + '" value="0" data-levy="' + rank + '"' + (kind.available ? '' : ' disabled') + '></div>').join('');
+  const POWER = [1, 2, 2, 3, 4, 6];
+  const rows = view.levy.map((kind, i) =>
+    '<div class="rank-row"><span><b>' + kind.available + ' ' + RANK_WORDS[kind.rank][kind.available === 1 ? 1 : kind.available >= 2 && kind.available <= 4 ? 2 : 3] + '</b> · сила ' + POWER[kind.rank] +
+    '<br><span class="tiny">' + LEVY_FROM[i] + ' · ' + kind.gold + ' зол. за голову</span></span>' +
+    '<input type="number" min="0" max="' + kind.available + '" value="0" data-levy="' + i + '"' + (kind.available ? '' : ' disabled') + '></div>').join('');
   return '<div class="rank-box"><div class="rank-head">Сбор войск</div>' +
     '<div class="tiny">Сейчас ' + lands + ' твоих владений готовы дать ' + people + ' человек. Всех — за ' + total + ' золота.</div>' + rows +
     '<div class="tiny">Деревни и города копят людей каждый день (до трёх дней). Собранные идут по дорогам в столицу.</div>' +
@@ -2040,7 +2041,7 @@ function levyBlock() {
 function drillBlock() {
   const view = snapshot.game.ranks_view;
   if (!view) return '';
-  const rows = [0, 1, 2, 3].map(rank => {
+  const rows = Array.from({ length: KINDS - 1 }, (_, rank) => rank).map(rank => {
     const free = Number(view.drill_free[rank] || 0);
     const locked = rank + 1 > view.drill_top;
     return '<div class="rank-row' + (locked ? ' off' : '') + '"><span><b>' + RANK_WORDS[rank][0] + '</b> → ' + RANK_WORDS[rank + 1][0].toLowerCase() +
@@ -2099,7 +2100,7 @@ function yardButton() {
   if (!view) return '';
   if (view.yard) {
     const ready = Date.parse(view.yard.ready_at) <= Date.now();
-    return '<button class="wide" disabled>' + (ready ? 'Учебный двор стоит: учат латников и дружинников' : 'Учебный двор строится · ' + escapeHtml(timeLeft(view.yard.ready_at))) + '</button>';
+    return '<button class="wide" disabled>' + (ready ? 'Учебный двор стоит: учат конных сержантов и рыцарей' : 'Учебный двор строится · ' + escapeHtml(timeLeft(view.yard.ready_at))) + '</button>';
   }
   return '<button class="wide" data-yard>Учебный двор · ' + view.yard_gold + ' золота</button>';
 }
@@ -5346,7 +5347,10 @@ function renderEconomy() {
   if (isSpectator || !economy) return;
   const gain = economy.income;
   const influence = gain.influence ? ` +${gain.influence} влияния` : '';
-  $('income-rate').textContent = `+${gain.gold} золота${influence}`;
+  // Games with troop kinds hire in the land card, not here; income shows net of upkeep.
+  const upkeep = snapshot?.game?.upkeep?.gold || 0;
+  $('old-recruit').hidden = unitsMode();
+  $('income-rate').textContent = `+${gain.gold} золота${influence}` + (upkeep ? ` · войску −${upkeep} · чистыми ${gain.gold - upkeep >= 0 ? '+' : ''}${gain.gold - upkeep}` : '');
   $('income-countdown').textContent = economy.next_income_at
     ? timeLeft(economy.next_income_at)
     : daysGame()

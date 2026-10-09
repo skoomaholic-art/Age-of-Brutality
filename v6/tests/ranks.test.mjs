@@ -70,7 +70,7 @@ test('the levy: villagers walk to the capital and arrive as villagers', () => {
   const march = game.orders.find(o => o.action.from === village);
   assert.ok(march, 'the villagers set off');
   assert.deepEqual(march.action.ranks, [2, 0, 0, 0, 0, 0]);
-  assert.equal(compAt(game.state, map, CAPITAL, HOUSE)[2], 1, 'a man-at-arms of the capital is there at once');
+  assert.equal(compAt(game.state, map, CAPITAL, HOUSE)[3], 1, 'a man-at-arms (ратник) of the capital is there at once');
   game = processDueOrders(game, map, constants, Date.parse(march.due_at));
   const comp = compAt(game.state, map, CAPITAL, HOUSE);
   assert.equal(comp[0], 2 + 2, 'the old garrison and the new villagers');

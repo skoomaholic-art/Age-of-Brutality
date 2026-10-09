@@ -82,6 +82,7 @@ export function choiceOutcomes(state, territory) {
 }
 
 export function applyCaptureChoice(state, territory, house, choice, { nowMs = Date.now() } = {}) {
+  if (!state.population) throw new Error('в этом веке судьбу земель не решают');
   const rule = CHOICES[choice];
   if (!rule) throw new Error('такого решения нет');
   if (state.territories?.[territory]?.owner !== house) throw new Error('эта земля не твоя');

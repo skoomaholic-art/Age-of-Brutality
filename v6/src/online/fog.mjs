@@ -160,6 +160,39 @@ export function applyFog(clientGame, map, house) {
   for (const id of Object.keys(state.guests || {})) {
     if (!seen.has(id)) delete state.guests[id];
   }
+  // What stands in a position is known only where it is seen: the makeup of
+  // hosts, their experience and full strength, the days a fleet spent at sea.
+  const positionKey = key => (key.startsWith('g:') ? key.slice(2) : key);
+  for (const field of ['ranks', 'stars', 'peak']) {
+    for (const key of Object.keys(state[field] || {})) {
+      if (seen.has(positionKey(key))) continue;
+      // Our own hosts are always known to us.
+      for (const owner of Object.keys(state[field][key])) if (owner !== house) delete state[field][key][owner];
+      if (!Object.keys(state[field][key]).length) delete state[field][key];
+    }
+  }
+  for (const [id, node] of Object.entries(state.sea_nodes || {})) {
+    if (!seen.has(id) && node.days_at_sea) delete node.days_at_sea;
+  }
+  // The people and the order of a land are known on seen lands only; on lands
+  // once explored the people are remembered as they were.
+  for (const field of ['population', 'order', 'growth']) {
+    for (const id of Object.keys(state[field] || {})) {
+      if (seen.has(id)) continue;
+      if (field === 'population' && explored.has(id)) continue;
+      delete state[field][id];
+    }
+  }
+  // Decisions about lands, bridges being built and ports being built belong to their Houses.
+  if (state.capture_choices) state.capture_choices = Object.fromEntries(Object.entries(state.capture_choices).filter(([, c]) => c.house === house));
+  for (const bridge of Object.values(state.bridges || {})) {
+    if (bridge.builder !== house && !bridge.built) { delete bridge.ready_at; delete bridge.builder; }
+  }
+  for (const [id, territory] of Object.entries(state.territories || {})) {
+    if (territory.owner !== house && !seen.has(id)) { delete territory.port_ready_at; delete territory.port_builder; }
+  }
+  // The Horde is seen where it stands; its road and goal are known only to the House it hunts.
+  state.hordes = (state.hordes || []).map(h => h.against === house ? h : { id: h.id, against: h.against, men: h.men, at: h.at, started: h.started, path: seen.has(h.at) || explored.has(h.at) ? [h.at] : [], next_at: h.next_at }).filter(h => h.against === house || seen.has(h.at) || explored.has(h.at));
   // Which Heart is true is a secret, save what this House's spies learnt.
   if (state.heart) {
     const known = state.heart.known?.[house] || {};
@@ -210,6 +243,10 @@ export function applyFog(clientGame, map, house) {
 
   delete clientGame.exploration;
   delete clientGame.agents;
+  for (const field of ['drills', 'yards']) if (clientGame[field]) clientGame[field] = { [house]: clientGame[field][house] || (field === 'drills' ? [] : null) };
+  if (clientGame.levy) {
+    for (const id of Object.keys(clientGame.levy)) if (state.territories?.[id]?.owner !== house) delete clientGame.levy[id];
+  }
   if (state.spy_sight) state.spy_sight = { [house]: state.spy_sight[house] || {} };
   // The past of lands never seen is unknown too.
   for (const id of Object.keys(clientGame.land_history || {})) {

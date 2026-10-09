@@ -28,18 +28,18 @@ const N = RANKS.length;
 export const LEVY = Object.freeze({
   'Деревня': { rank: 0, perDay: 2, gold: 1 },
   'Город': { rank: 1, perDay: 2, gold: 2 },
-  'Столица': { rank: 2, perDay: 1, gold: 3 }
+  'Столица': { rank: 3, perDay: 1, gold: 3 }
 });
 export const LEVY_DAYS_STOCK = 3;
 
 // The drill: a rank higher for gold and time; the yard opens the top ranks.
 export const DRILL = Object.freeze({
-  maxWithoutYard: 2,        // up to ratniki
-  maxWithYard: 4,           // up to druzhina
+  maxWithoutYard: 3,        // up to ратники
+  maxWithYard: 5,           // up to рыцари
   places: 6,                // warriors at drill at once
   placesWithYard: 12,
   dayShare: 1 / 3,          // a drill lasts a third of a game day
-  goldPerStep: [1, 2, 3, 4] // to rank 1, 2, 3, 4
+  goldPerStep: [1, 1, 2, 2, 3] // to kind 1, 2, 3, 4, 5
 });
 export const YARD = Object.freeze({ gold: 8, dayShare: 1 / 2 });
 
@@ -47,8 +47,16 @@ export const emptyComp = () => Array(N).fill(0);
 export const compSum = comp => (comp || []).reduce((a, b) => a + Number(b || 0), 0);
 export const compStrength = comp => (comp || []).reduce((a, n, i) => a + Number(n || 0) * RANKS[i].power, 0);
 
+// Games made before the six kinds stored five ranks: селяне, ополченцы,
+// ратники, латники, дружинники. They become крестьяне, копейщики, ратники,
+// конные сержанты and рыцари, so every old host keeps its strength.
+const OLD_TO_NEW = [0, 1, 3, 4, 5];
 function clean(comp) {
   const out = emptyComp();
+  if (Array.isArray(comp) && comp.length === 5) {
+    comp.forEach((n, i) => { out[OLD_TO_NEW[i]] += Math.max(0, Math.floor(Number(n || 0))); });
+    return out;
+  }
   for (let i = 0; i < N; i += 1) out[i] = Math.max(0, Math.floor(Number(comp?.[i] || 0)));
   return out;
 }
@@ -372,11 +380,11 @@ export function levyStock(game, map, territoryId, nowMs) {
 }
 
 export function levyView(game, map, house, nowMs) {
-  const kinds = [0, 1, 2].map(rank => ({ rank, name: RANKS[rank].name, gold: 0, available: 0, sources: 0 }));
+  const kinds = ['Деревня', 'Город', 'Столица'].map(type => ({ rank: LEVY[type].rank, name: RANKS[LEVY[type].rank].name, gold: 0, available: 0, sources: 0 }));
   for (const t of map.territories) {
     const rule = LEVY[t.type];
     if (!rule || game.state.territories[t.id]?.owner !== house) continue;
-    const kind = kinds[rule.rank];
+    const kind = kinds.find(k => k.rank === rule.rank);
     kind.gold = rule.gold;
     kind.available += Math.floor(levyStock(game, map, t.id, nowMs));
     kind.sources += 1;

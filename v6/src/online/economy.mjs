@@ -54,6 +54,7 @@ export function queueRecruitJob(game, constants, {
   territory,
   warriors
 }, { nowMs = Date.now(), timing = ONLINE_ECONOMY_TIMING } = {}) {
+  if (game.state?.population) throw new Error('в этом веке войска нанимают по родам: открой грамоту земли');
   const next = normalizeOnlineEconomy(game, nowMs, timing);
   const count = Number(warriors);
   if (!constants.houses.includes(house)) throw new Error('unknown house');

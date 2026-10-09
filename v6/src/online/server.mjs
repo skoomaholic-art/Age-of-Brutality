@@ -1684,16 +1684,7 @@ async function handleGameApi(req, res, url, ctx, subpath) {
       kind: command.type,
       status: 201,
       house: command.house,
-      mutate: async game => {
-        const done = executeCommand(game, map, constants, command);
-        const order = done?.game && done.response?.order?.id ? done.game.orders.find(item => item.id === done.response.order.id) : null;
-        // A way of the player's own: by the points he picked.
-        if (order && Array.isArray(body.via) && body.via.length) setViaRoute(done.game, map, constants, order, body.via, Date.now());
-        // "Stop part of the way": the army makes camp on the road at that share of it.
-        const ratio = Number(body.halt_ratio);
-        if (order && ratio > 0 && ratio < 1) setHaltPoint(order, ratio, Date.now());
-        return done;
-      }
+      mutate: async game => executeCommand(game, map, constants, command)
     }));
     return json(res, result.status, result.response);
   }

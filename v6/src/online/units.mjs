@@ -65,7 +65,13 @@ function cleanCounts(counts) {
 }
 
 // Hires troops in one of one's own lands. Mutates nothing; returns the new game.
+const OLD_RULES = 'в этом веке войска нанимают в столице по-старому';
+function assertNewRules(game) {
+  if (!game.state?.population) throw new Error(OLD_RULES);
+}
+
 export function hireUnits(game, map, house, territory, counts, { nowMs = Date.now() } = {}) {
+  assertNewRules(game);
   const land = game.state.territories[territory];
   if (!land || land.owner !== house) throw new Error('нанимать можно только в своей земле');
   const want = cleanCounts(counts);
@@ -125,6 +131,7 @@ export function replenishQuote(state, map, house, territory) {
 }
 
 export function replenishUnits(game, map, house, territory, { nowMs = Date.now() } = {}) {
+  assertNewRules(game);
   const quote = replenishQuote(game.state, map, house, territory);
   if (!quote.own) throw new Error('пополнять можно только в своей земле');
   if (!quote.men) throw new Error('отряд и так в полной силе');
@@ -149,6 +156,7 @@ export function replenishUnits(game, map, house, territory, { nowMs = Date.now()
 
 // Turns `count` men of one kind into a better kind, for the difference in price.
 export function retrainUnits(game, map, house, territory, from, to, count, { nowMs = Date.now() } = {}) {
+  assertNewRules(game);
   const land = game.state.territories[territory];
   if (!land || land.owner !== house) throw new Error('переучивать можно только в своей земле');
   from = Number(from); to = Number(to); count = Math.floor(Number(count) || 0);
@@ -180,6 +188,7 @@ export function retrainUnits(game, map, house, territory, from, to, count, { now
 
 // Fields or a fair: the land's people grow a little every dawn.
 export function buildGrowth(game, map, house, territory, { nowMs = Date.now() } = {}) {
+  assertNewRules(game);
   const land = game.state.territories[territory];
   if (!land || land.owner !== house) throw new Error('строить можно только в своей земле');
   if (game.state.growth?.[territory]) throw new Error('здесь уже есть');

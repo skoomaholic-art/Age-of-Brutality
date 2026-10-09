@@ -402,7 +402,7 @@ export function journalEntryToAudit(entry, map, game) {
   }
 
   if (entry.kind === 'LEVY_RAISED' || entry.kind === 'DRILL_DONE' || entry.kind === 'YARD_BUILT') {
-    const names = ['селян', 'ополченцев', 'ратников'];
+    const names = ['крестьян', 'копейщиков', 'ратников'];
     const raised = (entry.counts || []).map((n, i) => (n ? `${n} ${names[i]}` : '')).filter(Boolean).join(', ');
     return {
       ...base,
@@ -411,7 +411,7 @@ export function journalEntryToAudit(entry, map, game) {
         ? `Сбор войск: Дом ${entry.house} созвал ${raised}. Люди идут в столицу.`
         : entry.kind === 'DRILL_DONE'
           ? `Учения окончены: теперь в столице ${entry.risen_text || 'обученные воины'}.`
-          : `Учебный двор Дома ${entry.house} готов: можно учить латников и дружинников.`,
+          : `Учебный двор Дома ${entry.house} готов: можно учить конных сержантов и рыцарей.`,
       details: { house: entry.house, counts: entry.counts || null, risen: entry.risen || null, at: entry.at || null }
     };
   }

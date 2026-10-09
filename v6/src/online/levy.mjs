@@ -21,17 +21,24 @@ function heads(territory) {
 // "Собрать войска": men of the three ranks from the lands that give them.
 // Villagers and townsmen walk to the capital along the roads; the capital's
 // own men-at-arms stand ready at once.
+const NEW_RULES = 'в этом веке войска нанимают по родам в каждой своей земле';
+function assertOldRules(game) {
+  if (game.state?.population) throw new Error(NEW_RULES);
+}
+
 export function raiseLevy(game, map, constants, house, counts, { nowMs = Date.now() } = {}) {
+  assertOldRules(game);
   const capital = map.capitals?.[house];
   if (!capital || game.state.territories[capital]?.owner !== house) throw new Error('без столицы войска не собрать');
   let next = structuredClone(game);
-  const want = [0, 1, 2].map(rank => Math.max(0, Math.floor(Number(counts?.[rank] || 0))));
-  if (!want.some(Boolean)) throw new Error('сколько людей собрать?');
+  // `counts` is by levy kind: [villages, towns, capital].
   const view = levyView(next, map, house, nowMs);
+  const want = view.map((kind, i) => Math.max(0, Math.floor(Number(counts?.[i] || 0))));
+  if (!want.some(Boolean)) throw new Error('сколько людей собрать?');
   let gold = 0;
-  for (const rank of [0, 1, 2]) {
-    if (want[rank] > view[rank].available) throw new Error(`${RANKS[rank].name}: сейчас можно собрать не больше ${view[rank].available}`);
-    gold += want[rank] * view[rank].gold;
+  for (let i = 0; i < view.length; i += 1) {
+    if (want[i] > view[i].available) throw new Error(`${view[i].name}: сейчас можно собрать не больше ${view[i].available}`);
+    gold += want[i] * view[i].gold;
   }
   if (Number(next.state.houses[house].gold || 0) < gold) throw new Error(`нужно ${gold} золота`);
   const room = constants.house_warrior_cap - totalHouseWarriors(next.state, house);
@@ -40,9 +47,10 @@ export function raiseLevy(game, map, constants, house, counts, { nowMs = Date.no
   next.state.houses[house].gold -= gold;
   reconcileRanks(next.state, map);
   const marches = [];
-  for (const rank of [0, 1, 2]) {
-    if (!want[rank]) continue;
-    for (const { territory, count } of drawLevy(next, map, house, rank, want[rank], nowMs)) {
+  for (let i = 0; i < view.length; i += 1) {
+    const rank = view[i].rank;
+    if (!want[i]) continue;
+    for (const { territory, count } of drawLevy(next, map, house, rank, want[i], nowMs)) {
       const land = next.state.territories[territory];
       const fits = Math.min(count, constants.territory_warrior_cap - heads(land));
       if (fits <= 0) continue;
@@ -81,20 +89,22 @@ export function raiseLevy(game, map, constants, house, counts, { nowMs = Date.no
 
 // "Учения": raise a rank for chosen warriors of the capital garrison.
 export function startDrill(game, map, house, counts, { nowMs = Date.now() } = {}) {
+  assertOldRules(game);
   const next = structuredClone(game);
   reconcileRanks(next.state, map);
-  const take = [0, 1, 2, 3].map(rank => Math.max(0, Math.floor(Number(counts?.[rank] || 0))));
+  const steps = RANKS.length - 1;
+  const take = Array.from({ length: steps }, (_, rank) => Math.max(0, Math.floor(Number(counts?.[rank] || 0))));
   const total = take.reduce((a, b) => a + b, 0);
   if (!total) throw new Error('кого учить?');
   const yard = yardReady(next, house, nowMs);
   const top = yard ? DRILL.maxWithYard : DRILL.maxWithoutYard;
-  for (let rank = 0; rank < 4; rank += 1) {
+  for (let rank = 0; rank < steps; rank += 1) {
     if (take[rank] && rank + 1 > top) throw new Error(`${RANKS[rank].name} учатся дальше только на учебном дворе`);
   }
   const places = (yard ? DRILL.placesWithYard : DRILL.places) - drillingCount(next, house);
   if (total > places) throw new Error(`на учениях сейчас места ещё для ${Math.max(0, places)}`);
   const free = drillableComp(next, map, house);
-  for (let rank = 0; rank < 4; rank += 1) {
+  for (let rank = 0; rank < steps; rank += 1) {
     if (take[rank] > free[rank]) throw new Error(`${RANKS[rank].name}: в столице свободно только ${free[rank]}`);
   }
   const gold = take.reduce((sum, n, rank) => sum + n * DRILL.goldPerStep[rank], 0);
@@ -102,13 +112,13 @@ export function startDrill(game, map, house, counts, { nowMs = Date.now() } = {}
   next.state.houses[house].gold -= gold;
   next.drills ||= {};
   next.drills[house] ||= [];
-  const counts5 = [...take, 0];
-  next.drills[house].push({ id: `D${Date.now().toString(36)}${next.drills[house].length}`, counts: counts5, due_at: new Date(nowMs + drillTime(next)).toISOString(), started_at: new Date(nowMs).toISOString() });
+  next.drills[house].push({ id: `D${Date.now().toString(36)}${next.drills[house].length}`, counts: [...take, 0], due_at: new Date(nowMs + drillTime(next)).toISOString(), started_at: new Date(nowMs).toISOString() });
   next.updated_at = new Date(nowMs).toISOString();
   return next;
 }
 
 export function buildYard(game, map, house, { nowMs = Date.now() } = {}) {
+  assertOldRules(game);
   const capital = map.capitals?.[house];
   if (!capital || game.state.territories[capital]?.owner !== house) throw new Error('учебный двор ставят только в своей столице');
   if (yardOf(game, house)) throw new Error('учебный двор уже есть');
@@ -154,7 +164,7 @@ export function processRanks(game, map, nowMs = Date.now()) {
       reconcileRanks(g.state, map);
       const comp = g.state.ranks?.[capital]?.[house] ? [...g.state.ranks[capital][house]] : compAt(g.state, map, capital, house);
       const risen = emptyComp();
-      for (let rank = 3; rank >= 0; rank -= 1) {
+      for (let rank = RANKS.length - 2; rank >= 0; rank -= 1) {
         const n = Math.min(Number(drill.counts[rank] || 0), comp[rank]);
         comp[rank] -= n; comp[rank + 1] += n; risen[rank + 1] += n;
       }
