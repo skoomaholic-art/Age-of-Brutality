@@ -4212,7 +4212,8 @@ function renderMap() {
   // The SVG is rebuilt only when something on it has changed.
   const svgKey = JSON.stringify([usePixi, origin, target, house, [...legalTargets], explored ? [...explored] : null, state.territories, state.sea_nodes, state.guests, (snapshot.game.orders || []).filter(o => o.status === 'PENDING').map(o => [o.id, o.action?.warriors, Boolean(o.halted), o.action?.to]), activePath, abandonedHouses()]);
   if (usePixi) drawPixiMap(scene, svgKey);
-  updateClouds(explored, art, coords);
+  // Known waters clear too: sea waypoints have no painted shape, only a point.
+  updateClouds(explored, art, { ...coords, ...(snapshot.map.sea_waypoints || {}) });
   if (svgKey === lastSvgKey) return;
   lastSvgKey = svgKey;
   $('map').classList.toggle('pixi-on', usePixi);
