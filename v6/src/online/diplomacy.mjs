@@ -1,3 +1,4 @@
+import { houseCourtTotals } from './court.mjs';
 // Relations between Houses: neutral by default, war by deed, alliance by marriage.
 //
 // - Neutral Houses whose armies meet on the road go to war and fight.
@@ -555,6 +556,8 @@ export function aiVerdict(game, map, from, to) {
   }
   // An alliance is worth having; a daughter given away is worth a little gold.
   if (marriage) gain += 3 + (deal.take.some(item => item.type === 'MARRIAGE') ? -1 : 1);
+  // A well-spoken lord at the proposer's court sways the answer.
+  gain += houseCourtTotals(game.state, from).deals * 2;
   if (gain >= 0) return { accept: true, reason: null };
   return { accept: false, reason: `сочли договор невыгодным: не хватает примерно ${Math.ceil(-gain)} золота` };
 }

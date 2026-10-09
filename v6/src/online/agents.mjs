@@ -1,3 +1,4 @@
+import { houseCourtTotals } from './court.mjs';
 // Spies. A House hires a spy and hides him in a band of wayfarers resting in
 // one of its lands. He walks with the band along its own round, so nothing
 // marks him out, and when the band reaches the land he was sent to he watches
@@ -21,8 +22,10 @@ export function hireSpy(game, constants, house, { nowMs = Date.now() } = {}) {
   const mine = (next.agents[house] ||= []);
   if (mine.length >= MAX_SPIES) throw new Error(`у Дома не больше ${MAX_SPIES} шпионов`);
   const purse = next.state.houses[house];
-  if (Number(purse.gold || 0) < SPY_COST) throw new Error('не хватает золота на шпиона');
-  purse.gold -= SPY_COST;
+  // A lord skilled in intrigue at court makes spies cheaper.
+  const cost = Math.max(1, SPY_COST - houseCourtTotals(next.state, house).spy);
+  if (Number(purse.gold || 0) < cost) throw new Error('не хватает золота на шпиона');
+  purse.gold -= cost;
   next.next_agent_id = Number(next.next_agent_id || 1);
   const id = `S${next.next_agent_id}`;
   next.next_agent_id += 1;
@@ -103,7 +106,7 @@ export function nextAgentDueAt(game) {
 }
 
 export function agentsView(game, house) {
-  return { list: structuredClone(game.agents?.[house] || []), cost: SPY_COST, max: MAX_SPIES };
+  return { list: structuredClone(game.agents?.[house] || []), cost: Math.max(1, SPY_COST - houseCourtTotals(game.state, house).spy), max: MAX_SPIES };
 }
 
 export function wayfarersView(game, map) {

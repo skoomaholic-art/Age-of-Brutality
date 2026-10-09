@@ -33,6 +33,7 @@ import {
 import { normalizeOnlineSeaState } from './sea-navigation.mjs';
 import { raiseLevy, startDrill, buildYard, buildPort, processRanks, ranksView } from './levy.mjs';
 import { startRide, processRiders, ridersOf } from './riders.mjs';
+import { courtEffects } from './court.mjs';
 import {
   ONLINE_ECONOMY_TIMING,
   cancelJob,
@@ -594,6 +595,10 @@ function redactGameForPlayer(game, player) {
   // The levy, the drill and the yard of one's own House.
   clientGame.ranks_view = player?.house ? ranksView(game, map, player.house) : null;
   clientGame.riders = player?.house ? ridersOf(game, player.house) : [];
+  // What each lord of one's own House gives at court and with an army.
+  clientGame.court_effects = Object.fromEntries(Object.values(game.state?.characters || {})
+    .filter(character => character.house === player?.house)
+    .map(character => [character.id, courtEffects(character)]));
 
   clientGame.orders = player?.role === PLAYER_ROLE.SPECTATOR
     ? (clientGame.orders || []).filter(item => item.status !== 'PENDING').slice(-30)

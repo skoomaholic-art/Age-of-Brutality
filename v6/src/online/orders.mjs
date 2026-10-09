@@ -15,6 +15,7 @@ import {
 } from '../core/characters.mjs';
 import { declareWarInPlace, hasPassage } from './diplomacy.mjs';
 import { headsLost, ranksForMarch, settleMarchRanks, strengthOf } from './ranks.mjs';
+import { rulerLeadBonus } from './court.mjs';
 import { fateDice, recoveryMs, settleFate } from './fate.mjs';
 import {
   finishSeaLandingBridge,
@@ -727,8 +728,9 @@ function resolveOrder(state,map,constants,gameId,order,nowMs,recovery) {
       attackerCommander:commanderStats(attackerCommander),
       defenderCommander:commanderStats(defenderCommander),
       // Ranks add up as strength: a guardsman counts as five peasants.
-      attackerStrengthModifier:strengthOf(order.action.ranks,Number(action.warriors))-Number(action.warriors),
-      defenderStrengthModifier:strengthOf(state.ranks?.[action.to]?.[defenderHouse],defenders)-defenders,
+      // Ranks add up as strength; a ruler leading in person adds one more.
+      attackerStrengthModifier:strengthOf(order.action.ranks,Number(action.warriors))-Number(action.warriors)+rulerLeadBonus(attackerCommander),
+      defenderStrengthModifier:strengthOf(state.ranks?.[action.to]?.[defenderHouse],defenders)-defenders+rulerLeadBonus(defenderCommander),
       attackerLossesFor:damage=>headsLost(order.action.ranks,Number(action.warriors),damage),
       defenderLossesFor:damage=>headsLost(state.ranks?.[action.to]?.[defenderHouse],defenders,damage)
     }

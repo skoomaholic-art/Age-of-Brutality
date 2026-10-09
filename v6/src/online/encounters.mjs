@@ -16,6 +16,7 @@ import {
 import { fateDice, recoveryMs, settleFate } from './fate.mjs';
 import { areAllies, declareWarInPlace, hasPassage } from './diplomacy.mjs';
 import { headsLost, loseOnRoad, strengthOf } from './ranks.mjs';
+import { rulerLeadBonus } from './court.mjs';
 
 const BATTLE_DIE = 3;
 // Two armies "meet" at a crossroads when they reach it within this share of
@@ -136,7 +137,7 @@ function side(state, order) {
     warriors,
     attack: Number(stats.attack || 0),
     defense: Number(stats.defense || 0),
-    strength: strengthOf(order.action.ranks, warriors) + BATTLE_DIE + Number(stats.attack || 0)
+    strength: strengthOf(order.action.ranks, warriors) + BATTLE_DIE + Number(stats.attack || 0) + rulerLeadBonus(commander)
   };
 }
 
