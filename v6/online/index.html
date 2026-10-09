@@ -703,7 +703,10 @@
       .bar-drop button, .land-card button, .route-card button, .decision-card button { min-height: 44px; font-size: 16px; }
       .map-zoom { top: 40px; right: 8px; gap: 8px; }
       .map-zoom button { width: 46px; height: 46px; font-size: 24px; }
-      .land-card { left: 0; right: 0; bottom: 54px; width: auto; max-height: 55%; overflow: auto; border-width: 2px 0 0; }
+      .land-card { left: 0; right: 0; bottom: 54px; width: auto; max-height: 50%; overflow: auto; border-width: 2px 0 0; }
+      /* The news sit across the top on a phone and never run into the land's charter. */
+      .battle-card { left: 8px; right: 8px; top: 44px; width: auto; max-height: 40%; overflow: auto; }
+      .map-card:has(#land-card.show) .battle-card, .map-card:has(#field-card.show) .battle-card { max-height: 34%; }
       .route-card { bottom: 60px !important; }
       .map-guide { display: none; }
       .decision { padding: 8px; }
@@ -4230,6 +4233,25 @@ function applyMapView() {
 
 // Home view: the whole map on a wide screen, the player's own capital on a phone.
 let homeShown = false;
+// What a newcomer in a century of the Heart should be doing right now.
+function heartAim() {
+  const heart = snapshot?.game?.state?.heart;
+  if (!heart) return '';
+  const day = Number(snapshot.game.rounds?.number || 1);
+  const target = Number(heart.target || 30);
+  const mine = Number(snapshot.game.state.houses?.[house]?.victory_points || 0);
+  if (heart.territory) {
+    return snapshot.game.state.territories?.[heart.territory]?.owner === house
+      ? ` Истинное Сердце твоё: держи его, и слава будет прибывать каждый рассвет (у тебя ${mine} из ${target}).`
+      : ' Истинное Сердце открыто всем: кто его держит, тот и побеждает.';
+  }
+  if (!(heart.candidates || []).length) {
+    return ` Занимай вольные земли: чем дальше от дома, тем больше славы (у тебя ${mine} из ${target}). На ${heart.appear_day || 3}-й рассвет посреди мира восстанут Сердца.`;
+  }
+  const left = (heart.candidates || []).length - (heart.revealed || []).length;
+  return ` Сердца восстали, неразгаданных ${left}. Истинное даёт славу каждый рассвет, ложное будит Орду: шпион узнает правду (у тебя ${mine} из ${target}).`;
+}
+
 function goHome() {
   mapView = { ...MAP_HOME };
   const capital = snapshot?.map?.capitals?.[$('house').value];
@@ -5495,7 +5517,7 @@ function renderSelection() {
     $('commander-row').style.display = 'none';
     $('selection').textContent = 'Нажми на щит своей рати, потом на цель.';
     $('guide-title').textContent = 'Откуда выступит рать?';
-    $('guide-sub').textContent = 'Щит — выбрать рать; затем земля — приказ. Земля без выбранной рати — её карточка. Esc или правая кнопка — отменить.';
+    $('guide-sub').textContent = 'Щит — выбрать рать; затем земля — приказ. Земля без выбранной рати — её карточка. Esc или правая кнопка — отменить.' + heartAim();
     card.classList.remove('show');
     return;
   }
