@@ -65,17 +65,43 @@ function incomeByType(baseMap) {
   return out;
 }
 
-// How many lands a game of `count` Houses gets, by kind.
-export function mapPlan(count) {
-  const ringRadius = count === 2 ? 2 * STEP : HOME_SPAN / (2 * Math.sin(Math.PI / count));
-  const innerRing = count >= 3 && ringRadius - STEP > DIRECT_HUB;
-  const islandPairs = count === 2 ? 1 : count % 2 === 0 ? count / 2 : count;
-  const borderlands = count === 2 ? 2 : count;
-  const lands = count * 7 + borderlands + 1 + (innerRing ? count : 0) + islandPairs * 2;
-  return { houses: count, ringRadius, innerRing, islandPairs, borderlands, lands };
+// The lie of the land. The roads between lands decide the game and stay fair
+// in every shape; the shape decides where the water runs:
+// - wheel: one continent, the homes around a free city in the middle;
+// - peninsulas: every home on its own peninsula, joined to the heartland by a
+//   neck of land, with bays of sea between neighbours;
+// - archipelago: every home on its own island, the heartland an island too;
+// - inland: a ring of land around an inland sea, no city in the middle.
+// A warp then bends the whole picture (stretched, crescent, wavy) without
+// changing a single road.
+export const MAP_SHAPES = ['wheel', 'peninsulas', 'archipelago', 'inland'];
+export const MAP_WARPS = ['none', 'stretch', 'crescent', 'wave'];
+export const SHAPE_NAMES = { wheel: 'материк', peninsulas: 'полуострова', archipelago: 'архипелаг', inland: 'внутреннее море' };
+
+export function pickMapShape(count, seed) {
+  const random = seeded((Number(seed) || 1) ^ 0x51ed27);
+  const shapes = count === 2 ? ['wheel', 'archipelago', 'inland'] : MAP_SHAPES;
+  const shape = shapes[Math.floor(random() * shapes.length)];
+  const warp = MAP_WARPS[Math.floor(random() * MAP_WARPS.length)];
+  return { shape, warp };
 }
 
-export function generateMap(baseMap, constants, { houses, seed = 1 } = {}) {
+// How many lands a game of `count` Houses gets, by kind.
+export function mapPlan(count, shape = 'wheel') {
+  const ringRadius = count === 2 ? 2 * STEP : HOME_SPAN / (2 * Math.sin(Math.PI / count));
+  const apart = shape === 'peninsulas' || shape === 'archipelago';
+  const innerRing = count >= 3 && (apart || (shape === 'wheel' && ringRadius - STEP > DIRECT_HUB));
+  const islandPairs = count === 2 ? 1 : count % 2 === 0 ? count / 2 : count;
+  const borderlands = count === 2 ? 2 : count;
+  const hub = shape === 'inland' ? 0 : 1;
+  const lands = count * 7 + borderlands + hub + (innerRing ? count : 0) + islandPairs * 2;
+  return { houses: count, shape, ringRadius, innerRing, islandPairs, borderlands, lands };
+}
+
+export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'wheel', warp = 'none' } = {}) {
+  if (!MAP_SHAPES.includes(shape)) shape = 'wheel';
+  if (!MAP_WARPS.includes(warp)) warp = 'none';
+  if (houses.length === 2 && shape === 'peninsulas') shape = 'wheel';
   const count = houses.length;
   if (count < MIN_HOUSES || count > MAX_HOUSES) {
     throw new Error(`a map needs ${MIN_HOUSES} to ${MAX_HOUSES} Houses`);
@@ -85,8 +111,10 @@ export function generateMap(baseMap, constants, { houses, seed = 1 } = {}) {
   }
 
   const random = seeded(Number(seed) || 1);
-  const plan = mapPlan(count);
-  const R = plan.ringRadius;
+  const plan = mapPlan(count, shape);
+  const apart = shape === 'peninsulas' || shape === 'archipelago';
+  // Peninsulas and islands stand farther out, so the sea can run between them.
+  const R = plan.ringRadius * (shape === 'archipelago' ? 1.9 : shape === 'peninsulas' ? 1.5 : 1);
   const turn = random() * Math.PI * 2;
   const income = incomeByType(baseMap);
   const names = namePool(baseMap, random);
@@ -103,10 +131,12 @@ export function generateMap(baseMap, constants, { houses, seed = 1 } = {}) {
   })();
 
   const sites = [];          // { id, pos, type, sector, name, mass, island }
+  let bendRiver = null;
   const edges = new Set();
   const link = (a, b) => edges.add([a, b].sort().join('|'));
   const site = (id, pos, type, sector, name, extra = {}) => {
     sites.push({ id, pos, type, sector, name, mass: 'M', ...extra });
+    if (shape === 'archipelago' && !extra.mass) sites[sites.length - 1].mass = /^[A-F]\d$/.test(id) ? `H${id[0]}` : 'C';
     return id;
   };
 
@@ -133,10 +163,38 @@ export function generateMap(baseMap, constants, { houses, seed = 1 } = {}) {
     for (let k = 0; k < 6; k += 1) link(petal(i, k), petal(i, (k + 1) % 6));
   });
 
-  // The free city in the middle.
-  const hub = site('X0', { x: 0, y: 0 }, 'Город', 'Срединные земли', takeName());
+  // The free city in the middle (an inland sea has none).
+  const hub = shape === 'inland' ? null : site('X0', { x: 0, y: 0 }, 'Город', 'Срединные земли', takeName());
 
-  if (count === 2) {
+  if (count === 2 && shape === 'inland') {
+    // Two homes around a lake, a pass on each flank.
+    for (const [n, side] of [[1, 1], [2, -1]]) {
+      const id = site(`P${n}`, polar(STEP + 2, angles[0] + (side * Math.PI) / 2), 'Дикая земля', 'Пограничье', takeName());
+      link(id, petal(0, side === 1 ? 2 : 4));
+      link(id, petal(1, side === 1 ? 4 : 2));
+    }
+  } else if (count === 2 && shape === 'archipelago') {
+    // Two island homes and a heartland island with a pass at each end.
+    for (const [n, side] of [[1, 1], [2, -1]]) {
+      const id = site(`P${n}`, polar(STEP + 2, angles[0] + (side * Math.PI) / 2), 'Дикая земля', 'Пограничье', takeName());
+      link(id, hub);
+    }
+  } else if (apart) {
+    // The heartland: the free city, an inner ring, and a borderland between
+    // every two spokes. Each home is joined to it by a single neck of land
+    // (peninsulas) or only by sea (archipelago).
+    const inner = Math.min((R - STEP) / 2, 95);
+    for (let i = 0; i < count; i += 1) {
+      const id = site(`X${i + 1}`, polar(inner, angles[i]), 'Деревня', 'Срединные земли', takeName());
+      link(id, hub);
+      if (shape === 'peninsulas') link(id, petal(i, 3));
+    }
+    for (let i = 0; i < count; i += 1) {
+      const id = site(`P${i + 1}`, polar(inner * 1.25, angles[i] + Math.PI / count), 'Дикая земля', 'Пограничье', takeName());
+      link(id, `X${i + 1}`);
+      link(id, `X${((i + 1) % count) + 1}`);
+    }
+  } else if (count === 2) {
     // Two Houses face each other across the free city, with a pass on each flank.
     link(hub, petal(0, 3));
     link(hub, petal(1, 3));
@@ -153,7 +211,9 @@ export function generateMap(baseMap, constants, { houses, seed = 1 } = {}) {
       const b = polar(R, angles[next]);
       site(`P${i + 1}`, { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, 'Дикая земля', 'Пограничье', takeName());
     }
-    if (plan.innerRing) {
+    if (!hub) {
+      // An inland sea in the middle: the homes and borderlands make a ring around it.
+    } else if (plan.innerRing) {
       const inner = (R - STEP) / 2;
       for (let i = 0; i < count; i += 1) {
         const id = site(`X${i + 1}`, polar(inner, angles[i]), 'Деревня', 'Срединные земли', takeName());
@@ -166,10 +226,12 @@ export function generateMap(baseMap, constants, { houses, seed = 1 } = {}) {
     }
   }
 
-  // Lands that lie side by side share a border.
-  for (let i = 0; i < sites.length; i += 1) {
-    for (let j = i + 1; j < sites.length; j += 1) {
-      if (dist(sites[i].pos, sites[j].pos) <= NEAR) link(sites[i].id, sites[j].id);
+  // Lands that lie side by side share a border (where the shape is one piece).
+  if (!apart) {
+    for (let i = 0; i < sites.length; i += 1) {
+      for (let j = i + 1; j < sites.length; j += 1) {
+        if (dist(sites[i].pos, sites[j].pos) <= NEAR) link(sites[i].id, sites[j].id);
+      }
     }
   }
 
@@ -235,11 +297,31 @@ export function generateMap(baseMap, constants, { houses, seed = 1 } = {}) {
     if (!moved) break;
     for (const node of ring) node.pos = beyond(node.angle, node.gap || 78);
   }
+  // Inner waters: the straits between island homes and the inland sea.
+  const innerNodes = [];
+  if (shape === 'archipelago' || shape === 'inland') {
+    const lake = shape === 'inland';
+    for (let i = 0; i < count; i += 1) {
+      const angle = lake ? angles[i] + Math.PI / count : angles[i] + Math.PI / count;
+      const radius = lake ? Math.max(8, (R - STEP - 30) * 0.5) : (Math.min((R - STEP) / 2, 95) * 1.25 + R - STEP) / 2 + 6;
+      innerNodes.push({ id: `M-${lake ? 'L' : 'I'}${i + 1}`, pos: polar(radius, angle), angle });
+    }
+  }
+  const allNodes = [...ring, ...innerNodes];
   const mainSites = [...sites];
-  for (let k = 0; k < ringSize; k += 1) {
-    const node = ring[k];
+  for (let k = 0; k < innerNodes.length; k += 1) {
+    const node = innerNodes[k];
+    if (innerNodes.length > 2 || k === 0) lanes.push([node.id, innerNodes[(k + 1) % innerNodes.length].id]);
+    // The straits open to the outer sea; a lake stays a lake.
+    if (shape === 'archipelago') {
+      const out = ring.find(item => item.id === `M-B${k + 1}`) || ring[Math.round(k * ringSize / count + perHouse / 2) % ringSize];
+      lanes.push([node.id, out.id]);
+    }
+  }
+  for (let k = 0; k < allNodes.length; k += 1) {
+    const node = allNodes[k];
     waypoints[node.id] = node.pos;
-    lanes.push([node.id, ring[(k + 1) % ringSize].id]);
+    if (k < ringSize) lanes.push([node.id, ring[(k + 1) % ringSize].id]);
     // The nearest shore lands with a clear run to this waypoint become its ports.
     const clear = mainSites
       .filter(s => !mainSites.some(t => t !== s && toSegment(t.pos, s.pos, node.pos) < 36))
@@ -280,6 +362,42 @@ export function generateMap(baseMap, constants, { houses, seed = 1 } = {}) {
     islandBonus[key] = pair;
   }
 
+  // Bend the whole picture; the roads stay as they are.
+  if (warp !== 'none') {
+    const shaper = seeded(((Number(seed) || 1) ^ 0x2f3a9d) >>> 0);
+    const reachAll = Math.max(...[...sites.map(s => s.pos), ...Object.values(waypoints)].map(p => Math.hypot(p.x, p.y)));
+    const tilt = shaper() * Math.PI;
+    const bend = p => {
+      // Turn so the warp runs along a random direction, warp, turn back.
+      const c = Math.cos(tilt), s = Math.sin(tilt);
+      let x = p.x * c + p.y * s, y = -p.x * s + p.y * c;
+      if (warp === 'stretch') { x *= 1.5 + shaper.fixed * 0.4; }
+      if (warp === 'crescent') {
+        const D = reachAll * 1.5;
+        const a = x / D;
+        const r = D + y;
+        x = Math.sin(a) * r * 1.15;
+        y = D - Math.cos(a) * r;
+      }
+      if (warp === 'wave') { y += Math.sin(x / (reachAll * 0.38) + shaper.fixed * 6) * reachAll * 0.22; x *= 1.25; }
+      return { x: x * c - y * s, y: x * s + y * c };
+    };
+    shaper.fixed = shaper();
+    for (const s of sites) s.pos = bend(s.pos);
+    for (const id of Object.keys(waypoints)) waypoints[id] = bend(waypoints[id]);
+    // Where the bend squeezes lands together, the whole picture grows back.
+    let closest = Infinity;
+    for (let i = 0; i < sites.length; i += 1) {
+      for (let j = i + 1; j < sites.length; j += 1) closest = Math.min(closest, dist(sites[i].pos, sites[j].pos));
+    }
+    const grow = closest < 42 ? 42 / closest : 1;
+    if (grow > 1) {
+      for (const s of sites) s.pos = { x: s.pos.x * grow, y: s.pos.y * grow };
+      for (const id of Object.keys(waypoints)) waypoints[id] = { x: waypoints[id].x * grow, y: waypoints[id].y * grow };
+    }
+    bendRiver = p => { const q = bend(p); return { x: q.x * grow, y: q.y * grow }; };
+  }
+
   // Shift everything into positive coordinates with open sea around.
   const all = [...sites.map(s => s.pos), ...Object.values(waypoints)];
   const margin = 150;
@@ -310,19 +428,31 @@ export function generateMap(baseMap, constants, { houses, seed = 1 } = {}) {
   const seaWaypoints = Object.fromEntries(Object.entries(waypoints).map(([id, p]) => [id, shift(p)]));
   const origin = shift({ x: 0, y: 0 });
 
-  // A river runs out of the heartland along every border and falls into the sea.
+  // A river runs out of the heartland along every border and falls into the
+  // sea; where the homes stand apart it runs out of every home instead.
   const rivers = [];
   for (let i = 0; i < boundaries; i += 1) {
-    const angle = boundaryAngle(i) + (random() - 0.5) * 0.5;
-    const start = polar(count === 2 ? 24 : Math.max(26, R * 0.32), boundaryAngle(i) + (random() - 0.5) * 0.6);
+    let angle = boundaryAngle(i) + (random() - 0.5) * 0.5;
+    let start = polar(count === 2 ? 24 : Math.max(26, R * 0.32), boundaryAngle(i) + (random() - 0.5) * 0.6);
+    if (shape !== 'wheel' && i < count) {
+      angle = angles[i] + Math.PI / 6;
+      start = add(polar(R, angles[i]), polar(22, angle));
+    }
+    if (bendRiver) {
+      const ahead = bendRiver(add(start, polar(10, angle)));
+      start = bendRiver(start);
+      angle = Math.atan2(ahead.y - start.y, ahead.x - start.x);
+    }
     rivers.push({ ...shift(start), angle, seed: Math.floor(random() * 1e6) });
   }
 
   return {
     game: baseMap.game,
-    version: 'V6-GENERATED-2',
+    version: shape === 'wheel' && warp === 'none' ? 'V6-GENERATED-2' : 'V6-GENERATED-3',
     generated: true,
     seed: Number(seed) || 1,
+    shape,
+    warp,
     houses: [...houses],
     plan,
     territories,

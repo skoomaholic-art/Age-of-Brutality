@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadJson, buildAdjacency } from '../src/core/map.mjs';
-import { generateMap, mapPlan } from '../src/online/mapgen.mjs';
+import { generateMap, mapPlan, MAP_SHAPES, MAP_WARPS } from '../src/online/mapgen.mjs';
 import { createOnlineGame } from '../src/online/store.mjs';
 import { validateState } from '../src/core/state.mjs';
 import { listQueueableMarches } from '../src/online/orders.mjs';
@@ -29,13 +29,18 @@ function distances(map, from) {
   return seen;
 }
 
-for (let count = 2; count <= 6; count += 1) {
-  test(`a map for ${count} Houses is fair and whole`, () => {
+const CASES = [];
+for (let count = 2; count <= 6; count += 1) CASES.push([count, 'wheel', 'none']);
+MAP_SHAPES.forEach((shape, i) => [3, 4, 6].forEach((count, j) => CASES.push([count, shape, MAP_WARPS[(i + j) % MAP_WARPS.length]])));
+CASES.push([2, 'archipelago', 'stretch'], [2, 'inland', 'crescent']);
+
+for (const [count, shape, warp] of CASES) {
+  test(`a map for ${count} Houses (${shape}, ${warp}) is fair and whole`, () => {
     const houses = constants.houses.slice(0, count);
-    const map = generateMap(base, constants, { houses, seed: 100 + count });
+    const map = generateMap(base, constants, { houses, seed: 100 + count, shape, warp });
     const ids = new Set(map.territories.map(t => t.id));
     assert.equal(ids.size, map.territories.length, 'ids are unique');
-    assert.equal(map.territories.length, mapPlan(count).lands);
+    assert.equal(map.territories.length, mapPlan(count, map.shape).lands);
     assert.equal(new Set(map.territories.map(t => t.name)).size, map.territories.length, 'names are unique');
 
     for (const [a, b] of map.land_edges) assert.ok(ids.has(a) && ids.has(b));
@@ -60,14 +65,13 @@ for (let count = 2; count <= 6; count += 1) {
     assert.equal(new Set(profiles).size, 1, 'all Houses start alike: ' + profiles.join(' | '));
     assert.match(profiles[0], /"around":"Город,Деревня,Деревня,Деревня,Дикая земля,Дикая земля"/);
 
-    // The mainland is one piece and every island is reachable by sea.
-    const reach = distances(map, map.capitals[houses[0]]);
-    for (const t of map.territories) {
-      if (t.type === 'Половина острова') {
-        assert.ok(map.sea_lane_edges.some(edge => edge.includes(t.id)), `${t.id} has a sea lane`);
-      } else {
-        assert.ok(reach.has(t.id), `${t.id} is reachable by land`);
-      }
+    // Every land can be reached from every home, by land or by sea.
+    const both = { land_edges: [...map.land_edges, ...map.sea_lane_edges] };
+    const reach = distances(both, map.capitals[houses[0]]);
+    for (const t of map.territories) assert.ok(reach.has(t.id), `${t.id} is reachable`);
+    if (map.shape === 'wheel') {
+      const byLand = distances(map, map.capitals[houses[0]]);
+      for (const t of map.territories) if (t.type !== 'Половина острова') assert.ok(byLand.has(t.id), `${t.id} is reachable by land`);
     }
 
     // Lands do not sit on top of each other.

@@ -51,7 +51,7 @@ import {
   startRounds
 } from './rounds.mjs';
 import { applyFog, knownHouses, recordExploration, recordLandHistory } from './fog.mjs';
-import { generateMap, MAX_HOUSES, MIN_HOUSES } from './mapgen.mjs';
+import { generateMap, MAX_HOUSES, MIN_HOUSES, MAP_SHAPES, MAP_WARPS, pickMapShape } from './mapgen.mjs';
 import { processEncounters } from './encounters.mjs';
 import { expelGuests } from './guests.mjs';
 import { agentsView, attachSpy, hireSpy, processAgents, wayfarersView } from './agents.mjs';
@@ -144,12 +144,13 @@ const scopeCache = new Map();
 // A generated map is not stored: it is rebuilt from its seed and its Houses.
 function scopeForSpec(spec) {
   if (!spec || spec.kind !== 'generated') return {};
-  const key = JSON.stringify([spec.seed, spec.houses]);
+  // Games made before shapes existed keep their wheel (no shape in the key).
+  const key = JSON.stringify(spec.shape ? [spec.seed, spec.houses, spec.shape, spec.warp] : [spec.seed, spec.houses]);
   if (!scopeCache.has(key)) {
     if (scopeCache.size > 200) scopeCache.delete(scopeCache.keys().next().value);
     scopeCache.set(key, {
       key,
-      map: generateMap(classicMap, baseConstants, { houses: spec.houses, seed: spec.seed }),
+      map: generateMap(classicMap, baseConstants, { houses: spec.houses, seed: spec.seed, shape: spec.shape || 'wheel', warp: spec.warp || 'none' }),
       constants: { ...baseConstants, houses: [...spec.houses] }
     });
   }
@@ -174,13 +175,15 @@ function mapSpecFrom(body, { defaultHouses }) {
     if (picked.size >= count) break;
     picked.add(house);
   }
-  return {
-    kind: 'generated',
-    seed: Number.isInteger(Number(body.seed)) && Number(body.seed) > 0
-      ? Number(body.seed)
-      : crypto.randomInt(1, 2 ** 31 - 1),
-    houses: baseConstants.houses.filter(house => picked.has(house))
-  };
+  const seed = Number.isInteger(Number(body.seed)) && Number(body.seed) > 0
+    ? Number(body.seed)
+    : crypto.randomInt(1, 2 ** 31 - 1);
+  const houses = baseConstants.houses.filter(house => picked.has(house));
+  // The lie of the land and its bend: chosen by the creator or left to chance.
+  const chance = pickMapShape(houses.length, seed);
+  const shape = MAP_SHAPES.includes(body.shape) ? body.shape : chance.shape;
+  const warp = MAP_WARPS.includes(body.warp) ? body.warp : chance.warp;
+  return { kind: 'generated', seed, houses, shape, warp };
 }
 
 const mapArtCache = new Map();
@@ -192,7 +195,8 @@ async function mapArtFor(scope) {
       const { buildMapArt } = await import('./map-art.mjs');
       const art = buildMapArt(scope.map, {
         bounds: scope.map.art.bounds,
-        step: 1.6,
+        // Big maps are painted on a coarser grid so they are ready quickly.
+        step: Math.max(1.6, 1.6 * Math.sqrt(((scope.map.art.bounds.x1 - scope.map.art.bounds.x0) * (scope.map.art.bounds.y1 - scope.map.art.bounds.y0)) / 1.2e6)),
         seed: scope.map.seed,
         rivers: scope.map.art.rivers,
         compass: null

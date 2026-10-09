@@ -1565,12 +1565,22 @@ for (const prefix of ['solo', 'public', 'private']) {
     '<option value="' + count + '"' + (count === '4' ? ' selected' : '') + '>Случайная, ' + count +
     (count < 5 ? ' Дома' : ' Домов') + ' · ' + size + '</option>').join('') +
     '<option value="classic">Классическая, 6 Домов · для тестов</option>';
-  pace.after(label, select);
+  // The lie of the land: chosen or left to chance.
+  const shapeLabel = document.createElement('label');
+  shapeLabel.textContent = 'Ландшафт';
+  const shape = document.createElement('select');
+  shape.id = prefix + '-shape';
+  shape.className = pace.className;
+  shape.innerHTML = [['', 'Случайный'], ['wheel', 'Материк'], ['peninsulas', 'Полуострова'], ['archipelago', 'Архипелаг'], ['inland', 'Внутреннее море']]
+    .map(([value, name]) => '<option value="' + value + '">' + name + '</option>').join('');
+  select.addEventListener('change', () => { shape.disabled = select.value === 'classic'; });
+  pace.after(label, select, shapeLabel, shape);
 }
 
 function mapChoice(prefix) {
   const value = $(prefix + '-map')?.value || '4';
-  return value === 'classic' ? { map: 'classic' } : { map: 'random', houses_count: Number(value) };
+  const shape = $(prefix + '-shape')?.value || '';
+  return value === 'classic' ? { map: 'classic' } : { map: 'random', houses_count: Number(value), ...(shape ? { shape } : {}) };
 }
 
 async function createMultiplayer(visibility, button, errorId, roomInputId, houseSelectId, paceSelectId) {
