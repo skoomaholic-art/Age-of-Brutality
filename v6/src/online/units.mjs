@@ -10,6 +10,7 @@
 // A village raises the light kinds, a town the middle ones, the capital all.
 // Troops already standing can be retrained into a better kind where that kind
 // is raised, for the difference in price.
+import { orderOnCapture } from './order.mjs';
 import { RANKS, compAt, emptyComp, mergeStars, reconcileRanks, setStars, starsAt } from './ranks.mjs';
 
 export const PEOPLE = Object.freeze({
@@ -149,6 +150,15 @@ export function populationDawn(state, map) {
     const cap = (PEOPLE.start[type] ?? 6) * PEOPLE.capFactor;
     state.population[id] = Math.min(cap, Number(state.population[id] || 0) + (PEOPLE.growth[type] ?? 1));
   }
+}
+
+// A land changed hands (games with people): people lost, order low, a choice for the taker.
+export function onLandTaken(game, territory, previousOwner, nowMs = Date.now()) {
+  const state = game.state;
+  if (!state.population) return;
+  populationOnCapture(state, territory, previousOwner);
+  const house = state.territories[territory]?.owner;
+  if (house) orderOnCapture(state, territory, house, previousOwner, { nowMs, ai: (game.rounds?.ai_houses || []).includes(house) });
 }
 
 // A land changed hands: some of its people flee or fall.

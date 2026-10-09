@@ -329,6 +329,18 @@ export function journalEntryToAudit(entry, map, game) {
     };
   }
 
+  if (entry.kind === 'CAPTURE_CHOICE' || entry.kind === 'REVOLT') {
+    const where = territoryName(map, entry.territory);
+    const words = { MERCY: 'взял с миром', TRIBUTE: 'обложил данью', SACK: 'разграбил' };
+    return {
+      ...base,
+      message: entry.kind === 'REVOLT'
+        ? `Бунт в земле ${where}! Люди поднялись против Дома ${entry.house}: земля отпала к вольным людям (их ${entry.rebels}).${entry.garrison ? ` Гарнизон ${entry.retreat_to ? `отошёл в ${territoryName(map, entry.retreat_to)}` : 'разбежался'}.` : ''}`
+        : `Дом ${entry.house} ${words[entry.choice] || 'решил судьбу'} землю ${where}.${entry.gold ? ` Взято ${entry.gold} золота.` : ''}${entry.people_lost ? ` Людей потеряно: ${entry.people_lost}.` : ''} Порядок: ${entry.order}.`,
+      details: { house: entry.house, territory_id: entry.territory, choice: entry.choice || null, at: entry.at || null }
+    };
+  }
+
   if (entry.kind === 'SEA_TOLL') {
     return {
       ...base,

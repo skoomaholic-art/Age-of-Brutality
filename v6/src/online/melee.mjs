@@ -31,7 +31,7 @@ import { compAt, guestKey, headsLost, reconcileRanks, starsAt, strengthOf } from
 import { rulerLeadBonus } from './court.mjs';
 import { fateDice, recoveryMs, settleFate } from './fate.mjs';
 import { nearestOwnLand } from './guests.mjs';
-import { populationOnCapture } from './units.mjs';
+import { onLandTaken } from './units.mjs';
 
 const BATTLE_DIE = 3;
 
@@ -321,7 +321,7 @@ export function processCampFights(game, map, constants, nowMs = Date.now()) {
       const ownerBefore = next.state.territories[land]?.owner ?? null;
       fightOnLand(next, map, constants, land, aggressor, target, null, { nowMs });
       const ownerAfter = next.state.territories[land]?.owner ?? null;
-      if (ownerAfter && ownerAfter !== ownerBefore) populationOnCapture(next.state, land, ownerBefore);
+      if (ownerAfter && ownerAfter !== ownerBefore) onLandTaken(next, land, ownerBefore, nowMs);
     }
   }
   if (next) next.updated_at = iso(nowMs);

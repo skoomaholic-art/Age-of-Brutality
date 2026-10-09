@@ -226,6 +226,17 @@
     /* The letter of a deal: one parchment torn in two halves with a seal between. */
     .deal { position: absolute; inset: 0; z-index: 10; display: none; place-items: center; padding: 14px; background: rgba(43,27,18,.5); }
     .deal.show { display: grid; }
+    /* The fate of a land just taken: three choices side by side. */
+    .fate-lead { text-align: center; margin: -4px 0 12px; font-size: 14px; }
+    .fate-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .fate-card { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; background: rgba(255,250,232,.6); border: 1px solid rgba(43,27,18,.45); }
+    .fate-card h4 { margin: 0; font-family: Kurale, serif; font-size: 17px; color: var(--vermilion-deep); }
+    .fate-card .fx { display: block; width: 100%; max-width: none; font-size: 13px; line-height: 1.35; }
+    .fate-card .good { color: #2e5d2a; } .fate-card .bad { color: #9a2a1a; }
+    .fate-card button { margin-top: auto; }
+    .fate-later { display: block; margin: 12px auto 0; }
+    .bad-note { color: #9a2a1a; }
+    @media (max-width: 640px) { .fate-cards { grid-template-columns: 1fr; } }
     .deal-letter { width: min(760px, 100%); max-height: 100%; overflow: auto; padding: 20px 22px 18px; background: #efe1bb radial-gradient(circle at 30% 20%, rgba(255,250,230,.6), transparent 60%); border: 2px solid var(--ink); outline: 2px solid #c9a23a; outline-offset: -8px; box-shadow: 8px 10px 0 rgba(43,27,18,.45); }
     .deal-letter h3 { margin: 0 0 12px; text-align: center; font-family: 'Vek Gothic', Kurale, serif; font-weight: 400; font-size: 30px; color: var(--vermilion-deep); }
     .deal-halves { display: grid; grid-template-columns: 1fr 44px 1fr; align-items: stretch; }
@@ -786,6 +797,12 @@
           <div id="decision-terms" class="decision-terms"></div>
           <div id="decision-extra" class="decision-extra"></div>
           <div id="decision-actions" class="decision-actions"></div>
+        </div>
+      </div>
+      <div id="fate" class="deal">
+        <div class="deal-letter">
+          <h3 id="fate-title">Судьба земли</h3>
+          <div id="fate-body"></div>
         </div>
       </div>
       <div id="deal" class="deal">
@@ -1934,6 +1951,68 @@ function menToTake(guards) {
   return 41;
 }
 
+// A land just taken: the taker decides its fate (as in Total War).
+const fateLater = new Set();
+const RISK_WORDS = { NONE: 'бунта не будет', LOW: 'беспорядки: земля даёт половину золота', HIGH: 'бунт на рассвете, если не поставить гарнизон' };
+const FATE_TEXT = {
+  MERCY: 'Люди целы, порядок растёт. Казна ничего не получает.',
+  TRIBUTE: 'Немного золота сразу. Часть людей уходит, порядок прежний.',
+  SACK: 'Много золота сразу. Многие гибнут или бегут, порядок рушится: жди бунта.'
+};
+function renderFate() {
+  const box = $('fate');
+  const pending = Object.entries(snapshot?.game?.capture_choices || {}).filter(([id]) => !fateLater.has(id));
+  if (!pending.length || isSpectator) { box.classList.remove('show'); return; }
+  const [id, choice] = pending[0];
+  const t = territoryById(id);
+  const key = id + JSON.stringify(choice.outcomes);
+  if (box.dataset.key === key && box.classList.contains('show')) return;
+  box.dataset.key = key;
+  $('fate-title').textContent = 'Взята земля ' + (t?.name || id);
+  const people = Number(snapshot.game.state.population?.[id] || 0);
+  const cards = ['MERCY', 'TRIBUTE', 'SACK'].map(k => {
+    const o = choice.outcomes[k];
+    return '<div class="fate-card"><h4>' + escapeHtml(o.name) + '</h4>' +
+      '<div class="fx">' + FATE_TEXT[k] + '</div>' +
+      '<div class="fx ' + (o.gold ? 'good' : '') + '">Золото: +' + o.gold + '</div>' +
+      '<div class="fx ' + (o.people_lost ? 'bad' : 'good') + '">Люди: ' + (o.people_lost ? '−' + o.people_lost : 'без потерь') + ' (было ' + people + ')</div>' +
+      '<div class="fx">Порядок станет: <b>' + o.order_after + '</b></div>' +
+      '<div class="fx ' + (o.risk === 'NONE' ? 'good' : 'bad') + '">' + RISK_WORDS[o.risk] + '</div>' +
+      '<button class="' + (k === 'MERCY' ? '' : 'primary') + '" data-fate="' + k + '">Так и сделать</button></div>';
+  }).join('');
+  $('fate-body').innerHTML = '<div class="fate-lead">' + (choice.from ? 'Земля отнята у Дома ' + escapeHtml(choice.from) + ': люди насторожены.' : 'Вольные люди разбиты, земля покорилась.') +
+    ' Что сделать с поселением? Если не решить до рассвета, землю возьмут с миром.</div>' +
+    '<div class="fate-cards">' + cards + '</div><button class="fate-later" data-fate-later>Решить позже</button>';
+  box.classList.add('show');
+  box.onclick = async event => {
+    const pick = event.target.closest('[data-fate]');
+    if (event.target.closest('[data-fate-later]')) { fateLater.add(id); box.classList.remove('show'); return; }
+    if (!pick) return;
+    try {
+      await api('/api/capture-choice', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ house, territory: id, choice: pick.dataset.fate }) });
+      box.classList.remove('show');
+      await refresh();
+    } catch (error) {
+      alert(sayError(error));
+    }
+  };
+}
+
+// Order of a land of one's own, and how close it is to rising.
+function orderRow(id, owner) {
+  const order = snapshot.game.state.order?.[id];
+  if (order === undefined || order === null) return '';
+  const people = Number(snapshot.game.state.population?.[id] || 0);
+  const garrison = warriorsAt(id, owner);
+  const risk = order >= 40 ? 'NONE' : order < 20 && people >= 6 && garrison * 2 < people ? 'HIGH' : 'LOW';
+  const word = order >= 70 ? 'спокойно' : order >= 40 ? 'терпимо' : order >= 20 ? 'беспорядки' : 'на грани бунта';
+  const hint = risk === 'HIGH' ? '<div class="tiny bad-note">Бунт на рассвете! Поставь гарнизон не меньше ' + (Math.floor(people / 2) + 1) + ' или жди, пока уляжется.</div>'
+    : risk === 'LOW' ? '<div class="tiny">Земля в беспорядках даёт половину золота. Гарнизон успокаивает быстрее.</div>' : '';
+  const pending = owner === house && snapshot.game.capture_choices?.[id]
+    ? '<button class="wide primary" data-fate-open="' + escapeHtml(id) + '">Решить судьбу земли</button>' : '';
+  return '<div class="row"><span>Порядок</span><b>' + order + ' · ' + word + '</b></div>' + hint + pending;
+}
+
 function renderLand() {
   const card = $('land-card');
   const t = landId ? territoryById(landId) : null;
@@ -1964,6 +2043,7 @@ function renderLand() {
         : wildRows(landId)) +
       (seen && garrison ? '<div class="row"><span>Из них</span><b>' + escapeHtml(describeRanks(rankComp(landId, st.owner))) + '</b></div>' : '') +
       (seen && garrison && unitsMode() ? '<div class="row"><span>Опыт</span><b>' + starText(starsOf(landId, st.owner)) + '</b></div>' : '') +
+      (unitsMode() && st.owner && (seen || mine) ? orderRow(landId, st.owner) : '') +
       (unitsMode() && (seen || mine) ? '<div class="row"><span>Население</span><b>' + Number(snapshot.game.state.population?.[landId] || 0) + (snapshot.game.state.growth?.[landId] ? ' · растёт' : '') + '</b></div>' : '') +
       '<div class="row"><span>Возведено</span><b>' + ([st.fort ? 'крепость' : '', hasPort(landId) ? 'порт' : ''].filter(Boolean).join(', ') || 'нет') + '</b></div>' +
       '<div class="row"><span>Исконно</span><b>' + escapeHtml(t.house_sector && colors[t.house_sector] ? 'земля Дома ' + t.house_sector : t.house_sector || 'вольная земля') + '</b></div>' +
@@ -2087,6 +2167,8 @@ function setupLand() {
       });
     }
     if (event.target.closest('[data-growth]')) landCommand('/api/growth', {});
+    const fateOpen = event.target.closest('[data-fate-open]');
+    if (fateOpen) { fateLater.delete(fateOpen.dataset.fateOpen); $('fate').dataset.key = ''; renderFate(); }
     const bridgeButton = event.target.closest('[data-bridge-build]');
     if (bridgeButton) landCommand('/api/bridge', { key: bridgeButton.dataset.bridgeBuild });
     if (event.target.closest('[data-hire-spy]')) agentCommand({ action: 'HIRE' });
@@ -2612,6 +2694,7 @@ const TALMUD = [
   ['О стекле хрониста', 'Наведи перст на штандарт рати или путников, и в круглом стекле увидишь, кто идёт, сколько их и кто ведёт. Коснись штандарта, и стекло останется открытым.'],
   ['О брошенных державах', 'Правитель, покинувший век до срока, бросает свои земли. Они сереют, победить такой Дом уже не может, а земли его достаются тому, кто придёт первым.'],
   ['О победе', 'Славу считают в очках победы: за выигранные битвы, взятые и удержанные чужие столицы и величину державы. У кого их больше к исходу шестого дня, тот и пережил жестокий век.'],
+  ['О людях, порядке и бунтах', 'В новых веках у каждой земли свои люди. Всякий нанятый воин берётся из них, и сами по себе они не прибывают: нужны поля в деревне или ярмарка в городе. Войск можно держать сколько угодно, лишь бы хватало золота и людей. Деревня даёт крестьян, копейщиков и лучников, город ещё ратников и конных сержантов, а рыцарей набирают только в столице. Побывавший в бою отряд получает звезду опыта, до трёх, и каждая прибавляет ему силы. У каждой своей земли есть порядок. Земля в беспорядках даёт лишь половину золота, а на грани бунта, когда людей много, а гарнизон мал, поднимается на рассвете и уходит к вольным людям. Взяв землю, ты решаешь её судьбу: взять с миром, обложить данью или разграбить. Чем больше берёшь, тем ниже порядок.'],
   ['О Сердце земель', 'В новых веках вольные земли не пусты: их стерегут вольные люди. У самой столицы их горстка, а чем дальше к середине мира, тем их больше. Число стражи видно на сером щите и в грамоте земли. Бьются с ними без костей, как в любой битве, и павшие с обеих сторон не встают. Первому взявшему вольную землю достаётся слава по её удалённости: одна за ближнее кольцо, и больше за каждое следующее. В самой середине лежит Сердце земель за крепкими стенами, его стережёт дюжина. Кто держит Сердце, тот с каждым рассветом получает славу, и всё больше: три, четыре, пять. Кто первым наберёт нужную славу, тот и победил. Если не наберёт никто, век кончится после восьмого дня. Вольная стража со временем подрастает, если её не тревожить.']
 ];
 
@@ -5576,6 +5659,7 @@ async function refresh() {
   }
 
   renderVictory();
+  renderFate();
   renderFinale();
   announceNews();
   renderDiplomacy();

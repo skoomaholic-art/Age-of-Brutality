@@ -35,6 +35,7 @@ import { raiseLevy, startDrill, buildYard, buildPort, processRanks, ranksView } 
 import { buildBridge, seedCrossings, BRIDGE } from './bridges.mjs';
 import { seedHeart } from './heart.mjs';
 import { NO_LIMIT, buildGrowth, hireUnits, retrainUnits, seedPopulation, unitsView } from './units.mjs';
+import { applyCaptureChoice, choiceOutcomes, seedOrder } from './order.mjs';
 import { startRide, processRiders, ridersOf } from './riders.mjs';
 import { courtEffects } from './court.mjs';
 import {
@@ -604,6 +605,10 @@ function redactGameForPlayer(game, player) {
   // The levy, the drill and the yard of one's own House.
   clientGame.ranks_view = player?.house ? ranksView(game, map, player.house) : null;
   clientGame.riders = player?.house ? ridersOf(game, player.house) : [];
+  // Lands just taken waiting for the taker's choice, with what each choice gives.
+  clientGame.capture_choices = Object.fromEntries(Object.entries(game.state?.capture_choices || {})
+    .filter(([, pending]) => pending.house === player?.house)
+    .map(([id, pending]) => [id, { ...pending, outcomes: choiceOutcomes(game.state, id) }]));
   // Troop kinds and their prices (games of the Heart).
   clientGame.units_view = unitsView(game, map, player?.house);
   // What a bridge over a river costs and how long it takes.
@@ -868,7 +873,7 @@ async function createMultiplayerGame(body, profile = null) {
     // Where roads meet rivers: no crossing there until a bridge is built.
     seedCrossings(game.state, map, (await mapArtFor(scopeForSpec(mapSpec))).crossings);
     // The Heart of the Lands: the wild guard on free lands, the centre to hold.
-    if (mapSpec.heart) { seedHeart(game, map); seedPopulation(game, map); }
+    if (mapSpec.heart) { seedHeart(game, map); seedPopulation(game, map); seedOrder(game, map); }
   }
 
   const ctx = {
@@ -934,7 +939,7 @@ async function createSoloGame(body, profile = null) {
     // Where roads meet rivers: no crossing there until a bridge is built.
     seedCrossings(game.state, map, (await mapArtFor(scopeForSpec(mapSpec))).crossings);
     // The Heart of the Lands: the wild guard on free lands, the centre to hold.
-    if (mapSpec.heart) { seedHeart(game, map); seedPopulation(game, map); }
+    if (mapSpec.heart) { seedHeart(game, map); seedPopulation(game, map); seedOrder(game, map); }
   }
 
   const ctx = {
@@ -1678,7 +1683,7 @@ async function handleGameApi(req, res, url, ctx, subpath) {
     return json(res, result.status, result.response);
   }
 
-  if (req.method === 'POST' && ['/levy', '/drill', '/yard', '/port', '/bridge', '/hire', '/retrain', '/growth'].includes(subpath)) {
+  if (req.method === 'POST' && ['/levy', '/drill', '/yard', '/port', '/bridge', '/hire', '/retrain', '/growth', '/capture-choice'].includes(subpath)) {
     const body = await readBody(req);
     const house = String(body.house || '').trim();
     await requireHouse(ctx, req, house);
@@ -1695,6 +1700,12 @@ async function handleGameApi(req, res, url, ctx, subpath) {
                 : subpath === '/hire' ? hireUnits(game, map, house, String(body.territory || ''), body.counts, { nowMs })
                   : subpath === '/retrain' ? retrainUnits(game, map, house, String(body.territory || ''), body.from, body.to, body.count, { nowMs })
                     : subpath === '/growth' ? buildGrowth(game, map, house, String(body.territory || ''), { nowMs })
+                      : subpath === '/capture-choice' ? (() => {
+                        const chosen = structuredClone(game);
+                        applyCaptureChoice(chosen.state, String(body.territory || ''), house, String(body.choice || ''), { nowMs });
+                        chosen.updated_at = new Date(nowMs).toISOString();
+                        return chosen;
+                      })()
               : buildYard(game, map, house, { nowMs });
         return { game: next, response: { ok: true } };
       }
