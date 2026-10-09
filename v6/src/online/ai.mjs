@@ -3,6 +3,7 @@ import { neutralResistance } from '../core/neutral.mjs';
 import { buildAdjacency } from '../core/map.mjs';
 import { aiBridgeChoice, buildBridge } from './bridges.mjs';
 import { menToTakeWild, ringGlory } from './heart.mjs';
+import { aiHireChoice, hireUnits } from './units.mjs';
 import { totalHouseWarriors } from '../core/state.mjs';
 import { resolvePendingCapitalHold } from '../core/scoring.mjs';
 import { commandersAt } from '../core/characters.mjs';
@@ -202,7 +203,8 @@ function recruitCandidates(game, map, constants, house, adjacency) {
   const state = game.state;
   const gold = Number(state.houses[house]?.gold || 0);
   const houseRoom = constants.house_warrior_cap - totalHouseWarriors(state, house);
-  if (gold < 1 || houseRoom < 1) return [];
+  // Games with troop kinds hire through hireUnits instead.
+  if (state.population || gold < 1 || houseRoom < 1) return [];
 
   const total = totalHouseWarriors(state, house);
   const out = [];
@@ -279,6 +281,16 @@ export function takeAiAction(game, map, constants, house, { nowMs = Date.now() }
   const ranked = refunds >= MAX_AI_REFUNDS_PER_ROUND
     ? []
     : rankAiCommands(game, map, constants, house);
+
+  // A game with troop kinds: the House hires with about half of its gold.
+  const hire = aiHireChoice(game, map, house);
+  if (hire) {
+    try {
+      return { game: hireUnits(game, map, house, hire.territory, hire.counts, { nowMs }), decision: { kind: 'HIRE', value: 1, command: { type: 'HIRE', ...hire } } };
+    } catch {
+      // Not now.
+    }
+  }
 
   // A river in the way: the House builds a bridge from its own bank when it can spare the gold.
   const bridgeKey = aiBridgeChoice(game, house);

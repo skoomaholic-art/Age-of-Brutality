@@ -69,7 +69,7 @@ test('the levy: villagers walk to the capital and arrive as villagers', () => {
   assert.equal(game.state.houses[HOUSE].gold, 20 - 2 * 1 - 1 * 3);
   const march = game.orders.find(o => o.action.from === village);
   assert.ok(march, 'the villagers set off');
-  assert.deepEqual(march.action.ranks, [2, 0, 0, 0, 0]);
+  assert.deepEqual(march.action.ranks, [2, 0, 0, 0, 0, 0]);
   assert.equal(compAt(game.state, map, CAPITAL, HOUSE)[2], 1, 'a man-at-arms of the capital is there at once');
   game = processDueOrders(game, map, constants, Date.parse(march.due_at));
   const comp = compAt(game.state, map, CAPITAL, HOUSE);
@@ -98,12 +98,18 @@ test('the drill raises a rank, and the yard opens the higher ones', () => {
 test('ranks add up as strength: few veterans beat many villagers', () => {
   let game = borderGame(3, 5);
   reconcileRanks(game.state, map);
-  game.state.ranks[CAPITAL][HOUSE] = [1, 0, 0, 3, 0];
-  assert.equal(strengthOf(game.state.ranks[CAPITAL][HOUSE], 4), 13);
+  game.state.ranks[CAPITAL][HOUSE] = [1, 0, 0, 0, 3, 0];
+  assert.equal(strengthOf(game.state.ranks[CAPITAL][HOUSE], 4), 13, 'a peasant and three mounted sergeants');
   game = executeCommand(game, map, constants, { type: 'MARCH', house: HOUSE, from: CAPITAL, to: NEXT, warriors: 3 }, { nowMs: T0 }).game;
-  assert.deepEqual(game.orders[0].action.ranks, [0, 0, 0, 3, 0], 'the march takes the strongest');
+  assert.deepEqual(game.orders[0].action.ranks, [0, 0, 0, 0, 3, 0], 'the march takes the strongest');
   game = processDueOrders(game, map, constants, Date.parse(game.orders[0].due_at));
-  assert.equal(game.state.territories[NEXT].owner, HOUSE, 'three latniki take a land held by six villagers');
+  assert.equal(game.state.territories[NEXT].owner, HOUSE, 'three sergeants take a land held by six peasants');
   const comp = compAt(game.state, map, NEXT, HOUSE);
-  assert.ok(comp[3] + comp[4] > 0, 'the survivors keep their ranks');
+  assert.ok(comp[4] > 0, 'the survivors keep their kind');
+});
+
+test('archers hold walls better, and every star of experience adds a tenth', () => {
+  assert.equal(strengthOf([0, 0, 4, 0, 0, 0], 4), 8);
+  assert.equal(strengthOf([0, 0, 4, 0, 0, 0], 4, { defending: true }), 12);
+  assert.equal(strengthOf([10, 0, 0, 0, 0, 0], 10, { stars: 3 }), 13);
 });

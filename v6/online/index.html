@@ -415,6 +415,8 @@
     .fx .bad { color: var(--vermilion-deep); }
     .land-card { max-height: calc(100% - 64px); overflow: auto; }
     .rank-box { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--rule); }
+    .rank-box .acts { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+    .rank-box .acts select { max-width: 46%; min-width: 0; }
     .rank-head { font-family: Kurale, serif; font-size: 16px; color: var(--vermilion-deep); }
     .rank-row { display: grid; grid-template-columns: 1fr 58px; gap: 6px; align-items: center; padding: 4px 0; font-size: 13.5px; }
     .rank-row.off { opacity: .5; }
@@ -1748,19 +1750,21 @@ function openLand(id) {
 
 // ---------- ranks, the levy and the drill ----------
 const RANK_WORDS = [
-  ['Селяне', 'селянин', 'селянина', 'селян'],
-  ['Ополченцы', 'ополченец', 'ополченца', 'ополченцев'],
+  ['Крестьяне', 'крестьянин', 'крестьянина', 'крестьян'],
+  ['Копейщики', 'копейщик', 'копейщика', 'копейщиков'],
+  ['Лучники', 'лучник', 'лучника', 'лучников'],
   ['Ратники', 'ратник', 'ратника', 'ратников'],
-  ['Латники', 'латник', 'латника', 'латников'],
-  ['Дружинники', 'дружинник', 'дружинника', 'дружинников']
+  ['Конные сержанты', 'конный сержант', 'конных сержанта', 'конных сержантов'],
+  ['Рыцари', 'рыцарь', 'рыцаря', 'рыцарей']
 ];
+const KINDS = RANK_WORDS.length;
 const LEVY_FROM = ['из деревень', 'из городов', 'из столицы'];
 
 function rankComp(pos, owner) {
   const heads = warriorsAt(pos, owner);
-  const comp = [...(snapshot?.game?.state?.ranks?.[pos]?.[owner] || [0, 0, 0, 0, 0])].map(Number);
+  const comp = Array.from({ length: KINDS }, (_, i) => Number(snapshot?.game?.state?.ranks?.[pos]?.[owner]?.[i] || 0));
   let sum = comp.reduce((a, b) => a + b, 0);
-  for (let i = 0; i < 5 && sum > heads; i += 1) { const n = Math.min(comp[i], sum - heads); comp[i] -= n; sum -= n; }
+  for (let i = 0; i < KINDS && sum > heads; i += 1) { const n = Math.min(comp[i], sum - heads); comp[i] -= n; sum -= n; }
   if (sum < heads) comp[0] += heads - sum;
   return comp;
 }
@@ -1768,8 +1772,61 @@ function rankComp(pos, owner) {
 function describeRanks(comp) {
   const word = (w, n) => { const a = n % 10, b = n % 100; return a === 1 && b !== 11 ? w[1] : a >= 2 && a <= 4 && (b < 12 || b > 14) ? w[2] : w[3]; };
   const parts = [];
-  for (let i = 4; i >= 0; i -= 1) if (comp[i] > 0) parts.push(comp[i] + ' ' + word(RANK_WORDS[i], comp[i]));
+  for (let i = KINDS - 1; i >= 0; i -= 1) if (comp[i] > 0) parts.push(comp[i] + ' ' + word(RANK_WORDS[i], comp[i]));
   return parts.join(', ') || 'никого';
+}
+
+// Experience of a host: one to three stars.
+function starsOf(pos, owner) {
+  return Math.max(0, Math.min(3, Number(snapshot?.game?.state?.stars?.[pos]?.[owner] || 0)));
+}
+function starText(n) {
+  return n ? '★'.repeat(n) + '☆'.repeat(3 - n) : 'без опыта';
+}
+
+// Games with troop kinds and people: hiring in any land of one's own.
+function unitsMode() {
+  return Boolean(snapshot?.game?.state?.population);
+}
+const KIND_WHERE = ['любая земля', 'город или столица', 'только столица'];
+function hireBlock(id) {
+  const view = snapshot.game.units_view;
+  if (!view) return '';
+  const t = territoryById(id);
+  const level = t.type === 'Столица' ? 2 : t.type === 'Город' ? 1 : 0;
+  const people = Number(snapshot.game.state.population?.[id] || 0);
+  const rows = view.kinds.map(k => {
+    const ok = k.where <= level;
+    return '<div class="rank-row' + (ok ? '' : ' off') + '"><span><b>' + escapeHtml(k.name) + '</b> · сила ' + k.power + (k.guard ? ' (+' + k.guard + ' в обороне)' : '') +
+      '<br><span class="tiny">' + k.gold + ' зол. за голову' + (ok ? '' : ' · ' + KIND_WHERE[k.where]) + '</span></span>' +
+      '<input type="number" min="0" max="' + people + '" value="0" data-hire-kind="' + k.index + '" ' + (ok ? '' : 'disabled') + '></div>';
+  }).join('');
+  return '<div class="rank-box"><div class="rank-head">Нанять войска</div>' +
+    '<div class="tiny">Людей в земле: <b>' + people + '</b>. Каждый нанятый — один из них. Новые люди прибывают, только если здесь есть ' + (level ? 'ярмарка' : 'поля') + '.</div>' +
+    rows + '<div class="acts"><span class="tiny" data-hire-total>0 золота</span><button class="primary" data-hire-go>Нанять</button></div></div>';
+}
+function retrainBlock(id) {
+  const view = snapshot.game.units_view;
+  if (!view) return '';
+  const comp = rankComp(id, house);
+  if (!comp.some(Boolean)) return '';
+  const t = territoryById(id);
+  const level = t.type === 'Столица' ? 2 : t.type === 'Город' ? 1 : 0;
+  const from = comp.map((n, i) => n ? '<option value="' + i + '">' + escapeHtml(RANK_WORDS[i][0]) + ' (' + n + ')</option>' : '').join('');
+  const to = view.kinds.filter(k => k.where <= level && k.index > 0).map(k => '<option value="' + k.index + '">' + escapeHtml(k.name) + '</option>').join('');
+  return '<div class="rank-box"><div class="rank-head">Переучить</div>' +
+    '<div class="tiny">Платишь разницу в цене, людей не тратишь. Опыт отряда сохраняется.</div>' +
+    '<div class="acts"><select data-retrain-from>' + from + '</select> → <select data-retrain-to>' + to + '</select>' +
+    '<input type="number" min="1" value="1" data-retrain-count style="width:48px"><button data-retrain-go>Переучить</button></div></div>';
+}
+function growthButton(id) {
+  if (!unitsMode()) return '';
+  const t = territoryById(id);
+  const fair = t.type === 'Город' || t.type === 'Столица';
+  const gold = snapshot.game.units_view?.growth_gold?.[t.type] ?? 3;
+  const per = snapshot.game.units_view?.growth_per_dawn?.[t.type] ?? 1;
+  if (snapshot.game.state.growth?.[id]) return '<button class="wide" disabled>' + (fair ? 'Ярмарка' : 'Поля') + ' есть: +' + per + ' людей с каждым рассветом</button>';
+  return '<button class="wide" data-growth>' + (fair ? 'Ярмарка' : 'Поля') + ' · ' + gold + ' золота (+' + per + ' людей каждый рассвет)</button>';
 }
 
 function levyBlock() {
@@ -1906,6 +1963,8 @@ function renderLand() {
         ? '<div class="row"><span>Стража</span><b>' + (seen ? garrison + ' ' + warriorWord(garrison) : 'неизвестно') + '</b></div>'
         : wildRows(landId)) +
       (seen && garrison ? '<div class="row"><span>Из них</span><b>' + escapeHtml(describeRanks(rankComp(landId, st.owner))) + '</b></div>' : '') +
+      (seen && garrison && unitsMode() ? '<div class="row"><span>Опыт</span><b>' + starText(starsOf(landId, st.owner)) + '</b></div>' : '') +
+      (unitsMode() && (seen || mine) ? '<div class="row"><span>Население</span><b>' + Number(snapshot.game.state.population?.[landId] || 0) + (snapshot.game.state.growth?.[landId] ? ' · растёт' : '') + '</b></div>' : '') +
       '<div class="row"><span>Возведено</span><b>' + ([st.fort ? 'крепость' : '', hasPort(landId) ? 'порт' : ''].filter(Boolean).join(', ') || 'нет') + '</b></div>' +
       '<div class="row"><span>Исконно</span><b>' + escapeHtml(t.house_sector && colors[t.house_sector] ? 'земля Дома ' + t.house_sector : t.house_sector || 'вольная земля') + '</b></div>' +
       '<div class="row"><span>Прежде владели</span><b>' + escapeHtml(past.length ? past.join(', ') : 'никто') + '</b></div>' +
@@ -1919,6 +1978,12 @@ function renderLand() {
     const queue = jobs.filter(job => job.type === 'RECRUIT').map(job => '<span>+' + job.warriors + ' · ' + escapeHtml(timeLeft(job.due_at)) + '</span>').join('');
     const spies = characterData?.agents;
     const spyRow = spies ? '<button class="wide" data-hire-spy ' + (spies.list.length >= spies.max ? 'disabled' : '') + '>Шпион · ' + spies.cost + ' золота (' + spies.list.length + ' из ' + spies.max + ')</button>' : '';
+    if (unitsMode()) {
+      body.innerHTML = '<div class="row"><span>Стоит здесь</span><b>' + here + ' ' + warriorWord(here) + (here ? ' · ' + starText(starsOf(landId, house)) : '') + '</b></div>' +
+        (here ? '<div class="row"><span>Из них</span><b>' + escapeHtml(describeRanks(rankComp(landId, house))) + '</b></div>' : '') +
+        hireBlock(landId) + retrainBlock(landId) + spyRow;
+      return;
+    }
     body.innerHTML = '<div class="row"><span>Стоит здесь</span><b>' + here + ' ' + warriorWord(here) + '</b></div>' + spyRow +
       (queue ? '<div class="built">Вербовщики ведут: ' + queue + '</div>' : '') +
       (t.type === 'Столица' ? levyBlock() + drillBlock() : '<div class="tiny" style="margin-top:6px">Войска собирают в столице: туда приходят люди из всех твоих деревень и городов.</div>');
@@ -1928,7 +1993,7 @@ function renderLand() {
   const fortNote = t.type === 'Столица' ? 'В столице крепость не строят' : st.fort ? 'Крепость уже стоит' : building ? 'Крепость строится' : '';
   body.innerHTML = '<div class="built">Возведено: ' + (built || 'ничего') + '</div>' +
     '<button class="wide" data-land-fort ' + (fortNote ? 'disabled' : '') + '>' + (fortNote || 'Возвести крепость · 3 золота') + '</button>' +
-    (t.type === 'Столица' ? yardButton() : '') +
+    (t.type === 'Столица' && !unitsMode() ? yardButton() : '') + growthButton(t.id) +
     '<button class="wide" disabled>Тайный приказ · мастера ещё не прибыли</button>' +
     portButton(t, st) + bridgeRows(t.id, true);
 }
@@ -1976,6 +2041,19 @@ function setupLand() {
   document.querySelectorAll('.land-tab').forEach(tab => {
     tab.onclick = () => { landTab = tab.dataset.land; renderLand(); };
   });
+  // The price of the troops being hired, as the numbers change.
+  $('land-body').addEventListener('input', event => {
+    if (!event.target.closest('[data-hire-kind]')) return;
+    const kinds = snapshot.game.units_view?.kinds || [];
+    let gold = 0, men = 0;
+    document.querySelectorAll('#land-body [data-hire-kind]').forEach(input => {
+      const n = Math.max(0, Number(input.value || 0));
+      gold += n * (kinds[Number(input.dataset.hireKind)]?.gold || 0);
+      men += n;
+    });
+    const total = document.querySelector('#land-body [data-hire-total]');
+    if (total) total.textContent = men + ' ' + warriorWord(men) + ' · ' + gold + ' золота';
+  });
   $('land-body').addEventListener('click', event => {
     const hire = event.target.closest('[data-land-hire]');
     if (hire) landCommand('/api/recruit', { warriors: Number(hire.dataset.landHire) });
@@ -1997,6 +2075,18 @@ function setupLand() {
     if (event.target.closest('[data-drill-go]')) landCommand('/api/drill', { counts: readCounts('drill') });
     if (event.target.closest('[data-yard]')) landCommand('/api/yard', {});
     if (event.target.closest('[data-land-port]')) landCommand('/api/port', {});
+    if (event.target.closest('[data-hire-go]')) {
+      const counts = Array.from({ length: KINDS }, (_, i) => Number(document.querySelector('#land-body [data-hire-kind="' + i + '"]')?.value || 0));
+      landCommand('/api/hire', { counts });
+    }
+    if (event.target.closest('[data-retrain-go]')) {
+      landCommand('/api/retrain', {
+        from: Number(document.querySelector('#land-body [data-retrain-from]')?.value),
+        to: Number(document.querySelector('#land-body [data-retrain-to]')?.value),
+        count: Number(document.querySelector('#land-body [data-retrain-count]')?.value || 0)
+      });
+    }
+    if (event.target.closest('[data-growth]')) landCommand('/api/growth', {});
     const bridgeButton = event.target.closest('[data-bridge-build]');
     if (bridgeButton) landCommand('/api/bridge', { key: bridgeButton.dataset.bridgeBuild });
     if (event.target.closest('[data-hire-spy]')) agentCommand({ action: 'HIRE' });

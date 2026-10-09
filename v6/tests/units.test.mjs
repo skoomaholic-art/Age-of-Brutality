@@ -1,0 +1,74 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { loadJson } from '../src/core/map.mjs';
+import { generateMap } from '../src/online/mapgen.mjs';
+import { createOnlineGame } from '../src/online/store.mjs';
+import { hireUnits, retrainUnits, buildGrowth, populationDawn, populationOnCapture, seedPopulation, kindsRaisedIn, PEOPLE, NO_LIMIT } from '../src/online/units.mjs';
+import { compAt, starsAt, setStars } from '../src/online/ranks.mjs';
+import { validateState } from '../src/core/state.mjs';
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const root = path.resolve(here, '..');
+const base = loadJson(path.join(root, 'src/data/map.v6.json'));
+const constants0 = loadJson(path.join(root, 'src/data/constants.v6.json'));
+const characterCatalog = loadJson(path.join(root, 'src/data/characters.v6.json'));
+const houses = constants0.houses.slice(0, 4);
+const constants = { ...constants0, houses, house_warrior_cap: NO_LIMIT, territory_warrior_cap: NO_LIMIT };
+const map = generateMap(base, constants, { houses, seed: 21, shape: 'wheel', seaMesh: true, homePorts: false });
+const H = houses[0];
+const capital = map.capitals[H];
+const village = map.territories.find(t => t.type === 'Деревня').id;
+
+function game() {
+  const g = seedPopulation(createOnlineGame(map, constants, { id: 'units', nowMs: 1, characterCatalog }), map);
+  g.state.houses[H].gold = 200;
+  g.state.territories[village].owner = H;
+  return g;
+}
+
+test('a village raises light troops, the capital all of them; every man hired is one of the land\'s people', () => {
+  assert.deepEqual(kindsRaisedIn(map, village), [0, 1, 2]);
+  assert.deepEqual(kindsRaisedIn(map, capital), [0, 1, 2, 3, 4, 5]);
+  let g = game();
+  assert.throws(() => hireUnits(g, map, H, village, [0, 0, 0, 1]), /не набираются/);
+  g = hireUnits(g, map, H, capital, [5, 0, 0, 0, 0, 2]);
+  assert.equal(g.state.houses[H].gold, 200 - 5 - 20);
+  assert.equal(g.state.population[capital], PEOPLE.start['Столица'] - 7);
+  assert.equal(compAt(g.state, map, capital, H)[5], 2);
+  assert.throws(() => hireUnits(g, map, H, village, [99, 0, 0]), /осталось людей/);
+  assert.deepEqual(validateState(g.state, map, constants), []);
+});
+
+test('there is no cap on troops: gold and people are the limit', () => {
+  let g = game();
+  g = hireUnits(g, map, H, capital, [25, 0, 0, 0, 0, 0]);
+  assert.ok(g.state.territories[capital].warriors[H] > 25);
+  assert.deepEqual(validateState(g.state, map, constants), []);
+});
+
+test('retraining pays the difference; new men dilute the experience of a host', () => {
+  let g = game();
+  g = hireUnits(g, map, H, capital, [4, 0, 0, 0, 0, 0]);
+  const heads = g.state.territories[capital].warriors[H];
+  setStars(g.state, capital, H, 3);
+  g = retrainUnits(g, map, H, capital, 0, 3, 2);
+  assert.equal(compAt(g.state, map, capital, H)[3], 2);
+  assert.equal(g.state.houses[H].gold, 200 - 4 - 8);
+  g = hireUnits(g, map, H, capital, [heads, 0, 0, 0, 0, 0]);
+  assert.equal(starsAt(g.state, capital, H), 2, 'half the host is fresh: 3 stars become 1.5, rounded to 2');
+});
+
+test('people grow only with fields or a fair, and a taken land loses some', () => {
+  let g = game();
+  const before = g.state.population[village];
+  populationDawn(g.state, map);
+  assert.equal(g.state.population[village], before, 'no fields, no growth');
+  g = buildGrowth(g, map, H, village);
+  populationDawn(g.state, map);
+  assert.equal(g.state.population[village], before + 1);
+  populationOnCapture(g.state, village, houses[1]);
+  assert.ok(g.state.population[village] < before + 1);
+  assert.equal(g.state.growth[village], undefined, 'the fields are trampled');
+});

@@ -14,10 +14,11 @@ import {
   settleCommander
 } from '../core/characters.mjs';
 import { declareWarInPlace, hasPassage } from './diplomacy.mjs';
-import { headsLost, ranksForMarch, settleMarchRanks, strengthOf } from './ranks.mjs';
+import { headsLost, ranksForMarch, settleMarchRanks, starsAt, starsForMarch, strengthOf } from './ranks.mjs';
 import { rulerLeadBonus } from './court.mjs';
 import { fightOnLand, joinersAgainst } from './melee.mjs';
 import { heartMode, ringGlory, wildBattle } from './heart.mjs';
+import { populationOnCapture } from './units.mjs';
 import { fateDice, recoveryMs, settleFate } from './fate.mjs';
 import {
   finishSeaLandingBridge,
@@ -296,6 +297,7 @@ export function queueTimedOrder(
   };
   // Which warriors go: the strongest free ones, or the ranks asked for.
   order.action.ranks = ranksForMarch(game, map, order.action);
+  order.action.stars = starsForMarch(game, order.action);
 
   if (order.commander_id) {
     next.state = beginCommanderMarch(
@@ -626,6 +628,7 @@ function resolveOrder(state,map,constants,gameId,order,nowMs,recovery) {
     const commander=order.commander_id ? state.characters?.[order.commander_id] || null : null;
     const resolved=wildBattle(resolutionState,resolutionMap,constants,resolutionAction,{
       ranks:order.action.ranks,
+      stars:order.action.stars,
       commander,
       glory:ringGlory(state,action.to),
       nowMs
@@ -702,8 +705,8 @@ function resolveOrder(state,map,constants,gameId,order,nowMs,recovery) {
       defenderCommander:commanderStats(defenderCommander),
       // Ranks add up as strength: a guardsman counts as five peasants.
       // Ranks add up as strength; a ruler leading in person adds one more.
-      attackerStrengthModifier:strengthOf(order.action.ranks,Number(action.warriors))-Number(action.warriors)+rulerLeadBonus(attackerCommander),
-      defenderStrengthModifier:strengthOf(state.ranks?.[action.to]?.[defenderHouse],defenders)-defenders+rulerLeadBonus(defenderCommander),
+      attackerStrengthModifier:strengthOf(order.action.ranks,Number(action.warriors),{stars:order.action.stars})-Number(action.warriors)+rulerLeadBonus(attackerCommander),
+      defenderStrengthModifier:strengthOf(state.ranks?.[action.to]?.[defenderHouse],defenders,{defending:true,stars:starsAt(state,action.to,defenderHouse)})-defenders+rulerLeadBonus(defenderCommander),
       attackerLossesFor:damage=>headsLost(order.action.ranks,Number(action.warriors),damage),
       defenderLossesFor:damage=>headsLost(state.ranks?.[action.to]?.[defenderHouse],defenders,damage)
     }
@@ -796,7 +799,7 @@ function meleeArrival(game, map, constants, order, nowMs) {
   origin.warriors[house] = Number(origin.warriors[house] || 0) - Number(action.warriors);
   if (origin.warriors[house] <= 0) delete origin.warriors[house];
   const { result } = fightOnLand(g, map, constants, action.to, house, master, {
-    house, heads: Number(action.warriors), ranks: order.action.ranks, commanderId: order.commander_id || null, from: action.from
+    house, heads: Number(action.warriors), ranks: order.action.ranks, stars: order.action.stars || 0, commanderId: order.commander_id || null, from: action.from
   }, { nowMs });
   return { game: g, state: g.state, result: { ...result, kind: 'MELEE', route_path: [...(action.path || [])], commander_id: order.commander_id || null } };
 }
@@ -849,6 +852,10 @@ export function processDueOrders(game, map, constants, nowMs = Date.now()) {
       if (errors.length) throw new Error(`post-order state invalid: ${errors.join('; ')}`);
 
       settleMarchRanks(next.state, resolved.state, map, liveOrder, resolved.state.journal.slice(journalStart));
+      // A land taken loses some of its people.
+      const ownerBefore = next.state.territories?.[liveOrder.action.to]?.owner ?? null;
+      const ownerAfter = resolved.state.territories?.[liveOrder.action.to]?.owner ?? null;
+      if (ownerAfter && ownerAfter !== ownerBefore) populationOnCapture(resolved.state, liveOrder.action.to, ownerBefore);
       next.state = resolved.state;
       liveOrder.status = 'RESOLVED';
       liveOrder.resolved_at = new Date(nowMs).toISOString();

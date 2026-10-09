@@ -27,10 +27,11 @@ import {
   settleCommander
 } from '../core/characters.mjs';
 import { areAllies, declareWarInPlace, relationOf, RELATION } from './diplomacy.mjs';
-import { compAt, guestKey, headsLost, reconcileRanks, strengthOf } from './ranks.mjs';
+import { compAt, guestKey, headsLost, reconcileRanks, starsAt, strengthOf } from './ranks.mjs';
 import { rulerLeadBonus } from './court.mjs';
 import { fateDice, recoveryMs, settleFate } from './fate.mjs';
 import { nearestOwnLand } from './guests.mjs';
+import { populationOnCapture } from './units.mjs';
 
 const BATTLE_DIE = 3;
 
@@ -94,10 +95,10 @@ function share(damage, members) {
 function memberOf(state, map, land, entry, force) {
   if (force && entry.house === force.house) {
     const commander = force.commanderId ? state.characters?.[force.commanderId] || null : null;
-    return { house: force.house, kind: 'MARCH', heads: force.heads, comp: force.ranks, commander, from: force.from };
+    return { house: force.house, kind: 'MARCH', heads: force.heads, comp: force.ranks, stars: force.stars || 0, commander, from: force.from };
   }
   const key = entry.kind === 'GUEST' ? guestKey(land) : land;
-  return { house: entry.house, kind: entry.kind, heads: entry.heads, comp: compAt(state, map, key, entry.house), commander: commanderAt(state, entry.house, land) };
+  return { house: entry.house, kind: entry.kind, heads: entry.heads, comp: compAt(state, map, key, entry.house), stars: starsAt(state, key, entry.house), commander: commanderAt(state, entry.house, land) };
 }
 
 function sideStrength(members) {
@@ -105,7 +106,7 @@ function sideStrength(members) {
   let defense = 0;
   for (const m of members) {
     const stats = commanderStats(m.commander);
-    strength += strengthOf(m.comp, m.heads) + stats.attack + rulerLeadBonus(m.commander);
+    strength += strengthOf(m.comp, m.heads, { defending: m.kind === 'GARRISON', stars: m.stars }) + stats.attack + rulerLeadBonus(m.commander);
     defense = Math.max(defense, stats.defense);
   }
   return { strength, defense };
@@ -317,7 +318,10 @@ export function processCampFights(game, map, constants, nowMs = Date.now()) {
       const owner = next.state.territories[land]?.owner;
       let aggressor = declared?.aggressor || (pair[0] === owner ? pair[1] : pair[0]);
       const target = aggressor === pair[0] ? pair[1] : pair[0];
+      const ownerBefore = next.state.territories[land]?.owner ?? null;
       fightOnLand(next, map, constants, land, aggressor, target, null, { nowMs });
+      const ownerAfter = next.state.territories[land]?.owner ?? null;
+      if (ownerAfter && ownerAfter !== ownerBefore) populationOnCapture(next.state, land, ownerBefore);
     }
   }
   if (next) next.updated_at = iso(nowMs);

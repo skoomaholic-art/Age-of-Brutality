@@ -140,7 +140,7 @@ function side(state, order) {
     warriors,
     attack: Number(stats.attack || 0),
     defense: Number(stats.defense || 0),
-    strength: strengthOf(order.action.ranks, warriors) + BATTLE_DIE + Number(stats.attack || 0) + rulerLeadBonus(commander)
+    strength: strengthOf(order.action.ranks, warriors, { stars: order.action.stars }) + BATTLE_DIE + Number(stats.attack || 0) + rulerLeadBonus(commander)
   };
 }
 

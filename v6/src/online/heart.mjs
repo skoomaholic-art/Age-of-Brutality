@@ -22,7 +22,7 @@ export const HEART = Object.freeze({
   days: 8,
   target: 30,
   heartGlory: 5,
-  heartGuards: 10,
+  heartGuards: 20,
   // Glory for each dawn the Heart is held: 3, 4, 5, ...
   holdBase: 2,
   fortune: 3
@@ -96,11 +96,11 @@ export function heartLayout(map) {
   return { rings, heart, maxRing: RINGS };
 }
 
-// One army is at most a land's worth of men (8): the Heart is just within
-// its reach with fresh levies, easier with drilled men or two waves.
+// The guard is counted as peasants. Next to a capital two or three peasants
+// do; the Heart wants a real host, of better troops or in several waves.
 export function guardsFor(ring, type, isHeart) {
   if (isHeart) return HEART.heartGuards;
-  const base = [0, 1, 2, 4, 6][Math.min(4, Math.max(1, ring))];
+  const base = [0, 2, 4, 7, 10][Math.min(4, Math.max(1, ring))];
   return base + (type === 'Город' ? 1 : 0);
 }
 
@@ -110,9 +110,6 @@ export function guardCap(ring, type, isHeart) {
   const base = guardsFor(ring, type, isHeart);
   return isHeart ? base : base + Math.floor(base / 3);
 }
-
-// A game of the Heart lets a House keep a bigger host: the road to the centre is long.
-export const HEART_HOUSE_CAP = 24;
 
 export function ringGlory(state, territory) {
   if (territory === state.heart?.territory) return HEART.heartGlory;
@@ -170,7 +167,7 @@ export function wildBattle(state, map, constants, action, extra = {}) {
   if (origin.warriors[action.house] <= 0) delete origin.warriors[action.house];
 
   const stats = commanderStats(extra.commander);
-  const attackerStrength = strengthOf(extra.ranks, men) + HEART.fortune + stats.attack + rulerLeadBonus(extra.commander);
+  const attackerStrength = strengthOf(extra.ranks, men, { stars: extra.stars }) + HEART.fortune + stats.attack + rulerLeadBonus(extra.commander);
   const guardStrength = guards;
   const walls = guards > 0 ? baseDefense(map, next, constants, to) : 0;
   const toGuards = Math.max(0, Math.ceil(attackerStrength / 2) - walls);

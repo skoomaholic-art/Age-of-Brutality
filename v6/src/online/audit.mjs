@@ -313,6 +313,22 @@ export function journalEntryToAudit(entry, map, game) {
     };
   }
 
+  if (entry.kind === 'UNITS_HIRED' || entry.kind === 'UNITS_RETRAINED' || entry.kind === 'GROWTH_BUILT') {
+    const where = territoryName(map, entry.territory);
+    const kinds = ['крестьян', 'копейщиков', 'лучников', 'ратников', 'конных сержантов', 'рыцарей'];
+    const hired = (entry.counts || []).map((n, i) => n ? `${n} ${kinds[i]}` : '').filter(Boolean).join(', ');
+    return {
+      ...base,
+      visibility: 'PRIVATE',
+      message: entry.kind === 'UNITS_HIRED'
+        ? `В земле ${where} наняты ${hired} за ${entry.gold} золота.`
+        : entry.kind === 'UNITS_RETRAINED'
+          ? `В земле ${where} переучены ${entry.count} ${kinds[entry.from]} в ${kinds[entry.to]} за ${entry.gold} золота.`
+          : `В земле ${where} заложены ${['Город', 'Столица'].includes(map.territories.find(t => t.id === entry.territory)?.type) ? 'ярмарка' : 'поля'}: люди будут прибывать с каждым рассветом.`,
+      details: { house: entry.house, territory_id: entry.territory, at: entry.at || null }
+    };
+  }
+
   if (entry.kind === 'SEA_TOLL') {
     return {
       ...base,

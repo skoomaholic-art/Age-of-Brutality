@@ -117,7 +117,7 @@ export function knownHouses(game, house, houses) {
 
 // What other Houses do in private: their marches, levies and building.
 const PRIVATE_EVENTS = new Set([
-  'LEVY_RAISED', 'DRILL_DONE', 'YARD_BUILT', 'RIDER_SENT', 'SEA_TOLL', 'BRIDGE_STARTED', 'WILD_BATTLE',
+  'LEVY_RAISED', 'DRILL_DONE', 'YARD_BUILT', 'RIDER_SENT', 'SEA_TOLL', 'BRIDGE_STARTED', 'WILD_BATTLE', 'UNITS_HIRED', 'UNITS_RETRAINED', 'GROWTH_BUILT',
   'MARCH_QUEUED',
   'MARCH',
   'ROUTE_MARCH',

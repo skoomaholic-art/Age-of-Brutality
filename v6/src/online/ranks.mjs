@@ -10,12 +10,16 @@
 // in step after every change; marches carry their own ranks in
 // `order.action.ranks`.
 
+// The kinds of troops, weakest first. `gold` is the price of one man,
+// `where` the least settlement that can raise them (0 village, 1 town,
+// 2 capital), `guard` what each adds when holding a land (archers on walls).
 export const RANKS = Object.freeze([
-  { key: 'seliane', name: 'Селяне', one: 'селянин', few: 'селянина', many: 'селян', power: 1 },
-  { key: 'opolchenie', name: 'Ополченцы', one: 'ополченец', few: 'ополченца', many: 'ополченцев', power: 2 },
-  { key: 'ratniki', name: 'Ратники', one: 'ратник', few: 'ратника', many: 'ратников', power: 3 },
-  { key: 'latniki', name: 'Латники', one: 'латник', few: 'латника', many: 'латников', power: 4 },
-  { key: 'druzhina', name: 'Дружинники', one: 'дружинник', few: 'дружинника', many: 'дружинников', power: 5 }
+  { key: 'krestiane', name: 'Крестьяне', one: 'крестьянин', few: 'крестьянина', many: 'крестьян', power: 1, gold: 1, where: 0, guard: 0 },
+  { key: 'kopeyshiki', name: 'Копейщики', one: 'копейщик', few: 'копейщика', many: 'копейщиков', power: 2, gold: 2, where: 0, guard: 0 },
+  { key: 'luchniki', name: 'Лучники', one: 'лучник', few: 'лучника', many: 'лучников', power: 2, gold: 3, where: 0, guard: 1 },
+  { key: 'ratniki', name: 'Ратники', one: 'ратник', few: 'ратника', many: 'ратников', power: 3, gold: 5, where: 1, guard: 0 },
+  { key: 'serzhanty', name: 'Конные сержанты', one: 'конный сержант', few: 'конных сержанта', many: 'конных сержантов', power: 4, gold: 7, where: 1, guard: 0 },
+  { key: 'rytsari', name: 'Рыцари', one: 'рыцарь', few: 'рыцаря', many: 'рыцарей', power: 6, gold: 10, where: 2, guard: 0 }
 ]);
 const N = RANKS.length;
 
@@ -159,6 +163,12 @@ export function reconcileRanks(state, map) {
     next[key][house] = compAt(state, map, key, house);
   }
   state.ranks = next;
+  if (state.stars) {
+    for (const key of Object.keys(state.stars)) {
+      for (const house of Object.keys(state.stars[key])) if (!next[key]?.[house]) delete state.stars[key][house];
+      if (!Object.keys(state.stars[key]).length) delete state.stars[key];
+    }
+  }
   return JSON.stringify(next) !== before;
 }
 
@@ -184,6 +194,12 @@ export function ranksForMarch(game, map, action) {
   // Warriors the ranks have not met yet stand at the bottom.
   comp[0] += Math.max(0, Number(action.warriors) - compSum(comp));
   return comp;
+}
+
+export function starsForMarch(game, action) {
+  const key = game.state.guests?.[action.from]?.[action.house] && !game.state.territories?.[action.from]?.warriors?.[action.house]
+    ? guestKey(action.from) : action.from;
+  return starsAt(game.state, key, action.house);
 }
 
 function orderComp(order) {
@@ -220,9 +236,13 @@ export function settleMarchRanks(before, after, map, order, journal) {
     const arriving = [...comp];
     takeWeakest(arriving, compSum(arriving) - Math.min(came, compSum(arriving)));
     const stored = compAt(before, map, key, house);
+    const oldHeads = compSum(stored);
     addComp(stored, arriving);
-    if (journal?.some(entry => entry.kind === 'BATTLE' && entry.winner === house)) promote(stored, Math.floor(compSum(arriving) / 3), 3);
     setComp(after, key, house, stored);
+    // A won fight gives the newcomers a star; the host then shares its experience.
+    const won = journal?.some(entry => (entry.kind === 'BATTLE' && entry.winner === house) || (entry.kind === 'WILD_BATTLE' && entry.success));
+    const marched = Math.min(MAX_STARS, Number(order.action.stars || 0) + (won ? 1 : 0));
+    setStars(after, key, house, mergeStars(starsAt(before, key, house), oldHeads, marched, compSum(arriving)));
   }
   // A defender who held his walls learns too.
   for (const entry of journal || []) {
@@ -232,8 +252,8 @@ export function settleMarchRanks(before, after, map, order, journal) {
     if (heads <= 0) continue;
     const stored = compAt(before, map, key, entry.defender);
     takeWeakest(stored, Math.max(0, compSum(stored) - heads));
-    promote(stored, Math.floor(heads / 3), 3);
     setComp(after, key, entry.defender, stored);
+    setStars(after, key, entry.defender, starsAt(before, key, entry.defender) + 1);
   }
   reconcileRanks(after, map);
 }
@@ -261,12 +281,42 @@ export function loseOnRoad(state, map, order, losses) {
   setComp(state, key, order.action.house, stored);
 }
 
-export function strengthOf(comp, heads) {
+// Strength of a host: its men by kind; archers add more when holding a land;
+// each star of experience adds a tenth.
+export function strengthOf(comp, heads, { defending = false, stars = 0 } = {}) {
   const c = clean(comp);
   const sum = compSum(c);
   if (sum < heads) c[0] += heads - sum;
   else if (sum > heads) takeWeakest(c, sum - heads);
-  return compStrength(c);
+  let strength = compStrength(c);
+  if (defending) strength += c.reduce((a, n, i) => a + n * RANKS[i].guard, 0);
+  return Math.round(strength * (1 + 0.1 * Math.max(0, Math.min(3, Number(stars) || 0))));
+}
+
+// ---------- experience: one to three stars for a host that has fought ----------
+
+export const MAX_STARS = 3;
+
+export function starsAt(state, key, house) {
+  return Math.max(0, Math.min(MAX_STARS, Number(state.stars?.[key]?.[house] || 0)));
+}
+
+export function setStars(state, key, house, stars) {
+  state.stars ||= {};
+  const value = Math.max(0, Math.min(MAX_STARS, Math.round(Number(stars) || 0)));
+  if (!value) {
+    if (state.stars[key]) { delete state.stars[key][house]; if (!Object.keys(state.stars[key]).length) delete state.stars[key]; }
+    return;
+  }
+  state.stars[key] ||= {};
+  state.stars[key][house] = value;
+}
+
+// Two hosts become one: the experience is shared by heads.
+export function mergeStars(oldStars, oldHeads, newStars, newHeads) {
+  const total = oldHeads + newHeads;
+  if (total <= 0) return 0;
+  return Math.round((oldStars * oldHeads + newStars * newHeads) / total);
 }
 
 // ---------- the levy ----------

@@ -2,6 +2,7 @@ import { applyIncomePulse } from '../core/economy.mjs';
 import { applyCourtDawn } from './court.mjs';
 import { applySeaToll } from './sea-toll.mjs';
 import { heartDawn } from './heart.mjs';
+import { populationDawn } from './units.mjs';
 import { buildVictoryStatus } from '../core/victory.mjs';
 
 // Online adaptation of the tabletop round structure (Rules §4), in two modes.
@@ -107,6 +108,8 @@ function beginRound(next, map, constants, number, nowMs, timing) {
   applySeaToll(next.state, nowMs);
   // A game of the Heart: the wild guard grows back, the Heart pays its holder.
   rounds.heart_reached = number > 1 ? heartDawn(next, map, constants, nowMs) : [];
+  // Lands with fields or a fair gain people.
+  if (number > 1) populationDawn(next.state, map);
 
   // A game day starts exactly when the previous one ended, even if the server
   // noticed late, so the days keep their length.
