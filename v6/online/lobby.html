@@ -84,6 +84,7 @@ h3 { margin:0 0 8px; font-size:19px; font-weight:700; }
   padding:22px; background: var(--vellum); box-shadow: 4px 4px 0 rgba(43,27,18,.22);
 }
 .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+.profile-split { display:grid; gap:4px; margin-top:10px; font-size:14px; }
 .create-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
 .section { margin-top:24px; }
 label { display:block; font-size:14px; font-style:italic; color: var(--ink-soft); margin:10px 0 4px; }
@@ -302,6 +303,10 @@ button.loading { opacity:.65; cursor:wait; }
           <div class="profile-stat"><span>Поражения</span><b id="stat-losses">0</b></div>
           <div class="profile-stat"><span>В игре</span><b id="stat-time">0 мин</b></div>
         </div>
+        <div class="profile-split">
+          <div><b>С людьми</b> <span id="stat-people">0 игр</span><span class="muted"> · рейтинг MMR меняется только здесь</span></div>
+          <div><b>С ботами</b> <span id="stat-bots">0 игр</span></div>
+        </div>
 
         <div class="achievement-box">
           <h3>Достижения</h3>
@@ -356,10 +361,10 @@ button.loading { opacity:.65; cursor:wait; }
       </div>
     </section>
 
-    <section class="section" data-view="new">
+    <section class="section" data-view="new rooms">
       <h2 id="new">Новая игра</h2>
       <div class="create-grid">
-        <div class="card">
+        <div class="card" data-card="solo">
           <h3>Соло</h3>
           <div class="muted">Ты против Домов под управлением ИИ на случайной карте.</div>
           <label>Дом</label>
@@ -374,7 +379,7 @@ button.loading { opacity:.65; cursor:wait; }
           <div id="solo-error" class="error"></div>
         </div>
 
-        <div class="card">
+        <div class="card" data-card="room">
           <h3>Открытая комната</h3>
           <div class="muted">Появится в общем списке комнат.</div>
           <label>Название комнаты</label>
@@ -393,7 +398,7 @@ button.loading { opacity:.65; cursor:wait; }
           <div id="public-error" class="error"></div>
         </div>
 
-        <div class="card">
+        <div class="card" data-card="room">
           <h3>Приватная комната</h3>
           <div class="muted">Вход только по коду приглашения.</div>
           <label>Название комнаты</label>
@@ -579,6 +584,9 @@ html[data-view="profile"] #hub > [data-view~="profile"], html[data-view="social"
 html[data-view="games"] #hub > [data-view~="games"], html[data-view="rooms"] #hub > [data-view~="rooms"],
 html[data-view="new"] #hub > [data-view~="new"] { display: block !important; }
 html[data-view="social"] #social-card[style*="none"] { display: none !important; }
+/* Solo in "Новая игра"; open and private rooms in "Сетевая игра". */
+html[data-view="new"] [data-card="room"], html[data-view="rooms"] [data-card="solo"] { display: none !important; }
+html[data-view] .create-grid { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)) !important; }
 /* Without a profile nothing can be started: the sign-in card comes first in every section. */
 html[data-view]:not(.signed-in) #hub > #account-card { display: block !important; }
 html[data-view]:not(.signed-in) #hub > #account-card::after { content: 'Сначала войдите или создайте профиль — без него игру не начать.'; display: block; margin-top: 10px; color: #9c2c1e; font-weight: 700; }</style>
@@ -710,6 +718,9 @@ function renderAccount() {
     $('stat-wins').textContent = Number(stats.wins || 0);
     $('stat-losses').textContent = Number(stats.losses || 0);
     $('stat-time').textContent = formatPlayTime(stats.play_seconds || 0);
+    const split = part => Number(part?.games || 0) + ' игр · ' + Number(part?.wins || 0) + ' побед · ' + Number(part?.losses || 0) + ' поражений';
+    $('stat-people').textContent = split(stats.vs_people);
+    $('stat-bots').textContent = split(stats.vs_bots);
 
     const achievements = Array.isArray(stats.achievements) ? stats.achievements : [];
     $('achievement-list').innerHTML = achievements.length

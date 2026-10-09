@@ -791,7 +791,7 @@ export class FirestoreGameStore {
     };
   }
 
-  async recordProfileRankedResult(profileId, gameId, { won }, nowMs = Date.now()) {
+  async recordProfileRankedResult(profileId, gameId, { won, vsPeople = true, rated = true }, nowMs = Date.now()) {
     const profileRef = this.profileRef(profileId);
     const membershipRef = this.profileGamesRef(profileId).doc(String(gameId));
     const nowIso = new Date(nowMs).toISOString();
@@ -813,7 +813,7 @@ export class FirestoreGameStore {
         };
       }
 
-      const stats = applyRankedResult(profileDoc.data().stats, { won: Boolean(won) });
+      const stats = applyRankedResult(profileDoc.data().stats, { won: Boolean(won), vsPeople, rated });
       tx.update(profileRef, {
         stats,
         updated_at: nowIso
@@ -821,6 +821,7 @@ export class FirestoreGameStore {
       tx.set(membershipRef, {
         ...membership,
         ranked_result: won ? 'WIN' : 'LOSS',
+        opponents: vsPeople ? 'PEOPLE' : 'BOTS',
         result_recorded_at: nowIso
       }, { merge: false });
 

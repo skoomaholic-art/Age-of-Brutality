@@ -509,6 +509,12 @@ async function requireHouse(ctx, req, house, { running = true } = {}) {
 }
 
 async function tickUnlocked(ctx) {
+  // A finished game has its results written once (also for games finished before).
+  if (ctx.game.lifecycle?.status === GAME_STATUS.FINISHED && !ctx.resultsRecorded) {
+    ctx.resultsRecorded = true;
+    const winners = ctx.game.rounds?.winners || buildVictoryStatus(ctx.game, map, constants)?.winners || [];
+    await recordRankedResults(ctx, winners, Date.now()).catch(error => console.warn('results', error?.message));
+  }
   if (ctx.game.lifecycle?.status !== GAME_STATUS.RUNNING) return;
 
   const nowMs = Date.now();
@@ -534,7 +540,8 @@ async function tickUnlocked(ctx) {
     if (ctx.game.lifecycle?.status === GAME_STATUS.FINISHED) {
       // A joint victory is not ranked: there is no approved rating rule for ties.
       const winners = ctx.game.rounds?.winners || [];
-      if (winners.length === 1) await recordRankedResults(ctx, winners, nowMs);
+      ctx.resultsRecorded = true;
+      await recordRankedResults(ctx, winners, nowMs);
     }
   }
 }
@@ -542,23 +549,26 @@ async function tickUnlocked(ctx) {
 // Ranked results are recorded for multiplayer games only and are idempotent per game.
 async function recordRankedResults(ctx, winnerHouses, nowMs) {
   const rankedResults = [];
-  if (
-    !winnerHouses.length ||
-    ctx.game.lifecycle?.game_mode !== GAME_MODE.MULTIPLAYER
-  ) {
-    return rankedResults;
-  }
+  if (ctx.game.lifecycle?.access_mode !== ACCESS_MODE.PLAYER_BOUND) return rankedResults;
 
   const players = await ctx.store.listPlayers();
+  // Against people when two or more living rulers hold Houses; else against bots.
+  const people = players.filter(item => item.house && item.role !== PLAYER_ROLE.SPECTATOR).length;
   for (const participant of players) {
     if (!participant.profile_id || !participant.house) continue;
     const won = winnerHouses.includes(participant.house);
-    const result = await ctx.store.recordProfileRankedResult(
-      participant.profile_id,
-      ctx.game.id,
-      { won },
-      nowMs
-    );
+    let result;
+    try {
+      result = await ctx.store.recordProfileRankedResult(
+        participant.profile_id,
+        ctx.game.id,
+        { won, vsPeople: people >= 2, rated: winnerHouses.length === 1 },
+        nowMs
+      );
+    } catch (error) {
+      console.warn('result not recorded', participant.profile_id, error?.message);
+      continue;
+    }
     rankedResults.push({
       profile_id: participant.profile_id,
       house: participant.house,
