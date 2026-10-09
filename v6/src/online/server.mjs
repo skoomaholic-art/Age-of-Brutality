@@ -59,6 +59,7 @@ import { applyFog, knownHouses, recordExploration, recordLandHistory } from './f
 import { generateMap, MAX_HOUSES, MIN_HOUSES, MAP_SHAPES, MAP_WARPS, pickMapShape } from './mapgen.mjs';
 import { processEncounters } from './encounters.mjs';
 import { expelGuests } from './guests.mjs';
+import { processCampFights } from './melee.mjs';
 import { agentsView, attachSpy, hireSpy, processAgents, wayfarersView } from './agents.mjs';
 import { captiveAction, captivesView, processCharacters } from './fate.mjs';
 import {
@@ -531,6 +532,8 @@ async function tickUnlocked(ctx) {
   processed = processRounds(processed, map, constants, { nowMs });
   processed = processCharacters(processed, map, constants, { nowMs });
   processed = processRiders(processed, map, constants, nowMs);
+  // Houses camped side by side that are now at war fight it out before anyone is led home.
+  processed = processCampFights(processed, map, constants, nowMs);
   processed = expelGuests(processed, map, constants, nowMs);
   processed = processAgents(processed, map, { nowMs });
   processed = recordExploration(processed, map, constants.houses, nowMs);
@@ -1549,7 +1552,8 @@ async function handleGameApi(req, res, url, ctx, subpath) {
         const answer = action === 'PROPOSE_DEAL'
           ? next.state.journal.slice(journalBefore).find(entry => ['DEAL_MADE', 'DEAL_REJECTED'].includes(entry.kind) && entry.from === house && entry.to === target) || null
           : null;
-        // Guests whose welcome has just ended are led home at once.
+        // War among Houses camped on one land is fought at once; guests whose welcome has ended are led home.
+        next = processCampFights(next, map, constants, nowMs);
         next = expelGuests(next, map, constants, nowMs);
         return { game: next, response: { diplomacy: diplomacyView(next, house, knownHouses(next, house, constants.houses)), answer: answer ? { accepted: answer.kind === 'DEAL_MADE', reason: answer.reason || null, at: answer.at } : null } };
       }

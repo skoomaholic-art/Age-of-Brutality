@@ -7,7 +7,7 @@
 import { buildAdjacency } from '../core/map.mjs';
 import { hasPassage } from './diplomacy.mjs';
 
-function nearestOwnLand(state, map, house, from) {
+export function nearestOwnLand(state, map, house, from) {
   const adjacency = buildAdjacency([...(map.land_edges || []), ...(map.sea_lane_edges || [])]);
   const seen = new Set([from]);
   let wave = [from];

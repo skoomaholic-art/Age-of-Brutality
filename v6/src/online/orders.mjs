@@ -16,6 +16,7 @@ import {
 import { declareWarInPlace, hasPassage } from './diplomacy.mjs';
 import { headsLost, ranksForMarch, settleMarchRanks, strengthOf } from './ranks.mjs';
 import { rulerLeadBonus } from './court.mjs';
+import { fightOnLand, joinersAgainst } from './melee.mjs';
 import { fateDice, recoveryMs, settleFate } from './fate.mjs';
 import {
   finishSeaLandingBridge,
@@ -760,6 +761,29 @@ function resolveOrder(state,map,constants,gameId,order,nowMs,recovery) {
   return resolved;
 }
 
+// An army storming a land where more than the owner's garrison stands (guests
+// at war with it, or the owner's allies): everyone there takes a side.
+function meleeArrival(game, map, constants, order, nowMs) {
+  const action = hydrateOnlineRoute(game.state, map, constants, { ...order.action, path: null }, ONLINE_TIMING);
+  if (isSeaWaypoint(map, action.to)) return null;
+  const house = action.house;
+  const master = game.state.territories?.[action.to]?.owner ?? null;
+  if (!master || master === house || hasPassage(game.state, master, house)) return null;
+  if (game.state.territories?.[action.from]?.owner !== house) return null;
+  if (guestWarriors(game.state, action.to, house) > 0) return null;
+  if (!joinersAgainst(game, action.to, house).length) return null;
+  assertOnlineLegalAction(action, enumerateOnlineMarches(game.state, map, constants, house, ONLINE_TIMING));
+
+  const g = structuredClone(game);
+  const origin = g.state.territories[action.from];
+  origin.warriors[house] = Number(origin.warriors[house] || 0) - Number(action.warriors);
+  if (origin.warriors[house] <= 0) delete origin.warriors[house];
+  const { result } = fightOnLand(g, map, constants, action.to, house, master, {
+    house, heads: Number(action.warriors), ranks: order.action.ranks, commanderId: order.commander_id || null, from: action.from
+  }, { nowMs });
+  return { game: g, state: g.state, result: { ...result, kind: 'MELEE', route_path: [...(action.path || [])], commander_id: order.commander_id || null } };
+}
+
 export function processDueOrders(game, map, constants, nowMs = Date.now()) {
   const next = structuredClone(game);
   const due = next.orders
@@ -793,7 +817,9 @@ export function processDueOrders(game, map, constants, nowMs = Date.now()) {
     }
     try {
       const journalStart = next.state.journal.length;
-      const resolved = resolveOrder(
+      const melee = meleeArrival(next, map, constants, liveOrder, nowMs);
+      if (melee) next.diplomacy = melee.game.diplomacy;
+      const resolved = melee || resolveOrder(
         next.state,
         map,
         constants,

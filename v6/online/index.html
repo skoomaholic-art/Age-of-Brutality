@@ -167,6 +167,7 @@
     .land-edge.active-route { stroke: var(--vermilion); stroke-width: 2.6; stroke-linecap: round; stroke-dasharray: 5 3; pointer-events: none; }
     .sea-lane-edge { stroke: #24384d; stroke-width: 1; stroke-dasharray: .4 3.4; stroke-linecap: round; opacity: .85; pointer-events: none; }
     .sea-lane-edge.active-route { stroke: var(--vermilion); stroke-width: 2.4; stroke-dasharray: 5 3; opacity: 1; }
+    .sea-lane-edge.landing { opacity: .45; stroke-dasharray: .4 6; }
     .sea-node { cursor: pointer; }
     .sea-node .sea-hit { fill: transparent; }
     .sea-node .sea-waypoint { fill: #24384d; stroke: #cfd9d6; stroke-width: .6; }
@@ -4279,9 +4280,10 @@ function drawPixiMap(scene, key) {
   for (const lane of scene.lanes) {
     if (lane.active) continue;
     lanes.lineStyle(0);
-    lanes.beginFill(0x24384d, 0.85);
+    // A shore without a port: fleets may land there but not set out.
+    lanes.beginFill(0x24384d, lane.landing ? 0.45 : 0.85);
     const length = Math.hypot(lane.b.x - lane.a.x, lane.b.y - lane.a.y);
-    for (let d = 0; d <= length; d += 3.8) lanes.drawCircle(lane.a.x + (lane.b.x - lane.a.x) * d / length, lane.a.y + (lane.b.y - lane.a.y) * d / length, 0.5);
+    for (let d = 0; d <= length; d += lane.landing ? 6.5 : 3.8) lanes.drawCircle(lane.a.x + (lane.b.x - lane.a.x) * d / length, lane.a.y + (lane.b.y - lane.a.y) * d / length, 0.5);
     lanes.endFill();
   }
   lanes.lineStyle({ width: 2.5, color: 0xb3311f, cap: PIXI.LINE_CAP.ROUND });
@@ -4582,15 +4584,21 @@ function renderMap() {
   // The same picture is described once more for the WebGL layer.
   const scene = pixiScene = { realms: realmIds, ports: [], provinces: [], castles: [], lanes: [], routes: [], waypoints: [], ribbons: [], notes: [], tokens: [], bridges: [], dx: 0, dy: 0 };
   const lines = [];
-  // Where ports are built, the sea net shows only as far as it is known, and a
-  // shore joins it only through its port.
+  // Where ports are built, the sea net shows only as far as it is known. A
+  // shore with a port joins it fully; any other shore faintly, for landing only.
   const seaKnown = id => !snapshot.map.buildable_ports || !explored || explored.has(id);
   const laneShown = (a, b) => {
     if (!snapshot.map.buildable_ports) return true;
     const wa = Boolean(seaWaypoints[a]), wb = Boolean(seaWaypoints[b]);
     if (wa && wb) return seaKnown(a) && seaKnown(b);
-    const land = wa ? b : a, water = wa ? a : b;
-    return seaKnown(water) && hasPort(land);
+    const water = wa ? a : b;
+    return seaKnown(water);
+  };
+  const landingOnly = (a, b) => {
+    if (!snapshot.map.buildable_ports) return false;
+    const wa = Boolean(seaWaypoints[a]), wb = Boolean(seaWaypoints[b]);
+    if (wa && wb) return false;
+    return !hasPort(wa ? b : a);
   };
   for (const [a,b] of laneEdges) {
     const from = routeCoords[a];
@@ -4598,8 +4606,9 @@ function renderMap() {
     if (!from || !to) continue;
     if (!laneShown(a, b) && !activeEdges.has(routeEdgeKey(a,b))) continue;
     const active = activeEdges.has(routeEdgeKey(a,b)) ? ' active-route' : '';
-    scene.lanes.push({ a: from, b: to, active: Boolean(active) });
-    lines.push(`<line class="sea-lane-edge${active}" x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" />`);
+    const landing = !active && landingOnly(a, b);
+    scene.lanes.push({ a: from, b: to, active: Boolean(active), landing });
+    lines.push(`<line class="sea-lane-edge${active}${landing ? ' landing' : ''}" x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" />`);
   }
   for (const [a,b] of snapshot.map.land_edges) {
     if (!activeEdges.has(routeEdgeKey(a,b))) continue;

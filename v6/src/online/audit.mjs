@@ -571,6 +571,39 @@ export function journalEntryToAudit(entry, map, game) {
     };
   }
 
+  if (entry.kind === 'BATTLE' && entry.melee) {
+    const to = territoryName(map, entry.to);
+    const side = list => list.map(m => `${m.house} (${m.warriors}, −${m.losses})`).join(', ');
+    const winner = entry.attackerWins ? entry.attacker : entry.defender;
+    return {
+      ...base,
+      message: `Сеча за ${to}: ${side(entry.attackers)} против ${side(entry.defenders)}. Верх взял ${winner}${entry.attackers.length + entry.defenders.length > 2 ? ' со своей стороной' : ''}. ${entry.captured ? `Земля отошла Дому ${entry.captor}.` : 'Земля устояла.'}`,
+      details: {
+        melee: true,
+        attacker: entry.attacker,
+        defender: entry.defender,
+        winner,
+        houses: entry.houses,
+        attackers: entry.attackers,
+        defenders: entry.defenders,
+        from_id: entry.from,
+        territory_id: entry.to,
+        territory: to,
+        attacker_strength: entry.attackerStrength,
+        defender_strength: entry.defenderStrength,
+        attacker_losses: entry.attackerLosses,
+        defender_losses: entry.defenderLosses,
+        attacker_survivors: entry.attackerSurvivors,
+        defender_survivors: entry.defenderSurvivors,
+        captured: entry.captured,
+        captor: entry.captor,
+        order_id: entry.order_id || null,
+        at: entry.at || null,
+        ...timingFields(entry)
+      }
+    };
+  }
+
   if (entry.kind === 'BATTLE') {
     const from = territoryName(map, entry.from);
     const to = territoryName(map, entry.to);

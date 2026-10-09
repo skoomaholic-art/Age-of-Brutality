@@ -513,13 +513,14 @@ export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'whe
         lanes.push([ids[i], ids[j]]);
       }
     }
-    // Every shore with a clear run to open water close by may hold a port.
+    // Every shore with a clear run to open water close by may hold a port;
+    // it is joined to up to three sea points nearby.
     for (const s of sites) {
       const near = ids
         .map(id => ({ id, d: dist(s.pos, waypoints[id]) }))
-        .filter(({ id, d }) => d <= 105 && !sites.some(t => t !== s && toSegment(t.pos, s.pos, waypoints[id]) < 36))
+        .filter(({ id, d }) => d <= 125 && !sites.some(t => t !== s && toSegment(t.pos, s.pos, waypoints[id]) < 36))
         .sort((x, y) => x.d - y.d || (x.id < y.id ? -1 : 1))
-        .slice(0, 2);
+        .slice(0, 3);
       for (const { id } of near) {
         const key = [s.id, id].sort().join('|');
         if (lanesSet.has(key)) continue;

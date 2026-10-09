@@ -100,7 +100,7 @@ export function describeComp(comp) {
 
 // ---------- where warriors stand ----------
 
-const guestKey = id => `g:${id}`;
+export const guestKey = id => `g:${id}`;
 
 function headsAt(state, key, house) {
   if (key.startsWith('g:')) return Number(state.guests?.[key.slice(2)]?.[house] || 0);
