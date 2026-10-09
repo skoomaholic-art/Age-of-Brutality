@@ -2237,7 +2237,8 @@ function lensFor(node) {
   ];
   const slug = abandonedHouses()[owner] ? 'abandoned' : HOUSE_SLUGS[owner];
   const mood = weak ? 'sad' : moving ? 'angry' : 'calm';
-  const bust = commander ? liveBust(commander.role === 'RULER' ? 1 : 2, mood, moving ? 'forward' : null, moving ? 'marching' : '') : '';
+  // No painted head in the glass: only the host itself.
+  const bust = '';
   return { art, title: 'Дом ' + owner, lines, moving: Boolean(moving), bust: troopScene(count, bust, Boolean(moving), mood) };
 }
 
