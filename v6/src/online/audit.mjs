@@ -56,6 +56,16 @@ export function stateSnapshot(game, map) {
   return { houses };
 }
 
+// The clerks' reasons, said plainly.
+function marchFailWords(reason) {
+  const text = String(reason || '');
+  if (/no legal route|not emitted|no longer legal/i.test(text)) return 'Дорога туда закрылась, пока войско шло.';
+  if (/warrior cap/i.test(text)) return 'Там больше воинов не уместить.';
+  if (/commander/i.test(text)) return 'Воевода не может остаться без войска.';
+  if (/[а-яё]/i.test(text)) return text.endsWith('.') ? text : text + '.';
+  return 'Войско вернулось ни с чем.';
+}
+
 export function journalEntryToAudit(entry, map, game) {
   const base = {
     game_id: game.id,
@@ -475,7 +485,7 @@ export function journalEntryToAudit(entry, map, game) {
     const to = territoryName(map, entry.to);
     return {
       ...base,
-      message: `Поход Дома ${entry.house} не удался: ${from} → ${to}. ${entry.reason}.`,
+      message: `Поход Дома ${entry.house} не удался: ${from} → ${to}. ${marchFailWords(entry.reason)}`,
       details: {
         house: entry.house,
         from_id: entry.from,

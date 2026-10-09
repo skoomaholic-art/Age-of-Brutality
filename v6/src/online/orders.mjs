@@ -534,8 +534,10 @@ function finishRouteBridge(originalState,resolvedState,action,syntheticOrigin) {
 }
 
 function resolveOrder(state,map,constants,gameId,order,nowMs,recovery) {
+  // The army has already walked its way; on arrival only the goal must still
+  // be within reach, not the very same road (lands change hands meanwhile).
   const action=hydrateOnlineRoute(
-    state,map,constants,order.action,ONLINE_TIMING
+    state,map,constants,{ ...order.action, path:null },ONLINE_TIMING
   );
   const legal=enumerateOnlineMarches(
     state,map,constants,action.house,ONLINE_TIMING
