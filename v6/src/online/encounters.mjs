@@ -39,7 +39,7 @@ export function orderTimeline(order) {
   let at = start;
   for (const segment of segments) {
     at += Number(segment.duration_ms || 0) * factor;
-    points.push({ node: segment.to, at });
+    points.push({ node: segment.to, at, mode: segment.mode || 'LAND' });
   }
   return points;
 }
@@ -54,7 +54,8 @@ function meeting(a, b) {
 
   for (let i = 0; i + 1 < ta.length; i += 1) {
     for (let j = 0; j + 1 < tb.length; j += 1) {
-      // Head-on along one stretch of road or sea lane.
+      // Head-on along one stretch of road. Nobody fights at sea: fleets pass.
+      if (ta[i + 1].mode === 'SEA' || tb[j + 1].mode === 'SEA') continue;
       if (ta[i].node === tb[j + 1].node && ta[i + 1].node === tb[j].node) {
         const a0 = ta[i].at, da = ta[i + 1].at - a0;
         const b0 = tb[j].at, db = tb[j + 1].at - b0;
@@ -72,6 +73,8 @@ function meeting(a, b) {
   for (let i = 1; i + 1 < ta.length; i += 1) {
     for (let j = 1; j + 1 < tb.length; j += 1) {
       if (ta[i].node !== tb[j].node) continue;
+      // A point out in the open water: arrived at and left by sea.
+      if ((ta[i].mode === 'SEA' && ta[i + 1].mode === 'SEA') || (tb[j].mode === 'SEA' && tb[j + 1].mode === 'SEA')) continue;
       const window = CROSSROADS_WINDOW * Math.min(
         ta[i].at - ta[i - 1].at,
         tb[j].at - tb[j - 1].at

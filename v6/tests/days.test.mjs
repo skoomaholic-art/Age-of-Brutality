@@ -8,6 +8,7 @@ import { executeCommand } from '../src/online/commands.mjs';
 import { listQueueableMarches, processDueOrders } from '../src/online/orders.mjs';
 import { normalizeOnlineEconomy, processEconomy } from '../src/online/economy.mjs';
 import { processRounds } from '../src/online/ai.mjs';
+import { houseCourtTotals } from '../src/online/court.mjs';
 import { applyFog, recordExploration, visiblePositions } from '../src/online/fog.mjs';
 import { syncAuditFromJournal, normalizeAudit } from '../src/online/audit.mjs';
 import {
@@ -65,7 +66,8 @@ function march(game, from, to, warriors, nowMs, house = HOUSE) {
 test('a game in days pays income at the start, sets a day clock and has no order limit', () => {
   let game = daysGame();
   assert.equal(game.rounds.mode, 'days');
-  assert.equal(game.state.houses[HOUSE].gold, 12);
+  // Land income and what the lords at court give at dawn.
+  assert.equal(game.state.houses[HOUSE].gold, 12 + houseCourtTotals(game.state, HOUSE, map.capitals).gold);
   assert.equal(Date.parse(game.rounds.deadline_at), T0 + DAY);
   assert.equal(roundsView(game).day_ms, DAY);
 
@@ -109,7 +111,7 @@ test('the day changes on the clock while armies keep marching, and the days keep
   game = tick(game, T0 + 61_500);
   assert.equal(game.rounds.number, 2);
   assert.equal(game.orders[0].status, 'PENDING');
-  assert.equal(game.state.houses[RIVAL].gold, gold + 4, 'income at the day change');
+  assert.equal(game.state.houses[RIVAL].gold, gold + 4 + houseCourtTotals(game.state, RIVAL, map.capitals).gold, 'income at the day change');
   assert.equal(Date.parse(game.rounds.deadline_at), T0 + 120_000, 'day 2 ends two days after the start');
 });
 

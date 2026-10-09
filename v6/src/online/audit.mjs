@@ -299,6 +299,27 @@ export function journalEntryToAudit(entry, map, game) {
     };
   }
 
+  if (entry.kind === 'BRIDGE_STARTED' || entry.kind === 'BRIDGE_BUILT') {
+    const where = `${territoryName(map, entry.a)} — ${territoryName(map, entry.b)}`;
+    return {
+      ...base,
+      ...(entry.kind === 'BRIDGE_STARTED' ? { visibility: 'PRIVATE' } : {}),
+      message: entry.kind === 'BRIDGE_STARTED'
+        ? `Начали ставить мост через реку на дороге ${where}.`
+        : `Мост через реку на дороге ${where} готов (построил Дом ${entry.house}). Теперь по нему ходят все.`,
+      details: { house: entry.house, a: entry.a, b: entry.b, territory: entry.a, at: entry.at || null }
+    };
+  }
+
+  if (entry.kind === 'SEA_TOLL') {
+    return {
+      ...base,
+      visibility: 'PRIVATE',
+      message: `Море берёт своё: флот Дома ${entry.house} в открытом море уже ${entry.days}-й рассвет, ${entry.lost} человек сгинули от хвори, голода и бурь. Осталось ${entry.left}. Причаль к берегу, чтобы потери прекратились.`,
+      details: { house: entry.house, position: entry.position, lost: entry.lost, left: entry.left, at: entry.at || null }
+    };
+  }
+
   if (entry.kind === 'PORT_BUILT') {
     return {
       ...base,

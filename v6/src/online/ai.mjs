@@ -1,6 +1,7 @@
 import { areAllies } from './diplomacy.mjs';
 import { neutralResistance } from '../core/neutral.mjs';
 import { buildAdjacency } from '../core/map.mjs';
+import { aiBridgeChoice, buildBridge } from './bridges.mjs';
 import { totalHouseWarriors } from '../core/state.mjs';
 import { resolvePendingCapitalHold } from '../core/scoring.mjs';
 import { commandersAt } from '../core/characters.mjs';
@@ -260,6 +261,16 @@ export function takeAiAction(game, map, constants, house, { nowMs = Date.now() }
   const ranked = refunds >= MAX_AI_REFUNDS_PER_ROUND
     ? []
     : rankAiCommands(game, map, constants, house);
+
+  // A river in the way: the House builds a bridge from its own bank when it can spare the gold.
+  const bridgeKey = aiBridgeChoice(game, house);
+  if (bridgeKey) {
+    try {
+      return { game: buildBridge(game, map, house, bridgeKey, { nowMs }), decision: { kind: 'BRIDGE', value: 1, command: { type: 'BRIDGE', key: bridgeKey } } };
+    } catch {
+      // Not now; go on with the usual choices.
+    }
+  }
 
   for (const candidate of ranked) {
     if (candidate.value < PASS_THRESHOLD) break;

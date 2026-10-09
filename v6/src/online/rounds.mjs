@@ -1,5 +1,6 @@
 import { applyIncomePulse } from '../core/economy.mjs';
 import { applyCourtDawn } from './court.mjs';
+import { applySeaToll } from './sea-toll.mjs';
 import { buildVictoryStatus } from '../core/victory.mjs';
 
 // Online adaptation of the tabletop round structure (Rules §4), in two modes.
@@ -94,13 +95,15 @@ function beginRound(next, map, constants, number, nowMs, timing) {
   const rounds = next.rounds;
   const income = applyIncomePulse(next.state, map, constants);
   // The lords at court and with the armies give or cost at every dawn.
-  const court = applyCourtDawn(next.state, rounds.houses || constants.houses, map.capitals);
+  const court = applyCourtDawn(income.state, rounds.houses || constants.houses, map.capitals);
   for (const [house, add] of Object.entries(court)) {
     if (!income.gains?.[house]) continue;
     income.gains[house].gold = Number(income.gains[house].gold || 0) + add.gold;
     income.gains[house].influence = Number(income.gains[house].influence || 0) + add.influence;
   }
   next.state = income.state;
+  // Men long out at sea sicken and drown: the toll of the sea, every dawn.
+  applySeaToll(next.state, nowMs);
 
   // A game day starts exactly when the previous one ended, even if the server
   // noticed late, so the days keep their length.

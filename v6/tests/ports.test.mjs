@@ -60,7 +60,7 @@ test('an army can go by the points the player picks', () => {
   assert.deepEqual(order.travel_segments.map(s => s.to).slice(0, 1), [b.to]);
 });
 
-test('a fleet can sail into a sea point held by another House and fight there', async () => {
+test('fleets of two Houses share a sea point without a fight', async () => {
   const { relationOf, RELATION } = await import('../src/online/diplomacy.mjs');
   const { processDueOrders } = await import('../src/online/orders.mjs');
   let game = freshGame();
@@ -73,9 +73,29 @@ test('a fleet can sail into a sea point held by another House and fight there', 
   game.state.sea_nodes[point] = { owner: R, warriors: { [R]: 1 } };
   const sail = listQueueableMarches(game, map, constants, H).find(a => a.from === start && a.to === point && a.warriors === 5);
   assert.ok(sail, 'the occupied point can be aimed at');
+  const before = relationOf(game, H, R);
   game = executeCommand(game, map, constants, { type: 'MARCH', house: H, from: start, to: point, warriors: 5 }, { nowMs: 5 }).game;
   game = processDueOrders(game, map, constants, Date.parse(game.orders[0].due_at));
-  assert.equal(game.orders[0].status, 'RESOLVED');
-  assert.equal(game.state.sea_nodes[point].owner, H);
-  assert.equal(relationOf(game, H, R), RELATION.WAR);
+  assert.equal(game.orders[0].status, 'RESOLVED', JSON.stringify(game.orders[0].failure_reason || game.orders[0].result));
+  assert.deepEqual(game.state.sea_nodes[point].warriors, { [R]: 1, [H]: 5 });
+  assert.equal(game.state.sea_nodes[point].owner, null);
+  assert.ok(!game.state.journal.some(e => e.kind === 'BATTLE'), 'nobody fights at sea');
+  assert.equal(relationOf(game, H, R), before);
+  // Both fleets can sail on from the shared point.
+  assert.ok(listQueueableMarches(game, map, constants, H).some(a => a.from === point));
+  assert.ok(listQueueableMarches(game, map, constants, R).some(a => a.from === point));
+});
+
+test('the sea takes a fifth of a fleet from its second dawn out, never the last man', async () => {
+  const { applySeaToll } = await import('../src/online/sea-toll.mjs');
+  const point = Object.keys(map.sea_waypoints)[0];
+  const state = { journal: [], sea_nodes: { [point]: { owner: H, warriors: { [H]: 10 } } } };
+  applySeaToll(state);
+  assert.equal(state.sea_nodes[point].warriors[H], 10, 'the first dawn at sea is free');
+  applySeaToll(state);
+  assert.equal(state.sea_nodes[point].warriors[H], 8);
+  assert.equal(state.journal.at(-1).kind, 'SEA_TOLL');
+  state.sea_nodes[point].warriors[H] = 1;
+  applySeaToll(state);
+  assert.equal(state.sea_nodes[point].warriors[H], 1);
 });

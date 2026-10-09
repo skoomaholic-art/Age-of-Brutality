@@ -1111,6 +1111,12 @@ function warriorsAt(id, owner) {
   );
 }
 
+// Our fleet or garrison stands here (a sea point may hold fleets of several Houses).
+function holdsHere(id) {
+  if (warriorsAt(id, house) < 1) return false;
+  return nodeOwner(id) === house || Boolean(snapshot.map?.sea_waypoints?.[id]);
+}
+
 function nodeOwner(id) {
   return snapshot.game.state.territories[id]?.owner ??
     snapshot.game.state.sea_nodes?.[id]?.owner ??
@@ -1811,6 +1817,32 @@ function portButton(t, st) {
   return '<button class="wide" data-land-port>Построить порт · 4 золота</button>';
 }
 
+// Rivers on the roads of a land: a bridge is needed to cross each of them.
+function crossingsAt(id) {
+  return Object.entries(snapshot.game.state.river_crossings || {})
+    .filter(([, c]) => c.a === id || c.b === id)
+    .sort((x, y) => x[0].localeCompare(y[0]));
+}
+
+function bridgeOf(key) {
+  return snapshot.game.state.bridges?.[key] || null;
+}
+
+function bridgeRows(id, canBuild) {
+  const list = crossingsAt(id);
+  if (!list.length) return '';
+  const cost = snapshot.game.bridge_cost || { gold: 3, ms: 0 };
+  return '<div class="rank-box"><div class="rank-head">Реки на дорогах</div>' + list.map(([key, c]) => {
+    const other = territoryById(c.a === id ? c.b : c.a)?.name || '';
+    const bridge = bridgeOf(key);
+    const label = 'Дорога на ' + escapeHtml(other);
+    if (bridge?.built) return '<div class="row"><span>' + label + '</span><b>мост стоит</b></div>';
+    if (bridge?.ready_at) return '<div class="row"><span>' + label + '</span><b>мост строится · ' + escapeHtml(timeLeft(bridge.ready_at)) + '</b></div>';
+    if (!canBuild) return '<div class="row"><span>' + label + '</span><b>моста нет, не пройти</b></div>';
+    return '<button class="wide" data-bridge-build="' + escapeHtml(key) + '">Мост на дороге на ' + escapeHtml(other) + ' · ' + cost.gold + ' золота</button>';
+  }).join('') + '<div class="tiny">Без моста реку не перейти. Мост ставят со своего берега, и ходят по нему все.</div></div>';
+}
+
 function yardButton() {
   const view = snapshot.game.ranks_view;
   if (!view) return '';
@@ -1851,6 +1883,7 @@ function renderLand() {
       '<div class="row"><span>Возведено</span><b>' + ([st.fort ? 'крепость' : '', hasPort(landId) ? 'порт' : ''].filter(Boolean).join(', ') || 'нет') + '</b></div>' +
       '<div class="row"><span>Исконно</span><b>' + escapeHtml(t.house_sector && colors[t.house_sector] ? 'земля Дома ' + t.house_sector : t.house_sector || 'вольная земля') + '</b></div>' +
       '<div class="row"><span>Прежде владели</span><b>' + escapeHtml(past.length ? past.join(', ') : 'никто') + '</b></div>' +
+      bridgeRows(landId, false) +
       '<div class="lore">' + escapeHtml(LAND_LORE[Math.abs(hash) % LAND_LORE.length]) + '</div>' + guestsBlock(mine);
     return;
   }
@@ -1871,7 +1904,7 @@ function renderLand() {
     '<button class="wide" data-land-fort ' + (fortNote ? 'disabled' : '') + '>' + (fortNote || 'Возвести крепость · 3 золота') + '</button>' +
     (t.type === 'Столица' ? yardButton() : '') +
     '<button class="wide" disabled>Тайный приказ · мастера ещё не прибыли</button>' +
-    portButton(t, st);
+    portButton(t, st) + bridgeRows(t.id, true);
 }
 
 // Wayfarers resting in this land; with a free spy one of them can take him along.
@@ -1938,6 +1971,8 @@ function setupLand() {
     if (event.target.closest('[data-drill-go]')) landCommand('/api/drill', { counts: readCounts('drill') });
     if (event.target.closest('[data-yard]')) landCommand('/api/yard', {});
     if (event.target.closest('[data-land-port]')) landCommand('/api/port', {});
+    const bridgeButton = event.target.closest('[data-bridge-build]');
+    if (bridgeButton) landCommand('/api/bridge', { key: bridgeButton.dataset.bridgeBuild });
     if (event.target.closest('[data-hire-spy]')) agentCommand({ action: 'HIRE' });
     const join = event.target.closest('[data-spy-band]');
     if (join) {
@@ -2430,7 +2465,19 @@ function setupLens() {
     const marching = event.target.closest?.('.army-token[data-lens-order]');
     if (marching) { openField(marching.dataset.lensOrder); return; }
     const node = event.target.closest?.('.army-token[data-lens-at]');
-    if (node) { event.stopPropagation(); selectArmy(node.dataset.lensAt); }
+    if (node) { event.stopPropagation(); selectArmy(node.dataset.lensAt); return; }
+    // A river crossing: open the card of our bank (or of the near bank) on its roads.
+    const spot = event.target.closest?.('[data-bridge]');
+    if (spot && !origin) {
+      event.stopPropagation();
+      const c = snapshot.game.state.river_crossings?.[spot.dataset.bridge];
+      if (!c) return;
+      const ownA = snapshot.game.state.territories[c.a]?.owner === house;
+      const ownB = snapshot.game.state.territories[c.b]?.owner === house;
+      landId = ownB && !ownA ? c.b : c.a;
+      landTab = ownA || ownB ? 'build' : 'info';
+      renderLand();
+    }
   }, true);
 }
 
@@ -3986,7 +4033,22 @@ function dashedLine(g, pts, dash, gap, closed = false) {
   }
 }
 
-function provinceStyle(g, rings, cls) {
+// Shades of whole lands (fog, dimmed, chosen) are painted solid with a broad
+// edge, so no slit of bare map shows between two neighbours or along a
+// cove, and are faded together afterwards so overlaps do not darken.
+function shadeFor(fills, color, alpha) {
+  const key = color + '/' + alpha;
+  if (!fills.has(key)) {
+    const g = new PIXI.Graphics();
+    const box = new PIXI.Container();
+    box.addChild(g);
+    box.filters = [new PIXI.AlphaFilter(alpha)];
+    fills.set(key, { g, box, color });
+  }
+  return fills.get(key);
+}
+
+function provinceStyle(g, rings, cls, fills = null) {
   const has = name => cls.includes(name);
   let fill = null, line = null, dash = null;
   if (has('fogged')) fill = [0x101114, 0.6];
@@ -3995,7 +4057,11 @@ function provinceStyle(g, rings, cls) {
   if (has('origin')) { fill = [0xfff8e6, 0.2]; line = [0xfff8e6, 2.6]; dash = null; }
   if (has('legal')) { fill = [0x2c4a86, 0.34]; line = [0x172c5c, 1.5]; dash = [4, 2]; }
   if (has('target')) { fill = [0xb3311f, 0.36]; line = [0xb3311f, 2.8]; dash = null; }
-  if (fill) { g.lineStyle(0); g.beginFill(fill[0], fill[1]); fillRings(g, rings); g.endFill(); }
+  if (fill && fills) {
+    const shade = shadeFor(fills, fill[0], fill[1]).g;
+    shade.lineStyle({ width: 5, color: fill[0], alpha: 1, join: PIXI.LINE_JOIN.ROUND });
+    shade.beginFill(fill[0], 1); fillRings(shade, rings); shade.endFill();
+  } else if (fill) { g.lineStyle(0); g.beginFill(fill[0], fill[1]); fillRings(g, rings); g.endFill(); }
   if (line) {
     g.lineStyle({ width: line[1], color: line[0], join: PIXI.LINE_JOIN.ROUND, cap: PIXI.LINE_CAP.ROUND });
     for (const ring of rings) {
@@ -4030,7 +4096,7 @@ function pixiText(text, size, color, bold = true, stroke = null) {
   return t;
 }
 
-function shieldGraphic(color, count, scale) {
+function shieldGraphic(color, count, scale, textColor = 0xfff8e6) {
   const box = new PIXI.Container();
   const g = new PIXI.Graphics();
   g.lineStyle({ width: 0.75, color: INK, join: PIXI.LINE_JOIN.ROUND });
@@ -4042,11 +4108,47 @@ function shieldGraphic(color, count, scale) {
   g.moveTo(-3.4, -4); g.lineTo(3.4, -4);
   box.addChild(g);
   if (count !== null) {
-    const label = pixiText(String(count), 6.6, 0xfff8e6);
+    const label = pixiText(String(count), 6.6, textColor);
     label.position.set(0, 0.3);
     box.addChild(label);
   }
   box.scale.set(scale);
+  return box;
+}
+
+function bridgeGraphic(b) {
+  const box = new PIXI.Container();
+  box.position.set(b.x, b.y);
+  const g = new PIXI.Graphics();
+  if (b.status === 'none') {
+    // A parchment sign: an arch of a bridge, struck through.
+    g.lineStyle({ width: 0.7, color: INK });
+    g.beginFill(0xf2e6c8); g.drawCircle(0, 0, 4.6); g.endFill();
+    g.lineStyle({ width: 0.9, color: 0x6f4a22, cap: PIXI.LINE_CAP.ROUND });
+    g.moveTo(-2.8, 1.2); g.quadraticCurveTo(0, -2.6, 2.8, 1.2);
+    g.moveTo(-1.4, 0); g.lineTo(-1.4, 1.6); g.moveTo(1.4, 0); g.lineTo(1.4, 1.6);
+    g.lineStyle({ width: 0.9, color: 0xb3311f, cap: PIXI.LINE_CAP.ROUND });
+    g.moveTo(-3.1, -3.1); g.lineTo(3.1, 3.1);
+    box.addChild(g);
+    return box;
+  }
+  // Planks across the river along the road.
+  g.rotation = b.angle;
+  const building = b.status === 'building';
+  g.lineStyle(0);
+  g.beginFill(building ? 0xc9a23a : 0x8a5a2b, building ? 0.55 : 1);
+  g.drawRect(-5, -2.2, 10, 4.4);
+  g.endFill();
+  g.lineStyle({ width: 0.45, color: INK, alpha: 0.8 });
+  for (let x = -4; x <= 4; x += 2) { g.moveTo(x, -2.2); g.lineTo(x, 2.2); }
+  g.lineStyle({ width: 0.8, color: 0x3d2614 });
+  g.moveTo(-5.4, -2.5); g.lineTo(5.4, -2.5);
+  g.moveTo(-5.4, 2.5); g.lineTo(5.4, 2.5);
+  if (building) {
+    g.lineStyle({ width: 0.6, color: INK, alpha: 0.9 });
+    g.moveTo(-3, -5); g.lineTo(3, 5); g.moveTo(3, -5); g.lineTo(-3, 5);
+  }
+  box.addChild(g);
   return box;
 }
 
@@ -4155,11 +4257,14 @@ function drawPixiMap(scene, key) {
   const borders = new PIXI.Graphics();
   borders.lineStyle({ width: 0.5, color: INK, alpha: 0.6 });
   const states = new PIXI.Graphics();
+  const fills = new Map();
   for (const p of scene.provinces) {
     const r = provinceRings(p.id);
     for (const ring of r) dashedLine(borders, ring, 2.2, 1.8, true);
-    provinceStyle(states, r, p.cls);
+    provinceStyle(states, r, p.cls, fills);
   }
+  const shades = new PIXI.Container();
+  for (const f of fills.values()) shades.addChild(f.box);
 
   const castles = new PIXI.Container();
   for (const c of scene.castles) {
@@ -4181,6 +4286,10 @@ function drawPixiMap(scene, key) {
   }
   lanes.lineStyle({ width: 2.5, color: 0xb3311f, cap: PIXI.LINE_CAP.ROUND });
   for (const lane of [...scene.lanes.filter(l => l.active), ...scene.routes]) dashedLine(lanes, [[lane.a.x, lane.a.y], [lane.b.x, lane.b.y]], 5, 3);
+
+  // Rivers on the roads: a bridge, a bridge being built, or a sign that one is needed.
+  const bridges = new PIXI.Container();
+  for (const b of scene.bridges || []) bridges.addChild(bridgeGraphic(b));
 
   const nodes = new PIXI.Graphics();
   for (const w of scene.waypoints) {
@@ -4213,13 +4322,20 @@ function drawPixiMap(scene, key) {
     s.position.set(tk.x, tk.y);
     tokens.addChild(s);
   }
-  pixiMap.scene.addChild(wash, rings, borders, states, castles, lanes, nodes, labels, tokens);
+  pixiMap.scene.addChild(wash, rings, shades, borders, states, castles, lanes, bridges, nodes, labels, tokens);
 
   // Hosts on the march: one figure per order, moved every frame.
   for (const child of pixiMap.movers.removeChildren()) child.destroy({ children: true });
   for (const order of snapshot.game.orders || []) {
     if (order.status !== 'PENDING' || !Array.isArray(order.action?.path) || order.action.path.length < 2) continue;
-    const s = shieldGraphic(colors[order.action.house] || '#2b1b12', Number(order.action.warriors || 0), 1.1);
+    // Fresh recruits walking to the muster are white, with a ribbon of their House.
+    const s = shieldGraphic(order.levy ? '#f7f0dc' : (colors[order.action.house] || '#2b1b12'), Number(order.action.warriors || 0), 1.1, order.levy ? INK : 0xfff8e6);
+    if (order.levy) {
+      const ribbon = new PIXI.Graphics();
+      ribbon.lineStyle({ width: 0.5, color: INK });
+      ribbon.beginFill(hex(colors[order.action.house])); ribbon.drawRect(-5, -8.8, 10, 2.4); ribbon.endFill();
+      s.addChild(ribbon);
+    }
     s.orderId = order.id;
     const mark = markOrder(order);
     if (mark) s.addChild(leaderBadge(mark));
@@ -4241,7 +4357,8 @@ function drawPixiMap(scene, key) {
 // ---------- battles on the map ----------
 // For a while after a battle its place shows crossed swords in a cloud of
 // dust, out of which blades, spears, hands, men and horses keep poking.
-const BATTLE_SHOW_MS = 120_000;
+// A battle is settled at once: the dust hangs a few seconds and settles.
+const BATTLE_SHOW_MS = 9_000;
 const pixiBattles = new Map();
 
 function battleSpots() {
@@ -4330,7 +4447,7 @@ function animateBattles() {
   const now = Date.now(), t = now / 1000;
   for (const box of pixiBattles.values()) {
     const age = now - box.spot.at;
-    box.alpha = Math.max(0, Math.min(1, (BATTLE_SHOW_MS - age) / 15000));
+    box.alpha = Math.max(0, Math.min(1, (BATTLE_SHOW_MS - age) / 2500));
     for (const g of box.puffs) {
       g.position.set(g.base.x + Math.sin(t * g.base.speed + g.base.phase) * 1.4, g.base.y + Math.cos(t * g.base.speed * 1.3 + g.base.phase) * 1.1);
       g.scale.set(1 + Math.sin(t * 2 + g.base.phase) * 0.08);
@@ -4463,7 +4580,7 @@ function renderMap() {
     : snapshot.map.sea_edges;
 
   // The same picture is described once more for the WebGL layer.
-  const scene = pixiScene = { realms: realmIds, ports: [], provinces: [], castles: [], lanes: [], routes: [], waypoints: [], ribbons: [], notes: [], tokens: [], dx: 0, dy: 0 };
+  const scene = pixiScene = { realms: realmIds, ports: [], provinces: [], castles: [], lanes: [], routes: [], waypoints: [], ribbons: [], notes: [], tokens: [], bridges: [], dx: 0, dy: 0 };
   const lines = [];
   // Where ports are built, the sea net shows only as far as it is known, and a
   // shore joins it only through its port.
@@ -4492,12 +4609,13 @@ function renderMap() {
 
   const waypointNodes = Object.entries(seaWaypoints).filter(([id]) => seaKnown(id)).map(([id,point]) => {
     const seaState = state.sea_nodes?.[id] || {owner:null, warriors:{}};
-    const owner = seaState.owner;
-    const rawTotal = Object.values(seaState.warriors || {})
-      .reduce((sum,value) => sum + Number(value || 0), 0);
-    const total = Math.max(0, rawTotal - pendingOutgoingAt(id, owner));
+    // Fleets of several Houses may lie at one sea point: one shield each.
+    const fleets = Object.entries(seaState.warriors || {})
+      .map(([who, n]) => [who, Math.max(0, Number(n || 0) - pendingOutgoingAt(id, who))])
+      .filter(([, n]) => n > 0)
+      .sort((x, y) => (x[0] === house ? -1 : y[0] === house ? 1 : x[0].localeCompare(y[0])));
     const classes = ['sea-node'];
-    const ownMovable = owner === house && warriorsAt(id, house) > 0;
+    const ownMovable = warriorsAt(id, house) > 0;
     if (!origin && ownMovable) classes.push('selectable');
     if (id === origin) classes.push('origin');
     if (origin && legalTargets.has(id)) classes.push('legal');
@@ -4511,9 +4629,12 @@ function renderMap() {
         <circle class="sea-hit" r="9"></circle>
         <circle class="selection-ring" r="8"></circle>
         <circle class="sea-waypoint${active}" r="2.6"></circle>
-        ${total ? shieldToken(0, -1, colors[owner] || '#2c4a86', total, 0.9, `data-lens-at="${id}"`, owner) : ''}
+        ${fleets.map(([who, n], i) => {
+          const svg = shieldToken((i - (fleets.length - 1) / 2) * 9, -1, colors[who] || '#2c4a86', n, 0.9, `data-lens-at="${id}"`, who);
+          if (scene && scene.tokens.length) scene.tokens[scene.tokens.length - 1].mark = leaderMark(id, who);
+          return svg;
+        }).join('')}
       </g>`;
-    if (scene && total && scene.tokens.length) scene.tokens[scene.tokens.length - 1].mark = leaderMark(id, owner);
     if (scene) scene.dx = scene.dy = 0;
     return html;
   });
@@ -4597,9 +4718,22 @@ function renderMap() {
         '</g>';
     });
 
+  // River crossings on known roads: a click opens the bridge choices.
+  const bridgeSpots = Object.entries(state.river_crossings || {})
+    .filter(([, c]) => !explored || explored.has(c.a) || explored.has(c.b))
+    .map(([key, c]) => {
+      const bridge = state.bridges?.[key];
+      const status = bridge?.built ? 'built' : bridge?.ready_at ? 'building' : 'none';
+      const a = coords[c.a], b = coords[c.b];
+      const angle = a && b ? Math.atan2(b.y - a.y, b.x - a.x) : 0;
+      scene.bridges.push({ x: c.x, y: c.y, status, angle });
+      const title = status === 'built' ? 'Мост' : status === 'building' ? 'Мост строится' : 'Моста нет: реку не перейти. Нажми, чтобы построить';
+      return `<g class="bridge-spot" data-bridge="${escapeHtml(key)}" transform="translate(${c.x} ${c.y})"><title>${title}</title><circle r="5.5" fill="transparent"></circle></g>`;
+    });
+
   pixiScene = null;
   // The SVG is rebuilt only when something on it has changed.
-  const svgKey = JSON.stringify([usePixi, origin, target, house, [...legalTargets], explored ? [...explored] : null, state.territories, state.sea_nodes, state.guests, state.armies, (snapshot.game.orders || []).filter(o => o.status === 'PENDING').map(o => [o.id, o.action?.warriors, Boolean(o.halted), o.action?.to]), activePath, abandonedHouses()]);
+  const svgKey = JSON.stringify([usePixi, origin, target, house, [...legalTargets], explored ? [...explored] : null, state.territories, state.sea_nodes, state.guests, state.armies, state.bridges || null, (snapshot.game.orders || []).filter(o => o.status === 'PENDING').map(o => [o.id, o.action?.warriors, Boolean(o.halted), o.action?.to]), activePath, abandonedHouses()]);
   if (usePixi) drawPixiMap(scene, svgKey);
   // Known waters clear too: sea waypoints have no painted shape, only a point.
   updateClouds(explored, art, { ...coords, ...(snapshot.map.sea_waypoints || {}) });
@@ -4607,7 +4741,7 @@ function renderMap() {
   lastSvgKey = svgKey;
   $('map').classList.toggle('pixi-on', usePixi);
   live.innerHTML = usePixi
-    ? zones.join('') + waypointNodes.join('') + `<g class="map-tokens">${tokens.join('')}</g>` + movingArmies.join('')
+    ? zones.join('') + waypointNodes.join('') + `<g class="map-tokens">${tokens.join('')}</g>` + movingArmies.join('') + bridgeSpots.join('')
     : realms.join('') +
     `<g class="province-borders">${borders.join('')}</g>` +
     zones.join('') +
@@ -4616,7 +4750,7 @@ function renderMap() {
     waypointNodes.join('') +
     `<g class="map-ribbons">${ribbons.join('')}</g>` +
     `<g class="map-tokens">${tokens.join('')}</g>` +
-    movingArmies.join('');
+    movingArmies.join('') + bridgeSpots.join('');
 
   live.querySelectorAll('.province, .sea-node').forEach(node => {
     node.addEventListener('click', () => {
@@ -4997,7 +5131,7 @@ async function selectArmy(id) {
   if (fieldRedirect) { await redirectField(id); return; }
   if (origin && id !== origin && legal.some(a => a.from === origin && a.to === id)) {
     // Another House's army is a goal like its land.
-    if (nodeOwner(id) !== house || warriorsAt(id, house) < 1) { await selectTerritory(id); return; }
+    if (!holdsHere(id)) { await selectTerritory(id); return; }
   }
   if (warriorsAt(id, house) < 1) { await selectTerritory(id); return; }
   viaPoints = [];
@@ -5274,7 +5408,7 @@ async function refresh() {
   }
 
   if (origin) {
-    const stillOwned = nodeOwner(origin) === house && warriorsAt(origin, house) > 0;
+    const stillOwned = holdsHere(origin);
     if (!stillOwned) {
       origin = null;
       target = null;

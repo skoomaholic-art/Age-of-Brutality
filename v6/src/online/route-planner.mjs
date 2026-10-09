@@ -60,10 +60,8 @@ function graph(map, timing) {
 export function canPassThrough(state,map,house,node,destination) {
   if (node === destination) return true;
 
-  if (isSeaWaypoint(map,node)) {
-    const owner = onlinePositionOwner(state,node);
-    return owner === null || owner === house;
-  }
+  // Nobody bars the open sea: fleets sail past one another.
+  if (isSeaWaypoint(map,node)) return true;
 
   const owner = onlinePositionOwner(state,node);
   // Our own land, or the land of a House that gave us right of passage.
@@ -77,14 +75,27 @@ export function portOpen(state,map,id) {
   return Boolean(state.territories?.[id]?.port) || (map.starting_ports || []).includes(id);
 }
 
+// A road crossing a river is passable only over a finished bridge.
+// Games made before bridges have no crossings recorded: every road is open.
+export function crossingKey(a,b) {
+  return [String(a),String(b)].sort().join('|');
+}
+
+export function bridgeOpen(state,a,b) {
+  const key=crossingKey(a,b);
+  if(!state.river_crossings?.[key]) return true;
+  return Boolean(state.bridges?.[key]?.built);
+}
+
 function seaStepAllowed(state,map,from,to,mode) {
+  if(mode==='LAND') return bridgeOpen(state,from,to);
   if(mode!=='SEA' || !map.buildable_ports) return true;
   if(isSeaWaypoint(map,from)) return true;
   return portOpen(state,map,from);
 }
 
 function destinationAllowed(state,map,house,to) {
-  // A sea point held by another fleet can be sailed into: that is a sea battle.
+  // Any sea point can be sailed into; fleets there share the water.
   if (isSeaWaypoint(map,to)) return true;
   return Boolean(state.territories?.[to]);
 }
@@ -130,7 +141,7 @@ export function findOnlineRoute(
   if (!g.has(from) || !g.has(to)) return null;
   if (!destinationAllowed(state,map,house,to)) return null;
 
-  const owner=onlinePositionOwner(state,from);
+  const owner=isSeaWaypoint(map,from) && onlinePositionWarriors(state,from,house)>0 ? house : onlinePositionOwner(state,from);
   // A march starts from our own land or fleet, or from a camp of our guests.
   const camped=owner!==house && guestWarriors(state,from,house)>0;
   // An army already out on the road (`free`) may set off from any crossroads.
@@ -225,7 +236,7 @@ export function listReachableOnlineRoutes(
   if (!constants.houses.includes(house)) return [];
   const g=graph(map,timing);
   if (!g.has(from)) return [];
-  const owner=onlinePositionOwner(state,from);
+  const owner=isSeaWaypoint(map,from) && onlinePositionWarriors(state,from,house)>0 ? house : onlinePositionOwner(state,from);
   const camped=owner!==house && guestWarriors(state,from,house)>0;
   if ((owner!==house && !camped) || onlinePositionWarriors(state,from,house)<1) return [];
 

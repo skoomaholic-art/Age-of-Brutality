@@ -1,5 +1,6 @@
 // The levy, the drill and the drill yard as commands, and their clock.
 import { queueTimedOrder } from './orders.mjs';
+import { processBridges } from './bridges.mjs';
 import {
   DRILL, LEVY, RANKS, YARD, compAt, compSum, drawLevy, drillTime, drillableComp, drillingCount,
   emptyComp, levyView, promote, reconcileRanks, yardOf, yardReady, yardTime, describeComp
@@ -60,9 +61,13 @@ export function raiseLevy(game, map, constants, house, counts, { nowMs = Date.no
     const ranks = emptyComp();
     ranks[march.rank] = march.count;
     try {
-      next = queueTimedOrder(next, map, constants, {
+      const queued = queueTimedOrder(next, map, constants, {
         type: 'MARCH', mode: 'LAND', house, from: march.territory, to: capital, warriors: march.count, ranks
-      }, { nowMs }).game;
+      }, { nowMs });
+      next = queued.game;
+      // Fresh recruits on their way to the muster: shown as white shields.
+      const order = next.orders.find(item => item.id === queued.order.id);
+      if (order) order.levy = true;
     } catch {
       // A levy with no road home waits where it was raised.
     }
@@ -180,7 +185,8 @@ export function processRanks(game, map, nowMs = Date.now()) {
     edit().state = probe;
   }
   if (next) next.updated_at = new Date(nowMs).toISOString();
-  return next || game;
+  // Bridges under construction keep the same clock.
+  return processBridges(next || game, nowMs);
 }
 
 export function ranksView(game, map, house, nowMs = Date.now()) {

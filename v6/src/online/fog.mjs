@@ -20,7 +20,7 @@ export function visiblePositions(state, map, house) {
     if (territory.owner === house) own.add(id);
   }
   for (const [id, node] of Object.entries(state.sea_nodes || {})) {
-    if (node.owner === house) own.add(id);
+    if (Number(node.warriors?.[house] || 0) > 0) own.add(id);
   }
   // A spy in place sees the land he watches and what lies around it.
   for (const id of Object.keys(state.spy_sight?.[house] || {})) own.add(id);
@@ -117,7 +117,7 @@ export function knownHouses(game, house, houses) {
 
 // What other Houses do in private: their marches, levies and building.
 const PRIVATE_EVENTS = new Set([
-  'LEVY_RAISED', 'DRILL_DONE', 'YARD_BUILT', 'RIDER_SENT',
+  'LEVY_RAISED', 'DRILL_DONE', 'YARD_BUILT', 'RIDER_SENT', 'SEA_TOLL', 'BRIDGE_STARTED',
   'MARCH_QUEUED',
   'MARCH',
   'ROUTE_MARCH',

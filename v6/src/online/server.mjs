@@ -32,6 +32,7 @@ import {
 } from './orders.mjs';
 import { normalizeOnlineSeaState } from './sea-navigation.mjs';
 import { raiseLevy, startDrill, buildYard, buildPort, processRanks, ranksView } from './levy.mjs';
+import { buildBridge, seedCrossings, BRIDGE } from './bridges.mjs';
 import { startRide, processRiders, ridersOf } from './riders.mjs';
 import { courtEffects } from './court.mjs';
 import {
@@ -207,6 +208,7 @@ async function mapArtFor(scope) {
         compass: null
       });
       return {
+        crossings: art.crossings || [],
         terrain: zlib.gzipSync(art.terrain),
         provinces: zlib.gzipSync(JSON.stringify({ bounds: art.bounds, provinces: art.provinces }))
       };
@@ -595,6 +597,8 @@ function redactGameForPlayer(game, player) {
   // The levy, the drill and the yard of one's own House.
   clientGame.ranks_view = player?.house ? ranksView(game, map, player.house) : null;
   clientGame.riders = player?.house ? ridersOf(game, player.house) : [];
+  // What a bridge over a river costs and how long it takes.
+  clientGame.bridge_cost = { gold: BRIDGE.gold, ms: Math.round((Number(game.rounds?.round_duration_ms) > 0 ? Number(game.rounds.round_duration_ms) : 24 * 3600_000) * BRIDGE.dayShare) };
   // What each lord of one's own House gives at court and with an army.
   clientGame.court_effects = Object.fromEntries(Object.values(game.state?.characters || {})
     .filter(character => character.house === player?.house)
@@ -852,6 +856,8 @@ async function createMultiplayerGame(body, profile = null) {
   if (mapSpec) {
     game.map_spec = mapSpec;
     game.lifecycle.houses = [...mapSpec.houses];
+    // Where roads meet rivers: no crossing there until a bridge is built.
+    seedCrossings(game.state, map, (await mapArtFor(scopeForSpec(mapSpec))).crossings);
   }
 
   const ctx = {
@@ -914,6 +920,8 @@ async function createSoloGame(body, profile = null) {
   if (mapSpec) {
     game.map_spec = mapSpec;
     game.lifecycle.houses = [...mapSpec.houses];
+    // Where roads meet rivers: no crossing there until a bridge is built.
+    seedCrossings(game.state, map, (await mapArtFor(scopeForSpec(mapSpec))).crossings);
   }
 
   const ctx = {
@@ -1656,7 +1664,7 @@ async function handleGameApi(req, res, url, ctx, subpath) {
     return json(res, result.status, result.response);
   }
 
-  if (req.method === 'POST' && ['/levy', '/drill', '/yard', '/port'].includes(subpath)) {
+  if (req.method === 'POST' && ['/levy', '/drill', '/yard', '/port', '/bridge'].includes(subpath)) {
     const body = await readBody(req);
     const house = String(body.house || '').trim();
     await requireHouse(ctx, req, house);
@@ -1669,6 +1677,7 @@ async function handleGameApi(req, res, url, ctx, subpath) {
         const next = subpath === '/levy' ? raiseLevy(game, map, constants, house, body.counts, { nowMs })
           : subpath === '/drill' ? startDrill(game, map, house, body.counts, { nowMs })
             : subpath === '/port' ? buildPort(game, map, house, String(body.territory || ''), { nowMs })
+              : subpath === '/bridge' ? buildBridge(game, map, house, String(body.key || ''), { nowMs })
               : buildYard(game, map, house, { nowMs });
         return { game: next, response: { ok: true } };
       }

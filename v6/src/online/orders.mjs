@@ -157,7 +157,6 @@ export function enumerateOnlineMarches(
 
   for(const id of Object.keys(map.sea_waypoints || {})) {
     if(
-      onlinePositionOwner(state,id)===house &&
       onlinePositionWarriors(state,id,house)>0
     ) origins.push(id);
   }
@@ -359,6 +358,7 @@ function removeFromOnlineOrigin(next,action) {
     Number(source.warriors?.[action.house] || 0)-action.warriors;
   if(source.warriors[action.house]<=0) {
     delete source.warriors[action.house];
+    if(source.days_at_sea) delete source.days_at_sea[action.house];
   }
 
   if(next.sea_nodes?.[action.from]) {
@@ -366,54 +366,6 @@ function removeFromOnlineOrigin(next,action) {
       .filter(h=>Number(source.warriors[h] || 0)>0);
     source.owner=houses.length===1 ? houses[0] : null;
   }
-}
-
-// A fleet sails into a sea point held by another House: they fight there.
-// No dice: ranks add up as strength, the weakest fall first. The beaten
-// defender's ships are scattered; a beaten attacker sails home.
-function seaBattle(next,before,map,constants,action,target) {
-  const defender=target.owner;
-  const defenders=Number(target.warriors?.[defender] || 0);
-  const attackerStrength=strengthOf(action.ranks,Number(action.warriors))+BATTLE_DIE;
-  const defenderStrength=strengthOf(before.ranks?.[action.to]?.[defender],defenders)+BATTLE_DIE;
-  const attackerLosses=Math.min(action.warriors,headsLost(action.ranks,action.warriors,Math.ceil(defenderStrength/2)));
-  const defenderLosses=Math.min(defenders,headsLost(before.ranks?.[action.to]?.[defender],defenders,Math.ceil(attackerStrength/2)));
-  const attackerSurvivors=action.warriors-attackerLosses;
-  const defenderSurvivors=defenders-defenderLosses;
-  const attackerWins=attackerStrength>defenderStrength && attackerSurvivors>0;
-  if(attackerWins) {
-    target.warriors={[action.house]:attackerSurvivors};
-    target.owner=action.house;
-  } else {
-    if(defenderSurvivors>0) target.warriors[defender]=defenderSurvivors;
-    else { delete target.warriors[defender]; target.owner=null; }
-    // The survivors sail back where they came from.
-    const home=next.territories?.[action.from] || next.sea_nodes?.[action.from];
-    if(home && attackerSurvivors>0) {
-      home.warriors[action.house]=Number(home.warriors?.[action.house] || 0)+attackerSurvivors;
-      if(next.sea_nodes?.[action.from]) home.owner=action.house;
-    }
-  }
-  next.journal.push({
-    kind:'BATTLE',
-    naval:true,
-    attacker:action.house,
-    defender,
-    from:action.from,
-    to:action.to,
-    attackerStrength,
-    defenderStrength,
-    attackerWins,
-    attackerLosses,
-    defenderLosses,
-    attackerSurvivors,
-    defenderSurvivors,
-    captured:attackerWins,
-    defenderRetreatTo:null,
-    attackerDie:BATTLE_DIE,
-    defenderDie:BATTLE_DIE
-  });
-  return next;
 }
 
 function moveToSeaWaypoint(state,map,constants,action) {
@@ -424,10 +376,7 @@ function moveToSeaWaypoint(state,map,constants,action) {
   if(!target || !isSeaWaypoint(map,action.to)) {
     throw new Error('route destination is not a sea waypoint');
   }
-  if(target.owner && target.owner!==action.house) {
-    return seaBattle(next,state,map,constants,action,target);
-  }
-
+  // No battles at sea: fleets of different Houses share the water.
   const current=Number(target.warriors?.[action.house] || 0);
   if(current+action.warriors>constants.territory_warrior_cap) {
     throw new Error(
@@ -435,8 +384,14 @@ function moveToSeaWaypoint(state,map,constants,action) {
     );
   }
 
-  target.owner=action.house;
   target.warriors[action.house]=current+action.warriors;
+  const afloat=Object.keys(target.warriors).filter(h=>Number(target.warriors[h] || 0)>0);
+  target.owner=afloat.length===1 ? afloat[0] : null;
+  // Since when this House's men have been out at sea here (for the toll of the sea).
+  // Dawns this House's men have spent out at sea: carried from point to point.
+  const carried=Number(state.sea_nodes?.[action.from]?.days_at_sea?.[action.house] || 0);
+  target.days_at_sea ||= {};
+  target.days_at_sea[action.house]=Math.max(Number(target.days_at_sea[action.house] || 0),carried);
   next.journal.push({
     kind:'ROUTE_MARCH',
     house:action.house,

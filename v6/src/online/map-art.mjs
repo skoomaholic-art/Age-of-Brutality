@@ -327,7 +327,7 @@ export function buildMapArt(map, options = {}) {
 
   // ---------- roads ----------
 
-  function roadPath(a, b, seed) {
+  function roadCurve(a, b, seed) {
     const random = seeded(seed);
     const dx = b.x - a.x;
     const dy = b.y - a.y;
@@ -338,10 +338,50 @@ export function buildMapArt(map, options = {}) {
     const bend2 = (random() - 0.5) * length * 0.16;
     const p1 = [a.x + dx * 0.33 + nx * bend, a.y + dy * 0.33 + ny * bend];
     const p2 = [a.x + dx * 0.66 + nx * bend2, a.y + dy * 0.66 + ny * bend2];
-    return `M${f1(a.x)} ${f1(a.y)}C${f1(p1[0])} ${f1(p1[1])} ${f1(p2[0])} ${f1(p2[1])} ${f1(b.x)} ${f1(b.y)}`;
+    return [[a.x, a.y], p1, p2, [b.x, b.y]];
+  }
+
+  function roadPath(a, b, seed) {
+    const [p0, p1, p2, p3] = roadCurve(a, b, seed);
+    return `M${f1(p0[0])} ${f1(p0[1])}C${f1(p1[0])} ${f1(p1[1])} ${f1(p2[0])} ${f1(p2[1])} ${f1(p3[0])} ${f1(p3[1])}`;
   }
 
   const roads = segments.map((segment, index) => roadPath(segment.a, segment.b, 700 + index));
+
+  // Where a road meets a river: a bridge is needed there to cross.
+  function crossPoint(p, q, r, s) {
+    const d = (q[0] - p[0]) * (s[1] - r[1]) - (q[1] - p[1]) * (s[0] - r[0]);
+    if (Math.abs(d) < 1e-9) return null;
+    const t = ((r[0] - p[0]) * (s[1] - r[1]) - (r[1] - p[1]) * (s[0] - r[0])) / d;
+    const u = ((r[0] - p[0]) * (q[1] - p[1]) - (r[1] - p[1]) * (q[0] - p[0])) / d;
+    if (t < 0 || t > 1 || u < 0 || u > 1) return null;
+    return [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t];
+  }
+  const crossings = [];
+  segments.forEach((segment, index) => {
+    if (!segment.a || !segment.b) return;
+    const [p0, p1, p2, p3] = roadCurve(segment.a, segment.b, 700 + index);
+    const line = [];
+    for (let i = 0; i <= 32; i += 1) {
+      const t = i / 32, m = 1 - t;
+      line.push([
+        m * m * m * p0[0] + 3 * m * m * t * p1[0] + 3 * m * t * t * p2[0] + t * t * t * p3[0],
+        m * m * m * p0[1] + 3 * m * m * t * p1[1] + 3 * m * t * t * p2[1] + t * t * t * p3[1]
+      ]);
+    }
+    let found = null;
+    for (const river of rivers) {
+      for (let i = 0; i + 1 < line.length && !found; i += 1) {
+        for (let j = 0; j + 1 < river.length && !found; j += 1) {
+          const hit = crossPoint(line[i], line[i + 1], river[j], river[j + 1]);
+          // Not right at a town: a river bent away from it never truly reaches its gate.
+          if (hit) found = hit;
+        }
+      }
+      if (found) break;
+    }
+    if (found) crossings.push({ a: segment.a.id, b: segment.b.id, x: f1(found[0]), y: f1(found[1]) });
+  });
   const nearRoad = (x, y, reach) =>
     segments.some(segment => distToSegment(x, y, segment.a, segment.b) < reach);
   const nearestSiteDistance = (x, y) =>
@@ -599,6 +639,7 @@ export function buildMapArt(map, options = {}) {
     terrain,
     provinces,
     bounds: BOUNDS,
+    crossings,
     stats: { provinces: sites.length, trees: trees.length, fields: fields.length, rivers: rivers.length }
   };
 }
