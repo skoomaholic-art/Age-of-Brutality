@@ -4192,8 +4192,129 @@ function drawPixiMap(scene, key) {
   drawPixiHover();
 }
 
+// ---------- battles on the map ----------
+// For a while after a battle its place shows crossed swords in a cloud of
+// dust, out of which blades, spears, hands, men and horses keep poking.
+const BATTLE_SHOW_MS = 120_000;
+const pixiBattles = new Map();
+
+function battleSpots() {
+  const coords = routeCoordinates();
+  const now = Date.now();
+  const out = [];
+  for (const item of snapshot?.game?.audit_log || []) {
+    if (item.type !== 'BATTLE' && item.type !== 'FIELD_BATTLE') continue;
+    const d = item.details || {};
+    const at = Date.parse(d.completed_at || d.at || '');
+    if (!Number.isFinite(at) || now - at > BATTLE_SHOW_MS || now < at - 5000) continue;
+    let pos = coords[d.territory_id] || coords[d.place_node];
+    if (!pos && coords[d.place_from] && coords[d.place_to]) pos = { x: (coords[d.place_from].x + coords[d.place_to].x) / 2, y: (coords[d.place_from].y + coords[d.place_to].y) / 2 };
+    if (pos) out.push({ key: item.type + '@' + (d.completed_at || d.at) + '@' + (d.territory_id || d.place_node || d.place_from), x: pos.x, y: pos.y, at });
+  }
+  return out;
+}
+
+function swordGraphic(spear = false) {
+  const g = new PIXI.Graphics();
+  if (spear) {
+    g.lineStyle({ width: 0.7, color: 0x6b4a2a, cap: PIXI.LINE_CAP.ROUND });
+    g.moveTo(0, 5); g.lineTo(0, -5);
+    g.lineStyle({ width: 0.4, color: INK });
+    g.beginFill(0xd9d4c8); g.drawPolygon([0, -8, 1.3, -5, -1.3, -5]); g.endFill();
+  } else {
+    g.lineStyle({ width: 0.4, color: INK });
+    g.beginFill(0xe4e0d6); g.drawPolygon([-0.7, -6, 0, -7.5, 0.7, -6, 0.7, 2, -0.7, 2]); g.endFill();
+    g.beginFill(0xc9a23a); g.drawRect(-2.4, 2, 4.8, 0.9); g.endFill();
+    g.beginFill(0x6b4a2a); g.drawRect(-0.5, 2.9, 1, 2.2); g.endFill();
+  }
+  return g;
+}
+
+function popperThing(kind) {
+  if (kind === 'sword' || kind === 'spear') return swordGraphic(kind === 'spear');
+  if (kind === 'horse') { const h = pixiText('♞', 9, 0x3a2a1c, false); return h; }
+  const file = kind === 'hand' ? 'live-hand-' + (1 + Math.floor(Math.random() * 15)) : 'live-soldier-' + (1 + Math.floor(Math.random() * 3));
+  const s = new PIXI.Sprite(pixiTexture(file));
+  s.anchor.set(0.5);
+  s.width = kind === 'hand' ? 9 : 5;
+  s.height = kind === 'hand' ? 4.6 : 12;
+  return s;
+}
+
+function makeBattle(spot) {
+  const box = new PIXI.Container();
+  box.position.set(spot.x, spot.y);
+  const puff = () => {
+    const g = new PIXI.Graphics();
+    g.beginFill(0xb59d6e, 0.6); g.drawCircle(0, 0, 3.5 + Math.random() * 3); g.endFill();
+    g.beginFill(0xe2d4b0, 0.45); g.drawCircle(-1, -1, 2.2 + Math.random() * 1.8); g.endFill();
+    return g;
+  };
+  const back = new PIXI.Container(), mid = new PIXI.Container(), front = new PIXI.Container();
+  const puffs = [];
+  for (let i = 0; i < 9; i += 1) {
+    const g = puff();
+    const a = (i / 9) * Math.PI * 2;
+    g.base = { x: Math.cos(a) * 8, y: Math.sin(a) * 5.5, phase: Math.random() * 6.3, speed: 1.4 + Math.random() };
+    (i % 2 ? front : back).addChild(g);
+    puffs.push(g);
+  }
+  const core = puff(); core.scale.set(1.5); core.base = { x: 0, y: 0, phase: 1, speed: 1 }; back.addChild(core); puffs.push(core);
+  const swords = new PIXI.Container();
+  const s1 = swordGraphic(); s1.rotation = 0.65; const s2 = swordGraphic(); s2.rotation = -0.65;
+  swords.addChild(s1, s2);
+  swords.position.set(0, -11);
+  box.addChild(back, mid, front, swords);
+  box.puffs = puffs;
+  box.mid = mid;
+  box.swords = swords;
+  box.spot = spot;
+  box.poppers = [];
+  return box;
+}
+
+const POP_KINDS = ['sword', 'spear', 'hand', 'man', 'horse', 'sword', 'hand', 'spear'];
+function animateBattles() {
+  if (!pixiMap.layer || !snapshot) return;
+  pixiMap.battles ||= (() => { const c = new PIXI.Container(); pixiMap.layer.addChild(c); return c; })();
+  const spots = battleSpots();
+  const keys = new Set(spots.map(s => s.key));
+  for (const [key, box] of pixiBattles) if (!keys.has(key)) { pixiMap.battles.removeChild(box); box.destroy({ children: true }); pixiBattles.delete(key); }
+  for (const spot of spots) if (!pixiBattles.has(spot.key)) { const b = makeBattle(spot); pixiBattles.set(spot.key, b); pixiMap.battles.addChild(b); }
+  const now = Date.now(), t = now / 1000;
+  for (const box of pixiBattles.values()) {
+    const age = now - box.spot.at;
+    box.alpha = Math.max(0, Math.min(1, (BATTLE_SHOW_MS - age) / 15000));
+    for (const g of box.puffs) {
+      g.position.set(g.base.x + Math.sin(t * g.base.speed + g.base.phase) * 1.4, g.base.y + Math.cos(t * g.base.speed * 1.3 + g.base.phase) * 1.1);
+      g.scale.set(1 + Math.sin(t * 2 + g.base.phase) * 0.08);
+    }
+    box.swords.rotation = Math.sin(t * 6) * 0.08;
+    // Something pokes out of the dust now and then.
+    if (box.poppers.length < 3 && Math.random() < 0.1) {
+      const kind = POP_KINDS[Math.floor(Math.random() * POP_KINDS.length)];
+      const thing = popperThing(kind);
+      const a = Math.random() * Math.PI * 2;
+      thing.dir = { x: Math.cos(a), y: Math.sin(a) * 0.7 };
+      thing.born = now;
+      thing.rotation = a + Math.PI / 2 + (Math.random() - 0.5) * 0.6;
+      box.mid.addChild(thing);
+      box.poppers.push(thing);
+    }
+    box.poppers = box.poppers.filter(thing => {
+      const life = (now - thing.born) / 900;
+      if (life >= 1) { thing.destroy(); return false; }
+      const out = Math.sin(life * Math.PI);
+      thing.position.set(thing.dir.x * (4 + out * 8), thing.dir.y * (4 + out * 8));
+      thing.alpha = Math.min(1, out * 2);
+      return true;
+    });
+  }
+}
+
 function movePixiArmies() {
   if (!pixiMap.movers || !snapshot) return;
+  animateBattles();
   // Lords riding to their armies: a little gold shield with a horse.
   pixiMap.riders ||= (() => { const c = new PIXI.Container(); pixiMap.layer.addChild(c); return c; })();
   const riders = snapshot.game.riders || [];
