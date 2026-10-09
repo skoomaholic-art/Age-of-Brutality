@@ -94,9 +94,17 @@ function deadlinePassed(game, nowMs) {
   return Boolean(deadline) && Date.parse(deadline) <= nowMs;
 }
 
+// The treasurer's account of a dawn for every House: what came in, what went out.
+function purse(state) {
+  return Object.fromEntries(Object.entries(state.houses || {}).map(([h, p]) => [h, { gold: Number(p.gold || 0), influence: Number(p.influence || 0), glory: Number(p.victory_points || 0) }]));
+}
+
 function beginRound(next, map, constants, number, nowMs, timing) {
   const rounds = next.rounds;
+  const before = purse(next.state);
+  const journalStart = next.state.journal.length;
   const income = applyIncomePulse(next.state, map, constants);
+  const landGains = structuredClone(income.gains || {});
   // The lords at court and with the armies give or cost at every dawn.
   const court = applyCourtDawn(income.state, rounds.houses || constants.houses, map.capitals);
   for (const [house, add] of Object.entries(court)) {
@@ -105,6 +113,7 @@ function beginRound(next, map, constants, number, nowMs, timing) {
     income.gains[house].influence = Number(income.gains[house].influence || 0) + add.influence;
   }
   next.state = income.state;
+  const afterIncome = purse(next.state);
   // Men long out at sea sicken and drown: the toll of the sea, every dawn.
   applySeaToll(next.state, nowMs);
   // A game of the Heart: the wild guard grows back, the Heart pays its holder.
@@ -112,9 +121,32 @@ function beginRound(next, map, constants, number, nowMs, timing) {
   // Lands with fields or a fair gain people.
   if (number > 1) populationDawn(next.state, map);
   // The troops are paid; the unpaid desert.
+  const beforeUpkeep = purse(next.state);
   if (number > 1) upkeepDawn(next, map, nowMs);
+  const afterUpkeep = purse(next.state);
   // Order settles, open choices fall to mercy, lands in deep disorder rise.
   if (number > 1) orderDawn(next.state, map, constants, nowMs);
+  const after = purse(next.state);
+  const fresh = next.state.journal.slice(journalStart);
+  const ledgers = {};
+  for (const house of Object.keys(after)) {
+    const lands = landGains[house] || {};
+    ledgers[house] = {
+      gold_before: before[house]?.gold ?? 0,
+      lands_gold: Number(lands.gold || 0),
+      lands_influence: Number(lands.influence || 0),
+      court_gold: Number(court[house]?.gold || 0),
+      court_influence: Number(court[house]?.influence || 0),
+      upkeep: (beforeUpkeep[house]?.gold ?? 0) - (afterUpkeep[house]?.gold ?? 0),
+      disorder: (afterUpkeep[house]?.gold ?? 0) - (after[house]?.gold ?? 0),
+      deserted: fresh.filter(e => e.kind === 'DESERTION' && e.house === house).reduce((s, e) => s + Number(e.deserted || 0), 0),
+      sea_lost: fresh.filter(e => e.kind === 'SEA_TOLL' && e.house === house).reduce((s, e) => s + Number(e.lost || 0), 0),
+      revolts: fresh.filter(e => e.kind === 'REVOLT' && e.house === house).length,
+      glory: (after[house]?.glory ?? 0) - (afterIncome[house]?.glory ?? 0),
+      gold_after: after[house]?.gold ?? 0,
+      influence_after: after[house]?.influence ?? 0
+    };
+  }
 
   // A game day starts exactly when the previous one ended, even if the server
   // noticed late, so the days keep their length.
@@ -146,6 +178,7 @@ function beginRound(next, map, constants, number, nowMs, timing) {
   next.state.cycle = 1;
   next.state.journal.push({
     kind: 'ROUND_STARTED',
+    ledgers,
     at: rounds.started_at,
     mode: rounds.mode,
     round: number,

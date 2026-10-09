@@ -116,6 +116,7 @@ export function journalEntryToAudit(entry, map, game) {
         round: entry.round,
         deadline_at: entry.deadline_at || null,
         gains: entry.gains,
+        ledgers: entry.ledgers || null,
         at: entry.at || null
       }
     };

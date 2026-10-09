@@ -646,6 +646,11 @@ function redactGameForPlayer(game, player) {
     clientGame.audit_log = clientGame.audit_log.filter(item => {
       if (item.visibility !== 'PRIVATE') return true;
       return item.details?.house === ownHouse;
+    }).map(item => {
+      // The treasurer's account of a dawn: each House sees only its own.
+      if (item.type !== 'ROUND_STARTED' || !item.details?.ledgers) return item;
+      const ledger = item.details.ledgers[ownHouse] || null;
+      return { ...item, details: { ...item.details, ledgers: undefined, gains: undefined, ledger } };
     });
 
     // Fog of war while a game played in days is running. A finished game is
