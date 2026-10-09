@@ -16,6 +16,11 @@ function roads(map) {
   return buildAdjacency(map.land_edges);
 }
 
+// Roads and sea lanes together: how the House reaches islands.
+function ways(map) {
+  return buildAdjacency([...(map.land_edges || []), ...(map.sea_lane_edges || [])]);
+}
+
 // Road distances from `start` over land, ignoring who owns what.
 function distances(map, adjacency, start) {
   const dist = new Map([[start, 0]]);
@@ -90,7 +95,7 @@ export function chooseGoal(game, map, house) {
   if ((state.hordes || []).some(h => h.against === house && h.men > 0) && state.territories[capital]?.owner === house) {
     return { kind: 'DEFEND', target: capital };
   }
-  const adjacency = roads(map);
+  const adjacency = ways(map);
   const own = ownLands(state, house);
   const fromCapital = distances(map, adjacency, capital || own[0]);
   const near = id => fromCapital.get(id) ?? 99;
@@ -109,25 +114,28 @@ export function chooseGoal(game, map, house) {
   free.sort((a, b) => (rings[b] || 1) - (rings[a] || 1) || near(a) - near(b) || (a < b ? -1 : 1));
   // Not too deep too soon: the deepest land no more than two roads from our own.
   const ownSet = new Set(own);
-  const reachable = free.filter(id => [...(adjacency.get(id) || [])].some(n => ownSet.has(n)));
+  const byRoad = roads(map);
+  const reachable = free.filter(id => [...(byRoad.get(id) || [])].some(n => ownSet.has(n)));
   return { kind: 'EXPAND', target: reachable[0] || free[0] };
 }
 
-// The plan: muster at the own land nearest the goal, strike the next land on the road.
-export function heartPlan(game, map, constants, house) {
+// The plan: muster at the own land nearest the goal, strike the next land on
+// the way. `destinations(stage)` lists the lands a march from the stage may
+// reach (by road or by sea); without it the next land by road is taken.
+export function heartPlan(game, map, constants, house, destinations = null) {
   const state = game.state;
   const goal = chooseGoal(game, map, house);
   if (!goal) return null;
-  const adjacency = roads(map);
   const own = ownLands(state, house);
   if (!own.length) return null;
-  const toGoal = distances(map, adjacency, goal.target);
+  const toGoal = distances(map, ways(map), goal.target);
   if (goal.kind === 'DEFEND' || goal.kind === 'HOLD') return { goal, stage: goal.target, target: null };
   const stage = [...own].sort((a, b) => (toGoal.get(a) ?? 99) - (toGoal.get(b) ?? 99) || (a < b ? -1 : 1))[0];
   if ((toGoal.get(stage) ?? 99) >= 99) return null;
-  // The next step: a neighbour of the stage one road nearer the goal, not our own.
-  const step = [...(adjacency.get(stage) || [])]
-    .filter(n => state.territories[n]?.owner !== house && (toGoal.get(n) ?? 99) < (toGoal.get(stage) ?? 99))
+  // The next step: a land a march from the stage can reach, nearer the goal, not our own.
+  const reach = destinations ? destinations(stage) : [...(roads(map).get(stage) || [])];
+  const step = reach
+    .filter(n => state.territories[n] && state.territories[n].owner !== house && (toGoal.get(n) ?? 99) < (toGoal.get(stage) ?? 99))
     .sort((a, b) => (toGoal.get(a) ?? 99) - (toGoal.get(b) ?? 99) || (a < b ? -1 : 1))[0];
   return { goal, stage, target: step || null };
 }

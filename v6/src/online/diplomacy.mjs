@@ -1,4 +1,5 @@
 import { houseCourtTotals } from './court.mjs';
+import { moveRanks } from './ranks.mjs';
 // Relations between Houses: neutral by default, war by deed, alliance by marriage.
 //
 // - Neutral Houses whose armies meet on the road go to war and fight.
@@ -504,15 +505,17 @@ function handOver(game, map, constants, giver, taker, items, nowMs) {
       const land = game.state.territories[item.territory];
       // The giver's garrison goes home to the capital, as many as find room there.
       const leaving = Number(land.warriors?.[giver] || 0);
-      if (land.warriors) delete land.warriors[giver];
       const capitalId = map?.capitals?.[giver];
       const capital = capitalId && game.state.territories[capitalId];
       if (leaving && capital && capital.owner === giver) {
         const here = Object.values(capital.warriors || {}).reduce((sum, value) => sum + Number(value || 0), 0);
         const room = Math.max(0, Number(constants?.territory_warrior_cap || 99) - here);
+        const home = Math.min(leaving, room);
+        moveRanks(game.state, map, item.territory, capitalId, giver, home, { losses: leaving - home });
         capital.warriors ||= {};
-        capital.warriors[giver] = Number(capital.warriors[giver] || 0) + Math.min(leaving, room);
-      }
+        capital.warriors[giver] = Number(capital.warriors[giver] || 0) + home;
+      } else if (leaving) moveRanks(game.state, map, item.territory, null, giver, 0, { losses: leaving });
+      if (land.warriors) delete land.warriors[giver];
       land.owner = taker;
     }
   }

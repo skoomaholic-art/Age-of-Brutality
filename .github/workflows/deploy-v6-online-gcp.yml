@@ -116,12 +116,12 @@ jobs:
             --service-account="${RUNTIME_SA}" \
             --no-invoker-iam-check \
             --ingress=all \
-            --min-instances=0 \
+            --min-instances=1 \
             --max-instances=1 \
             --cpu=1 \
             --memory=256Mi \
             --concurrency=40 \
-            --cpu-throttling \
+            --no-cpu-throttling \
             --set-env-vars="AOB_FIRESTORE_DATABASE=${FIRESTORE_DATABASE},AOB_GAME_ID=prototype-1,AOB_BUILD_SHA=${GITHUB_SHA}" \
             --quiet
 

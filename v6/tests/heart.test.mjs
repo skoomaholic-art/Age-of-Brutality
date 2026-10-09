@@ -205,3 +205,24 @@ test('chooseHearts always finds as many Hearts as the table needs, even when the
   assert.equal(picked.length, Math.min(HEART.maxDecoys, houses.length - 1) + 1);
   for (const id of picked) assert.equal(game.state.territories[id].owner, null);
 });
+
+test('the Horde sacks a capital it reaches but does not keep it: the House stands, poorer and without its guard', () => {
+  let game = withHearts();
+  const { candidates, truth } = game.state.heart;
+  const decoy = candidates.find(id => id !== truth);
+  game.state.territories[decoy].owner = H;
+  game.state.territories[decoy].warriors = { [H]: 1 };
+  delete game.state.wild_guards[decoy];
+  heartOnCapture(game, map, decoy, H, 100);
+  const horde = game.state.hordes[0];
+  for (const id of horde.path.slice(1, -1)) { game.state.territories[id].owner = null; game.state.wild_guards[id] = 1; }
+  game.state.territories[capital].warriors = { [H]: 2 };
+  game.state.houses[H].gold = 9;
+  game = processHordes(game, map, constants, 10_000_000);
+  assert.equal(game.state.territories[capital].owner, H, 'the capital is still ours');
+  assert.equal(game.state.territories[capital].warriors[H], undefined, 'the guard fell');
+  assert.equal(game.state.houses[H].gold, 4, 'half the purse burnt');
+  assert.ok(game.state.journal.some(e => e.kind === 'HORDE_SACKED'));
+  assert.equal(game.state.hordes.length, 0);
+  assert.deepEqual(validateState(game.state, map, constants), []);
+});

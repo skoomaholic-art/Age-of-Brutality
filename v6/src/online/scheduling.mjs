@@ -5,6 +5,7 @@ import { nextEncounterAt } from './encounters.mjs';
 import { nextCharacterDueAt } from './fate.mjs';
 import { nextAgentDueAt } from './agents.mjs';
 import { nextHordeDueAt } from './heart.mjs';
+import { nextBridgeDueAt } from './bridges.mjs';
 
 export function calculateNextDueAt(game) {
   if (game.lifecycle?.status !== 'RUNNING') return null;
@@ -25,6 +26,8 @@ export function calculateNextDueAt(game) {
   if (ranksAt) candidates.push(ranksAt);
   const hordeAt = nextHordeDueAt(game);
   if (hordeAt) candidates.push(hordeAt);
+  const bridgeAt = nextBridgeDueAt(game);
+  if (bridgeAt) candidates.push(bridgeAt);
   const riderAt = nextRiderDueAt(game);
   if (riderAt) candidates.push(riderAt);
 

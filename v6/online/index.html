@@ -2478,17 +2478,21 @@ function marriageWindow(other) {
 function warnBeforeMarch(master) {
   const dip = snapshot?.game?.diplomacy || {};
   const ally = relationWith(master) === 'ALLIANCE';
+  const truceUntil = dip.truces?.[master] ? Date.parse(dip.truces[master]) : NaN;
+  const truce = Number.isFinite(truceUntil) && truceUntil > Date.now();
   const open = (dip.passage_from || []).includes(master);
   const asked = (dip.passage_asked_out || []).includes(master);
   const land = mapNodeById(target)?.name || '';
   showDecision({
     key: 'march',
-    art: ally ? 'pact-broken' : 'war-declared',
+    art: ally || truce ? 'pact-broken' : 'war-declared',
     from: 'Твой советник',
-    title: ally ? 'Это предательство' : 'Это война',
+    title: ally ? 'Это предательство' : truce ? 'Это клятвопреступление' : 'Это война',
     text: ally
       ? land + ' принадлежит твоему союзнику, Дому ' + master + '. Войти туда с оружием значит нарушить клятву и начать войну.'
-      : land + ' принадлежит Дому ' + master + ', с которым у тебя нет войны. Войти туда с оружием значит её начать.',
+      : truce
+        ? land + ' принадлежит Дому ' + master + ', с которым ты заключил мир: перемирие длится до ' + new Date(truceUntil).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + '. Нарушить его — клятвопреступление: ты потеряешь влияние, заплатишь пеню, и никто более не поверит твоему слову.'
+        : land + ' принадлежит Дому ' + master + ', с которым у тебя нет войны. Войти туда с оружием значит её начать.',
     terms: open
       ? ''
       : asked
@@ -4891,7 +4895,7 @@ function battleSpots() {
   const now = Date.now();
   const out = [];
   for (const item of snapshot?.game?.audit_log || []) {
-    if (!['BATTLE', 'FIELD_BATTLE', 'WILD_BATTLE', 'HORDE_TOOK', 'HORDE_BROKEN'].includes(item.type)) continue;
+    if (!['BATTLE', 'FIELD_BATTLE', 'WILD_BATTLE', 'HORDE_TOOK', 'HORDE_BROKEN', 'HORDE_SACKED'].includes(item.type)) continue;
     const d = item.details || {};
     const at = Date.parse(d.completed_at || d.at || '');
     if (!Number.isFinite(at) || now - at > BATTLE_SHOW_MS || now < at - 5000) continue;

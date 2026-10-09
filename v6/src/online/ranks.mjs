@@ -282,6 +282,45 @@ export function settleMarchRanks(before, after, map, order, journal) {
   reconcileRanks(after, map);
 }
 
+// Men leave one position for another outside a march (a retreat, guests sent
+// home, a garrison going home with a ceded land): the strongest go, with their
+// experience and their full strength; `losses` fall first on the weakest.
+// Call it before the heads themselves are moved. Returns the composition that went.
+export function moveRanks(state, map, fromKey, toKey, house, heads, { losses = 0 } = {}) {
+  const stored = compAt(state, map, fromKey, house);
+  if (losses > 0) takeWeakest(stored, Math.min(losses, compSum(stored)));
+  const going = takeStrongest(stored, Math.min(Math.max(0, heads), compSum(stored)));
+  going[0] += Math.max(0, heads - compSum(going));
+  setComp(state, fromKey, house, stored);
+  if (toKey && heads > 0) {
+    const there = compAt(state, map, toKey, house);
+    const oldHeads = compSum(there);
+    setComp(state, toKey, house, addComp(there, going));
+    setStars(state, toKey, house, mergeStars(starsAt(state, toKey, house), oldHeads, starsAt(state, fromKey, house), heads));
+    if (state.peak) {
+      addPeak(state, toKey, house, going);
+      if (state.peak[fromKey]?.[house]) addPeak(state, fromKey, house, going, -1);
+    }
+  }
+  return going;
+}
+
+// A host that stood nowhere (a marching army sent back, or camping as a
+// guest) joins the position `key`: `heads` survivors of `comp`, the losses
+// taken from the weakest. Call it before the heads themselves are added.
+export function arriveRanks(state, map, key, house, comp, heads, stars = 0) {
+  if (heads <= 0) return;
+  const coming = clean(comp);
+  const sum = compSum(coming);
+  if (sum > heads) takeWeakest(coming, sum - heads);
+  else if (sum < heads) coming[0] += heads - sum;
+  const there = compAt(state, map, key, house);
+  const oldHeads = compSum(there);
+  setComp(state, key, house, addComp(there, coming));
+  setStars(state, key, house, mergeStars(starsAt(state, key, house), oldHeads, stars, heads));
+  if (state.peak) addPeak(state, key, house, coming);
+}
+
 // Raises `count` of the weakest a rank, none above `cap`.
 export function promote(comp, count, cap = N - 1) {
   let left = count;

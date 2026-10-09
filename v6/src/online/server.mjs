@@ -241,6 +241,30 @@ function createStore(gameId) {
   });
 }
 
+// A long game keeps only its recent past in memory: the chronicle is already
+// in the audit log, and marches long resolved are of no use to anyone. Every
+// command clones the whole game, so an unbounded history would slow it down.
+const HISTORY = Object.freeze({ journal: 200, orders: 200, jobs: 50 });
+function trimHistory(game) {
+  const journal = game.state?.journal;
+  if (Array.isArray(journal) && journal.length > HISTORY.journal) {
+    const drop = journal.length - HISTORY.journal;
+    journal.splice(0, drop);
+    game.audit_journal_cursor = Math.max(0, Number(game.audit_journal_cursor || 0) - drop);
+  }
+  if (Array.isArray(game.orders) && game.orders.length > HISTORY.orders * 2) {
+    const done = game.orders.filter(item => item.status !== 'PENDING');
+    const keep = new Set(done.slice(-HISTORY.orders).map(item => item.id));
+    game.orders = game.orders.filter(item => item.status === 'PENDING' || keep.has(item.id));
+  }
+  if (Array.isArray(game.jobs) && game.jobs.length > HISTORY.jobs * 2) {
+    const done = game.jobs.filter(item => item.status !== 'PENDING');
+    const keep = new Set(done.slice(-HISTORY.jobs).map(item => item.id));
+    game.jobs = game.jobs.filter(item => item.status === 'PENDING' || keep.has(item.id));
+  }
+  return game;
+}
+
 async function finalizeGame(ctx, next, nowMs = Date.now(), saveOptions = {}) {
   const audited = syncAuditFromJournal(next, map, {
     nowMs,
@@ -251,6 +275,7 @@ async function finalizeGame(ctx, next, nowMs = Date.now(), saveOptions = {}) {
   if (validationErrors.length) {
     throw new Error(`invalid game state: ${validationErrors.join('; ')}`);
   }
+  trimHistory(audited);
 
   const persisted = await ctx.store.save(audited, saveOptions);
   if (persisted?.duplicate) {
@@ -2382,6 +2407,30 @@ const server = http.createServer(async (req, res) => {
     });
   }
 });
+
+// Games whose clock has run on while nobody was looking: every running game
+// that is due is loaded, so marches resolve and days turn whether or not a
+// player has the page open. Runs at start and then every half minute.
+async function wakeDueGames(nowMs = Date.now()) {
+  let ids = [];
+  try {
+    ids = await defaultContext.store.listDueGameIds(nowMs, 100);
+  } catch (error) {
+    console.error('listing due games failed', error);
+    return;
+  }
+  for (const gameId of ids) {
+    if (contexts.has(gameId)) continue;
+    try {
+      await loadContext(gameId);
+    } catch (error) {
+      console.error(`loading due game ${gameId} failed`, error);
+    }
+  }
+}
+
+wakeDueGames().catch(() => {});
+setInterval(() => { wakeDueGames().catch(() => {}); }, 30_000).unref();
 
 setInterval(() => {
   for (const ctx of contexts.values()) {

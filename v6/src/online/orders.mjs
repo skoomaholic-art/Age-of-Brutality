@@ -177,11 +177,14 @@ export function enumerateOnlineMarches(
     );
 
     for(const route of routes) {
-      for(let warriors=1;warriors<=count;warriors+=1) {
-        if(!destinationCapacityAllows(
-          state,map,constants,house,route,warriors
-        )) continue;
-
+      // The room at the destination shrinks with every head, so the largest
+      // host that fits bounds them all; the route itself is shared, not copied.
+      let max=count;
+      while(max>0 && !destinationCapacityAllows(state,map,constants,house,route,max)) max-=1;
+      if(max<=0) continue;
+      const path=Object.freeze([...route.path]);
+      const segments=Object.freeze(route.segments.map(segment=>Object.freeze({...segment})));
+      for(let warriors=1;warriors<=max;warriors+=1) {
         actions.push({
           type:'MARCH',
           mode:route.mode,
@@ -189,8 +192,8 @@ export function enumerateOnlineMarches(
           from,
           to:route.to,
           warriors,
-          path:[...route.path],
-          route_segments:route.segments.map(segment=>({...segment})),
+          path,
+          route_segments:segments,
           route_hops:route.hops,
           route_duration_ms:route.duration_ms
         });

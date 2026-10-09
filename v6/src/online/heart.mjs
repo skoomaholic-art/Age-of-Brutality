@@ -22,8 +22,9 @@
 import crypto from 'node:crypto';
 import { baseDefense, legalDefenderRetreats } from '../core/combat.mjs';
 import { commanderStats } from '../core/characters.mjs';
-import { compAt, headsLost, reconcileRanks, starsAt, strengthOf } from './ranks.mjs';
+import { compAt, headsLost, moveRanks, reconcileRanks, starsAt, strengthOf } from './ranks.mjs';
 import { rulerLeadBonus } from './court.mjs';
+import { leadArmiesAway } from './guests.mjs';
 
 export const HEART = Object.freeze({
   days: 8,
@@ -473,7 +474,20 @@ function hordeStrikes(game, map, constants, horde, land, nowMs) {
   }
   horde.men -= hordeLosses;
   const left = defenders - defenderLosses;
+  // The capital: the Horde sacks it and is spent there, but the House is not unmade.
+  if (land === map.capitals?.[house] && won) {
+    moveRanks(state, map, land, null, house, 0, { losses: defenders });
+    delete t.warriors[house];
+    const purse = Number(state.houses[house]?.gold || 0);
+    const burnt = Math.ceil(purse / 2);
+    state.houses[house].gold = purse - burnt;
+    if (state.order) state.order[land] = Math.min(Number(state.order[land] ?? 90), 30);
+    state.journal.push({ kind: 'HORDE_SACKED', house, houses: [house], territory: land, defenders, losses: defenders, horde_losses: hordeLosses, gold: burnt, at: iso(nowMs) });
+    horde.men = 0;
+    return;
+  }
   if (!won) {
+    if (defenderLosses > 0) moveRanks(state, map, land, null, house, 0, { losses: defenderLosses });
     t.warriors[house] = left;
     if (left <= 0) delete t.warriors[house];
     state.journal.push({ kind: 'HORDE_BROKEN', house, houses: [house], territory: land, defenders, losses: defenderLosses, at: iso(nowMs) });
@@ -483,9 +497,11 @@ function hordeStrikes(game, map, constants, horde, land, nowMs) {
   let retreatTo = null;
   if (left > 0) {
     retreatTo = legalDefenderRetreats(state, map, house, land, left, constants)[0] || null;
+    moveRanks(state, map, land, retreatTo, house, retreatTo ? left : 0, { losses: defenderLosses + (retreatTo ? 0 : left) });
     if (retreatTo) state.territories[retreatTo].warriors[house] = Number(state.territories[retreatTo].warriors[house] || 0) + left;
   }
   delete t.warriors[house];
+  leadArmiesAway(state, map, house, land, retreatTo);
   t.owner = null;
   if (state.order) delete state.order[land];
   if (state.capture_choices) delete state.capture_choices[land];

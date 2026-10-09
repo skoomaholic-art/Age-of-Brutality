@@ -16,6 +16,8 @@
 //   SACK     sack it: much gold, many people lost, order falls hard.
 // A choice not made by the next dawn is MERCY.
 import { legalDefenderRetreats } from '../core/combat.mjs';
+import { moveRanks } from './ranks.mjs';
+import { leadArmiesAway } from './guests.mjs';
 
 export const ORDER = Object.freeze({
   fromWild: 60,
@@ -170,9 +172,11 @@ function rise(state, map, constants, id, owner, people, garrison, nowMs) {
   let retreatTo = null;
   if (garrison > 0) {
     retreatTo = legalDefenderRetreats(state, map, owner, id, garrison, constants)[0] || null;
+    moveRanks(state, map, id, retreatTo, owner, retreatTo ? garrison : 0, { losses: retreatTo ? 0 : garrison });
     if (retreatTo) state.territories[retreatTo].warriors[owner] = Number(state.territories[retreatTo].warriors[owner] || 0) + garrison;
   }
   delete land.warriors[owner];
+  leadArmiesAway(state, map, owner, id, retreatTo);
   land.owner = null;
   delete state.order[id];
   if (state.capture_choices) delete state.capture_choices[id];

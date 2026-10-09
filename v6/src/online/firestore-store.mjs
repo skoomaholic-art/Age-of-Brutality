@@ -1321,8 +1321,9 @@ export class FirestoreGameStore {
 
     const session = this.sessionRef(sessionId);
     const [ordersSnap, jobsSnap, eventsSnap] = await Promise.all([
-      session.collection('orders').get(),
-      session.collection('jobs').get(),
+      // Old marches and works are history: only the recent ones come back.
+      session.collection('orders').orderBy('created_at', 'desc').limit(400).get(),
+      session.collection('jobs').orderBy('created_at', 'desc').limit(200).get(),
       session.collection('events').orderBy('seq', 'desc').limit(2000).get()
     ]);
 

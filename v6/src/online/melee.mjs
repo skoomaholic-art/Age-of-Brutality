@@ -27,7 +27,7 @@ import {
   settleCommander
 } from '../core/characters.mjs';
 import { areAllies, declareWarInPlace, relationOf, RELATION } from './diplomacy.mjs';
-import { compAt, guestKey, headsLost, reconcileRanks, starsAt, strengthOf } from './ranks.mjs';
+import { arriveRanks, compAt, guestKey, headsLost, MAX_STARS, moveRanks, reconcileRanks, starsAt, strengthOf } from './ranks.mjs';
 import { rulerLeadBonus } from './court.mjs';
 import { fateDice, recoveryMs, settleFate } from './fate.mjs';
 import { nearestOwnLand } from './guests.mjs';
@@ -207,12 +207,16 @@ export function fightOnLand(game, map, constants, land, aggressor, target, force
     if (ownerMember.survivors > 0) {
       const legal = legalDefenderRetreats(state, map, owner, land, ownerMember.survivors, constants);
       retreatTo = legal[0] || null;
+      if (ownerMember.kind === 'GARRISON') moveRanks(state, map, land, retreatTo, owner, retreatTo ? ownerMember.survivors : 0, { losses: retreatTo ? 0 : ownerMember.survivors });
       delete t.warriors[owner];
       if (retreatTo) state.territories[retreatTo].warriors[owner] = Number(state.territories[retreatTo].warriors[owner] || 0) + ownerMember.survivors;
       else removed = ownerMember.survivors;
     }
     t.owner = captor;
-    if (best.kind === 'MARCH') t.warriors[captor] = best.survivors;
+    if (best.kind === 'MARCH') {
+      arriveRanks(state, map, land, captor, best.comp, best.survivors, Math.min(MAX_STARS, (best.stars || 0) + 1));
+      t.warriors[captor] = best.survivors;
+    }
     else if (best.kind === 'GUEST') {
       setHeads(state, land, best, 0);
       t.warriors[captor] = Number(t.warriors[captor] || 0) + best.survivors;
@@ -230,11 +234,15 @@ export function fightOnLand(game, map, constants, land, aggressor, target, force
       // Already placed as the new garrison.
     } else if (!attackerWins || !winners.includes(marcher)) {
       const origin = state.territories[marcher.from];
-      if (origin) origin.warriors[marcher.house] = Number(origin.warriors[marcher.house] || 0) + marcher.survivors;
+      if (origin) {
+        arriveRanks(state, map, marcher.from, marcher.house, marcher.comp, marcher.survivors, marcher.stars);
+        origin.warriors[marcher.house] = Number(origin.warriors[marcher.house] || 0) + marcher.survivors;
+      }
     } else {
       // Won but the land went to another: it camps there beside its ally.
       state.guests ||= {};
       state.guests[land] ||= {};
+      arriveRanks(state, map, guestKey(land), marcher.house, marcher.comp, marcher.survivors, Math.min(MAX_STARS, (marcher.stars || 0) + 1));
       state.guests[land][marcher.house] = Number(state.guests[land][marcher.house] || 0) + marcher.survivors;
     }
   }

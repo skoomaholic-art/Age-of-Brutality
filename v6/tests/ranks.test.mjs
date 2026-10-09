@@ -7,7 +7,7 @@ import { createOnlineGame } from '../src/online/store.mjs';
 import { executeCommand } from '../src/online/commands.mjs';
 import { processDueOrders } from '../src/online/orders.mjs';
 import { raiseLevy, startDrill, buildYard, processRanks, ranksView } from '../src/online/levy.mjs';
-import { compAt, reconcileRanks, strengthOf, RANKS } from '../src/online/ranks.mjs';
+import { arriveRanks, compAt, moveRanks, reconcileRanks, strengthOf, RANKS } from '../src/online/ranks.mjs';
 import { normalizeOnlineEconomy } from '../src/online/economy.mjs';
 import { normalizeAudit, syncAuditFromJournal } from '../src/online/audit.mjs';
 import { startRounds } from '../src/online/rounds.mjs';
@@ -112,4 +112,29 @@ test('archers hold walls better, and every star of experience adds a tenth', () 
   assert.equal(strengthOf([0, 0, 4, 0, 0, 0], 4), 8);
   assert.equal(strengthOf([0, 0, 4, 0, 0, 0], 4, { defending: true }), 12);
   assert.equal(strengthOf([10, 0, 0, 0, 0, 0], 10, { stars: 3 }), 13);
+});
+
+test('men who leave a land outside a march take their kinds, stars and full strength with them', () => {
+  const game = rawBorderGame(6, 1);
+  const state = game.state;
+  state.ranks = { [CAPITAL]: { [HOUSE]: [2, 0, 0, 2, 0, 2] } };
+  state.stars = { [CAPITAL]: { [HOUSE]: 2 } };
+  state.peak = { [CAPITAL]: { [HOUSE]: [3, 0, 0, 2, 0, 2] } };
+  const other = [...adjacency.get(CAPITAL)].find(id => id !== NEXT);
+  state.territories[other].owner = HOUSE;
+  state.territories[other].warriors = { [HOUSE]: 1 };
+  // Four go, one of the six falls on the way: the knights and the men-at-arms go, the villagers stay or fall.
+  const went = moveRanks(state, map, CAPITAL, other, HOUSE, 4, { losses: 1 });
+  state.territories[CAPITAL].warriors[HOUSE] = 1;
+  state.territories[other].warriors[HOUSE] = 5;
+  assert.deepEqual(went, [0, 0, 0, 2, 0, 2]);
+  assert.deepEqual(compAt(state, map, CAPITAL, HOUSE), [1, 0, 0, 0, 0, 0]);
+  assert.deepEqual(compAt(state, map, other, HOUSE), [1, 0, 0, 2, 0, 2]);
+  assert.equal(state.stars[other][HOUSE], 2, 'experience shared by heads: (0*1 + 2*4)/5 rounds to 2');
+  assert.deepEqual(state.peak[other][HOUSE], [0, 0, 0, 2, 0, 2]);
+  assert.deepEqual(state.peak[CAPITAL][HOUSE], [3, 0, 0, 0, 0, 0]);
+  // A marching host sent back home arrives with its kinds too.
+  arriveRanks(state, map, CAPITAL, HOUSE, [1, 3, 0, 0, 0, 0], 3, 1);
+  state.territories[CAPITAL].warriors[HOUSE] = 4;
+  assert.deepEqual(compAt(state, map, CAPITAL, HOUSE), [1, 3, 0, 0, 0, 0]);
 });

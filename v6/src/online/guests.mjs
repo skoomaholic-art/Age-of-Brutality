@@ -6,6 +6,7 @@
 
 import { buildAdjacency } from '../core/map.mjs';
 import { hasPassage } from './diplomacy.mjs';
+import { guestKey, moveRanks } from './ranks.mjs';
 
 export function nearestOwnLand(state, map, house, from) {
   const adjacency = buildAdjacency([...(map.land_edges || []), ...(map.sea_lane_edges || [])]);
@@ -25,6 +26,20 @@ export function nearestOwnLand(state, map, house, from) {
     wave = next;
   }
   return null;
+}
+
+// A lord with an army on a land his House has just lost goes with the men that
+// got away, or to the nearest land of his House when none did.
+export function leadArmiesAway(state, map, house, land, to = null) {
+  const home = to || nearestOwnLand(state, map, house, land);
+  for (const army of Object.values(state.armies || {})) {
+    if (army.house !== house || army.territory !== land || army.moving_order_id) continue;
+    if (!home) continue;
+    army.territory = home;
+    const commander = state.characters?.[army.commander_id];
+    if (commander) commander.location = { kind: 'TERRITORY', territory: home };
+  }
+  return home;
 }
 
 export function expelGuests(game, map, constants, nowMs = Date.now()) {
@@ -54,6 +69,7 @@ export function expelGuests(game, map, constants, nowMs = Date.now()) {
       const room = constants.territory_warrior_cap -
         Object.values(land.warriors || {}).reduce((sum, n) => sum + Number(n || 0), 0);
       kept = Math.max(0, Math.min(count, room));
+      moveRanks(next.state, map, guestKey(id), home, house, kept, { losses: count - kept });
       if (kept > 0) land.warriors[house] = Number(land.warriors[house] || 0) + kept;
     }
     for (const army of Object.values(next.state.armies || {})) {

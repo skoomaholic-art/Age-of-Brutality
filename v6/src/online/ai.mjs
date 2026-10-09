@@ -4,6 +4,7 @@ import { buildAdjacency } from '../core/map.mjs';
 import { aiBridgeChoice, buildBridge } from './bridges.mjs';
 import { menToTakeWild, ringGlory } from './heart.mjs';
 import { aiHireChoice, hireUnits } from './units.mjs';
+import { buildPort } from './levy.mjs';
 import { canTake, garrisonToKeep, heartPlan, menToTake, wantsPeace } from './ai-heart.mjs';
 import { proposeDeal } from './diplomacy.mjs';
 import { totalHouseWarriors } from '../core/state.mjs';
@@ -101,16 +102,18 @@ function garrisonNeeded(state, map, house, from) {
 // A game of the Heart: one plan, three kinds of move. Strength, not heads.
 function heartCandidates(game, map, constants, house) {
   const state = game.state;
-  const plan = heartPlan(game, map, constants, house);
-  if (!plan) return [];
   const out = [];
   const legal = listQueueableMarches(game, map, constants, house);
   const pairs = new Map();
+  const reach = new Map();
   for (const action of legal) {
     if (!state.territories[action.to] || !state.territories[action.from]) continue;
     const key = `${action.from}>${action.to}`;
     pairs.set(key, Math.max(pairs.get(key) || 0, action.warriors));
+    (reach.get(action.from) || reach.set(action.from, new Set()).get(action.from)).add(action.to);
   }
+  const plan = heartPlan(game, map, constants, house, from => [...(reach.get(from) || [])]);
+  if (!plan) return [];
   const spareAt = id => warriorsOf(state, id, house) - garrisonNeeded(state, map, house, id);
   const command = (from, to, warriors) => ({ type: 'MARCH', house, from, to, warriors });
 
@@ -368,6 +371,15 @@ export function takeAiAction(game, map, constants, house, { nowMs = Date.now() }
       return { game: hireUnits(game, map, house, hire.territory, hire.counts, { nowMs }), decision: { kind: 'HIRE', value: 1, command: { type: 'HIRE', ...hire } } };
     } catch {
       // Not now.
+    }
+  }
+
+  // The goal lies over the sea and the stage has no harbour: build one there.
+  if (plan && !plan.target && plan.goal.kind !== 'DEFEND' && plan.goal.kind !== 'HOLD' && map.buildable_ports) {
+    try {
+      return { game: buildPort(game, map, house, plan.stage, { nowMs }), decision: { kind: 'PORT', value: 1, command: { type: 'PORT', territory: plan.stage } } };
+    } catch {
+      // No shore, no gold, or the port is already there or on its way.
     }
   }
 
