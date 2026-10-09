@@ -4030,6 +4030,43 @@ const pixiTexture = file => {
   return pixiTextureCache.get(file);
 };
 
+// Who leads the host standing here: the ruler (a crown) or a kinsman (a star).
+function leaderMark(pos, owner) {
+  const st = snapshot?.game?.state;
+  if (!st || !owner) return null;
+  const army = Object.values(st.armies || {}).find(a => a.house === owner && a.territory === pos && !a.moving_order_id);
+  const lord = army && st.characters?.[army.commander_id];
+  if (!lord || !lord.alive) return null;
+  return lord.role === 'RULER' ? 'crown' : 'star';
+}
+
+function markOrder(order) {
+  const st = snapshot?.game?.state;
+  const id = order.commander_id || Object.values(st?.armies || {}).find(a => a.moving_order_id === order.id)?.commander_id;
+  const lord = id && st?.characters?.[id];
+  if (!lord || !lord.alive) return null;
+  return lord.role === 'RULER' ? 'crown' : 'star';
+}
+
+function leaderBadge(kind) {
+  const g = new PIXI.Graphics();
+  g.lineStyle({ width: 0.5, color: INK, join: PIXI.LINE_JOIN.ROUND });
+  g.beginFill(0xe2b53e);
+  if (kind === 'crown') {
+    g.drawPolygon([-4, 1.6, -4, -2, -2, 0, 0, -3, 2, 0, 4, -2, 4, 1.6]);
+  } else {
+    const pts = [];
+    for (let i = 0; i < 10; i += 1) {
+      const r = i % 2 ? 1.3 : 3.1, a = -Math.PI / 2 + i * Math.PI / 5;
+      pts.push(Math.cos(a) * r, Math.sin(a) * r);
+    }
+    g.drawPolygon(pts);
+  }
+  g.endFill();
+  g.position.set(0, -9.2);
+  return g;
+}
+
 function drawPixiMap(scene, key) {
   if (key === pixiMap.key) return;
   pixiMap.key = key;
@@ -4126,6 +4163,7 @@ function drawPixiMap(scene, key) {
   const tokens = new PIXI.Container();
   for (const tk of scene.tokens) {
     const s = shieldGraphic(tk.color, tk.count, tk.scale);
+    if (tk.mark) s.addChild(leaderBadge(tk.mark));
     s.position.set(tk.x, tk.y);
     tokens.addChild(s);
   }
@@ -4137,6 +4175,8 @@ function drawPixiMap(scene, key) {
     if (order.status !== 'PENDING' || !Array.isArray(order.action?.path) || order.action.path.length < 2) continue;
     const s = shieldGraphic(colors[order.action.house] || '#2b1b12', Number(order.action.warriors || 0), 1.1);
     s.orderId = order.id;
+    const mark = markOrder(order);
+    if (mark) s.addChild(leaderBadge(mark));
     // A camp on the road: a small tent behind the shield.
     if (order.halted) {
       const tent = new PIXI.Graphics();
@@ -4306,6 +4346,7 @@ function renderMap() {
         <circle class="sea-waypoint${active}" r="2.6"></circle>
         ${total ? shieldToken(0, -1, colors[owner] || '#2c4a86', total, 0.9, `data-lens-at="${id}"`, owner) : ''}
       </g>`;
+    if (scene && total && scene.tokens.length) scene.tokens[scene.tokens.length - 1].mark = leaderMark(id, owner);
     if (scene) scene.dx = scene.dy = 0;
     return html;
   });
@@ -4360,6 +4401,7 @@ function renderMap() {
       const tx = capital ? c.x + 21 : t.type === 'Город' ? c.x + 14 : t.type === 'Деревня' ? c.x + 11 : c.x + 8.5;
       const ty = capital ? c.y - 1 : c.y - 5;
       tokens.push(shieldToken(tx, ty, colors[owner] || '#8a7a5c', total, 1, `data-lens-at="${t.id}"`, owner));
+      if (scene.tokens.length) scene.tokens[scene.tokens.length - 1].mark = leaderMark(t.id, owner);
     }
     // Guests camped here by right of passage stand beside the garrison.
     let shift = 0;
@@ -4390,7 +4432,7 @@ function renderMap() {
 
   pixiScene = null;
   // The SVG is rebuilt only when something on it has changed.
-  const svgKey = JSON.stringify([usePixi, origin, target, house, [...legalTargets], explored ? [...explored] : null, state.territories, state.sea_nodes, state.guests, (snapshot.game.orders || []).filter(o => o.status === 'PENDING').map(o => [o.id, o.action?.warriors, Boolean(o.halted), o.action?.to]), activePath, abandonedHouses()]);
+  const svgKey = JSON.stringify([usePixi, origin, target, house, [...legalTargets], explored ? [...explored] : null, state.territories, state.sea_nodes, state.guests, state.armies, (snapshot.game.orders || []).filter(o => o.status === 'PENDING').map(o => [o.id, o.action?.warriors, Boolean(o.halted), o.action?.to]), activePath, abandonedHouses()]);
   if (usePixi) drawPixiMap(scene, svgKey);
   // Known waters clear too: sea waypoints have no painted shape, only a point.
   updateClouds(explored, art, { ...coords, ...(snapshot.map.sea_waypoints || {}) });
