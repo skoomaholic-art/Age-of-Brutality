@@ -32,7 +32,7 @@ function take(g, house, from) {
   g.state.territories[village].owner = house;
   g.state.territories[village].warriors = { [house]: 1 };
   delete g.state.wild_guards[village];
-  onLandTaken(g, village, from, 10);
+  onLandTaken(g, map, village, from, 10);
 }
 
 test('a land taken from the wild is calm, one taken from a House sullen; the taker chooses its fate', () => {

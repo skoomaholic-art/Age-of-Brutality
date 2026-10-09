@@ -321,7 +321,7 @@ export function processCampFights(game, map, constants, nowMs = Date.now()) {
       const ownerBefore = next.state.territories[land]?.owner ?? null;
       fightOnLand(next, map, constants, land, aggressor, target, null, { nowMs });
       const ownerAfter = next.state.territories[land]?.owner ?? null;
-      if (ownerAfter && ownerAfter !== ownerBefore) onLandTaken(next, land, ownerBefore, nowMs);
+      if (ownerAfter && ownerAfter !== ownerBefore) onLandTaken(next, map, land, ownerBefore, nowMs);
     }
   }
   if (next) next.updated_at = iso(nowMs);

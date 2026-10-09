@@ -108,7 +108,7 @@ function beginRound(next, map, constants, number, nowMs, timing) {
   // Men long out at sea sicken and drown: the toll of the sea, every dawn.
   applySeaToll(next.state, nowMs);
   // A game of the Heart: the wild guard grows back, the Heart pays its holder.
-  rounds.heart_reached = number > 1 ? heartDawn(next, map, constants, nowMs) : [];
+  rounds.heart_reached = number > 1 ? heartDawn(next, map, constants, nowMs, number) : [];
   // Lands with fields or a fair gain people.
   if (number > 1) populationDawn(next.state, map);
   // Order settles, open choices fall to mercy, lands in deep disorder rise.

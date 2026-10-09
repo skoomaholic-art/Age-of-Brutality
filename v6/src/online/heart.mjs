@@ -1,21 +1,27 @@
 // The Heart of the Lands: the road to the centre gets harder, and whoever
-// holds the centre long enough wins.
+// holds the Heart long enough wins.
 //
-// Every land gets a ring: how far it lies from the nearest capital (ring 1 is
-// next to a capital). The land farthest from every capital is the Heart.
-// Free lands are held by the wild guard, the "вольные люди": few next to the
-// capitals, more and more towards the Heart, the most in the Heart itself,
-// behind walls. A House that takes a free land for the first time in the game
-// earns glory by its ring. Each dawn the House holding the Heart earns glory,
-// more for every dawn it keeps it. Whoever reaches the glory target at dawn
-// wins at once; otherwise the game ends after its last day as before.
+// Every land gets a ring by how far it lies from the nearest capital (ring 1
+// is next to a capital). Free lands are held by the wild guard, the "вольные
+// люди": few next to the capitals, more and more farther out; left alone they
+// grow back. A House that takes a free land for the first time in the game
+// earns glory by its ring.
 //
-// No dice: a guard fight is counted like any battle. The attackers' strength
-// is their men by rank, their lord's gifts and the fixed share of fortune;
-// the guard's strength is its head count, behind the land's walls.
-import { baseDefense } from '../core/combat.mjs';
+// Nobody knows at the start where the Heart is. On the dawn of day
+// `appearDay` several Hearts appear among the lands still free, placed by how
+// the Houses stand: far from those who have spread the most, nearer to those
+// who stayed home (who still have the wild guard to fight through). Only one
+// is true; the others are decoys. A spy who reaches a Heart or a land next to
+// it learns which it is; from the next dawn the chroniclers expose one decoy a
+// day. Whoever takes a decoy wakes the Horde, which marches on his capital
+// through his lands, leaving part of itself in every land it takes. Whoever
+// takes the true Heart reveals it to all, and each dawn he holds it earns him
+// glory, more each dawn. Reaching the glory target at dawn wins at once.
+//
+// No dice: guard fights and Horde fights are counted like any battle.
+import { baseDefense, legalDefenderRetreats } from '../core/combat.mjs';
 import { commanderStats } from '../core/characters.mjs';
-import { headsLost, strengthOf } from './ranks.mjs';
+import { compAt, headsLost, reconcileRanks, starsAt, strengthOf } from './ranks.mjs';
 import { rulerLeadBonus } from './court.mjs';
 
 export const HEART = Object.freeze({
@@ -25,17 +31,22 @@ export const HEART = Object.freeze({
   heartGuards: 20,
   // Glory for each dawn the Heart is held: 3, 4, 5, ...
   holdBase: 2,
-  fortune: 3
+  fortune: 3,
+  appearDay: 3,
+  maxDecoys: 3,
+  hordeMen: 24,
+  // The Horde takes a step every eighth of a game day.
+  hordeStepShare: 1 / 8
 });
 
 const SEA_STEP = 0.5;
+const RINGS = 4;
 
 function iso(ms) {
   return new Date(ms).toISOString();
 }
 
-// Distances over roads (1 per road) and sea lanes (half a road per stretch).
-function distancesFrom(map, starts) {
+function neighbours(map, { sea = true } = {}) {
   const near = new Map();
   const add = (a, b, w) => {
     if (!near.has(a)) near.set(a, []);
@@ -44,10 +55,15 @@ function distancesFrom(map, starts) {
     near.get(b).push([a, w]);
   };
   for (const [a, b] of map.land_edges || []) add(a, b, 1);
-  for (const [a, b] of map.sea_lane_edges || []) add(a, b, SEA_STEP);
+  if (sea) for (const [a, b] of map.sea_lane_edges || []) add(a, b, SEA_STEP);
+  return near;
+}
+
+// Distances over roads (1 per road) and sea lanes (half a road per stretch).
+function distancesFrom(map, starts, options) {
+  const near = neighbours(map, options);
   const dist = new Map(starts.map(id => [id, 0]));
   const queue = [...starts];
-  // Few nodes: a plain relaxation is enough.
   while (queue.length) {
     queue.sort((x, y) => dist.get(x) - dist.get(y));
     const at = queue.shift();
@@ -59,68 +75,56 @@ function distancesFrom(map, starts) {
   return dist;
 }
 
-const TYPE_RANK = { 'Город': 0, 'Деревня': 1, 'Дикая земля': 2, 'Половина острова': 3 };
-
-// Rings of every land and the Heart. The Heart is the land farthest from the
-// nearest capital (on the mainland, most evenly placed between all capitals).
-// A land's ring grows the farther it is from the capitals and the nearer it
-// is to the Heart: 1 by the capitals, RINGS next to the Heart.
-const RINGS = 4;
+// Rings: 1 by the capitals, RINGS at the farthest lands.
 export function heartLayout(map) {
   const capitals = Object.values(map.capitals || {});
   const nearest = distancesFrom(map, capitals);
-  const each = capitals.map(c => distancesFrom(map, [c]));
-  const candidates = map.territories.filter(t => !capitals.includes(t.id) && t.type !== 'Половина острова');
-  let heart = null;
-  let best = null;
-  for (const t of candidates) {
-    const ds = each.map(d => d.get(t.id) ?? 99);
-    const min = Math.min(...ds);
-    const key = [-min, Math.max(...ds) - min, TYPE_RANK[t.type] ?? 4, t.id];
-    const better = !best || key[0] < best[0] ||
-      (key[0] === best[0] && (key[1] < best[1] || (key[1] === best[1] && (key[2] < best[2] || (key[2] === best[2] && key[3] < best[3])))));
-    if (better) { best = key; heart = t.id; }
-  }
-  const toHeart = heart ? distancesFrom(map, [heart]) : new Map();
-  const score = id => (nearest.get(id) ?? 1) - (toHeart.get(id) ?? 0);
-  const free = map.territories.filter(t => !capitals.includes(t.id) && t.id !== heart).map(t => t.id);
-  const scores = free.map(score);
-  const lo = Math.min(...scores), hi = Math.max(...scores);
+  const free = map.territories.filter(t => !capitals.includes(t.id)).map(t => t.id);
+  const ds = free.map(id => nearest.get(id) ?? 1);
+  const lo = Math.min(...ds), hi = Math.max(...ds);
   const rings = {};
   for (const id of capitals) rings[id] = 0;
   for (const id of free) {
-    const share = hi > lo ? (score(id) - lo) / (hi - lo) : 0;
+    const share = hi > lo ? ((nearest.get(id) ?? 1) - lo) / (hi - lo) : 0;
     rings[id] = 1 + Math.min(RINGS - 1, Math.floor(share * RINGS));
   }
-  if (heart) rings[heart] = RINGS + 1;
-  return { rings, heart, maxRing: RINGS };
+  return { rings, maxRing: RINGS };
 }
 
 // The guard is counted as peasants. Next to a capital two or three peasants
-// do; the Heart wants a real host, of better troops or in several waves.
+// do; a Heart wants a real host, of better troops or in several waves.
 export function guardsFor(ring, type, isHeart) {
   if (isHeart) return HEART.heartGuards;
   const base = [0, 2, 4, 7, 10][Math.min(4, Math.max(1, ring))];
   return base + (type === 'Город' ? 1 : 0);
 }
 
-// Left alone, the guard grows back by one each dawn up to a third more than at
-// the start. The Heart's guard never grows past its first number.
+// Left alone, the guard grows back by one each dawn up to half again its start.
 export function guardCap(ring, type, isHeart) {
   const base = guardsFor(ring, type, isHeart);
-  return isHeart ? base : base + Math.floor(base / 3);
+  return isHeart ? base : base + Math.floor(base / 2);
+}
+
+export function isCandidate(state, territory) {
+  return Boolean(state.heart?.candidates?.includes(territory));
 }
 
 export function ringGlory(state, territory) {
-  if (territory === state.heart?.territory) return HEART.heartGlory;
+  if (isCandidate(state, territory)) return territory === state.heart.truth ? HEART.heartGlory : 1;
   return Math.max(1, Number(state.heart?.rings?.[territory] || 1));
 }
 
-// Sets up a new game for the Heart: rings, the wild guard on every free land.
+// Sets up a new game for the Heart: rings and the wild guard on every free land.
 export function seedHeart(game, map) {
-  const { rings, heart, maxRing } = heartLayout(map);
+  const { rings, maxRing } = heartLayout(map);
   game.state.heart = {
-    territory: heart,
+    appear_day: HEART.appearDay,
+    candidates: [],
+    truth: null,
+    territory: null,
+    revealed: [],
+    known: {},
+    woken: [],
     rings,
     max_ring: maxRing,
     target: HEART.target,
@@ -128,15 +132,103 @@ export function seedHeart(game, map) {
     holder: null,
     streak: 0
   };
+  game.state.hordes = [];
   game.state.wild_guards = {};
   game.state.wild_taken = {};
   for (const t of map.territories) {
     if (game.state.territories[t.id]?.owner) continue;
-    game.state.wild_guards[t.id] = guardsFor(rings[t.id], t.type, t.id === heart);
+    game.state.wild_guards[t.id] = guardsFor(rings[t.id], t.type, false);
   }
-  // The Heart stands behind walls.
-  if (heart && game.state.territories[heart]) game.state.territories[heart].fort = true;
   return game;
+}
+
+function hash(text) {
+  let h = 2166136261;
+  for (const ch of String(text)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+
+// Where the Hearts appear: among the free mainland lands, far from the Houses
+// that have spread the most and nearer to those that have not.
+export function chooseHearts(game, map) {
+  const state = game.state;
+  const abandoned = game.lifecycle?.abandoned_houses || {};
+  const lands = {};
+  for (const [id, t] of Object.entries(state.territories)) if (t.owner) (lands[t.owner] ||= []).push(id);
+  const houses = Object.keys(lands).filter(h => !abandoned[h]);
+  if (!houses.length) return [];
+  const avg = houses.reduce((s, h) => s + lands[h].length, 0) / houses.length;
+  const dist = Object.fromEntries(houses.map(h => [h, distancesFrom(map, lands[h])]));
+  const free = map.territories.filter(t => !state.territories[t.id]?.owner && t.type !== 'Половина острова' && t.type !== 'Столица');
+  const scored = free.map(t => {
+    const ds = houses.map(h => dist[h].get(t.id) ?? 30);
+    const min = Math.min(...ds);
+    const lean = houses.reduce((sum, h, i) => sum + (lands[h].length - avg) * ds[i], 0);
+    return { id: t.id, min, score: lean + 1.5 * min - 0.5 * (Math.max(...ds) - min) };
+  });
+  // Lands two roads or more from every House first; next to someone only if need be.
+  const pool = scored.sort((a, b) => (b.min >= 2) - (a.min >= 2) || b.score - a.score || (a.id < b.id ? -1 : 1));
+  const count = Math.min(HEART.maxDecoys, Math.max(1, houses.length - 1)) + 1;
+  const roads = neighbours(map, { sea: false });
+  const picked = [];
+  for (const x of pool) {
+    if (picked.length >= count) break;
+    // Hearts do not stand side by side.
+    if (picked.some(p => (roads.get(p) || []).some(([to]) => to === x.id))) continue;
+    picked.push(x.id);
+  }
+  return picked;
+}
+
+function appear(game, map, nowMs) {
+  const state = game.state;
+  const heart = state.heart;
+  const candidates = chooseHearts(game, map);
+  if (!candidates.length) return;
+  heart.candidates = candidates;
+  heart.truth = candidates[hash(`${game.id}:${map.seed}:${candidates.join(',')}`) % candidates.length];
+  for (const id of candidates) {
+    state.wild_guards[id] = Math.max(Number(state.wild_guards[id] || 0), HEART.heartGuards);
+    state.territories[id].fort = true;
+    heart.rings[id] = RINGS + 1;
+  }
+  state.journal.push({ kind: 'HEARTS_APPEARED', candidates: [...candidates], count: candidates.length, at: iso(nowMs) });
+}
+
+// A spy at a land or next to it learns which Hearts nearby are true.
+export function spyLearns(state, map, house, target, nowMs = Date.now()) {
+  const heart = state.heart;
+  if (!heart?.candidates?.length) return [];
+  const around = new Set([target, ...(neighbours(map, { sea: false }).get(target) || []).map(([to]) => to)]);
+  const learnt = [];
+  for (const id of heart.candidates) {
+    if (!around.has(id)) continue;
+    heart.known[house] ||= {};
+    if (heart.known[house][id]) continue;
+    heart.known[house][id] = id === heart.truth ? 'TRUE' : 'FALSE';
+    learnt.push(id);
+    state.journal.push({ kind: 'HEART_SPIED', house, houses: [house], territory: id, truth: id === heart.truth, at: iso(nowMs) });
+  }
+  return learnt;
+}
+
+// A Heart was taken: the true one shows itself, a decoy wakes the Horde.
+export function heartOnCapture(game, map, territory, house, nowMs = Date.now()) {
+  const state = game.state;
+  const heart = state.heart;
+  if (!heart || !isCandidate(state, territory) || !house) return;
+  if (territory === heart.truth) {
+    if (!heart.territory) {
+      heart.territory = territory;
+      heart.revealed = heart.candidates.filter(id => id !== heart.truth);
+      state.journal.push({ kind: 'HEART_FOUND', house, houses: [house], territory, at: iso(nowMs) });
+    }
+    return;
+  }
+  if (!heart.revealed.includes(territory)) heart.revealed.push(territory);
+  if (heart.woken.includes(territory)) return;
+  heart.woken.push(territory);
+  spawnHorde(game, map, territory, house, nowMs);
 }
 
 export function heartMode(state) {
@@ -219,37 +311,173 @@ export function wildBattle(state, map, constants, action, extra = {}) {
 }
 
 /**
- * At every dawn: the wild guard grows back on lands left alone, and the Heart
- * pays its holder. Mutates `game`. Returns the houses that reached the target.
+ * At every dawn: the wild guard grows back on lands left alone, the Hearts
+ * appear on their day, the chroniclers expose a decoy, and the true Heart pays
+ * its holder. Mutates `game`. Returns the houses that reached the target.
  */
-export function heartDawn(game, map, constants, nowMs = Date.now()) {
+export function heartDawn(game, map, constants, nowMs = Date.now(), day = null) {
   const heart = game.state.heart;
   if (!heart || !game.state.wild_guards) return [];
   const state = game.state;
   const rings = heart.rings || {};
   for (const t of map.territories) {
     if (state.territories[t.id]?.owner) continue;
-    const cap = guardCap(rings[t.id] || 1, t.type, t.id === heart.territory);
+    const cap = guardCap(rings[t.id] || 1, t.type, isCandidate(state, t.id));
     const now = Number(state.wild_guards[t.id] || 0);
     if (now < cap) state.wild_guards[t.id] = now + 1;
   }
 
-  const holder = heart.territory ? state.territories[heart.territory]?.owner || null : null;
+  if (day !== null && !heart.candidates.length && day >= heart.appear_day) appear(game, map, nowMs);
+  else if (heart.candidates.length && !heart.territory) {
+    // A rumour: one more decoy is known to all.
+    const hidden = heart.candidates.filter(id => id !== heart.truth && !heart.revealed.includes(id)).sort();
+    if (hidden.length) {
+      heart.revealed.push(hidden[0]);
+      state.journal.push({ kind: 'HEART_RUMOUR', territory: hidden[0], left: heart.candidates.length - heart.revealed.length, at: iso(nowMs) });
+    }
+  }
+
+  const holder = heart.truth ? state.territories[heart.truth]?.owner || null : null;
   if (holder && holder === heart.holder) heart.streak += 1;
   else heart.streak = holder ? 1 : 0;
   if (holder !== heart.holder && holder) {
-    state.journal.push({ kind: 'HEART_TAKEN', house: holder, houses: [holder], previous: heart.holder, territory: heart.territory, at: iso(nowMs) });
+    state.journal.push({ kind: 'HEART_TAKEN', house: holder, houses: [holder], previous: heart.holder, territory: heart.truth, at: iso(nowMs) });
   }
   heart.holder = holder;
   if (holder) {
     const glory = HEART.holdBase + heart.streak;
     state.houses[holder].victory_points = Number(state.houses[holder].victory_points || 0) + glory;
     state.journal.push({
-      kind: 'HEART_HELD', house: holder, houses: [holder], territory: heart.territory,
+      kind: 'HEART_HELD', house: holder, houses: [holder], territory: heart.truth,
       streak: heart.streak, glory, total: state.houses[holder].victory_points, target: heart.target, at: iso(nowMs)
     });
   }
   const abandoned = game.lifecycle?.abandoned_houses || {};
   return Object.keys(state.houses || {})
     .filter(house => !abandoned[house] && Number(state.houses[house].victory_points || 0) >= heart.target);
+}
+
+// ---------- the Horde ----------
+
+function dayMs(game) {
+  return Number(game.rounds?.round_duration_ms) > 0 ? Number(game.rounds.round_duration_ms) : 24 * 3600_000;
+}
+
+// The shortest road from a land to another (by land if it can, else by sea too).
+function roadBetween(map, from, to) {
+  for (const sea of [false, true]) {
+    const near = neighbours(map, { sea });
+    const prev = new Map([[from, null]]);
+    const queue = [from];
+    while (queue.length) {
+      const at = queue.shift();
+      if (at === to) break;
+      for (const [next] of near.get(at) || []) {
+        if (prev.has(next)) continue;
+        prev.set(next, at);
+        queue.push(next);
+      }
+    }
+    if (!prev.has(to)) continue;
+    const path = [];
+    for (let at = to; at !== null; at = prev.get(at)) path.unshift(at);
+    // Only lands are stepped on; sea points are crossed.
+    return path.filter(id => map.territories.some(t => t.id === id));
+  }
+  return [from];
+}
+
+function spawnHorde(game, map, decoy, house, nowMs) {
+  const state = game.state;
+  const capital = map.capitals?.[house];
+  const path = capital ? roadBetween(map, decoy, capital) : [decoy];
+  state.hordes ||= [];
+  const horde = {
+    id: `H${state.hordes.length + 1}-${decoy}`,
+    against: house,
+    path,
+    step: 0,
+    men: HEART.hordeMen,
+    at: decoy,
+    next_at: iso(nowMs)
+  };
+  state.hordes.push(horde);
+  state.journal.push({ kind: 'HORDE_AWAKENED', house, houses: [house], territory: decoy, men: horde.men, toward: capital, at: iso(nowMs) });
+}
+
+// The Horde strikes a land of the House it hunts.
+function hordeStrikes(game, map, constants, horde, land, nowMs) {
+  const state = game.state;
+  const t = state.territories[land];
+  const house = horde.against;
+  const defenders = Number(t.warriors?.[house] || 0);
+  const hordeStrength = horde.men + HEART.fortune;
+  let won = true;
+  let defenderLosses = 0;
+  let hordeLosses = 0;
+  if (defenders > 0) {
+    const comp = compAt(state, map, land, house);
+    const defStrength = strengthOf(comp, defenders, { defending: true, stars: starsAt(state, land, house) }) + HEART.fortune;
+    const walls = baseDefense(map, state, constants, land);
+    hordeLosses = Math.min(horde.men, Math.ceil(defStrength / 2));
+    defenderLosses = Math.min(defenders, headsLost(comp, defenders, Math.max(0, Math.ceil(hordeStrength / 2) - walls)));
+    won = hordeStrength > defStrength && horde.men - hordeLosses > 0;
+  }
+  horde.men -= hordeLosses;
+  const left = defenders - defenderLosses;
+  if (!won) {
+    t.warriors[house] = left;
+    if (left <= 0) delete t.warriors[house];
+    state.journal.push({ kind: 'HORDE_BROKEN', house, houses: [house], territory: land, defenders, losses: defenderLosses, at: iso(nowMs) });
+    horde.men = 0;
+    return;
+  }
+  let retreatTo = null;
+  if (left > 0) {
+    retreatTo = legalDefenderRetreats(state, map, house, land, left, constants)[0] || null;
+    if (retreatTo) state.territories[retreatTo].warriors[house] = Number(state.territories[retreatTo].warriors[house] || 0) + left;
+  }
+  delete t.warriors[house];
+  t.owner = null;
+  if (state.order) delete state.order[land];
+  if (state.capture_choices) delete state.capture_choices[land];
+  // A part of the Horde stays behind in every land it takes.
+  const stay = Math.max(1, Math.ceil(horde.men / 4));
+  state.wild_guards[land] = Number(state.wild_guards[land] || 0) + stay;
+  horde.men -= stay;
+  state.journal.push({
+    kind: 'HORDE_TOOK', house, houses: [house], territory: land, defenders, losses: defenderLosses,
+    horde_losses: hordeLosses, stayed: stay, men: horde.men, retreat_to: retreatTo, at: iso(nowMs)
+  });
+}
+
+// The Horde marches: one land a step, only the hunted House's lands are struck.
+export function processHordes(game, map, constants, nowMs = Date.now()) {
+  const hordes = game.state?.hordes || [];
+  if (!hordes.some(h => h.men > 0 && Date.parse(h.next_at) <= nowMs)) return game;
+  const next = structuredClone(game);
+  const state = next.state;
+  for (const horde of state.hordes) {
+    while (horde.men > 0 && Date.parse(horde.next_at) <= nowMs) {
+      const land = horde.path[horde.step];
+      horde.at = land;
+      if (land && state.territories[land]?.owner === horde.against) hordeStrikes(next, map, constants, horde, land, Date.parse(horde.next_at));
+      horde.step += 1;
+      if (horde.men > 0 && (horde.step >= horde.path.length || horde.men < 3)) {
+        state.journal.push({ kind: 'HORDE_SPENT', house: horde.against, houses: [horde.against], territory: land, men: horde.men, at: iso(nowMs) });
+        // What is left of it settles where it stopped.
+        if (land && !state.territories[land]?.owner) state.wild_guards[land] = Number(state.wild_guards[land] || 0) + horde.men;
+        horde.men = 0;
+      }
+      horde.next_at = iso(Date.parse(horde.next_at) + Math.round(dayMs(next) * HEART.hordeStepShare));
+    }
+  }
+  state.hordes = state.hordes.filter(h => h.men > 0);
+  reconcileRanks(state, map);
+  next.updated_at = iso(nowMs);
+  return next;
+}
+
+export function nextHordeDueAt(game) {
+  return (game.state?.hordes || []).filter(h => h.men > 0).map(h => h.next_at).sort()[0] || null;
 }

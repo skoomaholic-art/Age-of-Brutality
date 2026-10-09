@@ -33,7 +33,7 @@ import {
 import { normalizeOnlineSeaState } from './sea-navigation.mjs';
 import { raiseLevy, startDrill, buildYard, buildPort, processRanks, ranksView } from './levy.mjs';
 import { buildBridge, seedCrossings, BRIDGE } from './bridges.mjs';
-import { seedHeart } from './heart.mjs';
+import { processHordes, seedHeart } from './heart.mjs';
 import { NO_LIMIT, buildGrowth, hireUnits, retrainUnits, seedPopulation, unitsView } from './units.mjs';
 import { applyCaptureChoice, choiceOutcomes, seedOrder } from './order.mjs';
 import { startRide, processRiders, ridersOf } from './riders.mjs';
@@ -534,6 +534,8 @@ async function tickUnlocked(ctx) {
   processed = processDueOrders(processed, map, constants, nowMs);
   processed = processEconomy(processed, map, constants, nowMs);
   processed = processRanks(processed, map, nowMs);
+  // The Horde woken by a false Heart marches on.
+  processed = processHordes(processed, map, constants, nowMs);
   processed = processRounds(processed, map, constants, { nowMs });
   processed = processCharacters(processed, map, constants, { nowMs });
   processed = processRiders(processed, map, constants, nowMs);

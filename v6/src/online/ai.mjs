@@ -134,7 +134,10 @@ function marchCandidates(game, map, constants, house, adjacency) {
       const warriors = sizes.find(count => count >= need);
       if (!warriors) continue;
       const glory = state.wild_taken?.[to] ? 0 : ringGlory(state, to);
-      const heart = state.heart?.territory === to ? 6 : 0;
+      // A Heart: the true one once known is worth most; a decoy exposed is avoided.
+      const heart = state.heart?.territory === to ? 6
+        : state.heart?.revealed?.includes(to) ? -20
+          : state.heart?.candidates?.includes(to) ? 3 : 0;
       out.push({
         kind: 'CAPTURE_NEUTRAL',
         value: worth + glory * 1.2 + heart - Math.ceil(guards / 2) * 0.5 - warriors * 0.1,

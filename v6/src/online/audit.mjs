@@ -598,6 +598,37 @@ export function journalEntryToAudit(entry, map, game) {
     };
   }
 
+  if (['HEARTS_APPEARED', 'HEART_RUMOUR', 'HEART_FOUND', 'HEART_SPIED'].includes(entry.kind)) {
+    const where = entry.territory ? territoryName(map, entry.territory) : '';
+    const messages = {
+      HEARTS_APPEARED: `Явились Сердца земель: ${entry.count}, и лишь одно истинное. Их видно сквозь тучи: ${(entry.candidates || []).map(id => territoryName(map, id)).join(', ')}. Взявший ложное разбудит Орду.`,
+      HEART_RUMOUR: `Летописцы проведали: Сердце в земле ${where} ложное, там спит Орда. Нераскрытых осталось: ${entry.left}.`,
+      HEART_FOUND: `Истинное Сердце земель — ${where}! Его взял Дом ${entry.house}. Прочие Сердца ложные.`,
+      HEART_SPIED: `Наш шпион узнал: Сердце в земле ${where} ${entry.truth ? 'ИСТИННОЕ' : 'ложное, там спит Орда'}.`
+    };
+    return {
+      ...base,
+      ...(entry.kind === 'HEART_SPIED' ? { visibility: 'PRIVATE' } : {}),
+      message: messages[entry.kind],
+      details: { house: entry.house || null, territory_id: entry.territory || null, at: entry.at || null }
+    };
+  }
+
+  if (entry.kind.startsWith('HORDE_')) {
+    const where = territoryName(map, entry.territory);
+    const messages = {
+      HORDE_AWAKENED: `Дом ${entry.house} взял ложное Сердце в земле ${where} и разбудил Орду! ${entry.men} всадников идут на его столицу${entry.toward ? `, ${territoryName(map, entry.toward)}` : ''}.`,
+      HORDE_TOOK: `Орда взяла землю ${where} у Дома ${entry.house}. Там остались ${entry.stayed} её всадников, дальше идут ${entry.men}.`,
+      HORDE_BROKEN: `Орда разбита у земли ${where}: Дом ${entry.house} выстоял.`,
+      HORDE_SPENT: `Орда выдохлась у земли ${where}: остатки осели там.`
+    };
+    return {
+      ...base,
+      message: messages[entry.kind] || `Орда: ${where}.`,
+      details: { house: entry.house, territory_id: entry.territory, men: entry.men ?? null, at: entry.at || null }
+    };
+  }
+
   if (entry.kind === 'HEART_TAKEN' || entry.kind === 'HEART_HELD') {
     const where = territoryName(map, entry.territory);
     return {

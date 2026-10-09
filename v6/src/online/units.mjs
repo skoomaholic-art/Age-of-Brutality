@@ -11,6 +11,7 @@
 // Troops already standing can be retrained into a better kind where that kind
 // is raised, for the difference in price.
 import { orderOnCapture } from './order.mjs';
+import { heartOnCapture } from './heart.mjs';
 import { RANKS, compAt, emptyComp, mergeStars, reconcileRanks, setStars, starsAt } from './ranks.mjs';
 
 export const PEOPLE = Object.freeze({
@@ -153,11 +154,13 @@ export function populationDawn(state, map) {
 }
 
 // A land changed hands (games with people): people lost, order low, a choice for the taker.
-export function onLandTaken(game, territory, previousOwner, nowMs = Date.now()) {
+export function onLandTaken(game, map, territory, previousOwner, nowMs = Date.now()) {
   const state = game.state;
+  const house = state.territories[territory]?.owner;
+  // A Heart taken: the true one shows itself, a decoy wakes the Horde.
+  heartOnCapture(game, map, territory, house, nowMs);
   if (!state.population) return;
   populationOnCapture(state, territory, previousOwner);
-  const house = state.territories[territory]?.owner;
   if (house) orderOnCapture(state, territory, house, previousOwner, { nowMs, ai: (game.rounds?.ai_houses || []).includes(house) });
 }
 

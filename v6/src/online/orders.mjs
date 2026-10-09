@@ -855,7 +855,7 @@ export function processDueOrders(game, map, constants, nowMs = Date.now()) {
       // A land taken loses some of its people.
       const ownerBefore = next.state.territories?.[liveOrder.action.to]?.owner ?? null;
       const ownerAfter = resolved.state.territories?.[liveOrder.action.to]?.owner ?? null;
-      if (ownerAfter && ownerAfter !== ownerBefore) onLandTaken({ ...next, state: resolved.state }, liveOrder.action.to, ownerBefore, nowMs);
+      if (ownerAfter && ownerAfter !== ownerBefore) onLandTaken({ ...next, state: resolved.state }, map, liveOrder.action.to, ownerBefore, nowMs);
       next.state = resolved.state;
       liveOrder.status = 'RESOLVED';
       liveOrder.resolved_at = new Date(nowMs).toISOString();

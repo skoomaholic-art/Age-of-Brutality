@@ -1,3 +1,4 @@
+import { spyLearns } from './heart.mjs';
 import { houseCourtTotals } from './court.mjs';
 // Spies. A House hires a spy and hides him in a band of wayfarers resting in
 // one of its lands. He walks with the band along its own round, so nothing
@@ -79,6 +80,8 @@ export function processAgents(game, map, { nowMs = Date.now() } = {}) {
         agent.status = 'WATCH';
         agent.until = new Date(nowMs + watchMs(next)).toISOString();
         sight[agent.target] = agent.until;
+        // A spy at a Heart, or next to it, learns whether it is the true one.
+        spyLearns(next.state, map, house, agent.target, nowMs);
         next.state.journal.push({ kind: 'SPY_ARRIVED', house, agent_name: agent.name, territory: agent.target, until: agent.until, at: new Date(nowMs).toISOString() });
       } else {
         delete sight[agent.target];
