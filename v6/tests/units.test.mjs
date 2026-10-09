@@ -72,3 +72,21 @@ test('people grow only with fields or a fair, and a taken land loses some', () =
   assert.ok(g.state.population[village] < before + 1);
   assert.equal(g.state.growth[village], undefined, 'the fields are trampled');
 });
+
+test('a host that lost men can be made good to full strength, dearer the more seasoned it is', async () => {
+  const { replenishQuote, replenishUnits } = await import('../src/online/units.mjs');
+  let g = game();
+  g = hireUnits(g, map, H, capital, [6, 0, 0, 0, 0, 0]);
+  const full = g.state.territories[capital].warriors[H];
+  // A battle: three men fall.
+  g.state.territories[capital].warriors[H] = full - 3;
+  setStars(g.state, capital, H, 2);
+  const quote = replenishQuote(g.state, map, H, capital);
+  assert.equal(quote.men, 3);
+  assert.equal(quote.health, Math.round(((full - 3) / full) * 100));
+  assert.equal(quote.gold, Math.ceil(3 * 1 * 2), 'two stars: twice the price');
+  g = replenishUnits(g, map, H, capital);
+  assert.equal(g.state.territories[capital].warriors[H], full);
+  assert.equal(starsAt(g.state, capital, H), 2, 'the experience stays');
+  assert.throws(() => replenishUnits(g, map, H, capital), /полной силе/);
+});

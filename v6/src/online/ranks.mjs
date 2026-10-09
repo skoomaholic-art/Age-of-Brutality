@@ -164,6 +164,16 @@ export function reconcileRanks(state, map) {
     next[key][house] = compAt(state, map, key, house);
   }
   state.ranks = next;
+  // The full strength of each host (games with people): never below what stands there.
+  if (state.peak) {
+    for (const key of Object.keys(state.peak)) {
+      for (const house of Object.keys(state.peak[key])) {
+        if (!next[key]?.[house]) { delete state.peak[key][house]; continue; }
+        state.peak[key][house] = clean(state.peak[key][house]).map((n, i) => Math.max(n, next[key][house][i]));
+      }
+      if (!Object.keys(state.peak[key]).length) delete state.peak[key];
+    }
+  }
   if (state.stars) {
     for (const key of Object.keys(state.stars)) {
       for (const house of Object.keys(state.stars[key])) if (!next[key]?.[house]) delete state.stars[key][house];
@@ -241,6 +251,11 @@ export function settleMarchRanks(before, after, map, order, journal) {
     addComp(stored, arriving);
     setComp(after, key, house, stored);
     // A won fight gives the newcomers a star; the host then shares its experience.
+    // The host's full strength goes with it: the fallen of the march can be made good where it stands.
+    if (after.peak) {
+      addPeak(after, key, house, comp);
+      for (const fromKey of fromKeys) if (after.peak[fromKey]?.[house]) addPeak(after, fromKey, house, comp, -1);
+    }
     const won = journal?.some(entry => (entry.kind === 'BATTLE' && entry.winner === house) || (entry.kind === 'WILD_BATTLE' && entry.success));
     const marched = Math.min(MAX_STARS, Number(order.action.stars || 0) + (won ? 1 : 0));
     setStars(after, key, house, mergeStars(starsAt(before, key, house), oldHeads, marched, compSum(arriving)));
@@ -292,6 +307,24 @@ export function strengthOf(comp, heads, { defending = false, stars = 0 } = {}) {
   let strength = compStrength(c);
   if (defending) strength += c.reduce((a, n, i) => a + n * RANKS[i].guard, 0);
   return Math.round(strength * (1 + 0.1 * Math.max(0, Math.min(3, Number(stars) || 0))));
+}
+
+// ---------- full strength: what a host had before its losses ----------
+// Kept only in games with people (state.peak exists). The gap between the
+// full strength and what stands is the wounded and fallen, to be made good.
+
+export function peakAt(state, map, key, house) {
+  const comp = compAt(state, map, key, house);
+  const peak = clean(state.peak?.[key]?.[house]);
+  return peak.map((n, i) => Math.max(n, comp[i]));
+}
+
+export function addPeak(state, key, house, comp, sign = 1) {
+  if (!state.peak) return;
+  state.peak[key] ||= {};
+  const now = clean(state.peak[key][house]);
+  const add = clean(comp);
+  state.peak[key][house] = now.map((n, i) => Math.max(0, n + sign * add[i]));
 }
 
 // ---------- experience: one to three stars for a host that has fought ----------

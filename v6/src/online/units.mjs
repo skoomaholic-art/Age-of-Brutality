@@ -12,7 +12,7 @@
 // is raised, for the difference in price.
 import { orderOnCapture } from './order.mjs';
 import { heartOnCapture } from './heart.mjs';
-import { RANKS, compAt, emptyComp, mergeStars, reconcileRanks, setStars, starsAt } from './ranks.mjs';
+import { addPeak, peakAt, RANKS, compAt, emptyComp, mergeStars, reconcileRanks, setStars, starsAt } from './ranks.mjs';
 
 export const PEOPLE = Object.freeze({
   start: { 'Столица': 30, 'Город': 20, 'Деревня': 12, 'Дикая земля': 4, 'Половина острова': 6 },
@@ -41,6 +41,13 @@ export function seedPopulation(game, map) {
   game.state.population = {};
   for (const t of map.territories) game.state.population[t.id] = PEOPLE.start[t.type] ?? 6;
   game.state.growth = {};
+  game.state.peak = {};
+  // The hosts standing at the start are at full strength.
+  for (const [id, t] of Object.entries(game.state.territories)) {
+    for (const [house, n] of Object.entries(t.warriors || {})) {
+      if (Number(n) > 0) (game.state.peak[id] ||= {})[house] = compAt(game.state, map, id, house);
+    }
+  }
   return game;
 }
 
@@ -83,9 +90,59 @@ export function hireUnits(game, map, house, territory, counts, { nowMs = Date.no
   state.ranks ||= {};
   state.ranks[territory] ||= {};
   state.ranks[territory][house] = comp;
+  state.peak ||= {};
+  (state.peak[territory] ||= {})[house] = peakAt(game.state, map, territory, house).map((n, i) => n + want[i]);
   // Fresh men dilute the experience of the host they join.
   setStars(state, territory, house, mergeStars(starsAt(game.state, territory, house), oldHeads, 0, heads));
   state.journal.push({ kind: 'UNITS_HIRED', house, houses: [house], territory, counts: want, gold, at: iso(nowMs) });
+  next.updated_at = iso(nowMs);
+  return next;
+}
+
+// ---------- making good the losses ----------
+// A host that has fought is short of men: the wounded and fallen. Making them
+// good brings it back to full strength and keeps its experience; it costs the
+// price of the men, more for a seasoned host (half again per star), and one
+// of the land's people for each.
+export const REPLENISH_STAR_SHARE = 0.5;
+
+export function replenishQuote(state, map, house, territory) {
+  const land = state.territories?.[territory];
+  const comp = compAt(state, map, territory, house);
+  const peak = peakAt(state, map, territory, house);
+  const missing = peak.map((n, i) => Math.max(0, n - comp[i]));
+  const men = missing.reduce((a, b) => a + b, 0);
+  const stars = starsAt(state, territory, house);
+  const gold = Math.ceil(missing.reduce((sum, n, i) => sum + n * RANKS[i].gold, 0) * (1 + REPLENISH_STAR_SHARE * stars));
+  const heads = comp.reduce((a, b) => a + b, 0);
+  const full = peak.reduce((a, b) => a + b, 0);
+  return {
+    missing, men, gold, stars,
+    health: full ? Math.round((heads / full) * 100) : 100,
+    people: Number(state.population?.[territory] || 0),
+    own: land?.owner === house
+  };
+}
+
+export function replenishUnits(game, map, house, territory, { nowMs = Date.now() } = {}) {
+  const quote = replenishQuote(game.state, map, house, territory);
+  if (!quote.own) throw new Error('пополнять можно только в своей земле');
+  if (!quote.men) throw new Error('отряд и так в полной силе');
+  if (quote.people < quote.men) throw new Error(`в этой земле осталось людей: ${quote.people}, а нужно ${quote.men}`);
+  if (Number(game.state.houses[house].gold || 0) < quote.gold) throw new Error(`нужно ${quote.gold} золота`);
+  const next = structuredClone(game);
+  const state = next.state;
+  reconcileRanks(state, map);
+  const comp = compAt(state, map, territory, house);
+  quote.missing.forEach((n, i) => { comp[i] += n; });
+  state.territories[territory].warriors[house] = comp.reduce((a, b) => a + b, 0);
+  state.ranks[territory] ||= {};
+  state.ranks[territory][house] = comp;
+  state.houses[house].gold -= quote.gold;
+  state.population[territory] -= quote.men;
+  // The experience stays with the host.
+  setStars(state, territory, house, quote.stars);
+  state.journal.push({ kind: 'UNITS_REPLENISHED', house, houses: [house], territory, men: quote.men, gold: quote.gold, at: iso(nowMs) });
   next.updated_at = iso(nowMs);
   return next;
 }
@@ -182,6 +239,7 @@ export function unitsView(game, map, house) {
   return {
     kinds: RANKS.map((rank, i) => ({ index: i, name: rank.name, power: rank.power, gold: rank.gold, guard: rank.guard, where: rank.where, upkeep: rank.upkeep })),
     growth_gold: PEOPLE.growthGold,
+    replenish_star_share: REPLENISH_STAR_SHARE,
     growth_per_dawn: PEOPLE.growth
   };
 }
@@ -235,6 +293,7 @@ export function upkeepDawn(game, map, nowMs = Date.now()) {
       const free = p.heads - Number(marching[p.land || p.key] || 0);
       if (free <= 0) continue;
       const comp = compAt(state, map, p.key, house);
+      const before = [...comp];
       let gone = 0;
       for (let i = 0; i < comp.length && unpaid > 0 && gone < free; i += 1) {
         while (comp[i] > 0 && unpaid > 0 && gone < free) { comp[i] -= 1; gone += 1; unpaid -= RANKS[i].upkeep; }
@@ -246,6 +305,8 @@ export function upkeepDawn(game, map, nowMs = Date.now()) {
       if (left > 0) holder[house] = left; else delete holder[house];
       state.ranks[p.key] ||= {};
       state.ranks[p.key][house] = comp;
+      // Deserters are gone for good: the host's full strength shrinks.
+      addPeak(state, p.key, house, before.map((n, i) => n - comp[i]), -1);
       if (p.kind === 'SEA') {
         const afloat = Object.keys(holder).filter(h => Number(holder[h] || 0) > 0);
         state.sea_nodes[p.key].owner = afloat.length === 1 ? afloat[0] : null;

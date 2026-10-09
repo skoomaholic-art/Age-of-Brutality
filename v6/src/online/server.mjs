@@ -35,7 +35,7 @@ import { raiseLevy, startDrill, buildYard, buildPort, processRanks, ranksView } 
 import { buildBridge, burnBridge, seedCrossings, BRIDGE } from './bridges.mjs';
 import { processHordes, seedHeart } from './heart.mjs';
 import { devAction, devAllowed, devFastForward } from './dev.mjs';
-import { NO_LIMIT, buildGrowth, hireUnits, retrainUnits, seedPopulation, unitsView, upkeepOf } from './units.mjs';
+import { NO_LIMIT, buildGrowth, hireUnits, replenishUnits, retrainUnits, seedPopulation, unitsView, upkeepOf, REPLENISH_STAR_SHARE } from './units.mjs';
 import { applyCaptureChoice, choiceOutcomes, seedOrder } from './order.mjs';
 import { startRide, processRiders, ridersOf } from './riders.mjs';
 import { courtEffects } from './court.mjs';
@@ -1693,7 +1693,7 @@ async function handleGameApi(req, res, url, ctx, subpath) {
     return json(res, result.status, result.response);
   }
 
-  if (req.method === 'POST' && ['/levy', '/drill', '/yard', '/port', '/bridge', '/hire', '/retrain', '/growth', '/capture-choice', '/bridge-burn'].includes(subpath)) {
+  if (req.method === 'POST' && ['/levy', '/drill', '/yard', '/port', '/bridge', '/hire', '/retrain', '/growth', '/capture-choice', '/bridge-burn', '/replenish'].includes(subpath)) {
     const body = await readBody(req);
     const house = String(body.house || '').trim();
     await requireHouse(ctx, req, house);
@@ -1710,6 +1710,7 @@ async function handleGameApi(req, res, url, ctx, subpath) {
               : subpath === '/bridge-burn' ? burnBridge(game, map, house, String(body.key || ''), { nowMs })
                 : subpath === '/hire' ? hireUnits(game, map, house, String(body.territory || ''), body.counts, { nowMs })
                   : subpath === '/retrain' ? retrainUnits(game, map, house, String(body.territory || ''), body.from, body.to, body.count, { nowMs })
+                  : subpath === '/replenish' ? replenishUnits(game, map, house, String(body.territory || ''), { nowMs })
                     : subpath === '/growth' ? buildGrowth(game, map, house, String(body.territory || ''), { nowMs })
                       : subpath === '/capture-choice' ? (() => {
                         const chosen = structuredClone(game);

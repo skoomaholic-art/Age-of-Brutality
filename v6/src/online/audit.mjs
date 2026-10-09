@@ -323,6 +323,15 @@ export function journalEntryToAudit(entry, map, game) {
     };
   }
 
+  if (entry.kind === 'UNITS_REPLENISHED') {
+    return {
+      ...base,
+      visibility: 'PRIVATE',
+      message: `Отряд в земле ${territoryName(map, entry.territory)} пополнен: ${entry.men} человек встали на место раненых и павших. Заплачено ${entry.gold} золота.`,
+      details: { house: entry.house, territory_id: entry.territory, at: entry.at || null }
+    };
+  }
+
   if (entry.kind === 'UNITS_HIRED' || entry.kind === 'UNITS_RETRAINED' || entry.kind === 'GROWTH_BUILT') {
     const where = territoryName(map, entry.territory);
     const kinds = ['крестьян', 'копейщиков', 'лучников', 'ратников', 'конных сержантов', 'рыцарей'];

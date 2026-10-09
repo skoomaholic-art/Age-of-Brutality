@@ -236,8 +236,20 @@
     .fate-card button { margin-top: auto; }
     .fate-later { display: block; margin: 12px auto 0; }
     .bad-note { color: #9a2a1a; }
+    /* A (?) next to a control: hover, focus or tap shows what it does. */
+    .hint { position: relative; display: inline-grid; place-items: center; width: 17px; height: 17px; margin-left: 5px; border: 1px solid currentColor; border-radius: 50%; font-size: 11px; font-weight: 700; line-height: 1; cursor: help; opacity: .75; vertical-align: middle; flex: 0 0 auto; font-family: Kurale, serif; }
+    .hint:hover, .hint:focus, .hint.open { opacity: 1; outline: none; }
+    .hint .hint-text { display: none; position: fixed; z-index: 60; width: 240px; padding: 8px 10px; background: #2b1b12; color: #f6eed8; font: 12.5px/1.35 Kurale, serif; font-weight: 400; text-align: left; border: 1px solid #c9a23a; box-shadow: 3px 4px 0 rgba(0,0,0,.35); white-space: normal; }
+    .hint:hover .hint-text, .hint:focus .hint-text, .hint.open .hint-text { display: block; }
+    .with-hint { display: flex; align-items: center; gap: 2px; }
+    .with-hint > button { flex: 1; }
+    button.costly:disabled { filter: grayscale(1); opacity: .55; cursor: not-allowed; }
     .dev-panel { position: absolute; right: 12px; top: 54px; z-index: 12; width: 260px; padding: 10px 12px; background: #1d1a17; color: #f1e6c8; border: 1px solid #c9a23a; box-shadow: 4px 6px 0 rgba(0,0,0,.4); font-size: 13px; display: grid; gap: 8px; }
     .dev-panel[hidden] { display: none; }
+    .dev-console { position: absolute; left: 0; right: 0; top: 0; z-index: 70; max-height: 45%; display: flex; flex-direction: column; background: rgba(12,10,8,.93); color: #d8f0c8; font: 13px/1.4 ui-monospace, Menlo, Consolas, monospace; border-bottom: 2px solid #c9a23a; }
+    .dev-console[hidden] { display: none; }
+    .dev-log { overflow: auto; padding: 8px 12px; white-space: pre-wrap; }
+    .dev-console input { margin: 0; border: 0; border-top: 1px solid #3a3227; background: #0c0a08; color: #f1e6c8; font: inherit; padding: 8px 12px; outline: none; }
     .dev-head { display: flex; justify-content: space-between; align-items: center; font-weight: 600; color: #e2b93b; }
     .dev-row { display: flex; gap: 6px; }
     .dev-panel label { display: flex; gap: 6px; align-items: center; }
@@ -805,6 +817,10 @@
           <div id="decision-actions" class="decision-actions"></div>
         </div>
       </div>
+      <div id="dev-console" class="dev-console" hidden>
+        <div id="dev-log" class="dev-log"></div>
+        <input id="dev-input" autocomplete="off" spellcheck="false" placeholder="команда (help — список)">
+      </div>
       <div id="dev-panel" class="dev-panel" hidden>
         <div class="dev-head">Режим разработчика <button id="dev-close">×</button></div>
         <label><input type="checkbox" id="dev-reveal"> Открыть всю карту</label>
@@ -929,7 +945,7 @@
         <div class="stat"><span class="muted">Золото</span><b id="gold">0</b></div>
         <div class="stat"><span class="muted">Влияние</span><b id="influence">0</b></div>
         <div class="stat"><span class="muted">Слава</span><b id="vp">0</b></div>
-        <div class="stat" id="upkeep-stat" hidden><span class="muted">Войску с рассветом</span><b id="upkeep">0</b></div>
+        <div class="stat" id="upkeep-stat" hidden><span class="muted with-hint">Войску с рассветом<span class="hint" tabindex="0">?<span class="hint-text">Содержание войска каждый рассвет: крестьянин ¼ золота, копейщик и лучник ½, ратник 1, конный сержант 1½, рыцарь 2. Не хватит золота — неоплаченные разойдутся по домам, самые дешёвые первыми.</span></span></span><b id="upkeep">0</b></div>
       </div>
     </div>
 
@@ -1079,17 +1095,54 @@ async function decodeResponse(res) {
 
 // ---------- developer mode (solo games, with the developer key) ----------
 const DEV_KEY_STORE = 'aob-dev-key';
-(() => {
+// The console: the ` or ё key (or five taps on the game's title) opens it.
+// `dev <key>` turns developer mode on for this browser.
+function devLog(line) {
+  const log = $('dev-log');
+  log.textContent += line + '\n';
+  log.scrollTop = log.scrollHeight;
+}
+function toggleConsole(show = $('dev-console').hidden) {
+  $('dev-console').hidden = !show;
+  if (show) setTimeout(() => $('dev-input').focus(), 0);
+}
+const DEV_HELP = [
+  'dev <ключ>      — включить режим разработчика в этом браузере',
+  'dev off         — выключить',
+  'map on|off      — открыть всю карту',
+  'fast on|off     — постройки и найм без ожидания',
+  'gold <число>    — добавить золота',
+  'panel           — показать панель с кнопками',
+  'clear           — очистить консоль'
+].join('\n');
+async function runConsole(text) {
+  const [cmd, ...rest] = text.trim().split(/\s+/);
+  const arg = rest.join(' ');
+  devLog('> ' + text);
+  const solo = snapshot?.game?.lifecycle?.game_mode === 'SOLO';
+  const need = () => {
+    if (!devKey()) { devLog('Сначала: dev <ключ>'); return false; }
+    if (!solo) { devLog('Режим разработчика работает только в одиночной игре.'); return false; }
+    return true;
+  };
   try {
-    const key = new URLSearchParams(location.search).get('dev');
-    if (key) {
-      localStorage.setItem(DEV_KEY_STORE, key);
-      const url = new URL(location.href);
-      url.searchParams.delete('dev');
-      history.replaceState(null, '', url);
-    }
-  } catch {}
-})();
+    if (!cmd) return;
+    if (cmd === 'help' || cmd === '?') devLog(DEV_HELP);
+    else if (cmd === 'clear') $('dev-log').textContent = '';
+    else if (cmd === 'dev') {
+      if (arg === 'off') { try { localStorage.removeItem(DEV_KEY_STORE); } catch {} devLog('Режим разработчика выключен.'); }
+      else if (arg) { try { localStorage.setItem(DEV_KEY_STORE, arg); } catch {} devLog('Ключ сохранён. Команды: help.'); }
+      else devLog(devKey() ? 'Режим разработчика включён.' : 'Режим разработчика выключен.');
+      renderDev();
+    } else if (cmd === 'map' && need()) { await devDo('REVEAL', arg !== 'off'); devLog('Карта ' + (arg === 'off' ? 'снова в тумане.' : 'открыта.')); }
+    else if (cmd === 'fast' && need()) { await devDo('INSTANT', arg !== 'off'); devLog('Без ожидания: ' + (arg === 'off' ? 'выкл.' : 'вкл.')); }
+    else if (cmd === 'gold' && need()) { await devDo('GOLD', Number(arg) || 100); devLog('Золота добавлено: ' + (Number(arg) || 100) + '.'); }
+    else if (cmd === 'panel' && need()) { $('dev-panel').hidden = false; }
+    else if (!['map', 'fast', 'gold', 'panel'].includes(cmd)) devLog('Нет такой команды. help — список.');
+  } catch (error) {
+    devLog('Ошибка: ' + sayError(error));
+  }
+}
 function devKey() {
   try { return localStorage.getItem(DEV_KEY_STORE) || ''; } catch { return ''; }
 }
@@ -1098,7 +1151,8 @@ async function devDo(action, value) {
     await api('/api/dev', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ house, key: devKey(), action, value }) });
     await refresh();
   } catch (error) {
-    alert(sayError(error));
+    if ($('dev-console').hidden) alert(sayError(error));
+    else devLog('Ошибка: ' + sayError(error));
   }
 }
 function renderDev() {
@@ -1111,6 +1165,25 @@ function renderDev() {
   if (document.activeElement?.id !== 'dev-instant') $('dev-instant').checked = Boolean(dev.instant);
 }
 function setupDev() {
+  document.addEventListener('keydown', event => {
+    const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName) && document.activeElement?.id !== 'dev-input';
+    if (typing) return;
+    if (event.code === 'Backquote') { event.preventDefault(); toggleConsole(); }
+    if (event.key === 'Escape' && !$('dev-console').hidden) toggleConsole(false);
+  });
+  $('dev-input').addEventListener('keydown', event => {
+    if (event.key !== 'Enter') return;
+    const text = event.target.value;
+    event.target.value = '';
+    runConsole(text);
+  });
+  // On a phone: five quick taps on the game's title.
+  let taps = [];
+  document.querySelector('.brand, header h1, #brand, .title')?.addEventListener('click', () => {
+    const now = Date.now();
+    taps = [...taps.filter(t => now - t < 2500), now];
+    if (taps.length >= 5) { taps = []; toggleConsole(true); }
+  });
   $('bar-dev').onclick = () => { $('dev-panel').hidden = !$('dev-panel').hidden; };
   $('dev-close').onclick = () => { $('dev-panel').hidden = true; };
   $('dev-reveal').onchange = event => devDo('REVEAL', event.target.checked);
@@ -1848,6 +1921,40 @@ function describeRanks(comp) {
   return parts.join(', ') || 'никого';
 }
 
+// A (?) with an explanation.
+function hint(text) {
+  return '<span class="hint" tabindex="0" role="button" aria-label="Пояснение">?<span class="hint-text">' + text + '</span></span>';
+}
+// A button that costs gold: grey and inactive when the treasury is short.
+function goldButton(attrs, label, gold, extraOff = '') {
+  const have = Number(snapshot?.game?.state?.houses?.[house]?.gold || 0);
+  const off = extraOff || (have < gold ? 'не хватает золота: нужно ' + gold + ', есть ' + have : '');
+  return '<button class="wide costly' + (off ? '' : ' primary') + '" ' + attrs + (off ? ' disabled title="' + escapeHtml(off) + '"' : '') + '>' + label + '</button>';
+}
+// The explanation is placed in the window, above the (?) if there is room, never cut off.
+function placeHint(h) {
+  const text = h.querySelector('.hint-text');
+  if (!text) return;
+  const r = h.getBoundingClientRect();
+  const w = Math.min(240, window.innerWidth - 16);
+  text.style.width = w + 'px';
+  text.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + 'px';
+  text.style.top = '0px';
+  const height = text.offsetHeight || 80;
+  const above = r.top - height - 6;
+  text.style.top = (above >= 8 ? above : Math.min(window.innerHeight - height - 8, r.bottom + 6)) + 'px';
+}
+['mouseover', 'focusin'].forEach(type => document.addEventListener(type, event => {
+  const h = event.target.closest?.('.hint');
+  if (h) requestAnimationFrame(() => placeHint(h));
+}));
+document.addEventListener('click', event => {
+  const h = event.target.closest('.hint');
+  if (h) requestAnimationFrame(() => placeHint(h));
+  document.querySelectorAll('.hint.open').forEach(o => { if (o !== h) o.classList.remove('open'); });
+  if (h) { h.classList.toggle('open'); event.stopPropagation(); }
+}, true);
+
 // Experience of a host: one to three stars.
 function starsOf(pos, owner) {
   return Math.max(0, Math.min(3, Number(snapshot?.game?.state?.stars?.[pos]?.[owner] || 0)));
@@ -1873,24 +1980,34 @@ function hireBlock(id) {
       '<br><span class="tiny">' + k.gold + ' зол. за голову, содержание ' + k.upkeep + ' с рассветом' + (ok ? '' : ' · ' + KIND_WHERE[k.where]) + '</span></span>' +
       '<input type="number" min="0" max="' + people + '" value="0" data-hire-kind="' + k.index + '" ' + (ok ? '' : 'disabled') + '></div>';
   }).join('');
-  return '<div class="rank-box"><div class="rank-head">Нанять войска</div>' +
+  return '<div class="rank-box"><div class="rank-head with-hint">Нанять войска' + hint('Войска нанимают в любой своей земле. Деревня даёт крестьян, копейщиков и лучников, город ещё ратников и конных сержантов, столица и рыцарей. Каждый нанятый — один из людей этой земли. Войско каждый рассвет просит содержания; не заплатишь — неоплаченные разойдутся.') + '</div>' +
     '<div class="tiny">Людей в земле: <b>' + people + '</b>. Каждый нанятый — один из них. Новые люди прибывают, только если здесь есть ' + (level ? 'ярмарка' : 'поля') + '.' +
     (snapshot.game.upkeep ? ' Всё войско сейчас стоит <b>' + snapshot.game.upkeep.gold + '</b> золота с рассветом; не заплатишь — неоплаченные разойдутся.' : '') + '</div>' +
-    rows + '<div class="acts"><span class="tiny" data-hire-total>0 золота</span><button class="primary" data-hire-go>Нанять</button></div></div>';
+    rows + '<div class="acts"><span class="tiny" data-hire-total>0 золота</span><button class="primary costly" data-hire-go disabled>Нанять</button></div></div>';
 }
-function retrainBlock(id) {
+// Making good the losses of the host standing here (same count as the server).
+function replenishBlock(id) {
   const view = snapshot.game.units_view;
   if (!view) return '';
   const comp = rankComp(id, house);
-  if (!comp.some(Boolean)) return '';
-  const t = territoryById(id);
-  const level = t.type === 'Столица' ? 2 : t.type === 'Город' ? 1 : 0;
-  const from = comp.map((n, i) => n ? '<option value="' + i + '">' + escapeHtml(RANK_WORDS[i][0]) + ' (' + n + ')</option>' : '').join('');
-  const to = view.kinds.filter(k => k.where <= level && k.index > 0).map(k => '<option value="' + k.index + '">' + escapeHtml(k.name) + '</option>').join('');
-  return '<div class="rank-box"><div class="rank-head">Переучить</div>' +
-    '<div class="tiny">Платишь разницу в цене, людей не тратишь. Опыт отряда сохраняется.</div>' +
-    '<div class="acts"><select data-retrain-from>' + from + '</select> → <select data-retrain-to>' + to + '</select>' +
-    '<input type="number" min="1" value="1" data-retrain-count style="width:48px"><button data-retrain-go>Переучить</button></div></div>';
+  const heads = comp.reduce((a, b) => a + b, 0);
+  if (!heads) return '';
+  const stored = snapshot.game.state.peak?.[id]?.[house] || [];
+  const peak = comp.map((n, i) => Math.max(n, Number(stored[i] || 0)));
+  const missing = peak.map((n, i) => n - comp[i]);
+  const men = missing.reduce((a, b) => a + b, 0);
+  const full = peak.reduce((a, b) => a + b, 0);
+  const stars = starsOf(id, house);
+  const gold = Math.ceil(missing.reduce((sum, n, i) => sum + n * (view.kinds[i]?.gold || 0), 0) * (1 + (view.replenish_star_share || 0.5) * stars));
+  const people = Number(snapshot.game.state.population?.[id] || 0);
+  const health = full ? Math.round(heads / full * 100) : 100;
+  const help = hint('Пополнение потерь: на место раненых и павших встают новые люди того же рода, и отряд снова в полной силе. Опыт (звёзды) сохраняется. Цена — как за наём этих людей, и чем опытнее отряд, тем дороже: каждая звезда добавляет половину цены. Берутся люди этой земли.');
+  const button = men
+    ? goldButton('data-replenish', 'Пополнить за ' + gold + ' зол.', gold, people < men ? 'в земле мало людей: нужно ' + men + ', есть ' + people : '')
+    : '<button class="wide" disabled>Отряд в полной силе</button>';
+  return '<div class="rank-box"><div class="rank-head">Состояние отряда</div>' +
+    '<div class="row"><span>Сила</span><b>' + health + '% · ' + heads + ' из ' + full + ' · ' + starText(stars) + '</b></div>' +
+    '<div class="with-hint">' + button + help + '</div></div>';
 }
 function growthButton(id) {
   if (!unitsMode()) return '';
@@ -1899,7 +2016,8 @@ function growthButton(id) {
   const gold = snapshot.game.units_view?.growth_gold?.[t.type] ?? 3;
   const per = snapshot.game.units_view?.growth_per_dawn?.[t.type] ?? 1;
   if (snapshot.game.state.growth?.[id]) return '<button class="wide" disabled>' + (fair ? 'Ярмарка' : 'Поля') + ' есть: +' + per + ' людей с каждым рассветом</button>';
-  return '<button class="wide" data-growth>' + (fair ? 'Ярмарка' : 'Поля') + ' · ' + gold + ' золота (+' + per + ' людей каждый рассвет)</button>';
+  return '<div class="with-hint">' + goldButton('data-growth', (fair ? 'Ярмарка' : 'Поля') + ' · ' + gold + ' золота (+' + per + ' людей каждый рассвет)', gold) +
+    hint('Люди сами не прибывают. ' + (fair ? 'Ярмарка' : 'Поля') + ' приводят новых людей каждый рассвет, до двойного числа против начального. Из людей нанимают войска и пополняют потери.') + '</div>';
 }
 
 function levyBlock() {
@@ -1946,7 +2064,7 @@ function portButton(t, st) {
   if (hasPort(t.id)) return '<button class="wide" disabled>Порт стоит: отсюда выходят в море</button>';
   if (!(snapshot.map.ports || []).includes(t.id)) return '<button class="wide" disabled>Порт · земля не выходит к воде</button>';
   if (st.port_ready_at) return '<button class="wide" disabled>Порт строится · ' + escapeHtml(timeLeft(st.port_ready_at)) + '</button>';
-  return '<button class="wide" data-land-port>Построить порт · 4 золота</button>';
+  return '<div class="with-hint">' + goldButton('data-land-port', 'Построить порт · 4 золота', 4) + hint('Из порта корабли выходят в открытое море. Высадиться можно на любой берег и без порта, а выйти в море — только из порта. Строится треть дня.') + '</div>';
 }
 
 // Rivers on the roads of a land: a bridge is needed to cross each of them.
@@ -1968,10 +2086,10 @@ function bridgeRows(id, canBuild) {
     const other = territoryById(c.a === id ? c.b : c.a)?.name || '';
     const bridge = bridgeOf(key);
     const label = 'Дорога на ' + escapeHtml(other);
-    if (bridge?.built) return '<div class="row"><span>' + label + '</span><b>мост стоит' + (canBuild ? ' <button data-bridge-burn="' + escapeHtml(key) + '">Сжечь</button>' : '') + '</b></div>';
+    if (bridge?.built) return '<div class="row"><span>' + label + '</span><b>мост стоит' + (canBuild ? ' <button data-bridge-burn="' + escapeHtml(key) + '">Сжечь</button>' + hint('Сжечь мост со своего берега: по этой дороге никто не пройдёт, пока мост не отстроят. Орда у реки без моста теряет время, ища брод.') : '') + '</b></div>';
     if (bridge?.ready_at) return '<div class="row"><span>' + label + '</span><b>мост строится · ' + escapeHtml(timeLeft(bridge.ready_at)) + '</b></div>';
     if (!canBuild) return '<div class="row"><span>' + label + '</span><b>моста нет, не пройти</b></div>';
-    return '<button class="wide" data-bridge-build="' + escapeHtml(key) + '">Мост на дороге на ' + escapeHtml(other) + ' · ' + cost.gold + ' золота</button>';
+    return '<div class="with-hint">' + goldButton('data-bridge-build="' + escapeHtml(key) + '"', 'Мост на дороге на ' + escapeHtml(other) + ' · ' + cost.gold + ' золота', cost.gold) + hint('Без моста реку не перейти никому. Мост ставят со своего берега за четверть дня, ходят по нему все.') + '</div>';
   }).join('') + '<div class="tiny">Без моста реку не перейти. Мост ставят со своего берега, и ходят по нему все. Свой мост можно сжечь, чтобы задержать врага или Орду: та ищет брод и теряет время.</div></div>';
 }
 
@@ -2007,7 +2125,7 @@ function wildRows(id) {
   return '<div class="row"><span>Стража</span><b>' + (known ? guards + ' ' + warriorWord(guards) + ' вольных людей' : 'неизвестно') + '</b></div>' +
     '<div class="row"><span>Удалённость</span><b>' + (isHeart ? (truth === 'TRUE' ? 'истинное Сердце земель' : truth === 'FALSE' ? 'ложное Сердце: там спит Орда' : 'одно из Сердец земель — истинное ли?') : ring + '-е кольцо от столиц') + '</b></div>' +
     '<div class="row"><span>За взятие</span><b>' + (glory ? '+' + glory + ' славы' : 'слава уже взята') + '</b></div>' +
-    (known ? '<div class="row"><span>Чтобы взять</span><b>от ' + menToTake(guards) + ' ' + warriorWord(menToTake(guards)) + '</b></div>' : '') +
+    (known ? '<div class="row"><span class="with-hint">Чтобы взять' + hint('Столько крестьян хватит, чтобы одолеть стражу и кто-то остался в живых. Сильные войска (ратники, рыцари) и опыт заменяют число: рыцарь бьётся за шестерых.') + '</span><b>от ' + menToTake(guards) + ' ' + warriorWord(menToTake(guards)) + '</b></div>' : '') +
     (isHeart ? '<div class="tiny">' + (truth === 'FALSE'
       ? 'Взявший ложное Сердце будит Орду: она пойдёт на его столицу, забирая по пути его земли.'
       : 'Истинное Сердце каждый рассвет приносит держателю славу: 3, потом 4, 5 и дальше. Набравший ' + heart.target + ' славы побеждает. Ложное будит Орду. Узнать заранее может шпион, дошедший до Сердца или до соседней земли.') + '</div>' : '');
@@ -2074,11 +2192,12 @@ function orderRow(id, owner) {
   const garrison = warriorsAt(id, owner);
   const risk = order >= 40 ? 'NONE' : order < 20 && people >= 6 && garrison * 2 < people ? 'HIGH' : 'LOW';
   const word = order >= 70 ? 'спокойно' : order >= 40 ? 'терпимо' : order >= 20 ? 'беспорядки' : 'на грани бунта';
-  const hint = risk === 'HIGH' ? '<div class="tiny bad-note">Бунт на рассвете! Поставь гарнизон не меньше ' + (Math.floor(people / 2) + 1) + ' или жди, пока уляжется.</div>'
+  const note = risk === 'HIGH' ? '<div class="tiny bad-note">Бунт на рассвете! Поставь гарнизон не меньше ' + (Math.floor(people / 2) + 1) + ' или жди, пока уляжется.</div>'
     : risk === 'LOW' ? '<div class="tiny">Земля в беспорядках даёт половину золота. Гарнизон успокаивает быстрее.</div>' : '';
   const pending = owner === house && snapshot.game.capture_choices?.[id]
     ? '<button class="wide primary" data-fate-open="' + escapeHtml(id) + '">Решить судьбу земли</button>' : '';
-  return '<div class="row"><span>Порядок</span><b>' + order + ' · ' + word + '</b></div>' + hint + pending;
+  const help = hint('Порядок от 0 до 100. Ниже 40 — беспорядки, земля даёт половину золота. Ниже 20, когда людей много, а гарнизон мал, земля на рассвете поднимает бунт и уходит к вольным людям. Порядок растёт сам каждый рассвет, с гарнизоном быстрее.');
+  return '<div class="row"><span class="with-hint">Порядок' + help + '</span><b>' + order + ' · ' + word + '</b></div>' + note + pending;
 }
 
 function renderLand() {
@@ -2125,11 +2244,12 @@ function renderLand() {
     const here = warriorsAt(landId, house);
     const queue = jobs.filter(job => job.type === 'RECRUIT').map(job => '<span>+' + job.warriors + ' · ' + escapeHtml(timeLeft(job.due_at)) + '</span>').join('');
     const spies = characterData?.agents;
-    const spyRow = spies ? '<button class="wide" data-hire-spy ' + (spies.list.length >= spies.max ? 'disabled' : '') + '>Шпион · ' + spies.cost + ' золота (' + spies.list.length + ' из ' + spies.max + ')</button>' : '';
+    const spyRow = spies ? '<div class="with-hint">' + goldButton('data-hire-spy', 'Шпион · ' + spies.cost + ' золота (' + spies.list.length + ' из ' + spies.max + ')', spies.cost, spies.list.length >= spies.max ? 'шпионов уже ' + spies.max : '') +
+      hint('Шпион прячется среди путников и идёт с ними. Дойдя до земли, он на время открывает её и соседей. Шпион у Сердца или рядом с ним узнаёт, истинное ли оно.') + '</div>' : '';
     if (unitsMode()) {
       body.innerHTML = '<div class="row"><span>Стоит здесь</span><b>' + here + ' ' + warriorWord(here) + (here ? ' · ' + starText(starsOf(landId, house)) : '') + '</b></div>' +
         (here ? '<div class="row"><span>Из них</span><b>' + escapeHtml(describeRanks(rankComp(landId, house))) + '</b></div>' : '') +
-        hireBlock(landId) + retrainBlock(landId) + spyRow;
+        replenishBlock(landId) + hireBlock(landId) + spyRow;
       return;
     }
     body.innerHTML = '<div class="row"><span>Стоит здесь</span><b>' + here + ' ' + warriorWord(here) + '</b></div>' + spyRow +
@@ -2140,7 +2260,7 @@ function renderLand() {
   const building = jobs.some(job => job.type === 'FORT');
   const fortNote = t.type === 'Столица' ? 'В столице крепость не строят' : st.fort ? 'Крепость уже стоит' : building ? 'Крепость строится' : '';
   body.innerHTML = '<div class="built">Возведено: ' + (built || 'ничего') + '</div>' +
-    '<button class="wide" data-land-fort ' + (fortNote ? 'disabled' : '') + '>' + (fortNote || 'Возвести крепость · 3 золота') + '</button>' +
+    '<div class="with-hint">' + goldButton('data-land-fort', fortNote || 'Возвести крепость · 3 золота', 3, fortNote) + hint('Крепость прибавляет обороне земли 3: нападающему нужно больше силы, а гарнизон теряет меньше. В столице не строится — её стены и так крепки.') + '</div>' +
     (t.type === 'Столица' && !unitsMode() ? yardButton() : '') + growthButton(t.id) +
     '<button class="wide" disabled>Тайный приказ · мастера ещё не прибыли</button>' +
     portButton(t, st) + bridgeRows(t.id, true);
@@ -2201,6 +2321,9 @@ function setupLand() {
     });
     const total = document.querySelector('#land-body [data-hire-total]');
     if (total) total.textContent = men + ' ' + warriorWord(men) + ' · ' + gold + ' золота';
+    const go = document.querySelector('#land-body [data-hire-go]');
+    const have = Number(snapshot.game.state.houses[house]?.gold || 0);
+    if (go) { go.disabled = !men || gold > have; go.title = gold > have ? 'не хватает золота: нужно ' + gold + ', есть ' + have : ''; }
   });
   $('land-body').addEventListener('click', event => {
     const hire = event.target.closest('[data-land-hire]');
@@ -2227,6 +2350,7 @@ function setupLand() {
       const counts = Array.from({ length: KINDS }, (_, i) => Number(document.querySelector('#land-body [data-hire-kind="' + i + '"]')?.value || 0));
       landCommand('/api/hire', { counts });
     }
+    if (event.target.closest('[data-replenish]')) landCommand('/api/replenish', {});
     if (event.target.closest('[data-retrain-go]')) {
       landCommand('/api/retrain', {
         from: Number(document.querySelector('#land-body [data-retrain-from]')?.value),
@@ -2649,6 +2773,38 @@ function heraldFor(art) {
 function lensFor(node) {
   const state = snapshot?.game?.state;
   if (!state) return null;
+  // The wild guard of a free land, or the Horde.
+  if (node.dataset.lensWild) {
+    const id = node.dataset.lensWild;
+    const guards = Number(state.wild_guards?.[id] || 0);
+    const truth = heartTruth(id);
+    const ring = state.heart?.rings?.[id] || 1;
+    return {
+      title: 'Вольные люди',
+      art: 'neutral-taken',
+      lines: [
+        mapNodeById(id)?.name || '',
+        guards + ' ' + warriorWord(guards) + ' стерегут эту землю',
+        truth !== undefined ? (truth === 'FALSE' ? 'Ложное Сердце: под ним спит Орда' : truth === 'TRUE' ? 'Истинное Сердце земель' : 'Одно из Сердец земель') : ring + '-е кольцо от столиц',
+        'Чтобы взять: от ' + menToTake(guards) + ' крестьян (сильные войска — меньше)',
+        'Нажми — откроется грамота земли'
+      ]
+    };
+  }
+  if (node.dataset.lensHorde) {
+    const horde = (state.hordes || []).find(h => h.id === node.dataset.lensHorde);
+    if (!horde) return null;
+    return {
+      title: 'Орда',
+      art: 'war-declared',
+      lines: [
+        horde.men + ' всадников народа незнаемого',
+        'Идёт на столицу Дома ' + horde.against,
+        'Сейчас у земли ' + (mapNodeById(horde.at)?.name || ''),
+        'В каждой взятой земле оставляет четверть войска'
+      ]
+    };
+  }
   let owner, count, place, moving = null;
   if (node.dataset.lensOrder) {
     const order = (snapshot.game.orders || []).find(item => item.id === node.dataset.lensOrder);
@@ -2734,6 +2890,8 @@ function setupLens() {
     if (marching) { openField(marching.dataset.lensOrder); return; }
     const node = event.target.closest?.('.army-token[data-lens-at]');
     if (node) { event.stopPropagation(); selectArmy(node.dataset.lensAt); return; }
+    const wild = event.target.closest?.('.army-token[data-lens-wild]');
+    if (wild) { event.stopPropagation(); selectTerritory(wild.dataset.lensWild); return; }
     // A river crossing: open the card of our bank (or of the near bank) on its roads.
     const spot = event.target.closest?.('[data-bridge]');
     if (spot && !origin) {
@@ -5036,7 +5194,7 @@ function renderMap() {
     const guards = !owner ? Number(state.wild_guards?.[t.id] || 0) : 0;
     if (guards > 0 && (!explored || explored.has(t.id))) {
       const gx = t.type === 'Город' ? c.x + 14 : t.type === 'Деревня' ? c.x + 11 : c.x + 8.5;
-      tokens.push(shieldToken(gx, c.y - 5, '#8d877a', guards, 0.85, '', null));
+      tokens.push(shieldToken(gx, c.y - 5, '#8d877a', guards, 0.85, `data-lens-wild="${t.id}"`, null));
     }
     if (note) {
       scene.notes.push({ x: c.x, y: labelY + 10.6, text: note, target: t.id === target });
@@ -5069,7 +5227,7 @@ function renderMap() {
   for (const horde of state.hordes || []) {
     const c = coords[horde.at];
     if (!c || !(horde.men > 0)) continue;
-    tokens.push(shieldToken(c.x - 12, c.y - 8, '#1d1a17', horde.men, 1.1, '', null));
+    tokens.push(shieldToken(c.x - 12, c.y - 8, '#1d1a17', horde.men, 1.1, `data-lens-horde="${escapeHtml(horde.id)}"`, null));
   }
 
   const movingArmies = (snapshot.game.orders || [])
