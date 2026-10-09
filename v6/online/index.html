@@ -2807,6 +2807,17 @@ function newsFor(item) {
   if (item.type === 'ALLIANCE_BROKEN') {
     return { rank: 6, art: 'deal-failed', title: 'Союз расторгнут', text: strip(/^Союз расторгнут:\s*/) };
   }
+  if (item.type === 'GAME_FINISHED') {
+    const winners = d.winners || [];
+    const mine = winners.includes(house);
+    return {
+      rank: 9,
+      art: 'finale-' + (winners.length > 1 ? 'shared' : mine ? 'won' : 'lost'),
+      title: winners.length > 1 ? 'Совместная победа' : mine ? 'Твой Дом победил' : 'Век окончен',
+      text: text,
+      ok: 'Взглянуть на мир'
+    };
+  }
   if (item.type === 'ROUND_STARTED' && daysGame()) {
     return { rank: 3, art: 'day-change', title: 'Настал день ' + (d.round || ''), text: 'Солнце встало над Домами. Доход начислен, приказы ждут.' };
   }

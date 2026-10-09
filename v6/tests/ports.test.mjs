@@ -59,3 +59,23 @@ test('an army can go by the points the player picks', () => {
   assert.ok(order.duration_ms > plain, 'the way round is longer');
   assert.deepEqual(order.travel_segments.map(s => s.to).slice(0, 1), [b.to]);
 });
+
+test('a fleet can sail into a sea point held by another House and fight there', async () => {
+  const { relationOf, RELATION } = await import('../src/online/diplomacy.mjs');
+  const { processDueOrders } = await import('../src/online/orders.mjs');
+  let game = freshGame();
+  const start = map.starting_ports.find(id => id.startsWith('A'));
+  game.state.territories[start].owner = H;
+  game.state.territories[start].warriors = { [H]: 5 };
+  const lane = map.sea_lane_edges.find(e => e.includes(start) && map.sea_waypoints[e[0] === start ? e[1] : e[0]]);
+  const point = lane[0] === start ? lane[1] : lane[0];
+  const R = houses[1];
+  game.state.sea_nodes[point] = { owner: R, warriors: { [R]: 1 } };
+  const sail = listQueueableMarches(game, map, constants, H).find(a => a.from === start && a.to === point && a.warriors === 5);
+  assert.ok(sail, 'the occupied point can be aimed at');
+  game = executeCommand(game, map, constants, { type: 'MARCH', house: H, from: start, to: point, warriors: 5 }, { nowMs: 5 }).game;
+  game = processDueOrders(game, map, constants, Date.parse(game.orders[0].due_at));
+  assert.equal(game.orders[0].status, 'RESOLVED');
+  assert.equal(game.state.sea_nodes[point].owner, H);
+  assert.equal(relationOf(game, H, R), RELATION.WAR);
+});

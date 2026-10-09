@@ -84,10 +84,8 @@ function seaStepAllowed(state,map,from,to,mode) {
 }
 
 function destinationAllowed(state,map,house,to) {
-  if (isSeaWaypoint(map,to)) {
-    const owner = onlinePositionOwner(state,to);
-    return owner === null || owner === house;
-  }
+  // A sea point held by another fleet can be sailed into: that is a sea battle.
+  if (isSeaWaypoint(map,to)) return true;
   return Boolean(state.territories?.[to]);
 }
 

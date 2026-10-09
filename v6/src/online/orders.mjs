@@ -367,6 +367,54 @@ function removeFromOnlineOrigin(next,action) {
   }
 }
 
+// A fleet sails into a sea point held by another House: they fight there.
+// No dice: ranks add up as strength, the weakest fall first. The beaten
+// defender's ships are scattered; a beaten attacker sails home.
+function seaBattle(next,before,map,constants,action,target) {
+  const defender=target.owner;
+  const defenders=Number(target.warriors?.[defender] || 0);
+  const attackerStrength=strengthOf(action.ranks,Number(action.warriors))+BATTLE_DIE;
+  const defenderStrength=strengthOf(before.ranks?.[action.to]?.[defender],defenders)+BATTLE_DIE;
+  const attackerLosses=Math.min(action.warriors,headsLost(action.ranks,action.warriors,Math.ceil(defenderStrength/2)));
+  const defenderLosses=Math.min(defenders,headsLost(before.ranks?.[action.to]?.[defender],defenders,Math.ceil(attackerStrength/2)));
+  const attackerSurvivors=action.warriors-attackerLosses;
+  const defenderSurvivors=defenders-defenderLosses;
+  const attackerWins=attackerStrength>defenderStrength && attackerSurvivors>0;
+  if(attackerWins) {
+    target.warriors={[action.house]:attackerSurvivors};
+    target.owner=action.house;
+  } else {
+    if(defenderSurvivors>0) target.warriors[defender]=defenderSurvivors;
+    else { delete target.warriors[defender]; target.owner=null; }
+    // The survivors sail back where they came from.
+    const home=next.territories?.[action.from] || next.sea_nodes?.[action.from];
+    if(home && attackerSurvivors>0) {
+      home.warriors[action.house]=Number(home.warriors?.[action.house] || 0)+attackerSurvivors;
+      if(next.sea_nodes?.[action.from]) home.owner=action.house;
+    }
+  }
+  next.journal.push({
+    kind:'BATTLE',
+    naval:true,
+    attacker:action.house,
+    defender,
+    from:action.from,
+    to:action.to,
+    attackerStrength,
+    defenderStrength,
+    attackerWins,
+    attackerLosses,
+    defenderLosses,
+    attackerSurvivors,
+    defenderSurvivors,
+    captured:attackerWins,
+    defenderRetreatTo:null,
+    attackerDie:BATTLE_DIE,
+    defenderDie:BATTLE_DIE
+  });
+  return next;
+}
+
 function moveToSeaWaypoint(state,map,constants,action) {
   const next=structuredClone(state);
   removeFromOnlineOrigin(next,action);
@@ -376,9 +424,7 @@ function moveToSeaWaypoint(state,map,constants,action) {
     throw new Error('route destination is not a sea waypoint');
   }
   if(target.owner && target.owner!==action.house) {
-    throw new Error(
-      `sea waypoint ${action.to} is occupied by ${target.owner}; sea combat is not implemented`
-    );
+    return seaBattle(next,state,map,constants,action,target);
   }
 
   const current=Number(target.warriors?.[action.house] || 0);
@@ -549,13 +595,15 @@ function resolveOrder(state,map,constants,gameId,order,nowMs,recovery) {
     let moved=moveToSeaWaypoint(
       state,map,constants,action
     );
+    const fight=moved.journal[moved.journal.length-1];
+    const lost=fight?.kind==='BATTLE' && fight.naval && !fight.attackerWins;
     moved=settleCommander(
-      moved,order.commander_id,action.to
+      moved,order.commander_id,lost ? action.from : action.to
     );
     return {
       state:moved,
       result:{
-        kind:'SEA_WAYPOINT_MARCH',
+        kind:fight?.kind==='BATTLE' && fight.naval ? 'SEA_BATTLE' : 'SEA_WAYPOINT_MARCH',
         route_path:[...action.path],
         commander_id:order.commander_id || null
       }
