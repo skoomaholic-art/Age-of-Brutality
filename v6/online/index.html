@@ -2426,8 +2426,8 @@ function setupLens() {
     const marching = event.target.closest?.('.army-token[data-lens-order]');
     if (marching) { openField(marching.dataset.lensOrder); return; }
     const node = event.target.closest?.('.army-token[data-lens-at]');
-    if (node) selectTerritory(node.dataset.lensAt);
-  });
+    if (node) { event.stopPropagation(); selectArmy(node.dataset.lensAt); }
+  }, true);
 }
 
 // ---------- the book of knowledge ----------
@@ -4798,9 +4798,9 @@ function renderSelection() {
 
   if (!origin) {
     $('commander-row').style.display = 'none';
-    $('selection').textContent = 'Укажи землю, где стоит твоя рать.';
+    $('selection').textContent = 'Нажми на щит своей рати, потом на цель.';
     $('guide-title').textContent = 'Откуда выступит рать?';
-    $('guide-sub').textContent = 'Светлой каймой обведены земли, где стоят твои воины.';
+    $('guide-sub').textContent = 'Щит — выбрать рать; затем земля — приказ. Земля без выбранной рати — её карточка. Esc или правая кнопка — отменить.';
     card.classList.remove('show');
     return;
   }
@@ -4952,42 +4952,61 @@ async function selectTerritory(id) {
   viaPoints = [];
   viaPick = false;
 
-  const owner = nodeOwner(id);
-  const movable = warriorsAt(id, house);
-
   if (exploredNow && !exploredNow.has(id)) return;
-  // Any land that is not the aim of a march opens its card.
-  const aimed = origin && id !== origin && legal.some(a => a.from === origin && a.to === id);
-  if (!aimed && snapshot.game.state.territories[id]) openLand(id);
+  const isSea = Boolean(snapshot.map.sea_waypoints?.[id]);
 
-  if (!origin) {
-    if (movable < 1) return;
-    origin = id;
-    target = null;
-    marchModePreference = null;
-    await loadLegal();
-  } else if (id === origin) {
-    origin = null;
-    target = null;
-    marchModePreference = null;
-  } else {
-    const valid = legal.some(a => a.from === origin && a.to === id) &&
-      (!exploredNow || exploredNow.has(id));
-    if (!valid) {
-      if (movable > 0) {
-        origin = id;
-        target = null;
-        marchModePreference = null;
-        await loadLegal();
-      }
-    } else {
+  // A click on the map:
+  // - with an army chosen, a land or a sea point is its goal (an order);
+  // - without one, a land opens its card; our fleet at sea is chosen.
+  if (origin) {
+    const valid = id !== origin && legal.some(a => a.from === origin && a.to === id);
+    if (valid) {
       target = id;
+    } else {
+      origin = null;
+      target = null;
+      marchModePreference = null;
+      if (!isSea) openLand(id);
     }
+  } else if (isSea) {
+    if (warriorsAt(id, house) > 0) { await selectArmy(id); return; }
+  } else {
+    openLand(id);
   }
 
   renderMap();
   renderSelection();
   renderLand();
+}
+
+// A click on an army's shield chooses that army; the next click gives its order.
+async function selectArmy(id) {
+  if (isSpectator) return;
+  if (fieldRedirect) { await redirectField(id); return; }
+  if (origin && id !== origin && legal.some(a => a.from === origin && a.to === id)) {
+    // Another House's army is a goal like its land.
+    if (nodeOwner(id) !== house || warriorsAt(id, house) < 1) { await selectTerritory(id); return; }
+  }
+  if (warriorsAt(id, house) < 1) { await selectTerritory(id); return; }
+  viaPoints = [];
+  viaPick = false;
+  if (origin === id) {
+    origin = null;
+  } else {
+    origin = id;
+    landId = null;
+    await loadLegal();
+  }
+  target = null;
+  marchModePreference = null;
+  renderMap();
+  renderSelection();
+  renderLand();
+}
+
+function clearChoice() {
+  origin = null; target = null; viaPoints = []; viaPick = false; fieldRedirect = null;
+  renderMap(); renderSelection(); renderLand();
 }
 
 async function sendOrder(confirmed = false) {
@@ -5424,6 +5443,9 @@ placeStatus(); phoneLayout.addEventListener('change', placeStatus);
 // A phone opens on the player's own capital as soon as the map is known.
 const homeWatch = setInterval(() => { if (homeShown || !phoneLayout.matches) return clearInterval(homeWatch); if (snapshot?.map?.capitals && $('map').dataset.ready) goHome(); }, 400);
 $('field-close').onclick = closeField;
+// Esc or the right button lets go of the chosen army.
+addEventListener('keydown', event => { if (event.key === 'Escape' && (origin || fieldRedirect)) clearChoice(); });
+$('map').addEventListener('contextmenu', event => { if (origin || fieldRedirect) { event.preventDefault(); clearChoice(); } });
 $('via-toggle').onclick = () => { viaPick = !viaPick; renderSelection(); };
 $('via-clear').onclick = () => { viaPoints = []; viaPick = false; renderSelection(); };
 setInterval(() => { if (fieldOrderId) renderField(); }, 1000);

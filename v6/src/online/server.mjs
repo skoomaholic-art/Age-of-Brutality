@@ -154,7 +154,7 @@ function scopeForSpec(spec) {
     if (scopeCache.size > 200) scopeCache.delete(scopeCache.keys().next().value);
     scopeCache.set(key, {
       key,
-      map: generateMap(classicMap, baseConstants, { houses: spec.houses, seed: spec.seed, shape: spec.shape || 'wheel', warp: spec.warp || 'none', seaMesh: spec.sea === 'mesh' }),
+      map: generateMap(classicMap, baseConstants, { houses: spec.houses, seed: spec.seed, shape: spec.shape || 'wheel', warp: spec.warp || 'none', seaMesh: spec.sea === 'mesh' || spec.sea === 'mesh-free', homePorts: spec.sea !== 'mesh-free' }),
       constants: { ...baseConstants, houses: [...spec.houses] }
     });
   }
@@ -188,7 +188,7 @@ function mapSpecFrom(body, { defaultHouses }) {
   const shape = MAP_SHAPES.includes(body.shape) ? body.shape : chance.shape;
   const warp = MAP_WARPS.includes(body.warp) ? body.warp : chance.warp;
   // New games: a net of sea points over all the water, and ports to be built.
-  return { kind: 'generated', seed, houses, shape, warp, sea: 'mesh' };
+  return { kind: 'generated', seed, houses, shape, warp, sea: 'mesh-free' };
 }
 
 const mapArtCache = new Map();

@@ -118,7 +118,7 @@ export function mapPlan(count, shape = 'wheel') {
   return { houses: count, shape, ringRadius, innerRing, islandPairs, borderlands, lands };
 }
 
-export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'wheel', warp = 'none', seaMesh = false } = {}) {
+export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'wheel', warp = 'none', seaMesh = false, homePorts = true } = {}) {
   if (!MAP_SHAPES.includes(shape)) shape = 'wheel';
   if (!MAP_WARPS.includes(warp)) warp = 'none';
   if (houses.length === 2 && FOR_TWO[shape]) shape = FOR_TWO[shape];
@@ -529,7 +529,8 @@ export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'whe
       if (near.length) ports.add(s.id);
     }
     // The harbour of every home is there from the start: the settlement facing the sea.
-    startingPorts = houses.map((_, i) => petal(i, 0)).filter(id => ports.has(id));
+    // (Newer games start with none: every port is built where the player wants it.)
+    startingPorts = homePorts ? houses.map((_, i) => petal(i, 0)).filter(id => ports.has(id)) : [];
   }
 
   // Bend the whole picture; the roads stay as they are.
