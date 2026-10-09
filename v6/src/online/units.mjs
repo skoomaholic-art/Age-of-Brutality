@@ -274,7 +274,7 @@ export function upkeepDawn(game, map, nowMs = Date.now()) {
   for (const house of Object.keys(state.houses || {})) {
     const { gold } = upkeepOf(state, map, house);
     if (!gold) continue;
-    const purse = Number(state.houses[house].gold || 0);
+    const purse = Math.max(0, Number(state.houses[house].gold || 0));
     if (purse >= gold) {
       state.houses[house].gold = purse - gold;
       continue;
@@ -310,10 +310,11 @@ export function upkeepDawn(game, map, nowMs = Date.now()) {
       if (p.kind === 'SEA') {
         const afloat = Object.keys(holder).filter(h => Number(holder[h] || 0) > 0);
         state.sea_nodes[p.key].owner = afloat.length === 1 ? afloat[0] : null;
+        if (left <= 0 && state.sea_nodes[p.key].days_at_sea) delete state.sea_nodes[p.key].days_at_sea[house];
       }
       if (p.kind === 'GUEST' && !Object.keys(state.guests[p.land]).length) delete state.guests[p.land];
     }
-    state.journal.push({ kind: 'DESERTION', house, houses: [house], owed: gold, paid: purse, deserted, at: iso(nowMs) });
+    if (deserted > 0) state.journal.push({ kind: 'DESERTION', house, houses: [house], owed: gold, paid: purse, deserted, at: iso(nowMs) });
   }
   reconcileRanks(state, map);
 }

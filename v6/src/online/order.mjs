@@ -60,11 +60,9 @@ export function orderOnCapture(state, territory, house, previousOwner, { nowMs =
   if (!state.order) return;
   state.order[territory] = previousOwner ? ORDER.fromHouse : ORDER.fromWild;
   state.capture_choices ||= {};
-  if (ai) {
-    applyCaptureChoice(state, territory, house, 'TRIBUTE', { nowMs });
-    return;
-  }
   state.capture_choices[territory] = { house, from: previousOwner || null, at: iso(nowMs) };
+  // A House led by the AI decides at once.
+  if (ai) applyCaptureChoice(state, territory, house, 'TRIBUTE', { nowMs });
 }
 
 // What each choice would give, for the dialog.
@@ -88,7 +86,8 @@ export function applyCaptureChoice(state, territory, house, choice, { nowMs = Da
   if (!rule) throw new Error('такого решения нет');
   if (state.territories?.[territory]?.owner !== house) throw new Error('эта земля не твоя');
   const pending = state.capture_choices?.[territory];
-  if (pending && pending.house !== house) throw new Error('решение не за тобой');
+  if (!pending) throw new Error('судьба этой земли уже решена');
+  if (pending.house !== house) throw new Error('решение не за тобой');
   const outcome = choiceOutcomes(state, territory)[choice];
   state.population[territory] = Number(state.population?.[territory] || 0) - outcome.people_lost;
   state.houses[house].gold = Number(state.houses[house].gold || 0) + outcome.gold;

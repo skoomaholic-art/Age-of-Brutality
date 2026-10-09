@@ -19,6 +19,7 @@
 // glory, more each dawn. Reaching the glory target at dawn wins at once.
 //
 // No dice: guard fights and Horde fights are counted like any battle.
+import crypto from 'node:crypto';
 import { baseDefense, legalDefenderRetreats } from '../core/combat.mjs';
 import { commanderStats } from '../core/characters.mjs';
 import { compAt, headsLost, reconcileRanks, starsAt, strengthOf } from './ranks.mjs';
@@ -195,7 +196,9 @@ function appear(game, map, nowMs) {
   const candidates = chooseHearts(game, map);
   if (!candidates.length) return;
   heart.candidates = candidates;
-  heart.truth = candidates[hash(`${game.id}:${map.seed}:${candidates.join(',')}`) % candidates.length];
+  // Which one is true is drawn from a secret the clients never see.
+  heart.salt ||= crypto.randomBytes(12).toString('hex');
+  heart.truth = candidates[hash(`${heart.salt}:${candidates.join(',')}`) % candidates.length];
   for (const id of candidates) {
     state.wild_guards[id] = Math.max(Number(state.wild_guards[id] || 0), HEART.heartGuards);
     state.territories[id].fort = true;
@@ -432,8 +435,9 @@ function spawnHorde(game, map, decoy, house, nowMs, men = HEART.hordeMen) {
   const capital = map.capitals?.[house];
   const path = capital ? roadBetween(map, decoy, capital) : [decoy];
   state.hordes ||= [];
+  state.heart.horde_seq = Number(state.heart.horde_seq || 0) + 1;
   const horde = {
-    id: `H${state.hordes.length + 1}-${decoy}`,
+    id: `H${state.heart.horde_seq}-${decoy}`,
     against: house,
     path,
     started: false,

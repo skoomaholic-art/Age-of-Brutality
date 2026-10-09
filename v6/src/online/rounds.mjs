@@ -126,6 +126,8 @@ function beginRound(next, map, constants, number, nowMs, timing) {
   const afterUpkeep = purse(next.state);
   // Order settles, open choices fall to mercy, lands in deep disorder rise.
   if (number > 1) orderDawn(next.state, map, constants, nowMs);
+  // Truces that have run out are forgotten.
+  for (const [key, until] of Object.entries(next.diplomacy?.truces || {})) if (Date.parse(until) <= nowMs) delete next.diplomacy.truces[key];
   const after = purse(next.state);
   const fresh = next.state.journal.slice(journalStart);
   const ledgers = {};

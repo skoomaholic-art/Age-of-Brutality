@@ -33,7 +33,7 @@ import {
 import { normalizeOnlineSeaState } from './sea-navigation.mjs';
 import { raiseLevy, startDrill, buildYard, buildPort, processRanks, ranksView } from './levy.mjs';
 import { buildBridge, burnBridge, seedCrossings, BRIDGE } from './bridges.mjs';
-import { processHordes, seedHeart } from './heart.mjs';
+import { processHordes, seedHeart, HEART } from './heart.mjs';
 import { devAction, devAllowed, devFastForward } from './dev.mjs';
 import { NO_LIMIT, buildGrowth, hireUnits, replenishUnits, retrainUnits, seedPopulation, unitsView, upkeepOf, REPLENISH_STAR_SHARE } from './units.mjs';
 import { applyCaptureChoice, choiceOutcomes, seedOrder } from './order.mjs';
@@ -163,7 +163,7 @@ function scopeForSpec(spec) {
       map: generateMap(classicMap, baseConstants, { houses: spec.houses, seed: spec.seed, shape: spec.shape || 'wheel', warp: spec.warp || 'none', seaMesh: spec.sea === 'mesh' || spec.sea === 'mesh-free', homePorts: spec.sea !== 'mesh-free' }),
       // A game of the Heart lets a House keep a bigger host.
       // A game of the Heart has no limits on troops: gold and people are the limit.
-      constants: { ...baseConstants, houses: [...spec.houses], ...(spec.heart ? { house_warrior_cap: NO_LIMIT, territory_warrior_cap: NO_LIMIT } : {}) }
+      constants: { ...baseConstants, houses: [...spec.houses], ...(spec.heart ? { house_warrior_cap: NO_LIMIT, territory_warrior_cap: NO_LIMIT, rounds: HEART.days } : {}) }
     });
   }
   return scopeCache.get(key);

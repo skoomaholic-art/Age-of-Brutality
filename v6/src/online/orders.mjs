@@ -531,12 +531,16 @@ function finishRouteBridge(originalState,resolvedState,action,syntheticOrigin) {
   delete next.territories[action.from];
   next.sea_nodes ||= {};
   next.sea_nodes[action.from] ||= {owner:null,warriors:{}};
-  next.sea_nodes[action.from].warriors=remaining>0
-    ? {[action.house]:remaining}
-    : {};
-  next.sea_nodes[action.from].owner=remaining>0
-    ? action.house
-    : null;
+  // Other Houses' fleets at the point stay where they are.
+  const node=next.sea_nodes[action.from];
+  node.warriors={...(originalState.sea_nodes?.[action.from]?.warriors || {})};
+  if(remaining>0) node.warriors[action.house]=remaining;
+  else {
+    delete node.warriors[action.house];
+    if(node.days_at_sea) delete node.days_at_sea[action.house];
+  }
+  const afloat=Object.keys(node.warriors).filter(h=>Number(node.warriors[h] || 0)>0);
+  node.owner=afloat.length===1 ? afloat[0] : null;
   return next;
 }
 

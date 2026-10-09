@@ -165,6 +165,7 @@ export function applyFog(clientGame, map, house) {
     const known = state.heart.known?.[house] || {};
     state.heart.known = { [house]: known };
     if (!state.heart.territory) delete state.heart.truth;
+    delete state.heart.salt;
   }
   // The wild guard of lands never seen is not known.
   for (const id of Object.keys(state.wild_guards || {})) {
