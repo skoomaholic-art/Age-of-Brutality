@@ -3939,7 +3939,14 @@ function provinceRings(id) {
   if (!pixiRingCache.has(id)) {
     const rings = pixiFog.polys[id] || [];
     const biggest = Math.max(0, ...rings.map(ringArea));
-    pixiRingCache.set(id, rings.filter(ring => ringArea(ring) >= Math.min(120, biggest * 0.08)));
+    // Only the body of the province: crumbs and thin slivers of coast are dropped.
+    const perimeter = ring => ring.reduce((sum, p, i) => { const q = ring[(i + 1) % ring.length]; return sum + Math.hypot(q[0] - p[0], q[1] - p[1]); }, 0);
+    pixiRingCache.set(id, rings.filter(ring => {
+      const area = ringArea(ring);
+      if (area === biggest) return true;
+      const round = (4 * Math.PI * area) / Math.max(1, perimeter(ring) ** 2);
+      return area >= Math.max(150, biggest * 0.15) && round > 0.2;
+    }));
   }
   return pixiRingCache.get(id);
 }
