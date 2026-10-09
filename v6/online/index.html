@@ -3575,7 +3575,7 @@ function updatePixiFog(explored, art, coords) {
       known.push(rings);
       for (const ring of rings) for (const point of ring) edge.push(point);
     }
-    for (const id of explored) if (!art[id] && coords[id]) edge.push([coords[id].x, coords[id].y, 34]);
+    for (const id of explored) if (!art[id] && coords[id]) edge.push([coords[id].x, coords[id].y, 58]);
   }
   for (const cloud of pixiFog.clouds) {
     let on = Boolean(explored);
