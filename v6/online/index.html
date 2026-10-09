@@ -1151,6 +1151,8 @@ function characterRoleLabel(role) {
 
 function renderCharacters() {
   const box = $('characters');
+  // Do not pull a list out from under the player's hand.
+  if (box.contains(document.activeElement) && ['SELECT', 'INPUT'].includes(document.activeElement.tagName)) return;
   if (isSpectator || !house) {
     box.innerHTML = '<span class="muted">Зрителю ко двору хода нет.</span>';
     return;
@@ -1176,6 +1178,7 @@ function renderCharacters() {
   box.innerHTML = characters.map(character => {
     const army = character.army_id ? armies[character.army_id] : null;
     const stats = character.stats || {};
+    const riding = (snapshot?.game?.riders || []).find(rider => rider.character_id === character.id) || null;
     const location =
       character.status === 'FATE_PENDING'
         ? 'Ждёт своей участи после битвы'
@@ -1199,10 +1202,12 @@ function renderCharacters() {
                     (mapNodeById(army?.territory)?.name ||
                       army?.territory ||
                       'не определено')
-                : 'При Дворе';
+                : riding
+                  ? 'В пути к войску · ' + (mapNodeById(riding.to)?.name || riding.to) + ', ещё ' + timeLeft(riding.due_at)
+                  : 'При Дворе';
 
     const assignment = character.assignment || null;
-    const canAssign =
+    const canAssign = !riding &&
       assignment
         ? assignment.allowed
         : (
@@ -1244,7 +1249,8 @@ function renderCharacters() {
               '</option>'
             ).join('') +
             '</select>' +
-            '<button data-char-army="' + escapeHtml(character.id) + '">Поставить во главе рати</button>' +
+            '<button data-char-army="' + escapeHtml(character.id) + '">Отправить к рати</button>' +
+            '<div class="tiny">Поскачет из столицы и примет войско, когда доедет. В пути его могут схватить.</div>' +
             '</div>'
           )
         : character.mode === 'COURT' && assignment && !assignment.allowed
@@ -2743,6 +2749,14 @@ function newsFor(item) {
     if (d.betrayal) return { rank: involved ? 8 : 5, art: 'pact-broken', title: 'Клятва нарушена', text: strip(/^Война:\s*/) };
     return { rank: involved ? 7 : 4, art: 'war-declared', title: mine(d.target) ? 'Тебе объявлена война' : 'Война', text: strip(/^Война:\s*/) };
   }
+  if (item.type === 'RIDER_CAPTURED') {
+    if (!(d.house === house || d.captor === house)) return null;
+    return { rank: 7, art: 'commander-captured', title: d.house === house ? 'Гонец схвачен' : 'Схвачен чужой воевода', text: item.message, ok: d.house === house ? 'Горе нам' : 'В темницу его' };
+  }
+  if (item.type === 'RIDER_TURNED_BACK') {
+    if (d.house !== house) return null;
+    return { rank: 4, art: 'order-failed', title: 'Войска не нашёл', text: item.message, ok: 'Ну что ж' };
+  }
   if (item.type === 'DRILL_DONE') {
     if (d.house !== house) return null;
     return { rank: 5, art: 'recruit-done', title: 'Учения окончены', text: item.message, ok: 'Добрые воины' };
@@ -4110,6 +4124,29 @@ function drawPixiMap(scene, key) {
 
 function movePixiArmies() {
   if (!pixiMap.movers || !snapshot) return;
+  // Lords riding to their armies: a little gold shield with a horse.
+  pixiMap.riders ||= (() => { const c = new PIXI.Container(); pixiMap.layer.addChild(c); return c; })();
+  const riders = snapshot.game.riders || [];
+  while (pixiMap.riders.children.length < riders.length) {
+    const s = shieldGraphic('#c9a23a', null, 0.75);
+    const horse = pixiText('♞', 7, 0x2b1b12, false);
+    horse.position.set(0, 0.4);
+    s.addChild(horse);
+    pixiMap.riders.addChild(s);
+  }
+  while (pixiMap.riders.children.length > riders.length) pixiMap.riders.removeChildAt(0).destroy({ children: true });
+  const coords = routeCoordinates();
+  riders.forEach((rider, i) => {
+    const s = pixiMap.riders.children[i];
+    let left = Math.max(0, Date.now() - Date.parse(rider.created_at));
+    let pos = coords[rider.to] || coords[rider.from];
+    for (const seg of rider.segments || []) {
+      const length = Math.max(1, seg.duration_ms);
+      if (left < length) { const a = coords[seg.from], b = coords[seg.to]; if (a && b) pos = { x: a.x + (b.x - a.x) * left / length, y: a.y + (b.y - a.y) * left / length }; break; }
+      left -= length;
+    }
+    if (pos) s.position.set(pos.x, pos.y - 6);
+  });
   for (const s of pixiMap.movers.children) {
     const order = (snapshot.game.orders || []).find(item => item.id === s.orderId);
     const pos = order && order.status === 'PENDING' ? movingOrderPosition(order) : null;

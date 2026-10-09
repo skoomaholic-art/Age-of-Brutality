@@ -31,6 +31,7 @@ import {
 } from './orders.mjs';
 import { normalizeOnlineSeaState } from './sea-navigation.mjs';
 import { raiseLevy, startDrill, buildYard, processRanks, ranksView } from './levy.mjs';
+import { startRide, processRiders, ridersOf } from './riders.mjs';
 import {
   ONLINE_ECONOMY_TIMING,
   cancelJob,
@@ -518,6 +519,7 @@ async function tickUnlocked(ctx) {
   processed = processRanks(processed, map, nowMs);
   processed = processRounds(processed, map, constants, { nowMs });
   processed = processCharacters(processed, map, constants, { nowMs });
+  processed = processRiders(processed, map, constants, nowMs);
   processed = expelGuests(processed, map, constants, nowMs);
   processed = processAgents(processed, map, { nowMs });
   processed = recordExploration(processed, map, constants.houses, nowMs);
@@ -579,6 +581,7 @@ function redactGameForPlayer(game, player) {
   };
   // The levy, the drill and the yard of one's own House.
   clientGame.ranks_view = player?.house ? ranksView(game, map, player.house) : null;
+  clientGame.riders = player?.house ? ridersOf(game, player.house) : [];
 
   clientGame.orders = player?.role === PLAYER_ROLE.SPECTATOR
     ? (clientGame.orders || []).filter(item => item.status !== 'PENDING').slice(-30)
@@ -1402,17 +1405,12 @@ async function handleGameApi(req, res, url, ctx, subpath) {
 
     const payload = await serial(ctx, async () => {
       await tickUnlocked(ctx);
-      ctx.game.state = assignCharacterToArmy(
-        ctx.game.state,
-        map,
-        constants,
-        {
-          house,
-          characterId: String(body.character_id || '').trim(),
-          position: String(body.position || '').trim() || null
-        }
-      );
-      ctx.game.updated_at = new Date().toISOString();
+      // The lord rides out from the capital; he takes command when he gets there.
+      ctx.game = startRide(ctx.game, map, constants, {
+        house,
+        characterId: String(body.character_id || '').trim(),
+        position: String(body.position || '').trim() || null
+      });
       await finalizeGame(ctx, ctx.game);
       return {
         house,

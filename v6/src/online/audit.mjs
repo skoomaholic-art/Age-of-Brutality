@@ -299,6 +299,20 @@ export function journalEntryToAudit(entry, map, game) {
     };
   }
 
+  if (entry.kind === 'RIDER_SENT' || entry.kind === 'RIDER_CAPTURED' || entry.kind === 'RIDER_TURNED_BACK') {
+    const to = territoryName(map, entry.to || entry.territory);
+    return {
+      ...base,
+      ...(entry.kind === 'RIDER_SENT' ? { visibility: 'PRIVATE' } : {}),
+      message: entry.kind === 'RIDER_SENT'
+        ? `${entry.character_name} выехал из столицы к войску в ${to}. Поведёт его, когда доберётся.`
+        : entry.kind === 'RIDER_CAPTURED'
+          ? `${entry.character_name} из Дома ${entry.house} схвачен в пути: в ${to} его взяли люди Дома ${entry.captor}.`
+          : `${entry.character_name} не нашёл войска в ${to} и вернулся ко Двору.`,
+      details: { house: entry.house, captor: entry.captor || null, character_name: entry.character_name, territory: entry.to || entry.territory || null, at: entry.at || null }
+    };
+  }
+
   if (entry.kind === 'LEVY_RAISED' || entry.kind === 'DRILL_DONE' || entry.kind === 'YARD_BUILT') {
     const names = ['селян', 'ополченцев', 'ратников'];
     const raised = (entry.counts || []).map((n, i) => (n ? `${n} ${names[i]}` : '')).filter(Boolean).join(', ');

@@ -1,4 +1,5 @@
 import { nextRanksDueAt } from './ranks.mjs';
+import { nextRiderDueAt } from './riders.mjs';
 import { roundsNextDueAt } from './rounds.mjs';
 import { nextEncounterAt } from './encounters.mjs';
 import { nextCharacterDueAt } from './fate.mjs';
@@ -21,6 +22,8 @@ export function calculateNextDueAt(game) {
 
   const ranksAt = nextRanksDueAt(game);
   if (ranksAt) candidates.push(ranksAt);
+  const riderAt = nextRiderDueAt(game);
+  if (riderAt) candidates.push(riderAt);
 
   const encounterAt = nextEncounterAt(game);
   if (encounterAt) candidates.push(encounterAt);
