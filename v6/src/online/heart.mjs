@@ -162,12 +162,18 @@ export function chooseHearts(game, map) {
   if (!houses.length) return [];
   const avg = houses.reduce((s, h) => s + lands[h].length, 0) / houses.length;
   const dist = Object.fromEntries(houses.map(h => [h, distancesFrom(map, lands[h])]));
-  const free = map.territories.filter(t => !state.territories[t.id]?.owner && t.type !== 'Половина острова' && t.type !== 'Столица');
+  // Never in a House's home lands: the Hearts rise in the no-man's land between them.
+  const homeSectors = new Set(Object.keys(map.capitals || {}));
+  const open = map.territories.filter(t => !state.territories[t.id]?.owner && t.type !== 'Половина острова' && t.type !== 'Столица');
+  const middle = open.filter(t => !homeSectors.has(t.house_sector));
+  const free = middle.length >= Math.min(HEART.maxDecoys, Math.max(1, houses.length - 1)) + 1 ? middle : open;
   const scored = free.map(t => {
     const ds = houses.map(h => dist[h].get(t.id) ?? 30);
     const min = Math.min(...ds);
-    const lean = houses.reduce((sum, h, i) => sum + (lands[h].length - avg) * ds[i], 0);
-    return { id: t.id, min, score: lean + 1.5 * min - 0.5 * (Math.max(...ds) - min) };
+    const spread = Math.max(...ds) - min;
+    // Far from everyone and about as far from each; a little farther from those who spread most.
+    const lean = houses.reduce((sum, h, i) => sum + ((lands[h].length - avg) / Math.max(1, avg)) * ds[i], 0);
+    return { id: t.id, min, score: 2 * min - 1.5 * spread + lean };
   });
   // Lands two roads or more from every House first; next to someone only if need be.
   const pool = scored.sort((a, b) => (b.min >= 2) - (a.min >= 2) || b.score - a.score || (a.id < b.id ? -1 : 1));
