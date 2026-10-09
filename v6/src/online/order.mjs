@@ -80,6 +80,8 @@ export function aiCaptureChoice(state, territory, house) {
 export function choiceOutcomes(state, territory) {
   const people = Number(state.population?.[territory] || 0);
   const order = Number(state.order?.[territory] ?? ORDER.fromWild);
+  const land = state.territories?.[territory];
+  const garrison = Number(land?.warriors?.[land?.owner] || 0);
   return Object.fromEntries(Object.entries(CHOICES).map(([key, c]) => {
     const lost = Math.ceil(people * c.peopleShare);
     return [key, {
@@ -87,7 +89,8 @@ export function choiceOutcomes(state, territory) {
       gold: Math.floor(people * c.goldPerPerson),
       people_lost: lost,
       order_after: clampOrder(order + c.order),
-      risk: revoltRisk(clampOrder(order + c.order), people - lost, 0)
+      // As the dawn would judge it, with the men standing there now.
+      risk: revoltRisk(clampOrder(order + c.order), people - lost, garrison)
     }];
   }));
 }

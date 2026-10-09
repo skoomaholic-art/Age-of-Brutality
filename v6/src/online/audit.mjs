@@ -878,6 +878,46 @@ export function journalEntryToAudit(entry, map, game) {
     };
   }
 
+  if (entry.kind === 'MARCH_RETURNED') {
+    return {
+      ...base,
+      visibility: 'PRIVATE',
+      message: `Рать Дома ${entry.house} повернула назад и вернулась в ${territoryName(map, entry.territory)}: мечей ${entry.warriors}.`,
+      details: { house: entry.house, territory_id: entry.territory, warriors: entry.warriors, order_id: entry.order_id || null, at: entry.at || null }
+    };
+  }
+
+  if (entry.kind === 'ROUTE_MARCH' || entry.kind === 'SEA_WAYPOINT_MARCH') {
+    const sea = map.sea_waypoints?.[entry.to]?.name || entry.to;
+    return {
+      ...base,
+      visibility: 'PRIVATE',
+      message: `Ладьи Дома ${entry.house} вышли в море: ${territoryName(map, entry.from)} → ${sea}, мечей ${entry.warriors}.`,
+      details: { house: entry.house, from_id: entry.from, place_node: entry.to, warriors: entry.warriors, at: entry.at || null }
+    };
+  }
+
+  if (entry.kind === 'VOLUNTARY_RETREAT') {
+    const to = territoryName(map, entry.to);
+    return {
+      ...base,
+      message: `Дружина Дома ${entry.defender} отступила из земли ${to} без боя${entry.retreatTo ? ` в ${territoryName(map, entry.retreatTo)}` : ''}; Дом ${entry.attacker} вошёл в неё, мечей ${entry.defenders_after}.`,
+      details: { house: entry.attacker, defender: entry.defender, territory_id: entry.to, from_id: entry.from, retreat_to: entry.retreatTo || null, at: entry.at || null }
+    };
+  }
+
+  if (entry.kind === 'CHARACTER_ASSIGNED_ARMY' || entry.kind === 'CHARACTER_RETURNED_COURT') {
+    const where = entry.territory ? territoryName(map, entry.territory) : (map.sea_waypoints?.[entry.sea_waypoint]?.name || entry.sea_waypoint || '');
+    return {
+      ...base,
+      visibility: 'PRIVATE',
+      message: entry.kind === 'CHARACTER_ASSIGNED_ARMY'
+        ? `${entry.character_name} из Дома ${entry.house} принял под начало войско в ${where}.`
+        : `${entry.character_name} из Дома ${entry.house} вернулся ко двору в ${where}.`,
+      details: { house: entry.house, character_id: entry.character_id, territory_id: entry.territory || null, at: entry.at || null }
+    };
+  }
+
   return null;
 }
 

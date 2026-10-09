@@ -180,6 +180,13 @@ export function retrainUnits(game, map, house, territory, from, to, count, { now
   next.state.ranks ||= {};
   next.state.ranks[territory] ||= {};
   next.state.ranks[territory][house] = stored;
+  // The host's full strength follows: the retrained men count by their new kind.
+  if (next.state.peak?.[territory]?.[house]) {
+    const peak = next.state.peak[territory][house];
+    const moved = Math.min(count, Number(peak[from] || 0));
+    peak[from] = Number(peak[from] || 0) - moved;
+    peak[to] = Number(peak[to] || 0) + moved;
+  }
   next.state.houses[house].gold -= gold;
   next.state.journal.push({ kind: 'UNITS_RETRAINED', house, houses: [house], territory, from, to, count, gold, at: iso(nowMs) });
   next.updated_at = iso(nowMs);

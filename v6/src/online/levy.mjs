@@ -3,7 +3,7 @@ import { queueTimedOrder } from './orders.mjs';
 import { processBridges } from './bridges.mjs';
 import {
   DRILL, LEVY, RANKS, YARD, compAt, compSum, drawLevy, drillTime, drillableComp, drillingCount,
-  emptyComp, levyView, promote, reconcileRanks, yardOf, yardReady, yardTime, describeComp
+  emptyComp, levyView, reconcileRanks, yardOf, yardReady, yardTime, describeComp
 } from './ranks.mjs';
 
 function totalHouseWarriors(state, house) {
@@ -214,4 +214,3 @@ export function ranksView(game, map, house, nowMs = Date.now()) {
   };
 }
 
-export { promote };

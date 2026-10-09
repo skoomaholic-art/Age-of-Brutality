@@ -321,16 +321,6 @@ export function arriveRanks(state, map, key, house, comp, heads, stars = 0) {
   if (state.peak) addPeak(state, key, house, coming);
 }
 
-// Raises `count` of the weakest a rank, none above `cap`.
-export function promote(comp, count, cap = N - 1) {
-  let left = count;
-  for (let i = 0; i < cap && left > 0; i += 1) {
-    const n = Math.min(comp[i], left);
-    comp[i] -= n; comp[i + 1] += n; left -= n;
-  }
-  return count - left;
-}
-
 // Losses in a meeting on the road fall on the weakest of the marching army,
 // and leave the books of its origin too.
 export function loseOnRoad(state, map, order, losses) {
