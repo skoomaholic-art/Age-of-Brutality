@@ -166,18 +166,16 @@ export function chooseHearts(game, map) {
   // Never in a House's home lands: the Hearts rise in the no-man's land between them.
   const homeSectors = new Set(Object.keys(map.capitals || {}));
   const open = map.territories.filter(t => !state.territories[t.id]?.owner && t.type !== 'Половина острова' && t.type !== 'Столица');
-  const middle = open.filter(t => !homeSectors.has(t.house_sector));
-  const free = middle.length >= Math.min(HEART.maxDecoys, Math.max(1, houses.length - 1)) + 1 ? middle : open;
-  const scored = free.map(t => {
+  const scored = open.map(t => {
     const ds = houses.map(h => dist[h].get(t.id) ?? 30);
     const min = Math.min(...ds);
     const spread = Math.max(...ds) - min;
     // Far from everyone and about as far from each; a little farther from those who spread most.
     const lean = houses.reduce((sum, h, i) => sum + ((lands[h].length - avg) / Math.max(1, avg)) * ds[i], 0);
-    return { id: t.id, min, score: 2 * min - 1.5 * spread + lean };
+    return { id: t.id, min, middle: !homeSectors.has(t.house_sector), score: 2 * min - 1.5 * spread + lean };
   });
-  // Lands two roads or more from every House first; next to someone only if need be.
-  const pool = scored.sort((a, b) => (b.min >= 2) - (a.min >= 2) || b.score - a.score || (a.id < b.id ? -1 : 1));
+  // The no-man's land first, then lands two roads or more from every House; next to someone only if need be.
+  const pool = scored.sort((a, b) => b.middle - a.middle || (b.min >= 2) - (a.min >= 2) || b.score - a.score || (a.id < b.id ? -1 : 1));
   const count = Math.min(HEART.maxDecoys, Math.max(1, houses.length - 1)) + 1;
   const roads = neighbours(map, { sea: false });
   const picked = [];
@@ -186,6 +184,11 @@ export function chooseHearts(game, map) {
     // Hearts do not stand side by side.
     if (picked.some(p => (roads.get(p) || []).some(([to]) => to === x.id))) continue;
     picked.push(x.id);
+  }
+  // Too few lands left to keep them apart: fill up with the best that remain.
+  for (const x of pool) {
+    if (picked.length >= count) break;
+    if (!picked.includes(x.id)) picked.push(x.id);
   }
   return picked;
 }

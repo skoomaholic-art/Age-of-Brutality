@@ -61,8 +61,17 @@ export function orderOnCapture(state, territory, house, previousOwner, { nowMs =
   state.order[territory] = previousOwner ? ORDER.fromHouse : ORDER.fromWild;
   state.capture_choices ||= {};
   state.capture_choices[territory] = { house, from: previousOwner || null, at: iso(nowMs) };
-  // A House led by the AI decides at once.
-  if (ai) applyCaptureChoice(state, territory, house, 'TRIBUTE', { nowMs });
+  // A House led by the AI decides at once: mercy where tribute would leave the
+  // people ready to rise, sack when its purse is empty, tribute otherwise.
+  if (ai) applyCaptureChoice(state, territory, house, aiCaptureChoice(state, territory, house), { nowMs });
+}
+
+export function aiCaptureChoice(state, territory, house) {
+  const outcomes = choiceOutcomes(state, territory);
+  if (outcomes.TRIBUTE.risk === 'HIGH' && outcomes.MERCY.risk !== 'HIGH') return 'MERCY';
+  const gold = Number(state.houses?.[house]?.gold || 0);
+  if (gold < 2 && outcomes.SACK.risk !== 'HIGH' && outcomes.SACK.gold > outcomes.TRIBUTE.gold) return 'SACK';
+  return 'TRIBUTE';
 }
 
 // What each choice would give, for the dialog.

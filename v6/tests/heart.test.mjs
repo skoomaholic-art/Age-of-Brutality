@@ -196,3 +196,12 @@ test('a river with no bridge holds the Horde up at the ford', () => {
   assert.equal(game.state.hordes[0]?.at, at, 'waiting at the river');
   assert.ok(game.state.journal.some(e => e.kind === 'HORDE_FORDING'));
 });
+
+test('chooseHearts always finds as many Hearts as the table needs, even when the middle is taken', () => {
+  const game = heartGame();
+  // Every land in the no-man's land is owned already.
+  for (const t of map.territories) if (!(t.house_sector in map.capitals) && t.type !== 'Столица') { game.state.territories[t.id].owner = H; game.state.territories[t.id].warriors = { [H]: 1 }; delete game.state.wild_guards[t.id]; }
+  const picked = chooseHearts(game, map);
+  assert.equal(picked.length, Math.min(HEART.maxDecoys, houses.length - 1) + 1);
+  for (const id of picked) assert.equal(game.state.territories[id].owner, null);
+});

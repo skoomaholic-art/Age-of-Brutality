@@ -329,31 +329,34 @@ export function upkeepDawn(game, map, nowMs = Date.now()) {
 }
 
 // For the AI: what to hire where, with about half of its gold.
-export function aiHireChoice(game, map, house) {
+export function aiHireChoice(game, map, house, prefer = null) {
   const state = game.state;
   if (!state.population) return null;
   const gold = Number(state.houses[house]?.gold || 0);
-  if (gold < 6) return null;
-  // Keep enough for two dawns of upkeep.
+  if (gold < 3) return null;
+  // Keep enough for a dawn of upkeep, of the old men and the new.
   const upkeep = upkeepOf(state, map, house).gold;
-  const budget = Math.floor(Math.max(0, gold - upkeep * 2) * 0.6);
-  if (budget < 2) return null;
   const lands = Object.entries(state.territories)
     .filter(([id, t]) => t.owner === house && Number(state.population[id] || 0) > 0)
     .map(([id]) => id)
-    .sort((a, b) => (kindsRaisedIn(map, b).length - kindsRaisedIn(map, a).length) || (Number(state.population[b]) - Number(state.population[a])) || (a < b ? -1 : 1));
+    .sort((a, b) => (b === prefer) - (a === prefer) || (kindsRaisedIn(map, b).length - kindsRaisedIn(map, a).length) || (Number(state.population[b]) - Number(state.population[a])) || (a < b ? -1 : 1));
+  let best = null;
   for (const id of lands) {
-    const kinds = kindsRaisedIn(map, id);
     const people = Number(state.population[id] || 0);
-    // The best kind it can afford at least two of.
-    for (const k of [...kinds].reverse()) {
-      const n = Math.min(people, Math.floor(budget / RANKS[k].gold));
-      if (n >= 2) {
-        const counts = emptyComp();
-        counts[k] = n;
-        return { territory: id, counts };
-      }
+    // The kind that buys the most strength here; among equals the stronger men.
+    for (const k of kindsRaisedIn(map, id)) {
+      let n = Math.min(people, Math.floor(gold / RANKS[k].gold));
+      while (n > 0 && n * RANKS[k].gold + upkeep + Math.ceil(n * RANKS[k].upkeep) > gold) n -= 1;
+      if (n < 1) continue;
+      const power = n * RANKS[k].power;
+      const better = !best || power > best.power || (power === best.power && (id === prefer) > (best.territory === prefer)) || (power === best.power && id === best.territory && RANKS[k].power > RANKS[best.k].power);
+      if (better) best = { territory: id, k, n, power };
     }
+    // The stage first: once it can take men, hire there.
+    if (best && best.territory === prefer && best.n >= 2) break;
   }
-  return null;
+  if (!best) return null;
+  const counts = emptyComp();
+  counts[best.k] = best.n;
+  return { territory: best.territory, counts };
 }
