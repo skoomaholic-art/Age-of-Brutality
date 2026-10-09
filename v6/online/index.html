@@ -1767,13 +1767,17 @@ function describeRanks(comp) {
 function levyBlock() {
   const view = snapshot.game.ranks_view;
   if (!view) return '';
+  const lands = (snapshot.map.territories || []).filter(x => ['Деревня', 'Город', 'Столица'].includes(x.type) && snapshot.game.state.territories[x.id]?.owner === house).length;
+  const total = view.levy.reduce((sum, kind) => sum + kind.available * kind.gold, 0);
+  const people = view.levy.reduce((sum, kind) => sum + kind.available, 0);
   const rows = view.levy.map((kind, rank) =>
-    '<div class="rank-row"><span><b>' + RANK_WORDS[rank][0] + '</b> · сила ' + (rank + 1) + '<br><span class="tiny">' + LEVY_FROM[rank] + (kind.sources ? '' : ' — нет таких земель') +
-    ', можно до ' + kind.available + ' · ' + kind.gold + ' зол. за голову</span></span>' +
+    '<div class="rank-row"><span><b>' + kind.available + ' ' + RANK_WORDS[rank][kind.available === 1 ? 1 : kind.available >= 2 && kind.available <= 4 ? 2 : 3] + '</b> · сила ' + (rank + 1) +
+    '<br><span class="tiny">' + LEVY_FROM[rank] + ' · ' + kind.gold + ' зол. за голову</span></span>' +
     '<input type="number" min="0" max="' + kind.available + '" value="0" data-levy="' + rank + '"' + (kind.available ? '' : ' disabled') + '></div>').join('');
-  return '<div class="rank-box"><div class="rank-head">Сбор войск</div>' + rows +
+  return '<div class="rank-box"><div class="rank-head">Сбор войск</div>' +
+    '<div class="tiny">Сейчас ' + lands + ' твоих владений готовы дать ' + people + ' человек. Всех — за ' + total + ' золота.</div>' + rows +
     '<div class="tiny">Деревни и города копят людей каждый день (до трёх дней). Собранные идут по дорогам в столицу.</div>' +
-    '<button class="wide primary" data-levy-go>Собрать войска</button></div>';
+    '<div class="acts"><button class="primary" data-levy-all' + (people ? '' : ' disabled') + '>Нанять всех · ' + total + ' зол.</button><button data-levy-go>Нанять выбранных</button></div></div>';
 }
 
 function drillBlock() {
@@ -1858,8 +1862,7 @@ function renderLand() {
     const spyRow = spies ? '<button class="wide" data-hire-spy ' + (spies.list.length >= spies.max ? 'disabled' : '') + '>Шпион · ' + spies.cost + ' золота (' + spies.list.length + ' из ' + spies.max + ')</button>' : '';
     body.innerHTML = '<div class="row"><span>Стоит здесь</span><b>' + here + ' ' + warriorWord(here) + '</b></div>' + spyRow +
       (queue ? '<div class="built">Вербовщики ведут: ' + queue + '</div>' : '') +
-      (t.type === 'Столица' ? levyBlock() + drillBlock() + '<div class="built" style="margin-top:8px">Наёмники на месте (как прежде):</div>' : '') +
-      '<div class="acts">' + [1, 2, 3].map(n => '<button data-land-hire="' + n + '">+' + n + '<br><span class="tiny">' + n + ' зол.</span></button>').join('') + '</div>';
+      (t.type === 'Столица' ? levyBlock() + drillBlock() : '<div class="tiny" style="margin-top:6px">Войска собирают в столице: туда приходят люди из всех твоих деревень и городов.</div>');
     return;
   }
   const building = jobs.some(job => job.type === 'FORT');
@@ -1920,6 +1923,7 @@ function setupLand() {
     if (event.target.closest('[data-land-fort]')) landCommand('/api/fort', {});
     const readCounts = name => [0, 1, 2, 3].map(rank => Number($('land-body').querySelector('[data-' + name + '="' + rank + '"]')?.value || 0));
     if (event.target.closest('[data-levy-go]')) landCommand('/api/levy', { counts: readCounts('levy') });
+    if (event.target.closest('[data-levy-all]')) landCommand('/api/levy', { counts: (snapshot.game.ranks_view?.levy || []).map(kind => kind.available) });
     if (event.target.closest('[data-drill-all]')) {
       // Everyone free who can be taught, as many as there are places.
       const view = snapshot.game.ranks_view;
@@ -3576,6 +3580,14 @@ function updatePixiFog(explored, art, coords) {
       for (const ring of rings) for (const point of ring) edge.push(point);
     }
     for (const id of explored) if (!art[id] && coords[id]) edge.push([coords[id].x, coords[id].y, 58]);
+    // The water between known sea points clears too, so the way on is seen.
+    for (const [a, b] of snapshot?.map?.sea_lane_edges || []) {
+      if (!explored.has(a) || !explored.has(b) || !coords[a] || !coords[b]) continue;
+      const length = Math.hypot(coords[b].x - coords[a].x, coords[b].y - coords[a].y);
+      for (let d = 0; d <= length; d += 14) {
+        edge.push([coords[a].x + (coords[b].x - coords[a].x) * d / length, coords[a].y + (coords[b].y - coords[a].y) * d / length, 40]);
+      }
+    }
   }
   for (const cloud of pixiFog.clouds) {
     let on = Boolean(explored);
