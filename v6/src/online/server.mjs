@@ -30,6 +30,7 @@ import {
   setHaltPoint
 } from './orders.mjs';
 import { normalizeOnlineSeaState } from './sea-navigation.mjs';
+import { raiseLevy, startDrill, buildYard, processRanks, ranksView } from './levy.mjs';
 import {
   ONLINE_ECONOMY_TIMING,
   cancelJob,
@@ -514,6 +515,7 @@ async function tickUnlocked(ctx) {
   processed = answerAiDeals(processed, map, constants, processed.rounds?.ai_houses || [], { nowMs });
   processed = processDueOrders(processed, map, constants, nowMs);
   processed = processEconomy(processed, map, constants, nowMs);
+  processed = processRanks(processed, map, nowMs);
   processed = processRounds(processed, map, constants, { nowMs });
   processed = processCharacters(processed, map, constants, { nowMs });
   processed = expelGuests(processed, map, constants, nowMs);
@@ -575,6 +577,8 @@ function redactGameForPlayer(game, player) {
     ),
     ...dealsView(game, map, player?.house || null)
   };
+  // The levy, the drill and the yard of one's own House.
+  clientGame.ranks_view = player?.house ? ranksView(game, map, player.house) : null;
 
   clientGame.orders = player?.role === PLAYER_ROLE.SPECTATOR
     ? (clientGame.orders || []).filter(item => item.status !== 'PENDING').slice(-30)
@@ -1628,6 +1632,25 @@ async function handleGameApi(req, res, url, ctx, subpath) {
           if (order) setHaltPoint(order, ratio, Date.now());
         }
         return done;
+      }
+    }));
+    return json(res, result.status, result.response);
+  }
+
+  if (req.method === 'POST' && ['/levy', '/drill', '/yard'].includes(subpath)) {
+    const body = await readBody(req);
+    const house = String(body.house || '').trim();
+    await requireHouse(ctx, req, house);
+    const result = await serial(ctx, () => runGameCommand(ctx, req, {
+      kind: subpath.slice(1).toUpperCase(),
+      status: 200,
+      house,
+      mutate: async game => {
+        const nowMs = Date.now();
+        const next = subpath === '/levy' ? raiseLevy(game, map, constants, house, body.counts, { nowMs })
+          : subpath === '/drill' ? startDrill(game, map, house, body.counts, { nowMs })
+            : buildYard(game, map, house, { nowMs });
+        return { game: next, response: { ok: true } };
       }
     }));
     return json(res, result.status, result.response);

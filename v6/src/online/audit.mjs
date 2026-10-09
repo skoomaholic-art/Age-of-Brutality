@@ -289,6 +289,21 @@ export function journalEntryToAudit(entry, map, game) {
     };
   }
 
+  if (entry.kind === 'LEVY_RAISED' || entry.kind === 'DRILL_DONE' || entry.kind === 'YARD_BUILT') {
+    const names = ['селян', 'ополченцев', 'ратников'];
+    const raised = (entry.counts || []).map((n, i) => (n ? `${n} ${names[i]}` : '')).filter(Boolean).join(', ');
+    return {
+      ...base,
+      visibility: 'PRIVATE',
+      message: entry.kind === 'LEVY_RAISED'
+        ? `Сбор войск: Дом ${entry.house} созвал ${raised}. Люди идут в столицу.`
+        : entry.kind === 'DRILL_DONE'
+          ? `Учения окончены: теперь в столице ${entry.risen_text || 'обученные воины'}.`
+          : `Учебный двор Дома ${entry.house} готов: можно учить латников и дружинников.`,
+      details: { house: entry.house, counts: entry.counts || null, risen: entry.risen || null, at: entry.at || null }
+    };
+  }
+
   if (entry.kind === 'DEAL_MADE' || entry.kind === 'DEAL_REJECTED') {
     const say = items => (items || []).map(item =>
       item.type === 'GOLD' ? `${item.amount} золота`

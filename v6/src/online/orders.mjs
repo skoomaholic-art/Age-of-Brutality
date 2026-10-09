@@ -14,6 +14,7 @@ import {
   settleCommander
 } from '../core/characters.mjs';
 import { declareWarInPlace, hasPassage } from './diplomacy.mjs';
+import { headsLost, ranksForMarch, settleMarchRanks, strengthOf } from './ranks.mjs';
 import { fateDice, recoveryMs, settleFate } from './fate.mjs';
 import {
   finishSeaLandingBridge,
@@ -290,6 +291,8 @@ export function queueTimedOrder(
     result: null,
     failure_reason: null
   };
+  // Which warriors go: the strongest free ones, or the ranks asked for.
+  order.action.ranks = ranksForMarch(game, map, order.action);
 
   if (order.commander_id) {
     next.state = beginCommanderMarch(
@@ -671,7 +674,12 @@ function resolveOrder(state,map,constants,gameId,order,nowMs,recovery) {
       attackerDie,
       defenderDie,
       attackerCommander:commanderStats(attackerCommander),
-      defenderCommander:commanderStats(defenderCommander)
+      defenderCommander:commanderStats(defenderCommander),
+      // Ranks add up as strength: a guardsman counts as five peasants.
+      attackerStrengthModifier:strengthOf(order.action.ranks,Number(action.warriors))-Number(action.warriors),
+      defenderStrengthModifier:strengthOf(state.ranks?.[action.to]?.[defenderHouse],defenders)-defenders,
+      attackerLossesFor:damage=>headsLost(order.action.ranks,Number(action.warriors),damage),
+      defenderLossesFor:damage=>headsLost(state.ranks?.[action.to]?.[defenderHouse],defenders,damage)
     }
   );
 
@@ -789,6 +797,7 @@ export function processDueOrders(game, map, constants, nowMs = Date.now()) {
       const errors = validateState(resolved.state, map, constants);
       if (errors.length) throw new Error(`post-order state invalid: ${errors.join('; ')}`);
 
+      settleMarchRanks(next.state, resolved.state, map, liveOrder, resolved.state.journal.slice(journalStart));
       next.state = resolved.state;
       liveOrder.status = 'RESOLVED';
       liveOrder.resolved_at = new Date(nowMs).toISOString();

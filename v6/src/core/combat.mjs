@@ -79,8 +79,9 @@ export function resolveBattle(state, map, constants, action, options = {}) {
   const attackerDefenseValue = attackerDefense + attackerTempDefense;
   const damageToDefender = Math.max(0, Math.ceil(attackerStrength/2) - defenderDefense);
   const damageToAttacker = Math.max(0, Math.ceil(defenderStrength/2) - attackerDefenseValue);
-  const attackerLosses = Math.min(action.warriors, damageToAttacker);
-  const defenderLosses = Math.min(defenderWarriors, damageToDefender);
+  // Hardier warriors take more damage before they fall (online ranks); by default one head a point.
+  const attackerLosses = Math.min(action.warriors, typeof options.attackerLossesFor === 'function' ? options.attackerLossesFor(damageToAttacker) : damageToAttacker);
+  const defenderLosses = Math.min(defenderWarriors, typeof options.defenderLossesFor === 'function' ? options.defenderLossesFor(damageToDefender) : damageToDefender);
   const attackerSurvivors = action.warriors - attackerLosses;
   const defenderSurvivors = defenderWarriors - defenderLosses;
   const attackerWins = attackerStrength > defenderStrength;

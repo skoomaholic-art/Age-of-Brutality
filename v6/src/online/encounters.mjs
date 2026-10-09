@@ -15,6 +15,7 @@ import {
 } from '../core/characters.mjs';
 import { fateDice, recoveryMs, settleFate } from './fate.mjs';
 import { areAllies, declareWarInPlace, hasPassage } from './diplomacy.mjs';
+import { headsLost, loseOnRoad, strengthOf } from './ranks.mjs';
 
 const BATTLE_DIE = 3;
 // Two armies "meet" at a crossroads when they reach it within this share of
@@ -135,7 +136,7 @@ function side(state, order) {
     warriors,
     attack: Number(stats.attack || 0),
     defense: Number(stats.defense || 0),
-    strength: warriors + BATTLE_DIE + Number(stats.attack || 0)
+    strength: strengthOf(order.action.ranks, warriors) + BATTLE_DIE + Number(stats.attack || 0)
   };
 }
 
@@ -178,14 +179,16 @@ function fight(game, found, nowMs, map, constants) {
 
   const warDeclared = declareWarInPlace(game, a.house, b.house, { nowMs, cause: 'ENCOUNTER' });
 
-  const lossesA = Math.min(a.warriors, Math.max(0, Math.ceil(b.strength / 2) - a.defense));
-  const lossesB = Math.min(b.warriors, Math.max(0, Math.ceil(a.strength / 2) - b.defense));
+  const lossesA = Math.min(a.warriors, headsLost(orderA.action.ranks, a.warriors, Math.max(0, Math.ceil(b.strength / 2) - a.defense)));
+  const lossesB = Math.min(b.warriors, headsLost(orderB.action.ranks, b.warriors, Math.max(0, Math.ceil(a.strength / 2) - b.defense)));
   const leftA = a.warriors - lossesA;
   const leftB = b.warriors - lossesB;
   let winner = null;
   if (a.strength > b.strength && leftA > 0) winner = a.house;
   if (b.strength > a.strength && leftB > 0) winner = b.house;
 
+  loseOnRoad(game.state, map, orderA, lossesA);
+  loseOnRoad(game.state, map, orderB, lossesB);
   loseAtOrigin(game.state, orderA.action, lossesA);
   loseAtOrigin(game.state, orderB.action, lossesB);
 
