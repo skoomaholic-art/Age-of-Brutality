@@ -3763,9 +3763,18 @@ function setupPixiMap(app, world) {
   app.ticker.add(movePixiArmies);
 }
 
+// Slivers a few cells wide, left over where two provinces meet, are not drawn:
+// they showed as little closed loops of border inside a realm.
+const ringArea = ring => { let a = 0; for (let i = 0; i < ring.length; i += 1) { const p = ring[i], q = ring[(i + 1) % ring.length]; a += p[0] * q[1] - q[0] * p[1]; } return Math.abs(a / 2); };
+const pixiRingCache = new Map();
 function provinceRings(id) {
   pixiFog.polys ||= Object.fromEntries(Object.entries(mapArt.provinces).map(([key, shape]) => [key, parseRings(shape.d)]));
-  return pixiFog.polys[id] || [];
+  if (!pixiRingCache.has(id)) {
+    const rings = pixiFog.polys[id] || [];
+    const biggest = Math.max(0, ...rings.map(ringArea));
+    pixiRingCache.set(id, rings.filter(ring => ringArea(ring) >= Math.min(120, biggest * 0.08)));
+  }
+  return pixiRingCache.get(id);
 }
 
 function fillRings(g, rings) {
