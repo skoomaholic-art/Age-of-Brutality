@@ -13,6 +13,7 @@
 import { compAt, headsLost, moveRanks, starsAt, strengthOf, takeWeakest } from './ranks.mjs';
 import { commanderAt, commanderStats } from '../core/characters.mjs';
 import { areAllies, declareWarInPlace, inTruce } from './diplomacy.mjs';
+import { rememberDeed } from './opinion.mjs';
 import { rulerLeadBonus } from './court.mjs';
 import { orderPlace, travelSegments } from './orders.mjs';
 import { visiblePositions, alliesOf } from './fog.mjs';
@@ -196,6 +197,7 @@ export function processAmbushes(game, map, constants, nowMs = Date.now()) {
         }
       }
 
+      rememberDeed(game, { doer: laid.house, about: them, deed: 'AMBUSHED' });
       state.journal.push({
         kind: 'AMBUSH', house: laid.house, houses: [laid.house, them], against: them,
         territory: laid.from, road: laid.land, order_id: order.id,

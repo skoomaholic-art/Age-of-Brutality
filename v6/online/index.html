@@ -4723,6 +4723,17 @@ function pumpDeals() {
 // Which Houses have their fold open: a refresh must not shut it.
 const dipMoreOpen = new Set();
 
+// What one House thinks of another, in words.
+function opinionWord(value) {
+  if (value <= -60) return 'ненависть';
+  if (value <= -25) return 'вражда';
+  if (value < -8) return 'холодно';
+  if (value <= 8) return 'ровно';
+  if (value < 30) return 'приязнь';
+  if (value < 60) return 'дружба';
+  return 'братство';
+}
+
 function renderDiplomacy() {
   const box = $('diplomacy');
   if (!box) return;
@@ -4788,6 +4799,14 @@ function renderDiplomacy() {
       else sub += '<button data-dip="REQUEST_PASSAGE" data-target="' + tag + '">Просить прохода</button>';
     }
     const marked = (dip.oathbreakers || []).includes(other) ? ' <span class="oath" title="Нарушил брачный союз">клятвопреступник</span>' : '';
+    // What they think of us, and what we think of them — deeds remembered.
+    const mindTheirs = Number(dip.opinion_of_me?.[other] ?? 0);
+    const mindMine = Number(dip.my_opinion?.[other] ?? 0);
+    if (dip.opinion_of_me && (mindTheirs || mindMine)) {
+      sub = '<span title="Что помнят за тобой: удары, взятые земли, нарушенные клятвы — и дары, миры и свадьбы. Со временем забывается.">' +
+        escapeHtml('о тебе: ' + opinionWord(mindTheirs) + ' (' + (mindTheirs > 0 ? '+' : '') + mindTheirs + ') · о нём: ' + opinionWord(mindMine) + ' (' + (mindMine > 0 ? '+' : '') + mindMine + ')') +
+        '</span>' + sub;
+    }
     const wed = (dip.marriages || []).filter(m => [m.bride_house, m.groom_house].includes(other) && [m.bride_house, m.groom_house].includes(house))
       .map(m => '<span>' + escapeHtml(m.name + ' из Дома ' + m.bride_house + ' замужем в Доме ' + m.groom_house) + '</span>').join('');
     sub = wed + sub;

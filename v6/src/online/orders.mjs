@@ -37,6 +37,7 @@ import { COLD, isWinter } from './seasons.mjs';
 import { processAmbushes } from './intercept.mjs';
 import { standDown } from './stance.mjs';
 import { planLosses, planOf, planStrength } from './plans.mjs';
+import { rememberDeed } from './opinion.mjs';
 
 export const ONLINE_TIMING = Object.freeze({
   landSegmentMs: 3_000,
@@ -930,6 +931,16 @@ export function processDueOrders(game, map, constants, nowMs = Date.now()) {
         const entry = next.state.journal[i];
         if (entry.kind === 'BATTLE' || entry.kind === 'EMPTY_ENEMY_OCCUPATION') {
           declareWarInPlace(next, entry.attacker, entry.defender, { nowMs, cause: 'ATTACK' });
+          // And it is remembered: a blow, and a land or a seat taken with it.
+          const seen = Object.keys(next.state.houses || {});
+          rememberDeed(next, { doer: entry.attacker, about: entry.defender, deed: 'ATTACKED', houses: seen });
+          if (entry.captured) {
+            rememberDeed(next, {
+              doer: entry.attacker, about: entry.defender,
+              deed: Object.values(map.capitals || {}).includes(entry.to) ? 'CAPITAL_TAKEN' : 'LAND_TAKEN',
+              houses: seen
+            });
+          }
         }
       }
 

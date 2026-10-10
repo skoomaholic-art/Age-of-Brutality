@@ -31,6 +31,7 @@ import { arriveRanks, compAt, guestKey, headsLost, MAX_STARS, moveRanks, reconci
 import { rulerLeadBonus } from './court.mjs';
 import { clearHoldAt, holdGuard } from './stance.mjs';
 import { planLosses, planStrength } from './plans.mjs';
+import { rememberDeed } from './opinion.mjs';
 import { terrainGuard } from './terrain.mjs';
 import { fateDice, recoveryMs, settleFate } from './fate.mjs';
 import { nearestOwnLand } from './guests.mjs';
@@ -230,6 +231,13 @@ export function fightOnLand(game, map, constants, land, aggressor, target, force
     t.owner = captor;
     // The ground changed hands: nobody's ditches here are theirs any more.
     clearHoldAt(state, land);
+    if (owner && owner !== captor) {
+      rememberDeed(game, {
+        doer: captor, about: owner,
+        deed: Object.values(map.capitals || {}).includes(land) ? 'CAPITAL_TAKEN' : 'LAND_TAKEN',
+        houses: Object.keys(state.houses || {})
+      });
+    }
     if (best.kind === 'MARCH') {
       arriveRanks(state, map, land, captor, best.comp, best.survivors, Math.min(MAX_STARS, (best.stars || 0) + 1));
       t.warriors[captor] = best.survivors;

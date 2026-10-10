@@ -1,5 +1,6 @@
 import { areAllies, inTruce } from './diplomacy.mjs';
 import { alliesOf, visiblePositions } from './fog.mjs';
+import { opinionOf } from './opinion.mjs';
 import { neutralResistance } from '../core/neutral.mjs';
 import { buildAdjacency } from '../core/map.mjs';
 import { aiBridgeChoice, buildBridge } from './bridges.mjs';
@@ -304,10 +305,12 @@ function marchCandidates(game, map, constants, house, adjacency) {
       const outlook = battleOutlook(warriorsSent || warriors, defenders);
       if (!outlook.wins) continue;
       const capital = territoryMeta(map, to)?.type === 'Столица' ? 4 : state.heart?.territory === to ? 6 : 0;
+      // A House strikes first at the one it likes least.
+      const grudge = Math.max(0, -opinionOf(game, house, owner)) / 25;
       const firstBattle = hasAchievement(state, house, 'VP-W2') ? 0 : 4;
       out.push({
         kind: 'ATTACK',
-        value: worth + capital + firstBattle - outlook.losses * 0.7,
+        value: worth + capital + firstBattle + grudge - outlook.losses * 0.7,
         command: command(warriorsSent || warriors)
       });
       continue;

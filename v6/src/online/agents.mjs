@@ -7,6 +7,7 @@ import { houseCourtTotals, houseTemper } from './court.mjs';
 // home with other travellers and can be sent again.
 
 import { bandNow, buildWayfarers, nextArrival, spyRound, wayfarerLegMs } from './wayfarers.mjs';
+import { rememberDeed } from './opinion.mjs';
 
 export const SPY_COST = 3;
 export const MAX_SPIES = 2;
@@ -187,6 +188,7 @@ export function processAgents(game, map, { nowMs = Date.now() } = {}) {
             against: house, agent_name: agent.name, territory: agent.target,
             at: new Date(nowMs).toISOString()
           });
+          rememberDeed(next, { doer: house, about: caught.house, deed: 'SPY_CAUGHT' });
           const mine = next.agents[house];
           const at = mine.indexOf(agent);
           if (at >= 0) mine.splice(at, 1);

@@ -7,6 +7,7 @@ import { heartDawn } from './heart.mjs';
 import { populationDawn, upkeepDawn } from './units.mjs';
 import { orderDawn } from './order.mjs';
 import { seasonOfDay } from './seasons.mjs';
+import { opinionDawn } from './opinion.mjs';
 import { buildVictoryStatus } from '../core/victory.mjs';
 
 // Online adaptation of the tabletop round structure (Rules §4), in two modes.
@@ -184,6 +185,8 @@ function beginRound(next, map, constants, number, nowMs, timing) {
     );
   }
 
+  // Old grudges dull a little with every dawn.
+  if (number > 1) opinionDawn(next);
   // The year turns: two days of summer, two days of winter, and round again.
   const season = seasonOfDay(map, number);
   if (number > 1 && season !== seasonOfDay(map, number - 1)) {

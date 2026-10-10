@@ -1,3 +1,4 @@
+import { opinionOf, rememberDeed } from './opinion.mjs';
 import { houseCourtTotals } from './court.mjs';
 import { moveRanks } from './ranks.mjs';
 // Relations between Houses: neutral by default, war by deed, alliance by marriage.
@@ -88,6 +89,12 @@ export function declareWarInPlace(game, a, b, { nowMs = Date.now(), cause = 'ATT
   if (before === RELATION.WAR) return false;
 
   diplomacy.relations[key] = RELATION.WAR;
+  // A blow is remembered, and an oath broken for it is remembered by everyone.
+  const seen = Object.keys(game.state?.houses || {});
+  rememberDeed(game, { doer: a, about: b, deed: 'WAR', houses: seen });
+  if (before === RELATION.ALLIANCE || inTruce(game, a, b, nowMs)) {
+    rememberDeed(game, { doer: a, about: b, deed: 'OATH_BROKEN', houses: seen });
+  }
   delete diplomacy.offers[offerKey(a, b)];
   delete diplomacy.offers[offerKey(b, a)];
   // War closes the roads both ways.
@@ -410,6 +417,9 @@ export function diplomacyView(game, house, known = null) {
     // Whose roads are open to us, and to whom ours are.
     passage_from: Object.keys(passage).filter(host => passage[host].includes(house)),
     passage_to: [...(passage[house] || [])],
+    // What every House this one has met thinks of it, and what it thinks of them.
+    opinion_of_me: Object.fromEntries((known || []).map(other => [other, opinionOf(game, other, house)])),
+    my_opinion: Object.fromEntries((known || []).map(other => [other, opinionOf(game, house, other)])),
     // Truces of this House: until when it may not attack (or be attacked) without breaking its word.
     truces: Object.fromEntries(Object.entries(game?.diplomacy?.truces || {})
       .filter(([key, until]) => key.split('::').includes(house) && Date.parse(until) > Date.now())
@@ -507,6 +517,7 @@ export function inTruce(game, a, b, nowMs = Date.now()) {
 function makePeace(game, a, b, nowMs) {
   const diplomacy = ensure(game);
   if (diplomacy.relations[pairKey(a, b)] !== RELATION.WAR) return;
+  rememberDeed(game, { doer: a, about: b, deed: 'PEACE' });
   delete diplomacy.relations[pairKey(a, b)];
   diplomacy.truces ||= {};
   const until = new Date(nowMs + TRUCE_DAYS * dayLength(game)).toISOString();
@@ -519,12 +530,15 @@ function handOver(game, map, constants, giver, taker, items, nowMs) {
     if (item.type === 'GOLD') {
       game.state.houses[giver].gold = Number(game.state.houses[giver].gold || 0) - item.amount;
       game.state.houses[taker].gold = Number(game.state.houses[taker].gold || 0) + item.amount;
+      rememberDeed(game, { doer: giver, about: taker, deed: 'GIFT', amount: item.amount });
     } else if (item.type === 'PASSAGE') {
       setPassage(game, giver, taker, true);
+      rememberDeed(game, { doer: giver, about: taker, deed: 'PASSAGE' });
     } else if (item.type === 'PEACE') {
       makePeace(game, giver, taker, nowMs);
     } else if (item.type === 'MARRIAGE') {
       formAlliance(game, giver, taker, nowMs, giver);
+      rememberDeed(game, { doer: giver, about: taker, deed: 'MARRIAGE' });
     } else if (item.type === 'LAND') {
       const land = game.state.territories[item.territory];
       // The giver's garrison goes home to the capital, as many as find room there.
@@ -640,7 +654,12 @@ export function aiVerdict(game, map, from, to) {
   if (marriage) gain += 3 + (deal.take.some(item => item.type === 'MARRIAGE') ? -1 : 1);
   // A well-spoken lord at the proposer's court sways the answer.
   gain += houseCourtTotals(game.state, from).deals * 2;
+  // And so does what this House thinks of the one writing to it: a friend is
+  // met halfway, an enemy is not believed even when the offer is fair.
+  const mind = opinionOf(game, to, from);
+  gain += Math.round(mind / 12);
   if (gain >= 0) return { accept: true, reason: null };
+  if (mind <= -40) return { accept: false, reason: `не верят Дому ${from}: слишком много за ним помнится` };
   return { accept: false, reason: `сочли договор невыгодным: не хватает примерно ${Math.ceil(-gain)} золота` };
 }
 
