@@ -31,7 +31,9 @@ test('no road across a river without a bridge; a bridge built from one bank open
   const capital = map.capitals[H];
   const [a, b] = map.land_edges.find(edge => edge.includes(capital));
   const other = a === capital ? b : a;
-  seedCrossings(game.state, map, [{ a, b, x: 0, y: 0 }]);
+  // The ford lies on our side of the border, so ours is the House that bridges it.
+  const near = map.coordinates[capital];
+  seedCrossings(game.state, map, [{ a, b, x: near.x, y: near.y }]);
   const key = crossingKey(a, b);
   const reach = () => listQueueableMarches(game, map, constants, H).some(m => m.from === capital && m.to === other);
   assert.equal(reach(), false, 'the river bars the road');
@@ -47,12 +49,19 @@ test('no road across a river without a bridge; a bridge built from one bank open
   assert.ok(game.state.journal.some(e => e.kind === 'BRIDGE_BUILT'));
 });
 
-test('a bridge is built only from one\'s own bank', () => {
+test('a bridge is built only by the House whose land holds the ford', () => {
   const game = freshGame();
   const [a, b] = map.land_edges.find(edge => !edge.some(id => game.state.territories[id]?.owner));
-  seedCrossings(game.state, map, [{ a, b, x: 0, y: 0 }]);
+  seedCrossings(game.state, map, [{ a, b, ...map.coordinates[a] }]);
   game.state.houses[H].gold = 10;
-  assert.throws(() => buildBridge(game, map, H, crossingKey(a, b)), /своего берега/);
+  assert.throws(() => buildBridge(game, map, H, crossingKey(a, b)), /мост ставит тот, кто ею владеет/);
+
+  // Our own land on the far bank is not enough: the ford is not in it.
+  const capital = map.capitals[H];
+  const road = map.land_edges.find(edge => edge.includes(capital));
+  const far = road[0] === capital ? road[1] : road[0];
+  seedCrossings(game.state, map, [{ a: capital, b: far, ...map.coordinates[far] }]);
+  assert.throws(() => buildBridge(game, map, H, crossingKey(capital, far)), /мост ставит тот, кто ею владеет/);
 });
 
 test('roads and rivers of a generated map meet at crossings; a walled-in capital gets a bridge', async t => {

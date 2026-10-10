@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadJson, buildAdjacency } from '../src/core/map.mjs';
-import { generateMap, mapPlan, MAP_SHAPES, MAP_SIZE_KEYS, MAP_WARPS, recommendedSize } from '../src/online/mapgen.mjs';
+import { DRY_SHAPES, generateMap, mapPlan, MAP_SHAPES, MAP_SIZE_KEYS, MAP_WARPS, pickMapShape, recommendedSize } from '../src/online/mapgen.mjs';
 import { createOnlineGame } from '../src/online/store.mjs';
 import { validateState } from '../src/core/state.mjs';
 import { listQueueableMarches } from '../src/online/orders.mjs';
@@ -152,4 +152,20 @@ test('a world is made in a season of the creator’s choosing, and winter lies i
   const seen = new Set();
   for (let seed = 1; seed <= 40; seed += 1) seen.add(generateMap(base, constants, { houses, seed, shape: 'wheel' }).season);
   assert.deepEqual([...seen].sort(), ['зима', 'лето']);
+});
+
+
+test('the lot falls on dry land as often as on water', () => {
+  for (const count of [2, 4, 6]) {
+    let dry = 0;
+    const rolls = 600;
+    for (let seed = 1; seed <= rolls; seed += 1) {
+      const { shape, warp } = pickMapShape(count, seed);
+      assert.ok(MAP_SHAPES.includes(shape));
+      assert.ok(MAP_WARPS.includes(warp));
+      if (DRY_SHAPES.includes(shape)) dry += 1;
+    }
+    const share = dry / rolls;
+    assert.ok(share > 0.4 && share < 0.6, `${count} houses: dry land came up ${(share * 100).toFixed(0)}% of the time`);
+  }
 });

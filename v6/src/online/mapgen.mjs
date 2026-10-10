@@ -78,14 +78,17 @@ function incomeByType(baseMap) {
 // - lake-isle: a ring of land around a lake with the free city on an isle in it;
 // - fjords: one continent cut by deep bays between the homes;
 // - shattered: island homes around a heartland broken into islets.
-export const MAP_SHAPES = ['wheel', 'peninsulas', 'archipelago', 'inland', 'atoll', 'lake-isle', 'fjords', 'shattered'];
+export const MAP_SHAPES = ['wheel', 'mainland', 'peninsulas', 'archipelago', 'inland', 'atoll', 'lake-isle', 'fjords', 'shattered'];
 export const MAP_WARPS = ['none', 'stretch', 'crescent', 'wave', 'spiral', 'hourglass', 'ripple', 'zigzag', 'shear', 'teardrop'];
 export const SHAPE_NAMES = {
-  wheel: 'материк', peninsulas: 'полуострова', archipelago: 'архипелаг', inland: 'внутреннее море',
+  wheel: 'материк', mainland: 'сплошная суша', peninsulas: 'полуострова', archipelago: 'архипелаг', inland: 'внутреннее море',
   atoll: 'кольцо островов', 'lake-isle': 'остров в озере', fjords: 'фьорды', shattered: 'россыпь островов'
 };
 const SHAPE = {
   wheel: { r: 1 },
+  // Dry land to the edge of the world: no sea, no islands, no ships — rivers
+  // and lakes are all the water there is.
+  mainland: { r: 1, dry: true },
   peninsulas: { r: 1.5, apart: true, neck: true },
   archipelago: { r: 1.9, apart: true, straits: true },
   inland: { r: 1, noHub: true, lake: true },
@@ -120,17 +123,25 @@ function spreadOf(size) {
 // Shapes that need at least three Houses fall back to a kin shape for two.
 const FOR_TWO = { peninsulas: 'wheel', fjords: 'wheel', shattered: 'archipelago' };
 
-// A world drawn at random is dry land more often than not: whole continents
-// cut by rivers and bays, with scattered islands as the rarer picture.
+// Two kinds of world, and the lot falls on each as often as on the other: dry
+// land, where the country runs to the edge of the map and the water is rivers
+// and lakes, and water, where the sea cuts the world into shores and islands.
+export const DRY_SHAPES = ['mainland'];
+const WET_SHAPES = ['wheel', 'inland', 'peninsulas', 'fjords', 'lake-isle', 'archipelago', 'atoll', 'shattered'];
 const SHAPE_WEIGHT = {
-  wheel: 5, fjords: 4, peninsulas: 4, inland: 3,
-  'lake-isle': 2, archipelago: 1, atoll: 1, shattered: 1
+  mainland: 1,
+  wheel: 5, inland: 3, peninsulas: 4, fjords: 4, 'lake-isle': 2, archipelago: 2, atoll: 1, shattered: 1
 };
 
 export function pickMapShape(count, seed) {
   const random = seeded((Number(seed) || 1) ^ 0x51ed27);
-  const shapes = count === 2 ? MAP_SHAPES.filter(s => !FOR_TWO[s]) : MAP_SHAPES;
-  const bag = shapes.flatMap(name => Array(SHAPE_WEIGHT[name] || 1).fill(name));
+  const allowed = name => !(count === 2 && FOR_TWO[name]);
+  // The coin decides land or water first, so neither crowds the other out.
+  const dry = DRY_SHAPES.filter(allowed);
+  const wet = WET_SHAPES.filter(allowed);
+  const toss = random() < 0.5 ? dry : wet;
+  const pool = toss.length ? toss : [...dry, ...wet];
+  const bag = pool.flatMap(name => Array(SHAPE_WEIGHT[name] || 1).fill(name));
   const shape = bag[Math.floor(random() * bag.length)];
   const warp = MAP_WARPS[Math.floor(random() * MAP_WARPS.length)];
   return { shape, warp };
@@ -147,6 +158,8 @@ export function mapPlan(count, shape = 'wheel', size = 'medium') {
   const islandPairs = count === 2 ? 1 : everyBorder || count % 2 !== 0 ? count : count / 2;
   const borderlands = count === 2 ? 2 : count;
   const hub = SHAPE[shape]?.noHub ? 0 : 1;
+  // A world without a sea has no islands in it.
+  if (SHAPE[shape]?.dry) return { houses: count, shape, size: MAP_SIZES[size] ? size : 'medium', ringRadius, innerRing, islandPairs: 0, borderlands, lands: count * 7 + borderlands + hub + (innerRing ? count : 0) };
   const lands = count * 7 + borderlands + hub + (innerRing ? count : 0) + islandPairs * 2;
   return { houses: count, shape, size: MAP_SIZES[size] ? size : 'medium', ringRadius, innerRing, islandPairs, borderlands, lands };
 }
@@ -158,6 +171,8 @@ export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'whe
   if (!MAP_WARPS.includes(warp)) warp = 'none';
   if (houses.length === 2 && FOR_TWO[shape]) shape = FOR_TWO[shape];
   const form = SHAPE[shape];
+  // No sea on a world of dry land: no ship roads, no ports, no island halves.
+  if (form?.dry) seaMesh = false;
   const count = houses.length;
   if (count < MIN_HOUSES || count > MAX_HOUSES) {
     throw new Error(`a map needs ${MIN_HOUSES} to ${MAX_HOUSES} Houses`);
@@ -345,7 +360,8 @@ export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'whe
   const boundaries = count === 2 ? 2 : count;
   const boundaryAngle = i => angles[i] + Math.PI / count;
   const wideWorld = (MAP_SIZES[size]?.spread ?? 1) > 1;
-  const hasIsland = i => (count === 2 ? i === 0 : wideWorld || count % 2 !== 0 ? true : i % 2 === 0);
+  // A world of dry land has no islands at all.
+  const hasIsland = i => !form.dry && (count === 2 ? i === 0 : wideWorld || count % 2 !== 0 ? true : i % 2 === 0);
   let islandIndex = 0;
 
   // Sea waypoints stand in open water all around the land, so no lane ever

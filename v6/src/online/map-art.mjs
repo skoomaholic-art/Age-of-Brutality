@@ -29,6 +29,10 @@ return [
 ];
 }
 
+// Worlds painted as dry land to the edge of the picture, not as an island in
+// the ocean. Kept here, not imported, so the painter stands on its own.
+const MAINLAND_SHAPES = new Set(['mainland']);
+
 export function buildMapArt(map, options = {}) {
   // Painted area. It is larger than the client's default view so panning and
   // letterboxing show open sea instead of an edge.
@@ -184,8 +188,22 @@ export function buildMapArt(map, options = {}) {
     x0: Math.min(...sites.map(s => s.x)) - 70, x1: Math.max(...sites.map(s => s.x)) + 70,
     y0: Math.min(...sites.map(s => s.y)) - 70, y1: Math.max(...sites.map(s => s.y)) + 70
   };
+  // A world of dry land: the country does not end at a shore but runs on past
+  // the roads to the edge of the world, broken only by lakes in the hollows and
+  // by the water that still rings the islands.
+  const mainland = options.mainland ?? MAINLAND_SHAPES.has(map.shape);
+  const islandSites = sites.filter(site => site.small);
+  const massHeads = new Map();
+  for (const site of sites) {
+    if (site.small) continue;
+    const key = massIndex.get(site.mass);
+    massHeads.set(key, (massHeads.get(key) || 0) + 1);
+  }
+  const mainMass = [...massHeads.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? -1;
+
   const landMass = new Int16Array(COLS * ROWS).fill(-1);
   const province = new Int16Array(COLS * ROWS).fill(-1);
+  const openLand = new Uint8Array(COLS * ROWS); // country beyond the roads, claimed by nobody
   const coastDepth = new Float32Array(COLS * ROWS); // how far inside the land a cell is
 
   for (let row = 0; row < ROWS; row += 1) {
@@ -194,7 +212,18 @@ export function buildMapArt(map, options = {}) {
       const y = gridY(row);
       const index = row * COLS + col;
 
-      if (x < landBox.x0 || x > landBox.x1 || y < landBox.y0 || y > landBox.y1) { coastDepth[index] = -99; continue; }
+      const beyond = x < landBox.x0 || x > landBox.x1 || y < landBox.y0 || y > landBox.y1;
+      if (beyond) {
+        // Far from every road: open sea, or — on a world of dry land — open
+        // country with lakes in its hollows. Neither needs the nearest road.
+        if (!mainland || mainMass < 0) { coastDepth[index] = -99; continue; }
+        const far = fbm(x / 96, y / 96, 71 + SEED, 2) * 20 + fbm(x / 34, y / 34, 19 + SEED, 2) * 5;
+        if (far <= -10.5) { coastDepth[index] = -99; continue; }
+        coastDepth[index] = Math.min(19, far + 13);
+        landMass[index] = mainMass;
+        openLand[index] = 1;
+        continue;
+      }
 
       // Land follows the road network: a band around every land connection.
       let best = -Infinity;
@@ -223,9 +252,26 @@ export function buildMapArt(map, options = {}) {
           bestMass = massIndex.get(site.mass);
         }
       }
+      // Open country beyond the roads: woods and hills nobody has claimed. It
+      // keeps clear of the islands, so they stay islands, and the hollows in it
+      // fill with water and become lakes.
+      let open = false;
+      if (mainland && depth <= 0 && mainMass >= 0) {
+        const hollow = fbm(x / 96, y / 96, 71 + SEED, 2) * 20 + rough * 0.5;
+        const moat = islandSites.length
+          ? Math.min(...islandSites.map(site => Math.hypot(x - site.x, y - site.y))) - 54
+          : 99;
+        if (hollow > -10.5 && moat > 0) {
+          depth = Math.min(19, hollow + 13);
+          bestMass = mainMass;
+          open = true;
+        }
+      }
       coastDepth[index] = depth;
       if (depth <= 0) continue;
       landMass[index] = bestMass;
+      // Open country belongs to no House and to no province: it is only painted.
+      if (open) { openLand[index] = 1; continue; }
 
       // Province borders wander a little instead of running dead straight.
       const wx = x + fbm(x / 26, y / 26, 41 + SEED, 2) * 9;
@@ -258,6 +304,10 @@ export function buildMapArt(map, options = {}) {
   const depthAt = (x, y) => {
     const index = cellAt(x, y);
     return index >= 0 ? coastDepth[index] : -99;
+  };
+  const openAt = (x, y) => {
+    const index = cellAt(x, y);
+    return index >= 0 && openLand[index] === 1;
   };
 
   const coastRings = traceMask(isLand, { smooth: 2, minStep: 1.1 });
@@ -428,6 +478,8 @@ export function buildMapArt(map, options = {}) {
 
   const forestAt = (x, y) => {
     if (depthAt(x, y) < 2.5) return false;
+    // Open country beyond the realms: scattered groves, not a wall of wood.
+    if (openAt(x, y)) return fbm(x / 46, y / 46, 77 + SEED, 2) > 0.3;
     if (nearestSiteDistance(x, y) < 12.5) return false;
     if (nearRoad(x, y, 3.4)) return false;
     if (nearRiver(x, y, 3.6)) return false;
@@ -447,6 +499,8 @@ export function buildMapArt(map, options = {}) {
       const tx = x + (treeRandom() - 0.5) * TREE_STEP * 0.9;
       const ty = y + (treeRandom() - 0.5) * TREE_STEP * 0.8;
       if (!landAt(tx, ty) || !forestAt(tx, ty)) continue;
+      // The far country is drawn thinner: a wood there is a sketch, not a thicket.
+      if (openAt(tx, ty) && treeRandom() < 0.45) continue;
       trees.push({ x: tx, y: ty, size: 0.82 + treeRandom() * 0.5, tone: Math.floor(treeRandom() * 3) });
     }
   }

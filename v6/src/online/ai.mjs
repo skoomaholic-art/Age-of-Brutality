@@ -406,7 +406,7 @@ export function takeAiAction(game, map, constants, house, { nowMs = Date.now() }
   }
 
   // A river in the way: the House builds a bridge from its own bank when it can spare the gold.
-  const bridgeKey = aiBridgeChoice(game, house);
+  const bridgeKey = aiBridgeChoice(game, house, map);
   if (bridgeKey && !bestMarch) {
     try {
       return { game: buildBridge(game, map, house, bridgeKey, { nowMs }), decision: { kind: 'BRIDGE', value: 1, command: { type: 'BRIDGE', key: bridgeKey } } };

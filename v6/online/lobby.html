@@ -1620,7 +1620,7 @@ for (const prefix of ['solo', 'public', 'private']) {
   const shape = document.createElement('select');
   shape.id = prefix + '-shape';
   shape.className = pace.className;
-  shape.innerHTML = [['', 'Случайный'], ['wheel', 'Материк'], ['peninsulas', 'Полуострова'], ['archipelago', 'Архипелаг'], ['inland', 'Внутреннее море'], ['atoll', 'Кольцо островов'], ['lake-isle', 'Остров в озере'], ['fjords', 'Фьорды'], ['shattered', 'Россыпь островов']]
+  shape.innerHTML = [['', 'Случайный'], ['mainland', 'Сплошная суша'], ['wheel', 'Материк'], ['peninsulas', 'Полуострова'], ['archipelago', 'Архипелаг'], ['inland', 'Внутреннее море'], ['atoll', 'Кольцо островов'], ['lake-isle', 'Остров в озере'], ['fjords', 'Фьорды'], ['shattered', 'Россыпь островов']]
     .map(([value, name]) => '<option value="' + value + '">' + name + '</option>').join('');
   // Shapes that need three Houses are not offered for two: they would come out as their kin.
   const forTwo = { peninsulas: 'wheel', fjords: 'wheel', shattered: 'archipelago' };

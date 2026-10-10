@@ -27,15 +27,35 @@ export function seedCrossings(state, map, crossings) {
   return state;
 }
 
+// Whose land the ford lies in. A road crosses the river at one point, and that
+// point falls on one side of the border: the House that holds that land is the
+// one that can throw a bridge over it.
+export function crossingBank(map, crossing) {
+  const a = map?.coordinates?.[crossing?.a];
+  const b = map?.coordinates?.[crossing?.b];
+  if (!a || !b || !Number.isFinite(crossing.x) || !Number.isFinite(crossing.y)) return null;
+  const toA = Math.hypot(a.x - crossing.x, a.y - crossing.y);
+  const toB = Math.hypot(b.x - crossing.x, b.y - crossing.y);
+  return toA <= toB ? crossing.a : crossing.b;
+}
+
 export function buildBridge(game, map, house, key, { nowMs = Date.now() } = {}) {
   const crossing = game.state.river_crossings?.[key];
   if (!crossing) throw new Error('здесь нет реки');
   const bridge = game.state.bridges?.[key];
   if (bridge?.built) throw new Error('мост уже стоит');
   if (bridge?.ready_at) throw new Error('мост уже строится');
-  const ownA = game.state.territories?.[crossing.a]?.owner === house;
-  const ownB = game.state.territories?.[crossing.b]?.owner === house;
-  if (!ownA && !ownB) throw new Error('мост строят со своего берега: нужна земля на одном из концов дороги');
+  const bank = crossingBank(map, crossing);
+  if (bank) {
+    if (game.state.territories?.[bank]?.owner !== house) {
+      const name = map.territories?.find(t => t.id === bank)?.name || bank;
+      throw new Error(`брод лежит в земле ${name}: мост ставит тот, кто ею владеет`);
+    }
+  } else {
+    const ownA = game.state.territories?.[crossing.a]?.owner === house;
+    const ownB = game.state.territories?.[crossing.b]?.owner === house;
+    if (!ownA && !ownB) throw new Error('мост строят со своего берега: нужна земля на одном из концов дороги');
+  }
   if (Number(game.state.houses[house].gold || 0) < BRIDGE.gold) throw new Error(`нужно ${BRIDGE.gold} золота`);
   const next = structuredClone(game);
   next.state.houses[house].gold -= BRIDGE.gold;
@@ -93,12 +113,17 @@ export function nextBridgeDueAt(game) {
 }
 
 // For the AI: a crossing worth bridging from its own bank, if it can pay.
-export function aiBridgeChoice(game, house) {
+export function aiBridgeChoice(game, house, map = null) {
   const gold = Number(game.state.houses?.[house]?.gold || 0);
   if (gold < BRIDGE.gold + 3) return null;
   for (const [key, crossing] of Object.entries(game.state.river_crossings || {}).sort()) {
     const bridge = game.state.bridges?.[key];
     if (bridge?.built || bridge?.ready_at) continue;
+    const bank = map ? crossingBank(map, crossing) : null;
+    if (bank) {
+      if (game.state.territories?.[bank]?.owner === house) return key;
+      continue;
+    }
     const a = game.state.territories?.[crossing.a]?.owner;
     const b = game.state.territories?.[crossing.b]?.owner;
     if (a === house || b === house) return key;

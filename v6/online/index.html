@@ -2727,6 +2727,15 @@ function bridgeOf(key) {
   return snapshot.game.state.bridges?.[key] || null;
 }
 
+// Whose land the ford lies in: the road crosses the river at one point, and
+// that point falls on one side of the border. Only that land builds the bridge.
+function crossingBank(c) {
+  const a = snapshot.map?.coordinates?.[c.a];
+  const b = snapshot.map?.coordinates?.[c.b];
+  if (!a || !b || !Number.isFinite(c.x) || !Number.isFinite(c.y)) return null;
+  return Math.hypot(a.x - c.x, a.y - c.y) <= Math.hypot(b.x - c.x, b.y - c.y) ? c.a : c.b;
+}
+
 function bridgeRows(id, canBuild) {
   const list = crossingsAt(id);
   if (!list.length) return '';
@@ -2738,8 +2747,14 @@ function bridgeRows(id, canBuild) {
     if (bridge?.built) return '<div class="row"><span>' + label + '</span><b>мост стоит' + (canBuild ? ' <button data-bridge-burn="' + escapeHtml(key) + '">Сжечь</button>' + hint('Сжечь мост со своего берега: по этой дороге никто не пройдёт, пока мост не отстроят. Орда у реки без моста теряет время, ища брод.') : '') + '</b></div>';
     if (bridge?.ready_at) return '<div class="row"><span>' + label + '</span><b>мост строится · ' + escapeHtml(timeLeft(bridge.ready_at)) + '</b></div>';
     if (!canBuild) return '<div class="row"><span>' + label + '</span><b>моста нет, не пройти</b></div>';
-    return '<div class="with-hint">' + goldButton('data-bridge-build="' + escapeHtml(key) + '"', 'Мост на дороге на ' + escapeHtml(other) + ' · ' + cost.gold + ' золота', cost.gold) + hint('Без моста реку не перейти никому. Мост ставят со своего берега за четверть дня, ходят по нему все.') + '</div>';
-  }).join('') + '<div class="tiny">Без моста реку не перейти. Мост ставят со своего берега, и ходят по нему все. Свой мост можно сжечь, чтобы задержать врага или Орду: та ищет брод и теряет время.</div></div>';
+    // The ford lies on one side of the border: the other bank does not build it.
+    const bank = crossingBank(c);
+    if (bank && bank !== id) {
+      const where = territoryById(bank)?.name || '';
+      return '<div class="row"><span>' + label + '</span><b>брод в земле ' + escapeHtml(where) + '</b></div>';
+    }
+    return '<div class="with-hint">' + goldButton('data-bridge-build="' + escapeHtml(key) + '"', 'Мост на дороге на ' + escapeHtml(other) + ' · ' + cost.gold + ' золота', cost.gold) + hint('Без моста реку не перейти никому. Мост ставят в той земле, где лежит брод, за четверть дня, ходят по нему все.') + '</div>';
+  }).join('') + '<div class="tiny">Без моста реку не перейти. Мост ставит тот, в чьей земле лежит брод, и ходят по нему все. Свой мост можно сжечь, чтобы задержать врага или Орду: та ищет брод и теряет время.</div></div>';
 }
 
 function yardButton() {
@@ -5885,7 +5900,13 @@ function drawPixiMap(scene, key) {
       s.children[s.children.length - 1].position?.set?.(0, 0);
       s.scale.set(1);
       s.pivot.set(0, 0);
-      for (const child of s.children) if (child !== figure && child.position) { child.x += 7.5; child.y -= 4; child.scale?.set?.(0.78); }
+      // The banner shrinks to a shoulder badge. Its own scale is kept: the
+      // number inside is drawn ten times over and scaled back down, so setting
+      // it outright would blow the figure up to the size of a castle.
+      for (const child of s.children) if (child !== figure && child.position) {
+        child.x += 7.5; child.y -= 4;
+        if (child.scale) child.scale.set(child.scale.x * 0.78, child.scale.y * 0.78);
+      }
     }
     if (tk.whole !== null && tk.whole !== undefined) {
       const bar = new PIXI.Graphics();
