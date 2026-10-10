@@ -1981,7 +1981,7 @@ const server = http.createServer(async (req, res) => {
 
     // Static assets: self-hosted fonts, the painted map and miniatures. Flat file
     // names in three known folders only, so no path can escape them.
-    const asset = url.pathname.match(/^\/assets\/(fonts|map|img|lib)\/([a-z0-9][a-z0-9.-]*\.(woff2|svg|json|jpg|png|js))$/);
+    const asset = url.pathname.match(/^\/assets\/(fonts|map|img|lib|sfx)\/([a-z0-9][a-z0-9._-]*\.(woff2|svg|json|jpg|png|js|ogg))$/);
     if (req.method === 'GET' && asset) {
       const file = path.join(v6Root, 'online/assets', asset[1], asset[2]);
       if (!fs.existsSync(file)) return json(res, 404, { error: 'not found' });
@@ -1993,12 +1993,15 @@ const server = http.createServer(async (req, res) => {
         json: 'application/json; charset=utf-8',
         jpg: 'image/jpeg',
         png: 'image/png',
-        js: 'text/javascript; charset=utf-8'
+        js: 'text/javascript; charset=utf-8',
+        ogg: 'audio/ogg'
       }[asset[3]]);
       // Fonts never change; the map is rebuilt from the map data, so it is revalidated.
       res.setHeader(
         'cache-control',
-        fonts ? 'public, max-age=31536000, immutable' : asset[1] === 'img' ? 'public, max-age=86400' : 'public, max-age=300'
+        fonts || asset[1] === 'sfx'
+          ? 'public, max-age=31536000, immutable'
+          : asset[1] === 'img' ? 'public, max-age=86400' : 'public, max-age=300'
       );
       // The painted map is ~1.5 MB of SVG text; compressed once and kept in memory.
       const body = fs.readFileSync(file);

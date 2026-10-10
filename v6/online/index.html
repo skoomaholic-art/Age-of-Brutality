@@ -349,6 +349,24 @@
 
     .map-zoom { position: absolute; z-index: 6; right: 12px; top: 52px; display: grid; gap: 5px; }
     .map-zoom button { width: 34px; height: 34px; padding: 0; font-size: 19px; line-height: 1; }
+    /* The word a host says back when you touch it. */
+    .host-say {
+      position: absolute;
+      z-index: 31;
+      transform: translate(-50%, -100%);
+      padding: 3px 9px;
+      font-family: var(--serif, Georgia, serif);
+      font-size: 14px;
+      white-space: nowrap;
+      pointer-events: none;
+      color: #2b1b12;
+      background: rgba(242,230,200,.96);
+      border: 1.5px solid var(--ink);
+      box-shadow: 2px 2px 0 rgba(43,27,18,.35);
+      opacity: 1;
+      transition: opacity .55s ease-out, transform .55s ease-out;
+    }
+    .host-say.faded { opacity: 0; transform: translate(-50%, -128%); }
     .map-guide {
       position: absolute;
       z-index: 5;
@@ -749,6 +767,10 @@
       <span class="muted">Дом</span>
       <select id="house"></select>
     </label>
+    <div style="display:flex; gap:6px">
+      <button id="ctl-sound" style="flex:1 1 0; min-width:0">🔊 Звуки</button>
+      <button id="ctl-music" style="flex:1 1 0; min-width:0">🎶 Музыка</button>
+    </div>
     <button id="save-game">Занести в свиток</button>
     <button id="restore-game">Вернуть по свитку</button>
     <button id="reset">Начать век заново</button>
@@ -773,6 +795,8 @@
         <button class="bar-tab" data-pane="stats">Слава Домов</button>
         <button class="bar-tab" data-pane="journal">Летопись</button>
         <button class="bar-tab" data-pane="talmud">Талмуд знаний</button>
+        <button id="bar-sound" title="Звуки века" style="padding:4px 9px">🔊</button>
+        <button id="bar-music" title="Музыка века" style="padding:4px 9px">🎶</button>
         <button id="bar-full" title="Развернуть игру во весь экран" style="padding:4px 9px">⛶</button>
         <button id="bar-dev" title="Режим разработчика" style="padding:4px 9px" hidden>⚙</button>
         <div class="bar-status">
@@ -1114,6 +1138,268 @@ async function decodeResponse(res) {
   } catch {
     return { error: raw.trim() || ('HTTP ' + res.status) };
   }
+}
+
+// ---------- the voice of the century ----------
+// Every sound is a small ogg in /assets/sfx. Browsers forbid sound before the
+// person has touched the page, so nothing plays until the first click, and the
+// player's choice of loudness is remembered in this browser.
+const SOUND_STORE = 'aob-sound';
+const SOUND_FILES = ['tap', 'deny', 'select', 'march', 'arrive', 'battle', 'battle_won', 'battle_lost',
+  'coin', 'build', 'land_taken', 'dawn', 'revolt', 'horde', 'storm', 'victory', 'defeat', 'hail', 'hail2'];
+const soundPool = new Map();
+let soundUnlocked = false;
+let soundLevel = (() => {
+  try {
+    const kept = localStorage.getItem(SOUND_STORE);
+    return kept === null ? 0.7 : Math.max(0, Math.min(1, Number(kept) || 0));
+  } catch { return 0.7; }
+})();
+// Two sounds of the same kind at once would clatter: each is held back briefly.
+const soundLast = new Map();
+
+function playSound(name, { volume = 1, gap = 120 } = {}) {
+  if (!soundLevel || !soundUnlocked || !SOUND_FILES.includes(name)) return;
+  const now = Date.now();
+  if (now - (soundLast.get(name) || 0) < gap) return;
+  soundLast.set(name, now);
+  let pool = soundPool.get(name);
+  if (!pool) {
+    pool = Array.from({ length: 3 }, () => {
+      const audio = new Audio('/assets/sfx/' + name + '.ogg');
+      audio.preload = 'none';
+      return audio;
+    });
+    soundPool.set(name, pool);
+  }
+  const free = pool.find(audio => audio.paused || audio.ended) || pool[0];
+  try {
+    free.currentTime = 0;
+    free.volume = Math.max(0, Math.min(1, soundLevel * volume));
+    free.play().catch(() => {});
+  } catch { /* the browser is not in the mood */ }
+}
+
+function renderSound() {
+  const mark = soundLevel ? (soundLevel > 0.45 ? '🔊' : '🔉') : '🔇';
+  const title = soundLevel ? 'Звуки века: ' + Math.round(soundLevel * 100) + '% — нажми, чтобы убавить' : 'Звуки века выключены';
+  const bar = $('bar-sound');
+  if (bar) { bar.textContent = mark; bar.title = title; }
+  // The same switch under the phone's ☰, where the map's bar is hard to reach.
+  const item = $('ctl-sound');
+  if (item) { item.textContent = mark + ' Звуки'; item.title = title; }
+}
+
+// One press is one step quieter, and round again.
+function stepSound() {
+  soundLevel = soundLevel > 0.45 ? 0.35 : soundLevel > 0 ? 0 : 0.7;
+  try { localStorage.setItem(SOUND_STORE, String(soundLevel)); } catch { /* this browser forbids it */ }
+  renderSound();
+  soundUnlocked = true;
+  playSound('select', { volume: 0.6 });
+}
+
+function setupSound() {
+  const unlock = () => {
+    if (soundUnlocked) return;
+    soundUnlocked = true;
+    // Touching the page once is enough; the first sound may now be heard.
+    playSound('tap', { volume: 0.35 });
+    updateMusic();
+  };
+  addEventListener('pointerdown', unlock, { once: true });
+  addEventListener('keydown', unlock, { once: true });
+  for (const id of ['bar-sound', 'ctl-sound']) if ($(id)) $(id).onclick = stepSound;
+  renderSound();
+}
+
+// What a piece of news sounds like.
+const NEWS_SOUNDS = {
+  BATTLE: entry => (entry.details?.winner === house ? 'battle_won' : entry.details?.houses?.includes?.(house) || entry.details?.attacker === house || entry.details?.defender === house ? 'battle_lost' : 'battle'),
+  FIELD_BATTLE: entry => (entry.details?.winner === house ? 'battle_won' : 'battle'),
+  WILD_BATTLE: () => 'battle',
+  MELEE: () => 'battle',
+  HORDE_AWAKENED: () => 'horde',
+  HORDE_UNLEASHED: () => 'horde',
+  HORDE_TOOK: () => 'horde',
+  HORDE_SACKED: () => 'horde',
+  HORDE_BROKEN: () => 'battle_won',
+  HEARTS_APPEARED: () => 'land_taken',
+  HEART_FOUND: () => 'victory',
+  HEART_TAKEN: () => 'land_taken',
+  REVOLT: () => 'revolt',
+  STORM_ROSE: () => 'storm',
+  STORM_HIT: () => 'storm',
+  SEA_TOLL: () => 'deny',
+  DESERTION: () => 'deny',
+  ROUND_STARTED: () => 'dawn',
+  NEUTRAL_CAPTURE: () => 'land_taken',
+  EMPTY_ENEMY_OCCUPATION: () => 'land_taken',
+  MARCH: () => 'arrive',
+  FORT_COMPLETE: () => 'build',
+  PORT_BUILT: () => 'build',
+  BRIDGE_BUILT: () => 'build',
+  YARD_BUILT: () => 'build',
+  GROWTH_BUILT: () => 'build',
+  UNITS_HIRED: () => 'coin',
+  UNITS_REPLENISHED: () => 'coin',
+  LEVY_RAISED: () => 'coin',
+  WAR_DECLARED: () => 'deny',
+  GAME_FINISHED: entry => ((entry.details?.winners || []).includes(house) ? 'victory' : 'defeat')
+};
+
+function soundForNews(item) {
+  const pick = NEWS_SOUNDS[item.type];
+  return pick ? pick(item) : null;
+}
+
+// ---------- the host answers ----------
+// Touch your own host and a horn answers you, with a word over the banner.
+const HOST_WORDS = ['Милорд?', 'Да, господин?', 'Жду приказа.', 'Мы здесь, милорд.',
+  'Войско готово.', 'Твоё слово?', 'Клинки наточены.', 'Куда вести, господин?',
+  'Слушаю.', 'Веди нас.'];
+let hostWordAt = 0;
+
+function hostAnswers(event) {
+  const card = document.querySelector('.map-card');
+  if (!card) return;
+  const now = Date.now();
+  if (now - hostWordAt < 400) return;
+  hostWordAt = now;
+  const box = card.getBoundingClientRect();
+  const say = document.createElement('div');
+  say.className = 'host-say';
+  say.textContent = HOST_WORDS[Math.floor(Math.random() * HOST_WORDS.length)];
+  say.style.left = Math.max(8, Math.min(box.width - 8, event.clientX - box.left)) + 'px';
+  say.style.top = Math.max(18, event.clientY - box.top - 44) + 'px';
+  card.appendChild(say);
+  setTimeout(() => say.classList.add('faded'), 1150);
+  setTimeout(() => say.remove(), 1800);
+}
+
+// ---------- the music of the century ----------
+// Four pieces: summer and winter are long loops under the map, battle rises
+// for a while after swords are drawn, victory plays once at the end. They
+// change over one another softly, and they have a switch of their own.
+const MUSIC_STORE = 'aob-music';
+const MUSIC_BATTLE_MS = 45_000;
+let musicLevel = (() => {
+  try {
+    const kept = localStorage.getItem(MUSIC_STORE);
+    return kept === null ? 0.45 : Math.max(0, Math.min(1, Number(kept) || 0));
+  } catch { return 0.45; }
+})();
+let musicTrack = null;
+let musicBattleUntil = 0;
+let musicEnded = false;          // victory has been heard: nothing follows it
+const musicDecks = [];           // two players, so one may fade while the other rises
+let musicFader = null;
+
+function musicDeck(slot) {
+  if (!musicDecks[slot]) {
+    const audio = new Audio();
+    audio.preload = 'none';
+    audio.volume = 0;
+    musicDecks[slot] = audio;
+  }
+  return musicDecks[slot];
+}
+
+// Swap the piece under the map, letting the old one ebb as the new one swells.
+function setMusic(name) {
+  if (!soundUnlocked || (!musicLevel && name)) return;
+  if (name === musicTrack) return;
+  const loud = name === 'music_victory' ? 1 : name === 'music_battle' ? 0.85 : 0.7;
+  const old = musicDecks[0];
+  const next = musicDeck(1);
+  musicDecks[0] = next;
+  musicDecks[1] = old || null;
+  musicTrack = name;
+  if (name) {
+    next.src = '/assets/sfx/' + name + '.ogg';
+    next.loop = name !== 'music_victory';
+    next.currentTime = 0;
+    next.volume = 0;
+    next.play().catch(() => {});
+  }
+  // The swap is counted in time, not in ticks: a browser may slow its timers
+  // to one a second when the page is not looked at, and the fade must still end.
+  clearInterval(musicFader);
+  const span = 900;
+  const began = Date.now();
+  const from = old ? old.volume : 0;
+  const want = musicLevel * loud;
+  const fade = () => {
+    const part = Math.min(1, (Date.now() - began) / span);
+    if (name) next.volume = Math.max(0, Math.min(1, want * part));
+    if (old) old.volume = Math.max(0, Math.min(1, from * (1 - part)));
+    if (part >= 1) {
+      clearInterval(musicFader);
+      if (old) { try { old.pause(); } catch { /* already still */ } }
+    }
+  };
+  musicFader = setInterval(fade, 80);
+  fade();
+}
+
+// Which piece the hour calls for.
+function musicWanted() {
+  // The game is over: whatever plays now plays to its end, and nothing follows.
+  if (musicEnded) return musicTrack;
+  const game = snapshot?.game;
+  if (!game || game.lifecycle?.status !== 'RUNNING') return null;
+  if (Date.now() < musicBattleUntil) return 'music_battle';
+  return game.map?.season === 'winter' ? 'music_winter' : 'music_summer';
+}
+
+function updateMusic() {
+  if (!musicLevel || !soundUnlocked) return;
+  setMusic(musicWanted());
+}
+
+// A battle keeps the war drums going for a while; the end of the game silences all.
+function musicHeardNews(item) {
+  const kind = String(item?.type || '');
+  if (kind === 'GAME_FINISHED') {
+    musicBattleUntil = 0;
+    musicEnded = true;
+    setMusic((item.details?.winners || []).includes(house) ? 'music_victory' : null);
+    return;
+  }
+  if (['BATTLE', 'FIELD_BATTLE', 'WILD_BATTLE', 'MELEE', 'HORDE_TOOK', 'HORDE_SACKED', 'HEART_TAKEN', 'REVOLT'].includes(kind)) {
+    musicBattleUntil = Date.now() + MUSIC_BATTLE_MS;
+    updateMusic();
+  }
+}
+
+function renderMusic() {
+  const mark = musicLevel ? (musicLevel > 0.3 ? '🎶' : '🎵') : '🎼';
+  const title = musicLevel ? 'Музыка века: ' + Math.round(musicLevel * 100) + '% — нажми, чтобы убавить' : 'Музыка века умолкла';
+  const bar = $('bar-music');
+  if (bar) { bar.textContent = mark; bar.title = title; }
+  const item = $('ctl-music');
+  if (item) { item.textContent = mark + ' Музыка'; item.title = title; }
+}
+
+function stepMusic() {
+  musicLevel = musicLevel > 0.3 ? 0.2 : musicLevel > 0 ? 0 : 0.45;
+  try { localStorage.setItem(MUSIC_STORE, String(musicLevel)); } catch { /* this browser forbids it */ }
+  renderMusic();
+  soundUnlocked = true;
+  if (!musicLevel) {
+    musicTrack = null;
+    clearInterval(musicFader);
+    for (const deck of musicDecks) if (deck) { deck.volume = 0; try { deck.pause(); } catch { /* already still */ } }
+    return;
+  }
+  const want = musicWanted();
+  musicTrack = null;
+  setMusic(want);
+}
+
+function setupMusic() {
+  for (const id of ['bar-music', 'ctl-music']) if ($(id)) $(id).onclick = stepMusic;
+  renderMusic();
 }
 
 // ---------- developer mode (the author's own account, solo games) ----------
@@ -3003,7 +3289,15 @@ function setupLens() {
     const marching = event.target.closest?.('.army-token[data-lens-order]');
     if (marching) { openField(marching.dataset.lensOrder); return; }
     const node = event.target.closest?.('.army-token[data-lens-at]');
-    if (node) { event.stopPropagation(); selectArmy(node.dataset.lensAt); return; }
+    if (node) {
+      event.stopPropagation();
+      // Our own host answers the call; another House's only clinks.
+      const ours = nodeOwner(node.dataset.lensAt) === house || node.dataset.lensHouse === house;
+      playSound(ours ? (Date.now() % 2 ? 'hail' : 'hail2') : 'select', { volume: 0.85 });
+      if (ours) hostAnswers(event);
+      selectArmy(node.dataset.lensAt);
+      return;
+    }
     const wild = event.target.closest?.('.army-token[data-lens-wild]');
     if (wild) { event.stopPropagation(); selectTerritory(wild.dataset.lensWild); return; }
     // A river crossing: open the card of our bank (or of the near bank) on its roads.
@@ -3059,6 +3353,7 @@ const ERROR_WORDS = [
 ];
 
 function sayError(error) {
+  playSound('deny', { volume: 0.7 });
   const text = String(error?.message || error || '');
   if (/[а-яё]/i.test(text)) return text;
   const found = ERROR_WORDS.find(([pattern]) => pattern.test(text));
@@ -3099,7 +3394,11 @@ function setupBar() {
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape') togglePane(null);
   });
+  setupSound();
+  setupMusic();
   setInterval(renderBarStatus, 1000);
+  // The season under the map, and the war drums ebbing back into it.
+  setInterval(updateMusic, 4000);
 }
 
 function togglePane(pane) {
@@ -3583,6 +3882,12 @@ function announceNews() {
   if (newest <= lastNewsSeq) return;
   const fresh = log.filter(item => Number(item.seq || 0) > lastNewsSeq);
   lastNewsSeq = newest;
+  // The century speaks: fresh tidings ring, whether or not they make a card.
+  for (const item of fresh.slice(-6)) {
+    const name = soundForNews(item);
+    if (name) playSound(name, { volume: item.details?.house === house || (item.details?.houses || []).includes(house) ? 1 : 0.55, gap: 400 });
+    musicHeardNews(item);
+  }
   const found = fresh
     .map(item => ({ item, news: newsFor(item) }))
     // Quiet news belongs in the list of tidings and in the dawn's account,
@@ -6039,6 +6344,7 @@ async function sendOrder(confirmed = false) {
 
   const action = choices[0];
   const commanderId = $('commander').value || null;
+  playSound('march');
   await api('/api/orders', {
     method: 'POST',
     headers: {'content-type':'application/json'},
