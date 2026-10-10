@@ -1,5 +1,16 @@
+import { areAllies, inTruce } from './diplomacy.mjs';
+import { alliesOf, visiblePositions } from './fog.mjs';
+import { opinionOf } from './opinion.mjs';
 import { neutralResistance } from '../core/neutral.mjs';
 import { buildAdjacency } from '../core/map.mjs';
+import { aiBridgeChoice, buildBridge } from './bridges.mjs';
+import { menToTakeWild, ringGlory } from './heart.mjs';
+import { aiHireChoice, hireUnits } from './units.mjs';
+import { buildPort } from './levy.mjs';
+import { canTake, garrisonToKeep, heartPlan, menToTake, wantsPeace } from './ai-heart.mjs';
+import { atHome } from './attrition.mjs';
+import { wearAt } from './terrain.mjs';
+import { proposeDeal } from './diplomacy.mjs';
 import { totalHouseWarriors } from '../core/state.mjs';
 import { resolvePendingCapitalHold } from '../core/scoring.mjs';
 import { commandersAt } from '../core/characters.mjs';
@@ -8,6 +19,8 @@ import { executeCommand } from './commands.mjs';
 import {
   ONLINE_ROUND_TIMING,
   advanceRound,
+  aiOrderIntervalMs,
+  daysMode,
   houseRoundStatus,
   passRound,
   refundFailedRoundActions,
@@ -64,40 +77,140 @@ function territoryValue(map, constants, house, id) {
   return 1 + gold + influence * 1.5 + island;
 }
 
-// Chance that 2d6 + warriors beats 7 + resistance (strictly greater).
-function neutralCaptureChance(warriors, resistance) {
-  const needed = 7 + resistance - warriors;
-  let wins = 0;
-  for (let a = 1; a <= 6; a += 1) {
-    for (let b = 1; b <= 6; b += 1) if (a + b > needed) wins += 1;
-  }
-  return wins / 36;
+// The online game has no dice (see orders.mjs), so the AI can tell the outcome
+// of a fight from the numbers it sees. It does not know about commanders.
+
+// A neutral land falls when the warriors outnumber its resistance.
+function capturesNeutral(warriors, resistance) {
+  return warriors > resistance;
 }
 
-// Exact battle odds over both dice, using the same formula as core/combat.mjs
-// without commanders or support. Terrain defense only reduces defender losses,
-// so it does not change whether the territory is taken.
+// The larger force wins, ties go to the defender. Losses follow core/combat.mjs
+// with both dice fixed at 3.
 function battleOutlook(attackers, defenders) {
-  let captures = 0;
-  let losses = 0;
-  for (let a = 1; a <= 6; a += 1) {
-    for (let d = 1; d <= 6; d += 1) {
-      const attackStrength = attackers + a;
-      const defendStrength = defenders + d;
-      const damageToAttacker = Math.min(attackers, Math.ceil(defendStrength / 2));
-      const survivors = attackers - damageToAttacker;
-      if (attackStrength > defendStrength && survivors > 0) captures += 1;
-      losses += damageToAttacker;
-    }
+  const losses = Math.min(attackers, Math.ceil((defenders + 3) / 2));
+  return {
+    wins: attackers > defenders && attackers - losses > 0,
+    losses
+  };
+}
+
+// A land on the march of the realm — one with a stranger's land next door —
+// keeps a watch of its own. A House that pools every man into one fist leaves
+// its own country open, and that is not how a realm is held.
+function onBorder(state, map, house, id) {
+  for (const [a, b] of map.land_edges || []) {
+    if (a !== id && b !== id) continue;
+    const other = a === id ? b : a;
+    if ((state.territories[other]?.owner ?? null) !== house) return true;
   }
-  return { chance: captures / 36, expectedLosses: losses / 36 };
+  return false;
 }
 
 function garrisonNeeded(state, map, house, from) {
-  const meta = territoryMeta(map, from);
   const commanders = commandersAt(state, house, from).length;
-  const base = meta?.type === 'Столица' ? 2 : 1;
-  return Math.max(base, commanders);
+  const meta = territoryMeta(map, from);
+  const base = state.heart
+    ? garrisonToKeep(state, map, house, from)
+    : (meta?.type === 'Столица' ? 2 : 1);
+  // A third of the men of a border land stay to hold it, up to a watch of six:
+  // enough that a realm is not stripped bare, never so much that it cannot march.
+  const here = Number(state.territories?.[from]?.warriors?.[house] || 0);
+  const watch = onBorder(state, map, house, from)
+    ? Math.min(6, Math.max(meta?.type === 'Столица' ? 2 : 1, Math.floor(here / 3)))
+    : 0;
+  return Math.max(base, watch, commanders);
+}
+
+// The most men a House will gather in one place. Beyond this the host is not
+// an army but a hoard: the rest stay in the lands they were raised in.
+function hostCap(state, house) {
+  let all = 0;
+  for (const land of Object.values(state.territories || {})) all += Number(land.warriors?.[house] || 0);
+  return Math.max(8, Math.round(all * 0.45));
+}
+
+// A game of the Heart: one plan, three kinds of move. Strength, not heads.
+function heartCandidates(game, map, constants, house) {
+  const state = game.state;
+  const out = [];
+  const legal = listQueueableMarches(game, map, constants, house);
+  const pairs = new Map();
+  const reach = new Map();
+  // The fog binds the AI too: it marches on what its own lands and spies see.
+  const seen = visiblePositions(state, map, house, alliesOf(game, house));
+  for (const action of legal) {
+    if (!state.territories[action.to] || !state.territories[action.from]) continue;
+    if (!seen.has(action.to)) continue;
+    const key = `${action.from}>${action.to}`;
+    pairs.set(key, Math.max(pairs.get(key) || 0, action.warriors));
+    (reach.get(action.from) || reach.set(action.from, new Set()).get(action.from)).add(action.to);
+  }
+  const plan = heartPlan(game, map, constants, house, from => [...(reach.get(from) || [])]);
+  if (!plan) return [];
+  const spareAt = id => warriorsOf(state, id, house) - garrisonNeeded(state, map, house, id);
+  const command = (from, to, warriors) => ({ type: 'MARCH', house, from, to, warriors });
+  // Ground that eats men without a battle: worth stepping off, not worth camping on.
+  const wearOf = id => (atHome(map, id, house) ? null : wearAt(map, state, id, house));
+  const wearCost = id => Number(wearOf(id)?.rate || 0) * 6;
+  const cap = hostCap(state, house);
+
+  // 1. Strike: from the stage onto the next land, with the fewest men that win.
+  if (plan.target) {
+    const max = Math.min(pairs.get(`${plan.stage}>${plan.target}`) || 0, spareAt(plan.stage));
+    const need = max > 0 ? menToTake(state, map, constants, house, plan.stage, plan.target, max) : null;
+    if (need) {
+      const owner = state.territories[plan.target].owner;
+      // Spend a little more than the least so the host survives in strength.
+      const warriors = Math.min(max, need + 1);
+      const heart = plan.goal.kind === 'HEART' && plan.target === plan.goal.target ? 8 : 0;
+      const war = owner && owner !== house && !areAllies(game, house, owner) && !inTruce(game, house, owner) ? -1 : 0;
+      if (!(owner && (areAllies(game, house, owner) || inTruce(game, house, owner)))) {
+        out.push({ kind: 'STRIKE', value: 6 + heart + war - wearCost(plan.target) * 0.3, command: command(plan.stage, plan.target, warriors) });
+      }
+    }
+  }
+  // 2. Muster: spare men from other own lands walk to the stage.
+  for (const [key, max] of pairs) {
+    const [from, to] = key.split('>');
+    if (to !== plan.stage || from === plan.stage) continue;
+    const spare = Math.min(spareAt(from), max, Math.max(0, cap - warriorsOf(state, to, house)));
+    if (spare < 1) continue;
+    // Mustering out of ground that bleeds is worth more; mustering into it, less.
+    out.push({
+      kind: 'MUSTER',
+      value: (plan.goal.kind === 'DEFEND' ? 7 : plan.goal.kind === 'HOLD' ? 5 : 4) + Math.min(2, spare * 0.3) + wearCost(from) - wearCost(to),
+      command: command(from, to, spare)
+    });
+  }
+  // 3. Side gains: a free land next door that a land's spare men take on their own.
+  for (const [key, max] of pairs) {
+    const [from, to] = key.split('>');
+    const land = state.territories[to];
+    if (land.owner || to === plan.target) continue;
+    const spare = Math.min(spareAt(from), max);
+    const need = spare > 0 ? menToTake(state, map, constants, house, from, to, spare) : null;
+    if (!need) continue;
+    const decoy = (state.heart?.revealed || []).includes(to) || state.heart?.known?.[house]?.[to] === 'FALSE';
+    if (decoy) continue;
+    const unknownHeart = state.heart?.candidates?.includes(to) && to !== plan.goal.target;
+    if (unknownHeart) continue;
+    const glory = state.wild_taken?.[to] ? 0 : ringGlory(state, to);
+    out.push({ kind: 'CAPTURE_NEUTRAL', value: 2 + glory * 0.8 + territoryValue(map, constants, house, to) * 0.3 - wearCost(to) * 0.4, command: command(from, to, Math.min(spare, need + 1)) });
+  }
+  // 4. Off the bad ground: men standing where the weather eats them, with
+  // nothing to do there, walk to the nearest land of their own that is kind.
+  for (const [key, max] of pairs) {
+    const [from, to] = key.split('>');
+    if (from === plan.stage || to === plan.target) continue;
+    const leaving = wearOf(from);
+    if (!leaving) continue;
+    if (state.territories[to]?.owner !== house || wearOf(to)) continue;
+    const spare = Math.min(warriorsOf(state, from, house) - 1, max);
+    if (spare < 1) continue;
+    out.push({ kind: 'OFF_BAD_GROUND', value: 3.2 + wearCost(from), command: command(from, to, spare) });
+  }
+  return out;
 }
 
 function isBorder(state, adjacency, house, id) {
@@ -111,8 +224,12 @@ function isBorder(state, adjacency, house, id) {
 function marchCandidates(game, map, constants, house, adjacency) {
   const state = game.state;
   const options = new Map();
+  // A House marches on what it can see. The fog binds the lords of the AI as
+  // it binds a player: a land nobody of theirs has eyes on is no target.
+  const seen = visiblePositions(state, map, house, alliesOf(game, house));
   for (const action of listQueueableMarches(game, map, constants, house)) {
     if (!state.territories[action.to] || !state.territories[action.from]) continue;
+    if (!seen.has(action.to)) continue;
     const key = `${action.from}>${action.to}`;
     if (!options.has(key)) options.set(key, []);
     options.get(key).push(action.warriors);
@@ -126,8 +243,31 @@ function marchCandidates(game, map, constants, house, adjacency) {
     if (!sizes.length) continue;
 
     const owner = state.territories[to].owner ?? null;
+    // An ally's land is not a target, nor a land of a House at truce.
+    if (owner && owner !== house && areAllies(game, house, owner)) continue;
+    if (owner && owner !== house && inTruce(game, house, owner)) continue;
     const worth = territoryValue(map, constants, house, to);
     const command = warriors => ({ type: 'MARCH', house, from, to, warriors });
+
+    // A game of the Heart: the wild guard must be beaten; deeper lands give more glory,
+    // and the Heart most of all.
+    if (owner === null && state.wild_guards) {
+      const guards = Number(state.wild_guards[to] || 0);
+      const need = menToTakeWild(guards);
+      const warriors = sizes.find(count => count >= need);
+      if (!warriors) continue;
+      const glory = state.wild_taken?.[to] ? 0 : ringGlory(state, to);
+      // A Heart: the true one once known is worth most; a decoy exposed is avoided.
+      const heart = state.heart?.territory === to ? 6
+        : state.heart?.revealed?.includes(to) ? -20
+          : state.heart?.candidates?.includes(to) ? 3 : 0;
+      out.push({
+        kind: 'CAPTURE_NEUTRAL',
+        value: worth + glory * 1.2 + heart - Math.ceil(guards / 2) * 0.5 - warriors * 0.1,
+        command: command(warriors)
+      });
+      continue;
+    }
 
     if (owner === null) {
       let resistance;
@@ -136,15 +276,13 @@ function marchCandidates(game, map, constants, house, adjacency) {
       } catch {
         continue;
       }
-      // Smallest force that is reliable; otherwise the largest one if it is at least even odds.
-      const reliable = sizes.find(count => neutralCaptureChance(count, resistance) >= 0.72);
-      const warriors = reliable ?? sizes[sizes.length - 1];
-      const chance = neutralCaptureChance(warriors, resistance);
-      if (chance < 0.5) continue;
+      // The smallest force that is enough: spare warriors stay home.
+      const warriors = sizes.find(count => capturesNeutral(count, resistance));
+      if (!warriors) continue;
       const firstCapture = hasAchievement(state, house, 'VP-W1') ? 0 : 4;
       out.push({
         kind: 'CAPTURE_NEUTRAL',
-        value: chance * (worth + firstCapture) - (1 - chance),
+        value: worth + firstCapture - warriors * 0.15,
         command: command(warriors)
       });
       continue;
@@ -161,16 +299,19 @@ function marchCandidates(game, map, constants, house, adjacency) {
         });
         continue;
       }
-      const outlook = battleOutlook(warriors, defenders);
-      if (outlook.chance < 0.55) continue;
-      const capital = territoryMeta(map, to)?.type === 'Столица' ? 4 : 0;
+      // Enough to win and no more: the rest hold the lands they stand in.
+      const enough = sizes.find(count => battleOutlook(count, defenders).wins && count >= defenders + 2);
+      const warriorsSent = Math.min(enough || warriors, hostCap(state, house));
+      const outlook = battleOutlook(warriorsSent || warriors, defenders);
+      if (!outlook.wins) continue;
+      const capital = territoryMeta(map, to)?.type === 'Столица' ? 4 : state.heart?.territory === to ? 6 : 0;
+      // A House strikes first at the one it likes least.
+      const grudge = Math.max(0, -opinionOf(game, house, owner)) / 25;
       const firstBattle = hasAchievement(state, house, 'VP-W2') ? 0 : 4;
       out.push({
         kind: 'ATTACK',
-        value:
-          outlook.chance * (worth + capital + firstBattle) -
-          outlook.expectedLosses * 0.7,
-        command: command(warriors)
+        value: worth + capital + firstBattle + grudge - outlook.losses * 0.7,
+        command: command(warriorsSent || warriors)
       });
       continue;
     }
@@ -193,7 +334,8 @@ function recruitCandidates(game, map, constants, house, adjacency) {
   const state = game.state;
   const gold = Number(state.houses[house]?.gold || 0);
   const houseRoom = constants.house_warrior_cap - totalHouseWarriors(state, house);
-  if (gold < 1 || houseRoom < 1) return [];
+  // Games with troop kinds hire through hireUnits instead.
+  if (state.population || gold < 1 || houseRoom < 1) return [];
 
   const total = totalHouseWarriors(state, house);
   const out = [];
@@ -249,7 +391,7 @@ export function rankAiCommands(game, map, constants, house, { random = null } = 
   );
   const adjacency = buildAdjacency(map.land_edges);
   const candidates = [
-    ...marchCandidates(game, map, constants, house, adjacency),
+    ...(game.state.heart ? heartCandidates(game, map, constants, house) : marchCandidates(game, map, constants, house, adjacency)),
     ...recruitCandidates(game, map, constants, house, adjacency),
     ...fortCandidates(game, map, constants, house, adjacency)
   ];
@@ -271,6 +413,50 @@ export function takeAiAction(game, map, constants, house, { nowMs = Date.now() }
     ? []
     : rankAiCommands(game, map, constants, house);
 
+  // Losing a war: ask for peace (once a day per foe).
+  const foe = game.state.heart ? wantsPeace(game, map, house) : null;
+  if (foe) {
+    try {
+      const next = proposeDeal(game, constants, map, house, foe, { give: [{ type: 'PEACE' }] }, { nowMs });
+      next.rounds.ai_peace_asked ||= {};
+      next.rounds.ai_peace_asked[`${house}>${foe}`] = Number(next.rounds.number || 0);
+      return { game: next, decision: { kind: 'PEACE', value: 1, command: { type: 'PEACE', target: foe } } };
+    } catch {
+      // A letter is already on its way, or peace is not possible now.
+    }
+  }
+
+  // A game with troop kinds: the House hires when it has a stage to hire at and gold to spare.
+  const plan = game.state.heart ? heartPlan(game, map, constants, house) : null;
+  const hire = aiHireChoice(game, map, house, plan?.stage || null);
+  const bestMarch = ranked.find(c => c.kind === 'STRIKE' || c.kind === 'MUSTER');
+  if (hire && !(bestMarch && bestMarch.kind === 'STRIKE')) {
+    try {
+      return { game: hireUnits(game, map, house, hire.territory, hire.counts, { nowMs }), decision: { kind: 'HIRE', value: 1, command: { type: 'HIRE', ...hire } } };
+    } catch {
+      // Not now.
+    }
+  }
+
+  // The goal lies over the sea and the stage has no harbour: build one there.
+  if (plan && !plan.target && plan.goal.kind !== 'DEFEND' && plan.goal.kind !== 'HOLD' && map.buildable_ports) {
+    try {
+      return { game: buildPort(game, map, house, plan.stage, { nowMs }), decision: { kind: 'PORT', value: 1, command: { type: 'PORT', territory: plan.stage } } };
+    } catch {
+      // No shore, no gold, or the port is already there or on its way.
+    }
+  }
+
+  // A river in the way: the House builds a bridge from its own bank when it can spare the gold.
+  const bridgeKey = aiBridgeChoice(game, house, map);
+  if (bridgeKey && !bestMarch) {
+    try {
+      return { game: buildBridge(game, map, house, bridgeKey, { nowMs }), decision: { kind: 'BRIDGE', value: 1, command: { type: 'BRIDGE', key: bridgeKey } } };
+    } catch {
+      // Not now; go on with the usual choices.
+    }
+  }
+
   for (const candidate of ranked) {
     if (candidate.value < PASS_THRESHOLD) break;
     try {
@@ -281,18 +467,20 @@ export function takeAiAction(game, map, constants, house, { nowMs = Date.now() }
     }
   }
 
+  // Nothing worth doing right now. In a game played in days the House simply
+  // waits for its next turn to think; in rounds it ends its round.
   return {
-    game: passRound(game, house, nowMs),
+    game: daysMode(game) ? game : passRound(game, house, nowMs),
     decision: { kind: 'PASS', value: 0, command: null }
   };
 }
 
 function ownWorkPending(game, house) {
   return (
-    (game.orders || []).some(
+    (game.orders || []).filter(
       order => order.status === 'PENDING' && order.action?.house === house
-    ) ||
-    (game.jobs || []).some(job => job.status === 'PENDING' && job.house === house)
+    ).length +
+    (game.jobs || []).filter(job => job.status === 'PENDING' && job.house === house).length
   );
 }
 
@@ -304,20 +492,28 @@ export function runAiHouses(game, map, constants, {
   if (!roundsEnabled(game) || game.rounds.finished) return game;
   if (game.lifecycle?.status !== 'RUNNING') return game;
 
-  const aiHouses = game.rounds.ai_houses || [];
+  // A House whose player has left the table is not left standing: its lords
+  // carry on under the House AI, as every unplayed House does.
+  const aiHouses = [...new Set([
+    ...(game.rounds.ai_houses || []),
+    ...Object.keys(game.lifecycle?.abandoned_houses || {})
+  ])].filter(house => (game.rounds.houses || []).includes(house));
   if (!aiHouses.length) return game;
 
   // The first House to act rotates each round, as the first player does at the table.
   const offset = (game.rounds.number - 1) % aiHouses.length;
   const order = [...aiHouses.slice(offset), ...aiHouses.slice(0, offset)];
 
+  const days = daysMode(game);
   let next = game;
   for (const house of order) {
     if (houseRoundStatus(next, house).done) continue;
     const dueAt = Date.parse(next.rounds.ai_next_at?.[house] || 0);
     if (dueAt > nowMs) continue;
-    // Wait for the House's previous action to resolve so it decides on the real outcome.
-    if (ownWorkPending(next, house)) continue;
+    // In rounds the House waits for its previous action to resolve, so it decides
+    // on the real outcome. In days marches take long, so it may run up to three
+    // things at once.
+    if (ownWorkPending(next, house) >= (days ? 3 : 1)) continue;
 
     // Same check a player's command triggers: was a captured capital held until this action?
     const hold = resolvePendingCapitalHold(next.state, map, constants, house);
@@ -325,7 +521,10 @@ export function runAiHouses(game, map, constants, {
 
     const acted = takeAiAction(next, map, constants, house, { nowMs });
     next = acted.game;
-    next.rounds.ai_next_at[house] = new Date(nowMs + timing.aiActionDelayMs).toISOString();
+    next = next === game ? structuredClone(next) : next;
+    next.rounds.ai_next_at[house] = new Date(
+      nowMs + (days ? aiOrderIntervalMs(next.rounds) : timing.aiActionDelayMs)
+    ).toISOString();
     next.updated_at = new Date(nowMs).toISOString();
   }
   return next;

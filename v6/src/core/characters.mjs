@@ -16,7 +16,7 @@ export const CHARACTER_HEALTH = Object.freeze({
   WEAKENED: 'WEAKENED'
 });
 
-function listCatalog(catalog) {
+export function listCatalog(catalog) {
   if (Array.isArray(catalog)) return catalog;
   if (Array.isArray(catalog?.characters)) return catalog.characters;
   return [];
@@ -37,7 +37,7 @@ function armyId(characterId) {
   return 'ARM-' + String(characterId);
 }
 
-function activeRecord(card, house, role, mode, map) {
+export function activeRecord(card, house, role, mode, map) {
   const inArmy = mode === CHARACTER_MODE.ARMY;
   return {
     id: card.id,

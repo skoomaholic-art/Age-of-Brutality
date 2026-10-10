@@ -25,7 +25,8 @@ import {
   playerIdFromToken,
   hashAccessToken,
   safeTokenHashEqual,
-  validateStart
+  validateStart,
+  planLeave
 } from './multiplayer.mjs';
 
 function plain(value) {
@@ -790,7 +791,7 @@ export class FirestoreGameStore {
     };
   }
 
-  async recordProfileRankedResult(profileId, gameId, { won }, nowMs = Date.now()) {
+  async recordProfileRankedResult(profileId, gameId, { won, vsPeople = true, rated = true }, nowMs = Date.now()) {
     const profileRef = this.profileRef(profileId);
     const membershipRef = this.profileGamesRef(profileId).doc(String(gameId));
     const nowIso = new Date(nowMs).toISOString();
@@ -812,7 +813,7 @@ export class FirestoreGameStore {
         };
       }
 
-      const stats = applyRankedResult(profileDoc.data().stats, { won: Boolean(won) });
+      const stats = applyRankedResult(profileDoc.data().stats, { won: Boolean(won), vsPeople, rated });
       tx.update(profileRef, {
         stats,
         updated_at: nowIso
@@ -820,6 +821,7 @@ export class FirestoreGameStore {
       tx.set(membershipRef, {
         ...membership,
         ranked_result: won ? 'WIN' : 'LOSS',
+        opponents: vsPeople ? 'PEOPLE' : 'BOTS',
         result_recorded_at: nowIso
       }, { merge: false });
 
@@ -1172,6 +1174,54 @@ export class FirestoreGameStore {
     });
   }
 
+  // Removes a player from the game for good; see planLeave for the rules.
+  async leaveGame(playerId, { nowMs = Date.now() } = {}) {
+    const gameRef = this.gameRef();
+    const playerRef = this.playerRef(playerId);
+
+    return this.db.runTransaction(async tx => {
+      const [gameDoc, playerDoc, playersSnap] = await Promise.all([
+        tx.get(gameRef),
+        tx.get(playerRef),
+        tx.get(this.playersRef())
+      ]);
+
+      if (!gameDoc.exists) throw new Error('game not found');
+      if (!playerDoc.exists) throw new Error('player not found');
+
+      const game = gameDoc.data();
+      const player = playerDoc.data();
+      const others = playersSnap.docs
+        .map(doc => doc.data())
+        .filter(other => other.id !== playerId);
+
+      const plan = planLeave(game.lifecycle, player, others, nowMs);
+      const nextRevision = Number(game.state_revision || 0) + 1;
+
+      tx.update(gameRef, {
+        lifecycle: plain(plan.lifecycle),
+        updated_at: new Date(nowMs).toISOString(),
+        state_revision: nextRevision
+      });
+      tx.delete(playerRef);
+      if (plan.promote) {
+        tx.update(this.playerRef(plan.promote), { role: PLAYER_ROLE.ADMIN });
+      }
+      if (player.profile_id) {
+        tx.delete(this.profileGamesRef(player.profile_id).doc(this.gameId));
+      }
+
+      return {
+        lifecycle: plan.lifecycle,
+        house: plan.house,
+        abandoned_house: plan.abandonedHouse,
+        archived: plan.archived,
+        promoted_player_id: plan.promote,
+        display_name: player.display_name || null
+      };
+    });
+  }
+
   async archiveGame(playerId, nowMs = Date.now()) {
     const gameRef = this.gameRef();
     const playerRef = this.playerRef(playerId);
@@ -1271,8 +1321,9 @@ export class FirestoreGameStore {
 
     const session = this.sessionRef(sessionId);
     const [ordersSnap, jobsSnap, eventsSnap] = await Promise.all([
-      session.collection('orders').get(),
-      session.collection('jobs').get(),
+      // Old marches and works are history: only the recent ones come back.
+      session.collection('orders').orderBy('created_at', 'desc').limit(400).get(),
+      session.collection('jobs').orderBy('created_at', 'desc').limit(200).get(),
       session.collection('events').orderBy('seq', 'desc').limit(2000).get()
     ]);
 

@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Жестокий Век">
+<title>Жестокий Век</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/img/favicon-32.png">
+<link rel="apple-touch-icon" href="/assets/img/favicon-180.png">
+<style>
+  @font-face { font-family: Kurale; src: url('/assets/fonts/kurale-cyrillic-400-normal.woff2') format('woff2'); font-display: swap; }
+  html, body { margin: 0; height: 100%; background: #1b1512; overflow: hidden; }
+  /* The stage keeps the proportions of the painting and always fills the window;
+     it is pinned to the left so the menu never slides out of view. */
+  .stage {
+    position: fixed; left: 0; top: 50%; transform: translateY(-50%);
+    width: max(100vw, calc(100vh * 1672 / 941)); aspect-ratio: 1672 / 941;
+    container-type: size; overflow: hidden;
+  }
+  .world { position: absolute; inset: 0; transform-origin: 62% 55%; animation: breathe 26s ease-in-out infinite alternate; }
+  .scene { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  /* Living faces: eyes painted over the miniature that glance about and blink. */
+  .eye { position: absolute; transform: translate(-50%, -50%); border-radius: 50%; background: #dfdacb; overflow: hidden; pointer-events: none; }
+  .eye i { position: absolute; left: 50%; top: 50%; width: 46%; aspect-ratio: 1; border-radius: 50%; background: #241d19; transform: translate(calc(-50% + var(--gx, 30%)), calc(-50% + var(--gy, -10%))); transition: transform .22s ease-out; }
+  .eye b { position: absolute; inset: 0; background: #cfae90; border-bottom: .15cqh solid #4a372c; transform: translateY(-101%); transition: transform .07s linear; }
+  .eye.blink b { transform: translateY(0); }
+  .king-mouth { position: absolute; left: 48.33%; top: 38.75%; width: 1.5%; transform: translate(-50%, -50%) rotate(-9deg); opacity: 0; transition: opacity .12s; pointer-events: none; }
+  .king-mouth.open { opacity: 1; }
+  @keyframes breathe { from { transform: scale(1); } to { transform: scale(1.035) translateX(-.4%); } }
+
+  .cloud { position: absolute; left: -26%; opacity: .92; animation: drift linear infinite; pointer-events: none; }
+  @keyframes drift { from { transform: translateX(0); } to { transform: translateX(135cqw); } }
+
+  /* Marginal beasts cross the foot of the page one after another. */
+  .walker { position: absolute; bottom: 1.2%; left: 37%; pointer-events: none; opacity: 0; animation: cross 64s linear infinite; }
+  .walker img { display: block; width: 100%; animation: hop .55s ease-in-out infinite alternate; transform-origin: 50% 100%; }
+  @keyframes cross { 0% { transform: translateX(-12cqw); opacity: 0; } 1% { opacity: 1; } 21% { opacity: 1; } 22%, 100% { transform: translateX(78cqw); opacity: 0; } }
+  @keyframes hop { from { transform: translateY(0) rotate(-1.5deg); } to { transform: translateY(-.9cqh) rotate(1.5deg); } }
+
+  .panel {
+    position: absolute; left: 3.7%; top: 0; bottom: 0; width: 24%;
+    background: #1d1814 url('/assets/img/menu-panel.png') center / 100% 100% no-repeat;
+    box-shadow: 0 0 2.4cqw rgba(0,0,0,.55);
+    display: flex; flex-direction: column; align-items: stretch;
+  }
+  .logo { display: block; width: 80%; margin: 3.5cqh auto 2cqh; filter: drop-shadow(0 .4cqh .5cqh rgba(0,0,0,.6)); animation: glint 7s ease-in-out infinite; }
+  @keyframes glint { 0%, 100% { filter: drop-shadow(0 .4cqh .5cqh rgba(0,0,0,.6)) brightness(1); } 50% { filter: drop-shadow(0 .4cqh .9cqh rgba(0,0,0,.6)) brightness(1.12); } }
+  nav { display: grid; gap: .7cqh; padding: 0 0 0 9%; }
+  nav button {
+    all: unset; box-sizing: border-box; cursor: pointer; position: relative;
+    font-family: Kurale, Georgia, serif; font-size: 3.1cqh; line-height: 1; color: #efe4c6; letter-spacing: .02em;
+    padding: 1.05cqh 1.2cqw 1.05cqh 2.3cqw; white-space: nowrap;
+  }
+  nav button::before { content: '⚜'; position: absolute; left: .2cqw; top: 50%; transform: translateY(-50%) scale(0); color: #d9b24a; font-size: 2.6cqh; transition: transform .18s; }
+  nav button:hover:not(:disabled), nav button:focus-visible { background: linear-gradient(90deg, #9c2c1e, #7d2217 70%, transparent); color: #fff6dd; }
+  nav button:hover:not(:disabled)::before, nav button:focus-visible::before { transform: translateY(-50%) scale(1); }
+  nav button:disabled { color: #7d7362; cursor: default; }
+  .snail { margin: auto auto 2cqh; width: 46%; transform-origin: 30% 100%; animation: toot 3.2s ease-in-out infinite; }
+  @keyframes toot { 0%, 60%, 100% { transform: rotate(0); } 70% { transform: rotate(-4deg) translateY(-.4cqh); } 80% { transform: rotate(1deg); } 90% { transform: rotate(-3deg); } }
+  nav button.on { background: linear-gradient(90deg, #9c2c1e, #7d2217 70%, transparent); color: #fff6dd; }
+  /* A menu section opens as a sheet of parchment beside the panel. */
+  .sheet { position: fixed; left: calc(max(100vw, 100vh * 1672 / 941) * .29); right: 2vw; top: 4vh; bottom: 4vh; max-width: 1020px; display: none; flex-direction: column; border: 3px solid #2b1b12; outline: 2px solid #c9a24a; outline-offset: -7px; background: #ead9b0; box-shadow: 0 10px 40px rgba(0,0,0,.6); z-index: 5; }
+  .sheet.on { display: flex; }
+  .sheet header { display: flex; align-items: center; justify-content: space-between; padding: 12px 18px 8px; font: 26px Kurale, Georgia, serif; color: #7d2217; }
+  .sheet header button { all: unset; cursor: pointer; font: 22px Kurale, serif; color: #2b1b12; padding: 2px 10px; border: 1.5px solid #2b1b12; background: #f2e6c8; }
+  .sheet iframe { flex: 1; border: 0; width: 100%; background: transparent; }
+  /* Settings live in the menu itself, not in the lobby's frame. */
+  .sheet .local { flex: 1; overflow: auto; padding: 10px 22px 22px; font: 17px/1.4 Kurale, Georgia, serif; color: #2b1b12; }
+  .sheet .local .row { display: flex; align-items: center; gap: 14px; padding: 14px 0 4px; }
+  .sheet .local .row > span { flex: 0 0 170px; font-size: 20px; }
+  .sheet .local .row > b { flex: 0 0 64px; text-align: right; font-size: 18px; }
+  .sheet .local input[type=range] { flex: 1; min-width: 120px; accent-color: #7d2217; height: 28px; }
+  .sheet .local button { all: unset; cursor: pointer; padding: 7px 16px; border: 1.5px solid #2b1b12; background: #f2e6c8; font: 17px Kurale, Georgia, serif; }
+  .sheet .local button:hover { background: #fff6dd; }
+  .sheet .local h3 { margin: 18px 0 4px; font-size: 20px; color: #7d2217; font-weight: normal; }
+  .sheet .local p { margin: 0 0 6px; max-width: 62ch; }
+  .sheet .local .note { margin: 0 0 10px; padding-bottom: 12px; border-bottom: 1px solid rgba(43,27,18,.18); color: #5a4433; font-size: 15px; }
+  @media (max-width: 760px) {
+    .sheet .local .row { flex-wrap: wrap; }
+    .sheet .local .row > span { flex: 1 0 100%; }
+    .sheet .local input[type=range] { flex: 1 1 60%; }
+  }
+  @media (max-width: 760px) { .sheet { left: 2vw; } }
+  #hint { position: fixed; left: 50%; bottom: 6vh; transform: translateX(-50%); width: min(520px, 88vw); padding: 14px 18px; z-index: 9; background: #f2e6c8; color: #2b1b12; border: 2px solid #2b1b12; font: 17px/1.35 Kurale, Georgia, serif; box-shadow: 0 8px 30px rgba(0,0,0,.6); }
+  .mark { position: absolute; right: 1cqw; bottom: 1cqh; width: 3.4cqh; opacity: .8; }
+  @media (prefers-reduced-motion: reduce) { .world, .cloud, .walker, .walker img, .snail, .logo { animation: none; } .walker { display: none; } }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="world" id="world">
+    <img class="scene" src="/assets/img/menu-scene.jpg" alt="">
+    <img class="king-mouth" id="king-mouth" src="/assets/img/menu-king-mouth.png" alt="">
+  </div>
+  <img class="cloud" src="/assets/img/menu-cloud-1.png" alt="" style="top:2%;width:15%;animation-duration:150s;animation-delay:-40s">
+  <img class="cloud" src="/assets/img/menu-cloud-2.png" alt="" style="top:1%;width:13%;animation-duration:210s;animation-delay:-120s">
+  <img class="cloud" src="/assets/img/menu-cloud-3.png" alt="" style="top:5%;width:11%;animation-duration:180s;animation-delay:-5s">
+  <div class="walker" style="width:9%;animation-delay:2s"><img src="/assets/img/menu-hare.png" alt=""></div>
+  <div class="walker" style="width:12%;animation-delay:18s"><img src="/assets/img/menu-beast.png" alt=""></div>
+  <div class="walker" style="width:12%;animation-delay:34s"><img src="/assets/img/menu-dragon.png" alt=""></div>
+  <div class="walker" style="width:9%;animation-delay:50s"><img src="/assets/img/menu-monkey.png" alt=""></div>
+  <div class="panel">
+    <img class="logo" src="/assets/img/menu-logo.png" alt="Жестокий Век">
+    <nav>
+      <button id="m-continue" disabled>Продолжить</button>
+      <button id="m-new" data-view="new">Новая игра</button>
+      <button id="m-load" data-view="games">Загрузить</button>
+      <button data-view="rooms">Сетевая игра</button>
+      <button data-view="social">Друзья</button>
+      <button data-view="profile">Профиль</button>
+      <button id="m-full">Во весь экран</button>
+      <button data-local="settings">Настройки</button>
+      <button data-local="credits">Авторы</button>
+    </nav>
+    <img class="snail" src="/assets/img/menu-snail.png" alt="">
+  </div>
+  <img class="mark" src="/assets/img/s-mark.png" alt="Skoomaholic Dev">
+</div>
+<div class="sheet" id="sheet"><header><span id="sheet-title"></span><button id="sheet-close" title="Закрыть">✕</button></header>
+  <iframe id="sheet-frame" title="Раздел меню"></iframe>
+  <div class="local" id="sheet-local" hidden>
+    <label class="row">
+      <span>Звуки века</span>
+      <input id="set-sound" type="range" min="0" max="100" step="5">
+      <b id="set-sound-value">70%</b>
+    </label>
+    <p class="note">Рога, сеча, монеты, вести. Отклик рати на нажатие тоже здесь.</p>
+    <label class="row">
+      <span>Музыка века</span>
+      <input id="set-music" type="range" min="0" max="100" step="5">
+      <b id="set-music-value">45%</b>
+    </label>
+    <p class="note">Своя музыка у лета, у зимы, у боя и у заглавного экрана.</p>
+    <label class="row">
+      <span>Речь воеводы</span>
+      <input id="set-voice" type="range" min="0" max="100" step="5">
+      <b id="set-voice-value">70%</b>
+    </label>
+    <p class="note">Живой голос: отклик рати, вести гонца и глашатая. Убавишь до нуля — отвечает рог.</p>
+    <div class="row">
+      <span>Полный экран</span>
+      <button id="set-full">Развернуть</button>
+      <b></b>
+    </div>
+    <p class="note">На iPhone вместо этого добавь игру на экран «Домой» — она откроется без панелей браузера.</p>
+  </div>
+  <div class="local" id="sheet-credits" hidden>
+    <h3>Жестокий Век</h3>
+    <p>Настольная игра и её цифровая версия — Skoomaholic Dev.</p>
+    <h3>Замысел и правила</h3>
+    <p>Skoomaholic. Шесть Домов, Сердце Века, Орда, тайны и предательства — всё оттуда.</p>
+    <h3>Облик</h3>
+    <p>Средневековые миниатюры и маргиналии в духе «страдающего средневековья»; карта,
+      гербы, портреты и живые лица собраны для этой игры.</p>
+    <h3>Голос века</h3>
+    <p>Звуки и музыка написаны числами для этой игры: рога, колокола, барабаны,
+      ветер и четыре темы — лето, зима, бой, победа.</p>
+    <h3>Работа над кодом</h3>
+    <p>Claude (Anthropic) — в паре с автором.</p>
+    <p class="note" id="credits-build">Сборка неизвестна.</p>
+  </div>
+</div>
+<script>
+// The lobby opens the menu first; this flag tells it the visitor has been here.
+const go = url => { try { sessionStorage.setItem('aob-menu-seen', '1'); } catch {} location.href = url; };
+let last = null;
+try {
+  last = localStorage.getItem('aob-last-game');
+  if (last && !localStorage.getItem('aob-token-' + last) && !localStorage.getItem('aob-profile-token')) last = null;
+} catch {}
+const cont = document.getElementById('m-continue');
+if (last) { cont.disabled = false; cont.onclick = () => go('/?game=' + encodeURIComponent(last)); }
+// Every section of the old lobby opens here, inside the menu.
+const sheet = document.getElementById('sheet'), frame = document.getElementById('sheet-frame');
+const locals = { settings: document.getElementById('sheet-local'), credits: document.getElementById('sheet-credits') };
+const closeSheet = () => {
+  sheet.classList.remove('on'); frame.removeAttribute('src'); frame.hidden = false;
+  for (const pane of Object.values(locals)) pane.hidden = true;
+  document.querySelectorAll('nav button.on').forEach(b => b.classList.remove('on'));
+};
+const openSheet = button => {
+  if (button.classList.contains('on')) { closeSheet(); return false; }
+  closeSheet(); button.classList.add('on');
+  document.getElementById('sheet-title').textContent = button.textContent;
+  sheet.classList.add('on');
+  return true;
+};
+document.querySelectorAll('nav button[data-view]').forEach(button => button.onclick = () => {
+  if (openSheet(button)) frame.src = '/lobby.html?view=' + button.dataset.view;
+});
+// Settings belong to the menu itself and open without the lobby's frame.
+document.querySelectorAll('nav button[data-local]').forEach(button => button.onclick = () => {
+  if (!openSheet(button)) return;
+  frame.hidden = true;
+  locals[button.dataset.local].hidden = false;
+});
+document.getElementById('sheet-close').onclick = closeSheet;
+addEventListener('keydown', event => { if (event.key === 'Escape') closeSheet(); });
+const fullButton = document.getElementById('m-full');
+const fullLabel = () => {
+  const out = Boolean(document.fullscreenElement);
+  fullButton.textContent = out ? 'Выйти из полного экрана' : 'Во весь экран';
+  const twin = document.getElementById('set-full');
+  if (twin) twin.textContent = out ? 'Свернуть' : 'Развернуть';
+};
+const standalone = navigator.standalone || matchMedia('(display-mode: standalone)').matches;
+fullButton.onclick = () => {
+  const root = document.documentElement;
+  // The iPhone has no fullscreen for pages: the game is put on the home screen instead.
+  if (!root.requestFullscreen) return showHint('На iPhone полный экран включается иначе: нажмите «Поделиться» → «На экран „Домой“» и запускайте игру с появившегося значка — она откроется без панелей браузера.');
+  (document.fullscreenElement ? document.exitFullscreen() : root.requestFullscreen()).catch(() => showHint('Браузер не дал развернуть игру на весь экран.'));
+};
+const showHint = text => { let box = document.getElementById('hint'); if (!box) { box = document.createElement('div'); box.id = 'hint'; box.onclick = () => box.remove(); document.body.append(box); } box.textContent = text; };
+if (standalone) fullButton.hidden = true;
+document.addEventListener('fullscreenchange', fullLabel);
+
+// ---------- the voice of the century, at the gates ----------
+// The menu keeps the same two settings as the game and remembers them in the
+// same place, so a choice made here holds inside the century and back again.
+const SOUND_STORE = 'aob-sound', MUSIC_STORE = 'aob-music', VOICE_STORE = 'aob-voice';
+const kept = (key, fallback) => {
+  try {
+    const value = localStorage.getItem(key);
+    return value === null ? fallback : Math.max(0, Math.min(1, Number(value) || 0));
+  } catch { return fallback; }
+};
+const keep = (key, value) => { try { localStorage.setItem(key, String(value)); } catch { /* forbidden here */ } };
+let soundLevel = kept(SOUND_STORE, 0.25), musicLevel = kept(MUSIC_STORE, 0.4), voiceLevel = kept(VOICE_STORE, 0.7);
+let unlocked = false, theme = null;
+
+function ring(name, volume = 1) {
+  if (!soundLevel || !unlocked) return;
+  const audio = new Audio('/assets/sfx/' + name + '.ogg');
+  audio.volume = Math.max(0, Math.min(1, soundLevel * volume));
+  audio.play().catch(() => {});
+}
+
+// The title screen's own theme, quieter than anything inside the game.
+function playTheme() {
+  if (!musicLevel || !unlocked) return;
+  if (!theme) { theme = new Audio('/assets/sfx/music_menu.ogg'); theme.loop = true; theme.preload = 'none'; }
+  theme.volume = Math.max(0, Math.min(1, musicLevel * 0.55));
+  theme.play().catch(() => {});
+}
+function hushTheme() { if (theme) { try { theme.pause(); } catch { /* already still */ } } }
+const wake = () => { if (unlocked) return; unlocked = true; playTheme(); };
+addEventListener('pointerdown', wake, { once: true });
+addEventListener('keydown', wake, { once: true });
+document.querySelectorAll('nav button').forEach(button => button.addEventListener('click', () => {
+  if (!button.disabled) ring('tap', 0.5);
+}));
+
+const soundBar = document.getElementById('set-sound'), musicBar = document.getElementById('set-music');
+const voiceBar = document.getElementById('set-voice');
+const soundValue = document.getElementById('set-sound-value'), musicValue = document.getElementById('set-music-value');
+const voiceValue = document.getElementById('set-voice-value');
+const showLevels = () => {
+  soundBar.value = Math.round(soundLevel * 100); soundValue.textContent = Math.round(soundLevel * 100) + '%';
+  musicBar.value = Math.round(musicLevel * 100); musicValue.textContent = Math.round(musicLevel * 100) + '%';
+  voiceBar.value = Math.round(voiceLevel * 100); voiceValue.textContent = Math.round(voiceLevel * 100) + '%';
+};
+// The captain says a word, so the level can be judged by ear.
+const VOICE_SAMPLES = ['hail-01', 'hail-03', 'hail-05', 'hail-09'];
+let voiceTry = null;
+const voiceBarInput = () => {
+  voiceLevel = Number(voiceBar.value) / 100; keep(VOICE_STORE, voiceLevel); showLevels();
+  unlocked = true;
+  if (!voiceLevel) return;
+  if (voiceTry) { try { voiceTry.pause(); } catch { /* already still */ } }
+  voiceTry = new Audio('/assets/sfx/voice/' + VOICE_SAMPLES[Math.floor(Math.random() * VOICE_SAMPLES.length)] + '.ogg');
+  voiceTry.volume = Math.max(0, Math.min(1, voiceLevel));
+  voiceTry.play().catch(() => {});
+};
+soundBar.oninput = () => {
+  soundLevel = Number(soundBar.value) / 100; keep(SOUND_STORE, soundLevel); showLevels();
+  unlocked = true; ring('select', 0.8);
+};
+musicBar.oninput = () => {
+  musicLevel = Number(musicBar.value) / 100; keep(MUSIC_STORE, musicLevel); showLevels();
+  unlocked = true;
+  if (!musicLevel) hushTheme(); else playTheme();
+};
+voiceBar.oninput = voiceBarInput;
+showLevels();
+document.getElementById('set-full').onclick = () => fullButton.onclick();
+
+// Which build is open right now — the first thing to ask about when something is odd.
+fetch('/api/build').then(r => r.json()).then(build => {
+  const line = document.getElementById('credits-build');
+  const commit = build.commit ? String(build.commit).slice(0, 7) : null;
+  line.textContent = commit || build.revision
+    ? 'Сборка ' + [commit, build.revision].filter(Boolean).join(' · ')
+    : 'Сборка из рук разработчика.';
+}).catch(() => {});
+
+// Living faces. Each eye: centre x, y and size in pixels of the 1672x941 painting.
+const EYES = [[781,338,13,9,0],[807,329,10,8,0],[596,577,12,8,1],[616,575,9,8,1],[636,601,6,6,2],[1458,494,6,5,3],[1470,496,6,5,3],[1519,484,5,5,4],[1533,488,6,5,4],[1565,495,6,5,5],[1578,497,6,5,5]];
+const world = document.getElementById('world');
+const eyes = EYES.map(([x, y, w, h, face]) => {
+  const eye = document.createElement('div'); eye.className = 'eye'; eye.innerHTML = '<i></i><b></b>';
+  eye.style.cssText = `left:${x / 16.72}%;top:${y / 9.41}%;width:${w / 16.72}%;height:${h / 9.41}%`;
+  world.append(eye); return { eye, face };
+});
+const blink = face => { const set = eyes.filter(e => e.face === face); set.forEach(e => e.eye.classList.add('blink')); setTimeout(() => set.forEach(e => e.eye.classList.remove('blink')), 130); };
+const GLANCES = [[30,-10],[34,4],[-28,-6],[0,-22],[24,18],[-30,12],[30,-10]];
+const mouth = document.getElementById('king-mouth');
+if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  setInterval(() => blink(Math.floor(Math.random() * 6)), 900);
+  setInterval(() => { const [gx, gy] = GLANCES[Math.floor(Math.random() * GLANCES.length)]; world.style.setProperty('--gx', gx + '%'); world.style.setProperty('--gy', gy + '%'); }, 2600);
+  // The king gasps now and then.
+  setInterval(() => { mouth.classList.add('open'); setTimeout(() => mouth.classList.remove('open'), 500 + Math.random() * 900); }, 5200);
+}
+
+</script>
+</body>
+</html>

@@ -13,16 +13,32 @@ import {
   resolveCommanderFate,
   settleCommander
 } from '../core/characters.mjs';
+import { declareWarInPlace, hasPassage } from './diplomacy.mjs';
+import { headsLost, ranksForMarch, settleMarchRanks, starsAt, starsForMarch, strengthOf, takeStrongest } from './ranks.mjs';
+import { rulerLeadBonus } from './court.mjs';
+import { fightOnLand, joinersAgainst } from './melee.mjs';
+import { heartMode, ringGlory, wildBattle } from './heart.mjs';
+import { onLandTaken } from './units.mjs';
+import { fateDice, recoveryMs, settleFate } from './fate.mjs';
 import {
   finishSeaLandingBridge,
   isSeaWaypoint
 } from './sea-navigation.mjs';
 import {
+  canPassThrough,
   findOnlineRoute,
   listReachableOnlineRoutes,
+  guestWarriors,
   onlinePositionOwner,
   onlinePositionWarriors
 } from './route-planner.mjs';
+
+import { COLD, isWinter } from './seasons.mjs';
+import { processAmbushes } from './intercept.mjs';
+import { standDown } from './stance.mjs';
+import { planLosses, planOf, planStrength } from './plans.mjs';
+import { claimTaken, rememberDeed } from './opinion.mjs';
+import { giftOf } from './aspiration.mjs';
 
 export const ONLINE_TIMING = Object.freeze({
   landSegmentMs: 3_000,
@@ -85,19 +101,33 @@ function hydrateOnlineRoute(state,map,constants,action,timing=ONLINE_TIMING) {
   };
 }
 
-function hash32(input) {
-  let hash = 2166136261;
-  for (let i = 0; i < input.length; i += 1) {
-    hash ^= input.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
+// The online game has no dice: numbers and facts decide.
+//
+// The core rules still take dice, so the online layer feeds them fixed values
+// that stand for an average throw:
+// - a neutral land falls when the warriors outnumber its resistance
+//   (2d6 fixed at 7, so `7 + warriors > 7 + resistance`);
+// - in a battle both sides get the same 3, so the larger force wins, ties go
+//   to the defender, and losses stay at the level of the dice rules.
+const NEUTRAL_DICE = Object.freeze([3, 4]);
+const BATTLE_DIE = 3;
+
+// Marches take a share of the game day (see rounds.mjs); 1 in older games.
+export function timeScale(game) {
+  const scale = Number(game?.clock?.time_scale);
+  return scale > 0 ? scale : 1;
 }
 
-function deterministicDice(seed) {
-  const a = hash32(seed);
-  const b = hash32(seed + ':second');
-  return [(a % 6) + 1, (b % 6) + 1];
+function scaleRoute(action, scale) {
+  if (scale === 1) return action;
+  return {
+    ...action,
+    route_duration_ms: Math.round(Number(action.route_duration_ms || 0) * scale),
+    route_segments: (action.route_segments || []).map(segment => ({
+      ...segment,
+      duration_ms: Math.round(Number(segment.duration_ms || 0) * scale)
+    }))
+  };
 }
 
 export function reservedWarriors(game, house, from) {
@@ -137,9 +167,13 @@ export function enumerateOnlineMarches(
 
   for(const id of Object.keys(map.sea_waypoints || {})) {
     if(
-      onlinePositionOwner(state,id)===house &&
       onlinePositionWarriors(state,id,house)>0
     ) origins.push(id);
+  }
+
+  // Our warriors standing as guests on a host's land can march on from there.
+  for(const id of Object.keys(state.guests || {})) {
+    if(guestWarriors(state,id,house)>0 && !origins.includes(id)) origins.push(id);
   }
 
   const actions=[];
@@ -150,11 +184,14 @@ export function enumerateOnlineMarches(
     );
 
     for(const route of routes) {
-      for(let warriors=1;warriors<=count;warriors+=1) {
-        if(!destinationCapacityAllows(
-          state,map,constants,house,route,warriors
-        )) continue;
-
+      // The room at the destination shrinks with every head, so the largest
+      // host that fits bounds them all; the route itself is shared, not copied.
+      let max=count;
+      while(max>0 && !destinationCapacityAllows(state,map,constants,house,route,max)) max-=1;
+      if(max<=0) continue;
+      const path=Object.freeze([...route.path]);
+      const segments=Object.freeze(route.segments.map(segment=>Object.freeze({...segment})));
+      for(let warriors=1;warriors<=max;warriors+=1) {
         actions.push({
           type:'MARCH',
           mode:route.mode,
@@ -162,8 +199,8 @@ export function enumerateOnlineMarches(
           from,
           to:route.to,
           warriors,
-          path:[...route.path],
-          route_segments:route.segments.map(segment=>({...segment})),
+          path,
+          route_segments:segments,
           route_hops:route.hops,
           route_duration_ms:route.duration_ms
         });
@@ -178,6 +215,7 @@ export function listQueueableMarches(game,map,constants,house) {
     game.state,map,constants,house,ONLINE_TIMING
   );
 
+  const scale=timeScale(game);
   return legal.filter(action => {
     const available=onlinePositionWarriors(
       game.state,action.from,house
@@ -186,7 +224,7 @@ export function listQueueableMarches(game,map,constants,house) {
       game,house,action.from
     );
     return action.warriors<=available-reserved;
-  });
+  }).map(action => scaleRoute(action,scale));
 }
 
 export function travelDurationMs(
@@ -221,10 +259,15 @@ export function queueTimedOrder(
   );
   assertOnlineLegalAction(hydratedAction, legal);
 
-  action = hydratedAction;
+  const scale = timeScale(game);
+  action = scaleRoute(hydratedAction, scale);
   let next = structuredClone(game);
   const id = `O${String(next.next_order_id).padStart(6, '0')}`;
-  const durationMs = travelDurationMs(next.state, map, constants, action, timing);
+  // Winter lies on the road: the same march takes longer between the snows.
+  const durationMs = Math.round(
+    travelDurationMs(next.state, map, constants, action, timing) * scale
+      * (isWinter(game, map) ? COLD.slow : 1)
+  );
   const availableWarriors =
     onlinePositionWarriors(game.state, action.from, action.house) -
     reservedWarriors(game, action.house, action.from);
@@ -264,6 +307,9 @@ export function queueTimedOrder(
     result: null,
     failure_reason: null
   };
+  // Which warriors go: the strongest free ones, or the ranks asked for.
+  order.action.ranks = ranksForMarch(game, map, order.action);
+  order.action.stars = starsForMarch(game, order.action);
 
   if (order.commander_id) {
     next.state = beginCommanderMarch(
@@ -297,7 +343,31 @@ export function queueTimedOrder(
   return { game: next, order };
 }
 
+const GUEST_ORIGIN='__guest_origin__';
+
+function isGuestOrigin(state,action) {
+  return guestWarriors(state,action.from,action.house)>0 &&
+    state.territories?.[action.from]?.owner!==action.house;
+}
+
+function setGuests(state,id,house,count) {
+  state.guests ||= {};
+  state.guests[id] ||= {};
+  if(count>0) state.guests[id][house]=count;
+  else delete state.guests[id][house];
+  if(!Object.keys(state.guests[id]).length) delete state.guests[id];
+}
+
 function removeFromOnlineOrigin(next,action) {
+  // Men who set out are no longer standing to arms where they stood.
+  standDown(next, action.from, action.house);
+  if(isGuestOrigin(next,action)) {
+    setGuests(
+      next,action.from,action.house,
+      guestWarriors(next,action.from,action.house)-action.warriors
+    );
+    return;
+  }
   const source=next.territories?.[action.from] ||
     next.sea_nodes?.[action.from];
   if(!source) throw new Error(`unknown route origin ${action.from}`);
@@ -306,6 +376,7 @@ function removeFromOnlineOrigin(next,action) {
     Number(source.warriors?.[action.house] || 0)-action.warriors;
   if(source.warriors[action.house]<=0) {
     delete source.warriors[action.house];
+    if(source.days_at_sea) delete source.days_at_sea[action.house];
   }
 
   if(next.sea_nodes?.[action.from]) {
@@ -323,12 +394,7 @@ function moveToSeaWaypoint(state,map,constants,action) {
   if(!target || !isSeaWaypoint(map,action.to)) {
     throw new Error('route destination is not a sea waypoint');
   }
-  if(target.owner && target.owner!==action.house) {
-    throw new Error(
-      `sea waypoint ${action.to} is occupied by ${target.owner}; sea combat is not implemented`
-    );
-  }
-
+  // No battles at sea: fleets of different Houses share the water.
   const current=Number(target.warriors?.[action.house] || 0);
   if(current+action.warriors>constants.territory_warrior_cap) {
     throw new Error(
@@ -336,8 +402,14 @@ function moveToSeaWaypoint(state,map,constants,action) {
     );
   }
 
-  target.owner=action.house;
   target.warriors[action.house]=current+action.warriors;
+  const afloat=Object.keys(target.warriors).filter(h=>Number(target.warriors[h] || 0)>0);
+  target.owner=afloat.length===1 ? afloat[0] : null;
+  // Since when this House's men have been out at sea here (for the toll of the sea).
+  // Dawns this House's men have spent out at sea: carried from point to point.
+  const carried=Number(state.sea_nodes?.[action.from]?.days_at_sea?.[action.house] || 0);
+  target.days_at_sea ||= {};
+  target.days_at_sea[action.house]=Math.max(Number(target.days_at_sea[action.house] || 0),carried);
   next.journal.push({
     kind:'ROUTE_MARCH',
     house:action.house,
@@ -350,10 +422,60 @@ function moveToSeaWaypoint(state,map,constants,action) {
   return next;
 }
 
+// Entering the land of a host who gave us right of passage: the warriors
+// camp there as guests. The land stays the host's and nobody fights.
+function moveInAsGuest(state,map,constants,action) {
+  const next=structuredClone(state);
+  const target=next.territories[action.to];
+  const here=Object.values(target.warriors || {}).reduce((sum,n)=>sum+Number(n || 0),0) +
+    Object.values(next.guests?.[action.to] || {}).reduce((sum,n)=>sum+Number(n || 0),0);
+  if(here+action.warriors>constants.territory_warrior_cap) {
+    throw new Error(`destination ${action.to} would exceed warrior cap ${constants.territory_warrior_cap}`);
+  }
+  removeFromOnlineOrigin(next,action);
+  setGuests(next,action.to,action.house,guestWarriors(next,action.to,action.house)+action.warriors);
+  next.journal.push({
+    kind:'GUEST_MARCH',
+    house:action.house,
+    host:target.owner,
+    houses:[action.house,target.owner],
+    from:action.from,
+    to:action.to,
+    warriors:action.warriors,
+    route_path:[...(action.path || [])]
+  });
+  return next;
+}
+
 function routeResolutionBridge(state,map,action) {
   const bridgedState=structuredClone(state);
-  const bridgedMap=structuredClone(map);
+  const bridgedMap=structuredClone({ ...map });
   let syntheticOrigin=false;
+
+  // A march that starts from a guest camp: for the core rules the camp is a
+  // land of its own, joined to the destination, holding only our warriors.
+  if(isGuestOrigin(state,action)) {
+    bridgedState.territories[GUEST_ORIGIN]={
+      owner:action.house,
+      warriors:{[action.house]:guestWarriors(state,action.from,action.house)},
+      fort:false
+    };
+    bridgedMap.territories=[...bridgedMap.territories,{
+      id:GUEST_ORIGIN,name:GUEST_ORIGIN,house_sector:'Гости',type:'Дикая земля',
+      gold_income:0,is_central_half:false,island:null,island_bonus:null,icon:''
+    }];
+    bridgedMap.land_edges=[...(bridgedMap.land_edges || []),[GUEST_ORIGIN,action.to]];
+    return {
+      state:bridgedState,
+      map:bridgedMap,
+      action:{
+        type:'MARCH',mode:'LAND',house:action.house,
+        from:GUEST_ORIGIN,to:action.to,warriors:action.warriors,
+        path:[GUEST_ORIGIN,action.to]
+      },
+      syntheticOrigin:'GUEST'
+    };
+  }
 
   if(isSeaWaypoint(map,action.from)) {
     const sea=bridgedState.sea_nodes?.[action.from];
@@ -404,6 +526,18 @@ function routeResolutionBridge(state,map,action) {
 function finishRouteBridge(originalState,resolvedState,action,syntheticOrigin) {
   if(!syntheticOrigin) return resolvedState;
 
+  if(syntheticOrigin==='GUEST') {
+    const next=structuredClone(resolvedState);
+    const left=Number(next.territories[GUEST_ORIGIN]?.warriors?.[action.house] || 0);
+    delete next.territories[GUEST_ORIGIN];
+    setGuests(next,action.from,action.house,left);
+    // The camp was only a stand-in: the chronicle names the real place.
+    for(const entry of next.journal.slice(originalState.journal.length)) {
+      if(entry.from===GUEST_ORIGIN) entry.from=action.from;
+    }
+    return next;
+  }
+
   const next=structuredClone(resolvedState);
   const synthetic=next.territories[action.from];
   const remaining=Number(synthetic?.warriors?.[action.house] || 0);
@@ -411,18 +545,24 @@ function finishRouteBridge(originalState,resolvedState,action,syntheticOrigin) {
   delete next.territories[action.from];
   next.sea_nodes ||= {};
   next.sea_nodes[action.from] ||= {owner:null,warriors:{}};
-  next.sea_nodes[action.from].warriors=remaining>0
-    ? {[action.house]:remaining}
-    : {};
-  next.sea_nodes[action.from].owner=remaining>0
-    ? action.house
-    : null;
+  // Other Houses' fleets at the point stay where they are.
+  const node=next.sea_nodes[action.from];
+  node.warriors={...(originalState.sea_nodes?.[action.from]?.warriors || {})};
+  if(remaining>0) node.warriors[action.house]=remaining;
+  else {
+    delete node.warriors[action.house];
+    if(node.days_at_sea) delete node.days_at_sea[action.house];
+  }
+  const afloat=Object.keys(node.warriors).filter(h=>Number(node.warriors[h] || 0)>0);
+  node.owner=afloat.length===1 ? afloat[0] : null;
   return next;
 }
 
-function resolveOrder(state,map,constants,gameId,order,nowMs) {
+function resolveOrder(state,map,constants,gameId,order,nowMs,recovery) {
+  // The army has already walked its way; on arrival only the goal must still
+  // be within reach, not the very same road (lands change hands meanwhile).
   const action=hydrateOnlineRoute(
-    state,map,constants,order.action,ONLINE_TIMING
+    state,map,constants,{ ...order.action, path:null },ONLINE_TIMING
   );
   const legal=enumerateOnlineMarches(
     state,map,constants,action.house,ONLINE_TIMING
@@ -433,13 +573,30 @@ function resolveOrder(state,map,constants,gameId,order,nowMs) {
     let moved=moveToSeaWaypoint(
       state,map,constants,action
     );
+    const fight=moved.journal[moved.journal.length-1];
+    const lost=fight?.kind==='BATTLE' && fight.naval && !fight.attackerWins;
     moved=settleCommander(
-      moved,order.commander_id,action.to
+      moved,order.commander_id,lost ? action.from : action.to
     );
     return {
       state:moved,
       result:{
-        kind:'SEA_WAYPOINT_MARCH',
+        kind:fight?.kind==='BATTLE' && fight.naval ? 'SEA_BATTLE' : 'SEA_WAYPOINT_MARCH',
+        route_path:[...action.path],
+        commander_id:order.commander_id || null
+      }
+    };
+  }
+
+  const master=state.territories?.[action.to]?.owner ?? null;
+  if(master && master!==action.house && hasPassage(state,master,action.house)) {
+    let moved=moveInAsGuest(state,map,constants,action);
+    moved=settleCommander(moved,order.commander_id,action.to);
+    return {
+      state:moved,
+      result:{
+        kind:'GUEST_MARCH',
+        host:master,
         route_path:[...action.path],
         commander_id:order.commander_id || null
       }
@@ -457,6 +614,10 @@ function resolveOrder(state,map,constants,gameId,order,nowMs) {
     finishRouteBridge(
       state,resolvedState,action,bridge.syntheticOrigin
     );
+  const realOrigin=result => {
+    if(result && result.from===GUEST_ORIGIN) result.from=action.from;
+    return result;
+  };
 
   const destination=classifyDestination(
     resolutionState,action.house,action.to
@@ -480,10 +641,25 @@ function resolveOrder(state,map,constants,gameId,order,nowMs) {
     };
   }
 
+  // A game of the Heart: free lands are held by the wild guard and must be fought for.
+  if(destination==='NEUTRAL' && heartMode(state)) {
+    const commander=order.commander_id ? state.characters?.[order.commander_id] || null : null;
+    const resolved=wildBattle(resolutionState,resolutionMap,constants,resolutionAction,{
+      ranks:order.action.ranks,
+      stars:order.action.stars,
+      commander,
+      glory:ringGlory(state,action.to),
+      nowMs
+    });
+    resolved.state=finalize(resolved.state);
+    resolved.state=settleCommander(resolved.state,order.commander_id,resolved.result.success ? action.to : action.from);
+    resolved.result.route_path=[...action.path];
+    resolved.result.commander_id=order.commander_id || null;
+    return resolved;
+  }
+
   if(destination==='NEUTRAL') {
-    const dice=deterministicDice(
-      `${gameId}:${order.id}:neutral`
-    );
+    const dice=[...NEUTRAL_DICE];
     let resolved=resolveNeutralCapture(
       resolutionState,
       resolutionMap,
@@ -498,6 +674,7 @@ function resolveOrder(state,map,constants,gameId,order,nowMs) {
       resolved.result.success ? action.to : action.from
     );
     resolved.result.route_path=[...action.path];
+    realOrigin(resolved.result);
     resolved.result.commander_id=order.commander_id || null;
     return resolved;
   }
@@ -519,6 +696,7 @@ function resolveOrder(state,map,constants,gameId,order,nowMs) {
       resolved.state,order.commander_id,action.to
     );
     resolved.result.route_path=[...action.path];
+    realOrigin(resolved.result);
     resolved.result.commander_id=order.commander_id || null;
     return resolved;
   }
@@ -530,9 +708,8 @@ function resolveOrder(state,map,constants,gameId,order,nowMs) {
     state,defenderHouse,action.to
   );
 
-  const [attackerDie,defenderDie]=deterministicDice(
-    `${gameId}:${order.id}:battle`
-  );
+  const attackerDie=BATTLE_DIE;
+  const defenderDie=BATTLE_DIE;
 
   let resolved=resolveBattle(
     resolutionState,
@@ -542,13 +719,22 @@ function resolveOrder(state,map,constants,gameId,order,nowMs) {
     {
       attackerDie,
       defenderDie,
+      plan:planOf(order.action),
       attackerCommander:commanderStats(attackerCommander),
-      defenderCommander:commanderStats(defenderCommander)
+      defenderCommander:commanderStats(defenderCommander),
+      // Ranks add up as strength: a guardsman counts as five peasants.
+      // Ranks add up as strength; a ruler leading in person adds one more.
+      attackerStrengthModifier:strengthOf(order.action.ranks,Number(action.warriors),{stars:order.action.stars})-Number(action.warriors)+rulerLeadBonus(attackerCommander)+planStrength(order.action)+giftOf(state,action.house,'attack'),
+      defenderStrengthModifier:strengthOf(state.ranks?.[action.to]?.[defenderHouse],defenders,{defending:true,stars:starsAt(state,action.to,defenderHouse)})-defenders+rulerLeadBonus(defenderCommander)+giftOf(state,defenderHouse,'attack'),
+      // The plan the host was given tells on its own dead as well as on its blows.
+      attackerLossesFor:damage=>Math.min(Number(action.warriors),planLosses(order.action,headsLost(order.action.ranks,Number(action.warriors),damage))),
+      defenderLossesFor:damage=>headsLost(state.ranks?.[action.to]?.[defenderHouse],defenders,damage)
     }
   );
 
   resolved.state=finalize(resolved.state);
   resolved.result.route_path=[...action.path];
+    realOrigin(resolved.result);
   resolved.result.attacker_commander_id=attackerCommander?.id || null;
   resolved.result.defender_commander_id=defenderCommander?.id || null;
 
@@ -572,14 +758,11 @@ function resolveOrder(state,map,constants,gameId,order,nowMs) {
           created_at:new Date(nowMs).toISOString()
         }
       );
-      const fateDice=deterministicDice(
-        `${gameId}:${order.id}:fate:${defenderCommander.id}`
-      );
       const fate=resolveCommanderFate(
         resolved.state,map,constants,defenderCommander.id,
-        fateDice,{nowMs}
+        fateDice(resolved.result,defenderCommander),{nowMs}
       );
-      resolved.state=fate.state;
+      resolved.state=settleFate(fate.state,map,defenderCommander.id,{nowMs,recovery});
       resolved.result.defender_commander_fate=fate.result;
     }
   } else {
@@ -606,14 +789,11 @@ function resolveOrder(state,map,constants,gameId,order,nowMs) {
           created_at:new Date(nowMs).toISOString()
         }
       );
-      const fateDice=deterministicDice(
-        `${gameId}:${order.id}:fate:${attackerCommander.id}`
-      );
       const fate=resolveCommanderFate(
         resolved.state,map,constants,attackerCommander.id,
-        fateDice,{nowMs}
+        fateDice(resolved.result,attackerCommander),{nowMs}
       );
-      resolved.state=fate.state;
+      resolved.state=settleFate(fate.state,map,attackerCommander.id,{nowMs,recovery});
       resolved.result.attacker_commander_fate=fate.result;
     }
   }
@@ -621,8 +801,75 @@ function resolveOrder(state,map,constants,gameId,order,nowMs) {
   return resolved;
 }
 
+// An army storming a land where more than the owner's garrison stands (guests
+// at war with it, or the owner's allies): everyone there takes a side.
+function meleeArrival(game, map, constants, order, nowMs) {
+  const action = hydrateOnlineRoute(game.state, map, constants, { ...order.action, path: null }, ONLINE_TIMING);
+  if (isSeaWaypoint(map, action.to)) return null;
+  const house = action.house;
+  const master = game.state.territories?.[action.to]?.owner ?? null;
+  if (!master || master === house || hasPassage(game.state, master, house)) return null;
+  if (game.state.territories?.[action.from]?.owner !== house) return null;
+  if (guestWarriors(game.state, action.to, house) > 0) return null;
+  if (!joinersAgainst(game, action.to, house).length) return null;
+  assertOnlineLegalAction(action, enumerateOnlineMarches(game.state, map, constants, house, ONLINE_TIMING));
+
+  const g = structuredClone(game);
+  const origin = g.state.territories[action.from];
+  origin.warriors[house] = Number(origin.warriors[house] || 0) - Number(action.warriors);
+  if (origin.warriors[house] <= 0) delete origin.warriors[house];
+  const { result } = fightOnLand(g, map, constants, action.to, house, master, {
+    house, heads: Number(action.warriors), ranks: order.action.ranks, stars: order.action.stars || 0,
+    commanderId: order.commander_id || null, from: action.from, plan: planOf(order.action)
+  }, { nowMs });
+  return { game: g, state: g.state, result: { ...result, kind: 'MELEE', route_path: [...(action.path || [])], commander_id: order.commander_id || null } };
+}
+
+/**
+ * Marching men are still counted at the land they set out from until they
+ * arrive, so a host whose home falls while it is on the road falls with it.
+ * Before anything resolves, every pending march is matched against the men
+ * actually left at its origin: a march with nobody behind it is given up, and
+ * one with fewer men than ordered marches with those it has. Mutates `next`.
+ */
+function reconcilePendingOrders(next, map, nowMs) {
+  const taken = new Map();
+  for (const order of next.orders || []) {
+    if (order.status !== 'PENDING' || order.return_home) continue;
+    const { house, from } = order.action;
+    const key = `${house}@${from}`;
+    const here = onlinePositionWarriors(next.state, from, house);
+    const already = Number(taken.get(key) || 0);
+    const free = Math.max(0, here - already);
+    const asked = Number(order.action.warriors || 0);
+    if (free >= asked) { taken.set(key, already + asked); continue; }
+    const where = map.territories?.some(t => t.id === from) ? from : null;
+    if (free <= 0) {
+      order.status = 'FAILED';
+      order.resolved_at = new Date(nowMs).toISOString();
+      order.failure_reason = 'рати больше нет: она осталась в земле, откуда выступила';
+      next.state.journal.push({
+        kind: 'MARCH_LOST', order_id: order.id, house, from, to: order.action.to,
+        warriors: asked, territory: where, at: order.resolved_at
+      });
+      continue;
+    }
+    taken.set(key, already + free);
+    next.state.journal.push({
+      kind: 'MARCH_THINNED', order_id: order.id, house, from, to: order.action.to,
+      warriors: free, was: asked, territory: where, at: new Date(nowMs).toISOString()
+    });
+    order.action.warriors = free;
+    // Those who march on are the strongest of the host that was to go.
+    if (Array.isArray(order.action.ranks)) order.action.ranks = takeStrongest([...order.action.ranks], free);
+  }
+}
+
 export function processDueOrders(game, map, constants, nowMs = Date.now()) {
   const next = structuredClone(game);
+  reconcilePendingOrders(next, map, nowMs);
+  // Hosts caught on the road fight before anyone arrives anywhere.
+  processAmbushes(next, map, constants, nowMs);
   const due = next.orders
     .filter(order => order.status === 'PENDING' && Date.parse(order.due_at) <= nowMs)
     .sort((a, b) => {
@@ -633,26 +880,79 @@ export function processDueOrders(game, map, constants, nowMs = Date.now()) {
 
   for (const dueOrder of due) {
     const liveOrder = next.orders.find(order => order.id === dueOrder.id);
+    // An army told to stop part of the way makes camp on the road.
+    if (liveOrder.halt_at_progress_ms != null && !liveOrder.halted) {
+      liveOrder.halted = { progress_ms: Number(liveOrder.halt_at_progress_ms), at: new Date(nowMs).toISOString() };
+      delete liveOrder.halt_at_progress_ms;
+      liveOrder.due_at = FIELD_FOREVER;
+      continue;
+    }
+    // An army turned back home simply comes back: its warriors never left the books there.
+    if (liveOrder.return_home) {
+      liveOrder.status = 'RESOLVED';
+      liveOrder.resolved_at = new Date(nowMs).toISOString();
+      liveOrder.result = { kind: 'RETURNED_HOME' };
+      if (liveOrder.commander_id) next.state = settleCommander(next.state, liveOrder.commander_id, liveOrder.action.from);
+      next.state.journal.push({
+        kind: 'MARCH_RETURNED', order_id: liveOrder.id, house: liveOrder.action.house, territory: liveOrder.action.from,
+        warriors: liveOrder.action.warriors, at: liveOrder.resolved_at
+      });
+      continue;
+    }
     try {
       const journalStart = next.state.journal.length;
-      const resolved = resolveOrder(
+      const melee = meleeArrival(next, map, constants, liveOrder, nowMs);
+      if (melee) next.diplomacy = melee.game.diplomacy;
+      const resolved = melee || resolveOrder(
         next.state,
         map,
         constants,
         next.id,
         liveOrder,
-        nowMs
+        nowMs,
+        recoveryMs(next)
       );
       const errors = validateState(resolved.state, map, constants);
       if (errors.length) throw new Error(`post-order state invalid: ${errors.join('; ')}`);
 
+      settleMarchRanks(next.state, resolved.state, map, liveOrder, resolved.state.journal.slice(journalStart));
+      // A land taken loses some of its people.
+      const ownerBefore = next.state.territories?.[liveOrder.action.to]?.owner ?? null;
+      const ownerAfter = resolved.state.territories?.[liveOrder.action.to]?.owner ?? null;
+      if (ownerAfter && ownerAfter !== ownerBefore) onLandTaken({ ...next, state: resolved.state }, map, liveOrder.action.to, ownerBefore, nowMs);
+      // A free land somebody held for his own: he takes it ill.
+      if (ownerAfter && !ownerBefore) {
+        const before = { ...next, state: next.state };
+        next.state = resolved.state;
+        claimTaken({ ...next, state: next.state }, map, liveOrder.action.to, ownerAfter, { nowMs });
+        void before;
+      }
       next.state = resolved.state;
       liveOrder.status = 'RESOLVED';
       liveOrder.resolved_at = new Date(nowMs).toISOString();
       liveOrder.result = resolved.result;
       liveOrder.failure_reason = null;
 
-      for (let i = journalStart; i < next.state.journal.length; i += 1) {
+      // Taking up arms against a House's land is war (and treachery, if it was an ally).
+      const journalEnd = next.state.journal.length;
+      for (let i = journalStart; i < journalEnd; i += 1) {
+        const entry = next.state.journal[i];
+        if (entry.kind === 'BATTLE' || entry.kind === 'EMPTY_ENEMY_OCCUPATION') {
+          declareWarInPlace(next, entry.attacker, entry.defender, { nowMs, cause: 'ATTACK' });
+          // And it is remembered: a blow, and a land or a seat taken with it.
+          const seen = Object.keys(next.state.houses || {});
+          rememberDeed(next, { doer: entry.attacker, about: entry.defender, deed: 'ATTACKED', houses: seen });
+          if (entry.captured) {
+            rememberDeed(next, {
+              doer: entry.attacker, about: entry.defender,
+              deed: Object.values(map.capitals || {}).includes(entry.to) ? 'CAPITAL_TAKEN' : 'LAND_TAKEN',
+              houses: seen
+            });
+          }
+        }
+      }
+
+      for (let i = journalStart; i < journalEnd; i += 1) {
         Object.assign(next.state.journal[i], {
           order_id: liveOrder.id,
           started_at: liveOrder.created_at,
@@ -696,4 +996,164 @@ export function processDueOrders(game, map, constants, nowMs = Date.now()) {
 
 export function isSameAction(a, b) {
   return actionKey(a) === actionKey(b);
+}
+
+
+// ---------- armies in the field ----------
+// A march can be stopped on the road, set going again, or turned to another
+// goal from wherever the army stands. The army keeps its warriors on the books
+// of the land it left; only its way across the map changes.
+export const FIELD_FOREVER = '9999-12-31T00:00:00.000Z';
+
+export function travelSegments(order) {
+  return order.travel_segments?.length ? order.travel_segments : (order.action?.route_segments || []);
+}
+
+export function orderProgressMs(order, nowMs) {
+  if (order.halted) return Number(order.halted.progress_ms || 0);
+  return Math.max(0, Math.min(Number(order.duration_ms || 0), nowMs - Date.parse(order.created_at)));
+}
+
+// The stretch of road the army is on and how far along it.
+export function orderPlace(order, nowMs) {
+  const segments = travelSegments(order);
+  const total = segments.reduce((sum, s) => sum + Number(s.duration_ms || 0), 0) || 1;
+  // Old orders scale the planned stretches to their actual duration.
+  const factor = Number(order.duration_ms || total) / total;
+  let left = orderProgressMs(order, nowMs);
+  for (let index = 0; index < segments.length; index += 1) {
+    const length = Math.max(1, Number(segments[index].duration_ms || 0) * factor);
+    if (left <= length || index === segments.length - 1) {
+      return { index, segment: segments[index], local: Math.max(0, Math.min(1, left / length)), length };
+    }
+    left -= length;
+  }
+  return null;
+}
+
+function ownMarch(game, house, orderId) {
+  const order = (game.orders || []).find(item => item.id === orderId);
+  if (!order || order.status !== 'PENDING') throw new Error('такого похода нет');
+  if (order.action?.house !== house) throw new Error('это не твоё войско');
+  return order;
+}
+
+export function haltOrder(game, house, orderId, { nowMs = Date.now() } = {}) {
+  const next = structuredClone(game);
+  const order = ownMarch(next, house, orderId);
+  if (order.halted) throw new Error('войско уже стоит лагерем');
+  order.halted = { progress_ms: orderProgressMs(order, nowMs), at: new Date(nowMs).toISOString() };
+  delete order.halt_at_progress_ms;
+  order.due_at = FIELD_FOREVER;
+  next.updated_at = new Date(nowMs).toISOString();
+  return next;
+}
+
+export function resumeOrder(game, house, orderId, { nowMs = Date.now() } = {}) {
+  const next = structuredClone(game);
+  const order = ownMarch(next, house, orderId);
+  if (!order.halted) throw new Error('войско и так в пути');
+  const start = nowMs - Number(order.halted.progress_ms || 0);
+  order.created_at = new Date(start).toISOString();
+  order.due_at = new Date(start + Number(order.duration_ms || 0)).toISOString();
+  delete order.halted;
+  next.updated_at = new Date(nowMs).toISOString();
+  return next;
+}
+
+// Sets the army going to `target` from the very spot where it stands: on to the
+// next crossroads or back to the last one, whichever is quicker.
+export function redirectOrder(game, map, constants, house, orderId, target, { nowMs = Date.now(), halt_ratio = null } = {}) {
+  const next = structuredClone(game);
+  const order = ownMarch(next, house, orderId);
+  const place = orderPlace(order, nowMs);
+  if (!place) throw new Error('не понять, где стоит войско');
+  const origin = order.action.from;
+  const home = target === origin;
+  if (!home) {
+    const legal = enumerateOnlineMarches(next.state, map, constants, house, ONLINE_TIMING)
+      .some(action => action.from === origin && action.to === target && action.warriors === order.action.warriors);
+    if (!legal) throw new Error('туда этому войску дороги нет');
+  }
+  const scale = timeScale(next);
+  const seg = place.segment;
+  const length = place.length;
+  const choices = [
+    { pivot: seg.to, lead: { ...seg, duration_ms: Math.round(length) }, offset: place.local * length },
+    { pivot: seg.from, lead: { ...seg, from: seg.to, to: seg.from, duration_ms: Math.round(length) }, offset: (1 - place.local) * length }
+  ];
+  let best = null;
+  for (const choice of choices) {
+    let rest = [];
+    if (choice.pivot !== target) {
+      const route = findOnlineRoute(next.state, map, constants, house, choice.pivot, target, ONLINE_TIMING, { free: true });
+      if (!route) continue;
+      rest = route.segments.map(segment => ({ ...segment, duration_ms: Math.round(Number(segment.duration_ms || 0) * scale) }));
+    }
+    const cost = (length - choice.offset) + rest.reduce((sum, s) => sum + s.duration_ms, 0);
+    if (!best || cost < best.cost) best = { ...choice, rest, cost };
+  }
+  if (!best) throw new Error('туда этому войску дороги нет');
+
+  if (!home) {
+    const hydrated = hydrateOnlineRoute(next.state, map, constants, { ...order.action, to: target, path: null }, ONLINE_TIMING);
+    order.action = { ...scaleRoute(hydrated, scale), warriors: order.action.warriors, commander_id: order.action.commander_id };
+    order.return_home = false;
+  } else {
+    order.return_home = true;
+  }
+  order.travel_segments = [best.lead, ...best.rest];
+  const total = order.travel_segments.reduce((sum, s) => sum + Number(s.duration_ms || 0), 0);
+  const start = nowMs - best.offset;
+  order.created_at = new Date(start).toISOString();
+  order.duration_ms = total;
+  order.due_at = new Date(start + total).toISOString();
+  order.travel_to = target;
+  delete order.halted;
+  delete order.halt_at_progress_ms;
+  if (halt_ratio != null) setHaltPoint(order, halt_ratio, nowMs);
+  for (const army of Object.values(next.state.armies || {})) {
+    if (army.moving_order_id === order.id) army.to = target;
+  }
+  next.updated_at = new Date(nowMs).toISOString();
+  return next;
+}
+
+// Stop at a share of the whole way (0 < ratio < 1) and make camp on the road.
+export function setHaltPoint(order, ratio, nowMs = Date.now()) {
+  const share = Number(ratio);
+  if (!(share > 0 && share < 1)) return order;
+  const at = Math.round(Number(order.duration_ms || 0) * share);
+  const done = orderProgressMs(order, nowMs);
+  order.halt_at_progress_ms = Math.max(done, at);
+  order.due_at = new Date(Date.parse(order.created_at) + order.halt_at_progress_ms).toISOString();
+  return order;
+}
+
+// "Через точки": the army goes to its goal by the points the player picked,
+// leg by leg along the roads and sea lanes, and only then to the goal.
+export function setViaRoute(game, map, constants, order, via, nowMs = Date.now()) {
+  const house = order.action.house;
+  const chain = [order.action.from];
+  for (const id of (Array.isArray(via) ? via : []).map(String).slice(0, 8)) {
+    if (id && id !== chain[chain.length - 1] && id !== order.action.to) chain.push(id);
+  }
+  if (chain.length === 1) return order;
+  chain.push(order.action.to);
+  for (const id of chain.slice(1, -1)) {
+    if (!canPassThrough(game.state, map, house, id, null)) throw new Error('через чужую землю без права прохода не пройти');
+  }
+  const scale = timeScale(game);
+  const segments = [];
+  for (let i = 0; i < chain.length - 1; i += 1) {
+    const route = findOnlineRoute(game.state, map, constants, house, chain[i], chain[i + 1], ONLINE_TIMING, { free: true });
+    if (!route) throw new Error('по этим точкам дороги нет');
+    segments.push(...route.segments.map(segment => ({ ...segment, duration_ms: Math.round(Number(segment.duration_ms || 0) * scale) })));
+  }
+  const total = segments.reduce((sum, segment) => sum + segment.duration_ms, 0);
+  order.travel_segments = segments;
+  order.travel_via = chain.slice(1, -1);
+  order.duration_ms = total;
+  order.due_at = new Date(Date.parse(order.created_at) + total).toISOString();
+  return order;
 }

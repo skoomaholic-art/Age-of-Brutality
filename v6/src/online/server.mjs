@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -22,14 +23,32 @@ import {
   ONLINE_TIMING,
   enumerateOnlineMarches,
   listQueueableMarches,
-  processDueOrders
+  processDueOrders,
+  haltOrder,
+  resumeOrder,
+  redirectOrder,
+  setHaltPoint,
+  setViaRoute
 } from './orders.mjs';
 import { normalizeOnlineSeaState } from './sea-navigation.mjs';
+import { raiseLevy, startDrill, buildYard, buildPort, processRanks, ranksView } from './levy.mjs';
+import { buildBridge, burnBridge, seedCrossings, BRIDGE } from './bridges.mjs';
+import { processHordes, seedHeart, HEART } from './heart.mjs';
+import { devAction, devAllowed, devFastForward, isDevOwner } from './dev.mjs';
+import { NO_LIMIT, buildGrowth, hireUnits, militiaOffer, raiseMilitia, replenishUnits, seedPopulation, unitsView, upkeepOf, REPLENISH_STAR_SHARE } from './units.mjs';
+import { applyCaptureChoice, choiceOutcomes, seedOrder, ORDER } from './order.mjs';
+import { startRide, processRiders, ridersOf } from './riders.mjs';
+import { courtEffects } from './court.mjs';
 import {
   ONLINE_ECONOMY_TIMING,
+  cancelJob,
   economyView,
+  hurryJob,
   normalizeOnlineEconomy,
-  processEconomy
+  processEconomy,
+  queueGrowJob,
+  queueRebuildJob,
+  queueRetrainJob
 } from './economy.mjs';
 import {
   commandHouse,
@@ -37,7 +56,49 @@ import {
   normalizeCommand
 } from './commands.mjs';
 import { buildGameStats } from './stats.mjs';
-import { passRound, roundsView, startRounds } from './rounds.mjs';
+import {
+  DEFAULT_PACE,
+  GAME_PACES,
+  passRound,
+  roundsView,
+  startRounds
+} from './rounds.mjs';
+import { applyFog, knownHouses, recordExploration, recordLandHistory } from './fog.mjs';
+import { attritionView } from './attrition.mjs';
+import { processStorms } from './storms.mjs';
+import { TERRAIN } from './terrain.mjs';
+import { seasonNow, seasonTurnsOn } from './seasons.mjs';
+import { listInterceptions, orderIntercept } from './intercept.mjs';
+import { holdLine } from './stance.mjs';
+import { EMPTY_THRONE, isInterregnum, processSuccession } from './succession.mjs';
+import { seedLands } from './settlements.mjs';
+import { aspirationView, chooseAspiration } from './aspiration.mjs';
+import { generateMap, MAX_HOUSES, MIN_HOUSES, MAP_SEASON_KEYS, MAP_SHAPES, MAP_SIZE_KEYS, MAP_WARPS, pickMapShape, recommendedSize } from './mapgen.mjs';
+import { processEncounters } from './encounters.mjs';
+import { expelGuests } from './guests.mjs';
+import { processCampFights } from './melee.mjs';
+import { agentsView, hireSpy, orderSpy, processAgents, setWatch, wayfarersView } from './agents.mjs';
+import { captiveAction, captivesView, processCharacters, rescueStrandedCommanders } from './fate.mjs';
+import {
+  acceptAlliance,
+  answerAiOffers,
+  answerPassage,
+  requestPassage,
+  breakAlliance,
+  declareWar,
+  declineAlliance,
+  diplomacyView,
+  freeDaughter,
+  offerAlliance,
+  proposeDeal,
+  acceptDeal,
+  declineDeal,
+  answerAiDeals,
+  dealsView,
+  sendAid,
+  joinAllyWar,
+  warsOfAlly
+} from './diplomacy.mjs';
 import { processRounds } from './ai.mjs';
 import {
   emitCloudAudit,
@@ -78,12 +139,118 @@ import {
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const v6Root = path.resolve(here, '../..');
-const map = loadJson(path.join(v6Root, 'src/data/map.v6.json'));
-const constants = loadJson(path.join(v6Root, 'src/data/constants.v6.json'));
+const classicMap = loadJson(path.join(v6Root, 'src/data/map.v6.json'));
+const baseConstants = loadJson(path.join(v6Root, 'src/data/constants.v6.json'));
+
+// Every game plays on its own map with its own set of Houses: the classic
+// hand-made map with all six, or a generated one. `map` and `constants` below
+// stand for "the map and the Houses of the game this request is about"; the
+// scope is entered once the game is known (enterGameScope).
+const gameScope = new AsyncLocalStorage();
+
+function scopedView(key, fallback) {
+  const current = () => gameScope.getStore()?.[key] || fallback;
+  return new Proxy(fallback, {
+    get: (_, name) => current()[name],
+    has: (_, name) => name in current(),
+    ownKeys: () => Reflect.ownKeys(current()),
+    getOwnPropertyDescriptor: (_, name) => {
+      const found = Reflect.getOwnPropertyDescriptor(current(), name);
+      if (found) found.configurable = true;
+      return found;
+    }
+  });
+}
+
+const map = scopedView('map', classicMap);
+const constants = scopedView('constants', baseConstants);
+
+const scopeCache = new Map();
+
+// A generated map is not stored: it is rebuilt from its seed and its Houses.
+function scopeForSpec(spec) {
+  if (!spec || spec.kind !== 'generated') return {};
+  // Games made before shapes existed keep their wheel (no shape in the key).
+  const key = JSON.stringify(spec.shape ? [spec.seed, spec.houses, spec.shape, spec.warp, spec.sea || null, spec.heart || null, spec.size || null, spec.season || null] : [spec.seed, spec.houses]);
+  if (!scopeCache.has(key)) {
+    if (scopeCache.size > 200) scopeCache.delete(scopeCache.keys().next().value);
+    scopeCache.set(key, {
+      key,
+      map: generateMap(classicMap, baseConstants, { houses: spec.houses, seed: spec.seed, shape: spec.shape || 'wheel', warp: spec.warp || 'none', seaMesh: spec.sea === 'mesh' || spec.sea === 'mesh-free', homePorts: spec.sea !== 'mesh-free', size: spec.size || 'medium', season: spec.season || null }),
+      // A game of the Heart lets a House keep a bigger host.
+      // A game of the Heart has no limits on troops: gold and people are the limit.
+      constants: { ...baseConstants, houses: [...spec.houses], ...(spec.heart ? { house_warrior_cap: NO_LIMIT, territory_warrior_cap: NO_LIMIT, rounds: HEART.days } : {}) }
+    });
+  }
+  return scopeCache.get(key);
+}
+
+function enterGameScope(game) {
+  gameScope.enterWith(scopeForSpec(game?.map_spec));
+}
+
+// What the creator of a game asked for: the classic map, or a generated one
+// for a chosen number of Houses (the creator's House is always among them).
+function mapSpecFrom(body, { defaultHouses }) {
+  if (String(body.map || '').toLowerCase() === 'classic') return null;
+  const asked = Number(body.houses_count);
+  const count = Number.isInteger(asked)
+    ? Math.max(MIN_HOUSES, Math.min(MAX_HOUSES, asked))
+    : defaultHouses;
+  const own = String(body.house || '').trim();
+  const picked = new Set(baseConstants.houses.includes(own) ? [own] : []);
+  for (const house of baseConstants.houses) {
+    if (picked.size >= count) break;
+    picked.add(house);
+  }
+  const seed = Number.isInteger(Number(body.seed)) && Number(body.seed) > 0
+    ? Number(body.seed)
+    : crypto.randomInt(1, 2 ** 31 - 1);
+  const houses = baseConstants.houses.filter(house => picked.has(house));
+  // The lie of the land and its bend: chosen by the creator or left to chance.
+  const chance = pickMapShape(houses.length, seed);
+  const shape = MAP_SHAPES.includes(body.shape) ? body.shape : chance.shape;
+  const warp = MAP_WARPS.includes(body.warp) ? body.warp : chance.warp;
+  // How wide the world is laid out: the creator's choice, or what fits the table.
+  const size = MAP_SIZE_KEYS.includes(body.size) ? body.size : recommendedSize(houses.length);
+  // Summer or winter: the creator's choice, or left to chance.
+  const season = MAP_SEASON_KEYS.includes(body.season) ? body.season : null;
+  // New games: a net of sea points over all the water, and ports to be built.
+  return { kind: 'generated', seed, houses, shape, warp, size, season, sea: 'mesh-free', heart: true };
+}
+
+const mapArtCache = new Map();
+
+async function mapArtFor(scope, season = null) {
+  // Summer and winter are two pictures of the same world; each is painted once.
+  const key = season ? `${scope.key}|${season}` : scope.key;
+  if (!mapArtCache.has(key)) {
+    if (mapArtCache.size > 12) mapArtCache.delete(mapArtCache.keys().next().value);
+    mapArtCache.set(key, (async () => {
+      const { buildMapArt } = await import('./map-art.mjs');
+      const art = buildMapArt(season ? { ...scope.map, season } : scope.map, {
+        bounds: scope.map.art.bounds,
+        // Big maps are painted on a coarser grid so they are ready quickly.
+        step: Math.max(1.6, 1.6 * Math.sqrt(((scope.map.art.bounds.x1 - scope.map.art.bounds.x0) * (scope.map.art.bounds.y1 - scope.map.art.bounds.y0)) / 1.2e6)),
+        seed: scope.map.seed,
+        rivers: scope.map.art.rivers,
+        compass: null
+      });
+      return {
+        crossings: art.crossings || [],
+        terrain: zlib.gzipSync(art.terrain),
+        provinces: zlib.gzipSync(JSON.stringify({ bounds: art.bounds, provinces: art.provinces }))
+      };
+    })());
+  }
+  return mapArtCache.get(key);
+}
 const characterCatalog = loadJson(path.join(v6Root, 'src/data/characters.v6.json'));
 
 const defaultGameId = process.env.AOB_GAME_ID || 'prototype-1';
 const databaseId = process.env.AOB_FIRESTORE_DATABASE || '(default)';
+// Shortens the game day for local runs and tests; unset in production.
+const TEST_DAY_MS = Number(process.env.AOB_TEST_DAY_MS) > 0 ? Number(process.env.AOB_TEST_DAY_MS) : null;
 const assetGzipCache = new Map();
 const contexts = new Map();
 const contextLoads = new Map();
@@ -96,6 +263,30 @@ function createStore(gameId) {
   });
 }
 
+// A long game keeps only its recent past in memory: the chronicle is already
+// in the audit log, and marches long resolved are of no use to anyone. Every
+// command clones the whole game, so an unbounded history would slow it down.
+const HISTORY = Object.freeze({ journal: 200, orders: 200, jobs: 50 });
+function trimHistory(game) {
+  const journal = game.state?.journal;
+  if (Array.isArray(journal) && journal.length > HISTORY.journal) {
+    const drop = journal.length - HISTORY.journal;
+    journal.splice(0, drop);
+    game.audit_journal_cursor = Math.max(0, Number(game.audit_journal_cursor || 0) - drop);
+  }
+  if (Array.isArray(game.orders) && game.orders.length > HISTORY.orders * 2) {
+    const done = game.orders.filter(item => item.status !== 'PENDING');
+    const keep = new Set(done.slice(-HISTORY.orders).map(item => item.id));
+    game.orders = game.orders.filter(item => item.status === 'PENDING' || keep.has(item.id));
+  }
+  if (Array.isArray(game.jobs) && game.jobs.length > HISTORY.jobs * 2) {
+    const done = game.jobs.filter(item => item.status !== 'PENDING');
+    const keep = new Set(done.slice(-HISTORY.jobs).map(item => item.id));
+    game.jobs = game.jobs.filter(item => item.status === 'PENDING' || keep.has(item.id));
+  }
+  return game;
+}
+
 async function finalizeGame(ctx, next, nowMs = Date.now(), saveOptions = {}) {
   const audited = syncAuditFromJournal(next, map, {
     nowMs,
@@ -106,6 +297,7 @@ async function finalizeGame(ctx, next, nowMs = Date.now(), saveOptions = {}) {
   if (validationErrors.length) {
     throw new Error(`invalid game state: ${validationErrors.join('; ')}`);
   }
+  trimHistory(audited);
 
   const persisted = await ctx.store.save(audited, saveOptions);
   if (persisted?.duplicate) {
@@ -135,6 +327,7 @@ async function loadContext(gameId, {
   const pending = (async () => {
     const store = createStore(gameId);
     let game = await store.load();
+    enterGameScope(game);
 
     if (!game && createIfMissing) {
       game = createOnlineGame(map, constants, {
@@ -355,6 +548,9 @@ async function requirePlayer(ctx, req) {
 
   const player = await ctx.store.findPlayerByProfileId(profile.id);
   if (!player) throw new Error('profile is not a member of this game');
+  // Developer mode belongs to one account; everyone else never sees it.
+  player.profile_handle = profile.handle || null;
+  player.dev_owner = isDevOwner(profile);
   return player;
 }
 
@@ -373,12 +569,46 @@ async function requireHouse(ctx, req, house, { running = true } = {}) {
 }
 
 async function tickUnlocked(ctx) {
+  // A finished game has its results written once (also for games finished before).
+  if (ctx.game.lifecycle?.status === GAME_STATUS.FINISHED && !ctx.resultsRecorded) {
+    ctx.resultsRecorded = true;
+    const winners = ctx.game.rounds?.winners || buildVictoryStatus(ctx.game, map, constants)?.winners || [];
+    await recordRankedResults(ctx, winners, Date.now()).catch(error => console.warn('results', error?.message));
+  }
   if (ctx.game.lifecycle?.status !== GAME_STATUS.RUNNING) return;
 
   const nowMs = Date.now();
-  let processed = processDueOrders(ctx.game, map, constants, nowMs);
+  // Armies that met on the road fight before anyone arrives anywhere.
+  let processed = processEncounters(ctx.game, map, constants, nowMs);
+  processed = answerAiOffers(processed, processed.rounds?.ai_houses || [], { nowMs });
+  processed = answerAiDeals(processed, map, constants, processed.rounds?.ai_houses || [], { nowMs });
+  // Developer mode: the developer's buildings and hires finish at once.
+  processed = devFastForward(processed, nowMs);
+  processed = processDueOrders(processed, map, constants, nowMs);
   processed = processEconomy(processed, map, constants, nowMs);
+  processed = processRanks(processed, map, nowMs);
+  // The Horde woken by a false Heart marches on.
+  processed = processHordes(processed, map, constants, nowMs);
+  processed = processStorms(processed, map, nowMs);
   processed = processRounds(processed, map, constants, { nowMs });
+  processed = processCharacters(processed, map, constants, { nowMs });
+  // The throne of a fallen ruler passes to his heir.
+  {
+    const crowned = structuredClone(processed);
+    if (processSuccession(crowned, map, characterCatalog, { nowMs })) {
+      crowned.updated_at = new Date(nowMs).toISOString();
+      processed = crowned;
+    }
+  }
+  // A lord left alone on the open water is brought ashore (or drowns).
+  processed = rescueStrandedCommanders(processed, map, nowMs);
+  processed = processRiders(processed, map, constants, nowMs);
+  // Houses camped side by side that are now at war fight it out before anyone is led home.
+  processed = processCampFights(processed, map, constants, nowMs);
+  processed = expelGuests(processed, map, constants, nowMs);
+  processed = processAgents(processed, map, { nowMs });
+  processed = recordExploration(processed, map, constants.houses, nowMs);
+  processed = recordLandHistory(processed, nowMs);
   if (
     processed.updated_at !== ctx.game.updated_at ||
     processed.state.journal.length !== ctx.game.state.journal.length
@@ -387,7 +617,8 @@ async function tickUnlocked(ctx) {
     if (ctx.game.lifecycle?.status === GAME_STATUS.FINISHED) {
       // A joint victory is not ranked: there is no approved rating rule for ties.
       const winners = ctx.game.rounds?.winners || [];
-      if (winners.length === 1) await recordRankedResults(ctx, winners, nowMs);
+      ctx.resultsRecorded = true;
+      await recordRankedResults(ctx, winners, nowMs);
     }
   }
 }
@@ -395,23 +626,26 @@ async function tickUnlocked(ctx) {
 // Ranked results are recorded for multiplayer games only and are idempotent per game.
 async function recordRankedResults(ctx, winnerHouses, nowMs) {
   const rankedResults = [];
-  if (
-    !winnerHouses.length ||
-    ctx.game.lifecycle?.game_mode !== GAME_MODE.MULTIPLAYER
-  ) {
-    return rankedResults;
-  }
+  if (ctx.game.lifecycle?.access_mode !== ACCESS_MODE.PLAYER_BOUND) return rankedResults;
 
   const players = await ctx.store.listPlayers();
+  // Against people when two or more living rulers hold Houses; else against bots.
+  const people = players.filter(item => item.house && item.role !== PLAYER_ROLE.SPECTATOR).length;
   for (const participant of players) {
     if (!participant.profile_id || !participant.house) continue;
     const won = winnerHouses.includes(participant.house);
-    const result = await ctx.store.recordProfileRankedResult(
-      participant.profile_id,
-      ctx.game.id,
-      { won },
-      nowMs
-    );
+    let result;
+    try {
+      result = await ctx.store.recordProfileRankedResult(
+        participant.profile_id,
+        ctx.game.id,
+        { won, vsPeople: people >= 2, rated: winnerHouses.length === 1 },
+        nowMs
+      );
+    } catch (error) {
+      console.warn('result not recorded', participant.profile_id, error?.message);
+      continue;
+    }
     rankedResults.push({
       profile_id: participant.profile_id,
       house: participant.house,
@@ -425,6 +659,31 @@ async function recordRankedResults(ctx, winnerHouses, nowMs) {
 function redactGameForPlayer(game, player) {
   const clientGame = structuredClone(game);
   clientGame.lifecycle = publicLifecycle(clientGame.lifecycle);
+  // Wars and alliances are public; offers reach only the Houses concerned.
+  clientGame.diplomacy = {
+    ...diplomacyView(
+      game,
+      player?.house || null,
+      player?.house ? knownHouses(game, player.house, constants.houses) : null
+    ),
+    ...dealsView(game, map, player?.house || null)
+  };
+  // The levy, the drill and the yard of one's own House.
+  clientGame.ranks_view = player?.house ? ranksView(game, map, player.house) : null;
+  clientGame.riders = player?.house ? ridersOf(game, player.house) : [];
+  // Lands just taken waiting for the taker's choice, with what each choice gives.
+  clientGame.capture_choices = Object.fromEntries(Object.entries(game.state?.capture_choices || {})
+    .filter(([, pending]) => pending.house === player?.house)
+    .map(([id, pending]) => [id, { ...pending, outcomes: choiceOutcomes(game.state, id) }]));
+  // Troop kinds and their prices (games of the Heart).
+  clientGame.units_view = unitsView(game, map, player?.house);
+  clientGame.upkeep = player?.house && game.state?.population ? upkeepOf(game.state, map, player.house) : null;
+  // What a bridge over a river costs and how long it takes.
+  clientGame.bridge_cost = { gold: BRIDGE.gold, ms: Math.round((Number(game.rounds?.round_duration_ms) > 0 ? Number(game.rounds.round_duration_ms) : 24 * 3600_000) * BRIDGE.dayShare) };
+  // What each lord of one's own House gives at court and with an army.
+  clientGame.court_effects = Object.fromEntries(Object.values(game.state?.characters || {})
+    .filter(character => character.house === player?.house)
+    .map(character => [character.id, courtEffects(character)]));
 
   clientGame.orders = player?.role === PLAYER_ROLE.SPECTATOR
     ? (clientGame.orders || []).filter(item => item.status !== 'PENDING').slice(-30)
@@ -448,9 +707,46 @@ function redactGameForPlayer(game, player) {
     clientGame.audit_log = clientGame.audit_log.filter(item => {
       if (item.visibility !== 'PRIVATE') return true;
       return item.details?.house === ownHouse;
+    }).map(item => {
+      // The treasurer's account of a dawn: each House sees only its own.
+      if (item.type !== 'ROUND_STARTED' || !item.details?.ledgers) return item;
+      const ledger = item.details.ledgers[ownHouse] || null;
+      return { ...item, details: { ...item.details, ledgers: undefined, gains: undefined, ledger } };
     });
+
+    // Fog of war while a game played in days is running. A finished game is
+    // shown in full; spectators have no House and see everything.
+    // The developer may lift the fog in his own solo game.
+    const devReveal = game.dev?.reveal && game.dev.house === ownHouse;
+    if (
+      ownHouse &&
+      !devReveal &&
+      game.rounds?.mode === 'days' &&
+      game.lifecycle?.status === GAME_STATUS.RUNNING
+    ) {
+      applyFog(clientGame, map, ownHouse);
+    }
+    // Enemy columns this House could ride out and catch on the road.
+    clientGame.interceptions = ownHouse && game.lifecycle?.status === GAME_STATUS.RUNNING
+      ? listInterceptions(game, map, ownHouse, { nowMs: Date.now() })
+      : [];
+    // Only the author's own account is told that developer mode exists at all.
+    clientGame.dev = player?.dev_owner && game.lifecycle?.game_mode === 'SOLO'
+      ? { allowed: true, reveal: Boolean(game.dev?.reveal && game.dev.house === ownHouse), instant: Boolean(game.dev?.instant && game.dev.house === ownHouse) }
+      : null;
   }
 
+  // Which hosts are bleeding without a battle, read off what this player can
+  // actually see, so the skulls tell nothing the fog hides.
+  clientGame.attrition = attritionView(clientGame.state, map, seasonNow(game, map));
+  // Summer or winter right now, and the day the weather turns.
+  clientGame.season = { now: seasonNow(game, map), turns_on: seasonTurnsOn(game, map), born: map.season || null };
+  // What each kind of ground does to an army, so the charter can say it.
+  clientGame.terrain_kinds = TERRAIN;
+  // What this House set out to do, and how far along it is.
+  if (player?.house) clientGame.aspiration = aspirationView(game, map, player.house);
+  // The thresholds of order, so the charter counts a revolt exactly as the dawn does.
+  clientGame.order_rules = ORDER;
   return clientGame;
 }
 
@@ -468,6 +764,7 @@ async function publicState(ctx, player = null) {
     game: redactGameForPlayer(ctx.game, player),
     lobby,
     rounds: roundsView(ctx.game),
+    wayfarers: wayfarersView(ctx.game, map),
     victory: buildVictoryStatus(ctx.game, map, constants)
   };
 }
@@ -483,7 +780,20 @@ function publicBootstrap(ctx) {
       sea_waypoints: map.sea_waypoints || {},
       sea_lane_edges: map.sea_lane_edges || [],
       ports: map.ports,
-      capitals: map.capitals
+      buildable_ports: Boolean(map.buildable_ports),
+      starting_ports: map.starting_ports || [],
+      shape: map.shape || null,
+      warp: map.warp || null,
+      size: map.size || null,
+      capitals: map.capitals,
+      generated: Boolean(map.generated),
+      seed: map.seed || null,
+      centre: map.art?.centre || null,
+      // The lie of the land: rough ground, walls of rock, shallows, the season.
+      terrain: map.terrain || {},
+      ridges: map.ridges || [],
+      reefs: map.reefs || [],
+      season: map.season || null
     },
     houses: constants.houses,
     ruleset_version: constants.version,
@@ -495,7 +805,47 @@ function publicBootstrap(ctx) {
     timing: {
       ...ONLINE_TIMING,
       ...ONLINE_ECONOMY_TIMING
+    },
+    paces: Object.fromEntries(
+      Object.entries(GAME_PACES).map(([key, pace]) => [key, { ...pace, default: key === DEFAULT_PACE }])
+    )
+  };
+}
+
+// The family of a House as its tree shows it: the ruler, his children, the
+// daughters and where they are married, the brides taken in, the bastards.
+function familyView(game, house) {
+  const cards = (characterCatalog.characters || []).filter(card => card.house_pool === house);
+  const live = id => game.state.characters?.[id] || null;
+  const person = card => {
+    const now = live(card.id);
+    return {
+      id: card.id,
+      name: now?.name || card.name,
+      appearance: now?.appearance || null,
+      kind: card.type,
+      role: now?.role || null,
+      alive: now ? Boolean(now.alive) : true,
+      mode: now?.mode || 'RESERVE',
+      health: now?.health || 'HEALTHY',
+      held_by: now?.captivity?.held_by || null
+    };
+  };
+  const daughters = (game.dynasty?.[house]?.daughters || [{ id: `D-${house}-1`, name: freeDaughter(game, house)?.name, married_to: null }])
+    .map(daughter => ({ id: daughter.id, name: daughter.name, married_to: daughter.married_to || null }));
+  const brides = [];
+  for (const [from, family] of Object.entries(game.dynasty || {})) {
+    for (const daughter of family.daughters || []) {
+      if (daughter.married_to === house) brides.push({ id: daughter.id, name: daughter.name, from });
     }
+  }
+  return {
+    house,
+    ruler: cards.filter(card => card.type === 'Правитель').map(person)[0] || null,
+    children: cards.filter(card => card.type === 'Законный ребёнок').map(person),
+    bastards: cards.filter(card => card.type === 'Бастард').map(person),
+    daughters,
+    brides
   };
 }
 
@@ -520,6 +870,12 @@ function gamePath(pathname) {
   };
 }
 
+// The tempo chosen when the game is created; unknown values fall back to the default.
+function paceFrom(body) {
+  const pace = String(body?.pace || '').trim();
+  return GAME_PACES[pace] ? pace : DEFAULT_PACE;
+}
+
 function newGameId() {
   return `game-${crypto.randomUUID()}`;
 }
@@ -529,8 +885,10 @@ function errorStatus(error) {
   if (/authentication required|invalid player token|invalid profile session/i.test(message)) return 401;
   if (/admin role required|cannot control|spectator|ownership mismatch|friend request blocked|messages are blocked|game invites are blocked|messages are allowed only between friends|game invites are allowed only between friends|sender is not a member|spectating this private game requires friendship/i.test(message)) return 403;
   if (/game not found|player not found|profile not found|friend request not found|game invite not found|no snapshot found/i.test(message)) return 404;
-  if (/already|claimed|full|closed|not joinable|not in lobby|require all six|missing:|only a running game|only a finished game|unique invite|not a public room|not multiplayer|profile login already exists|linked to another profile|players are already friends|friend request already sent|friend is already in this game|game is not accepting invitations|game invite already sent|player is not in game|game is not watchable/i.test(message)) return 409;
+  if (/already|claimed|full|closed|not joinable|not in lobby|require all six|needs at least|game is closed|sandbox game cannot be left|missing:|only a running game|only a finished game|unique invite|not a public room|not multiplayer|profile login already exists|linked to another profile|players are already friends|friend request already sent|friend is already in this game|game is not accepting invitations|game invite already sent|player is not in game|game is not watchable/i.test(message)) return 409;
   if (/Idempotency-Key|unknown|invalid|must be|request body|not running|solo game requires|login must be|password must be|display name must be|invalid avatar|unknown winner house|message must be|conversation requires|profile id required|invite id required|cannot add this profile|cannot block this profile|invalid watch target|character does not belong|only adult|dead character|weakened character|character is not|army must be|capital army already|two army characters|Нельзя назначить|Мёртвый персонаж|Назначить командиром|Ослабленного персонажа|Персонаж сейчас недоступен|Персонаж должен находиться|У Дома уже два персонажа|Армия в столице|Нет свободной армии|Выберите армию Дома|no legal route|stored route is no longer legal|sea waypoint .* is occupied/i.test(message)) return 400;
+  // A refusal in the player's own tongue is his mistake, not the server's fault.
+  if (/^[А-ЯЁа-яё]/.test(message) || /нужно |не хватает|нельзя|только в своей|здесь не |осталось|под рукой|сколько |уже |нет /i.test(message)) return 400;
   if (/stale game state|could not be committed/i.test(message)) return 409;
   if (/no actions left this round|round already ended for this House|round time expired|rounds are not enabled|house does not take part/i.test(message)) return 409;
   return 500;
@@ -596,6 +954,8 @@ async function createMultiplayerGame(body, profile = null) {
   });
 
   const store = createStore(gameId);
+  const mapSpec = mapSpecFrom(body, { defaultHouses: 4 });
+  enterGameScope({ map_spec: mapSpec });
   let game = createOnlineGame(map, constants, {
     id: gameId,
     accessMode: ACCESS_MODE.PLAYER_BOUND,
@@ -608,6 +968,15 @@ async function createMultiplayerGame(body, profile = null) {
     characterCatalog
   });
   game = normalizeAudit(normalizeOnlineEconomy(game));
+  game.pace = paceFrom(body);
+  if (mapSpec) {
+    game.map_spec = mapSpec;
+    game.lifecycle.houses = [...mapSpec.houses];
+    // Where roads meet rivers: no crossing there until a bridge is built.
+    seedCrossings(game.state, map, (await mapArtFor(scopeForSpec(mapSpec))).crossings);
+    // The Heart of the Lands: the wild guard on free lands, the centre to hold.
+    if (mapSpec.heart) { seedHeart(game, map); seedPopulation(game, map); seedOrder(game, map); seedLands(game, map); }
+  }
 
   const ctx = {
     gameId,
@@ -638,7 +1007,9 @@ async function createMultiplayerGame(body, profile = null) {
 
 async function createSoloGame(body, profile = null) {
   const house = String(body.house || '').trim();
-  if (!constants.houses.includes(house)) throw new Error('solo game requires a valid house');
+  if (!baseConstants.houses.includes(house)) throw new Error('solo game requires a valid house');
+  const mapSpec = mapSpecFrom(body, { defaultHouses: 4 });
+  enterGameScope({ map_spec: mapSpec });
 
   const gameId = newGameId();
   const credentials = createPlayerCredentials();
@@ -663,6 +1034,15 @@ async function createSoloGame(body, profile = null) {
     characterCatalog
   });
   game = normalizeAudit(normalizeOnlineEconomy(game));
+  game.pace = paceFrom(body);
+  if (mapSpec) {
+    game.map_spec = mapSpec;
+    game.lifecycle.houses = [...mapSpec.houses];
+    // Where roads meet rivers: no crossing there until a bridge is built.
+    seedCrossings(game.state, map, (await mapArtFor(scopeForSpec(mapSpec))).crossings);
+    // The Heart of the Lands: the wild guard on free lands, the centre to hold.
+    if (mapSpec.heart) { seedHeart(game, map); seedPopulation(game, map); seedOrder(game, map); seedLands(game, map); }
+  }
 
   const ctx = {
     gameId,
@@ -691,8 +1071,14 @@ async function createSoloGame(body, profile = null) {
     ruleset_version: ctx.game.ruleset_version,
     game_mode: GAME_MODE.SOLO
   });
-  // The five Houses the player did not take are played by the House AI.
-  ctx.game = startRounds(ctx.game, map, constants, { nowMs });
+  // The game runs in real time over game days; the five Houses the player did
+  // not take are played by the House AI.
+  ctx.game = startRounds(ctx.game, map, constants, {
+    nowMs,
+    mode: 'days',
+    pace: ctx.game.pace,
+        dayMs: TEST_DAY_MS
+  });
   await finalizeGame(ctx, ctx.game, nowMs);
 
   return {
@@ -705,6 +1091,8 @@ async function createSoloGame(body, profile = null) {
 
 async function joinGameById(gameId, body, { publicOnly = false, profile = null } = {}) {
   const ctx = await loadContext(gameId);
+  // From here on `map` and `constants` are those of this game.
+  enterGameScope(ctx.game);
   const lifecycle = ctx.game.lifecycle || {};
 
   if (lifecycle.status !== GAME_STATUS.LOBBY) throw new Error('game is not joinable');
@@ -811,6 +1199,38 @@ async function handleGameApi(req, res, url, ctx, subpath) {
     return json(res, 200, payload);
   }
 
+  // Leaving is final: the player record is removed and cannot be restored.
+  if (req.method === 'POST' && subpath === '/leave') {
+    const player = await requirePlayer(ctx, req);
+    if (!player) throw new Error('the sandbox game cannot be left');
+
+    const payload = await serial(ctx, async () => {
+      const nowMs = Date.now();
+      const result = await ctx.store.leaveGame(player.id, { nowMs });
+      await refreshContext(ctx);
+
+      if (result.abandoned_house) {
+        ctx.game.state.journal.push({
+          kind: 'HOUSE_ABANDONED',
+          at: new Date(nowMs).toISOString(),
+          house: result.abandoned_house,
+          player_name: result.display_name
+        });
+        ctx.game.updated_at = new Date(nowMs).toISOString();
+        await finalizeGame(ctx, ctx.game, nowMs);
+      }
+
+      return {
+        left: true,
+        game_id: ctx.game.id,
+        abandoned_house: result.abandoned_house,
+        archived: result.archived,
+        lifecycle: publicLifecycle(ctx.game.lifecycle)
+      };
+    });
+    return json(res, 200, payload);
+  }
+
   if (req.method === 'POST' && subpath === '/start') {
     const player = await requireAdmin(ctx, req);
     const payload = await serial(ctx, async () => {
@@ -825,7 +1245,13 @@ async function handleGameApi(req, res, url, ctx, subpath) {
         game_id: ctx.game.id,
         ruleset_version: ctx.game.ruleset_version
       });
-      ctx.game = startRounds(ctx.game, map, constants, { nowMs });
+      // New games run in real time over game days; empty seats go to the House AI.
+      ctx.game = startRounds(ctx.game, map, constants, {
+        nowMs,
+        mode: 'days',
+        pace: ctx.game.pace,
+        dayMs: TEST_DAY_MS
+      });
       await finalizeGame(ctx, ctx.game, nowMs);
       return {
         game_id: ctx.game.id,
@@ -935,6 +1361,23 @@ async function handleGameApi(req, res, url, ctx, subpath) {
   if (req.method === 'GET' && subpath === '/storage') {
     await requirePlayer(ctx, req);
     return json(res, 200, ctx.store.status());
+  }
+
+  // The painted map of a generated game. It carries no secrets of play and an
+  // <image> cannot send a token, so it is served without one.
+  const artFile = subpath.match(/^\/map-art\/(terrain\.svg|provinces\.json)$/);
+  if (req.method === 'GET' && artFile) {
+    const scope = gameScope.getStore();
+    if (!scope?.key) return json(res, 404, { error: 'this game uses the classic map' });
+    const asked = url.searchParams.get('s');
+    const art = await mapArtFor(scope, asked === 'зима' || asked === 'лето' ? asked : null);
+    const svg = artFile[1] === 'terrain.svg';
+    res.writeHead(200, {
+      'content-type': svg ? 'image/svg+xml' : 'application/json; charset=utf-8',
+      'content-encoding': 'gzip',
+      'cache-control': 'public, max-age=86400, immutable'
+    });
+    return res.end(svg ? art.terrain : art.provinces);
   }
 
   if (req.method === 'GET' && subpath === '/bootstrap') {
@@ -1055,8 +1498,54 @@ async function handleGameApi(req, res, url, ctx, subpath) {
           }
         )
       })),
-      armies
+      armies,
+      captives: captivesView(ctx.game, map, house),
+      motto: ctx.game.house_profiles?.[house]?.motto || '',
+      agents: agentsView(ctx.game, house),
+      family: familyView(ctx.game, house)
     });
+  }
+
+  // The player names a member of his House and chooses how he looks.
+  if (req.method === 'POST' && subpath === '/characters/appearance') {
+    const body = await readBody(req);
+    const house = String(body.house || '').trim();
+    await requireHouse(ctx, req, house, { running: false });
+    const result = await serial(ctx, () => runGameCommand(ctx, req, {
+      kind: 'APPEARANCE',
+      status: 200,
+      house,
+      mutate: async game => {
+        const next = structuredClone(game);
+        const character = next.state.characters?.[String(body.character_id || '')];
+        if (!character || character.house !== house) throw new Error('это не человек твоего Дома');
+        const name = String(body.name || '').replace(/\s+/g, ' ').trim().slice(0, 24);
+        if (name.length < 2) throw new Error('имя должно быть не короче двух букв');
+        const look = {};
+        for (const key of ['sex', 'head', 'eyes', 'brows', 'nose', 'mouth', 'beard', 'hair', 'hat', 'clothes']) {
+          const value = Number(body.appearance?.[key]);
+          look[key] = Number.isInteger(value) && value >= 0 && value <= 40 ? value : 0;
+        }
+        character.name = name;
+        character.appearance = look;
+        // The House's motto is set together with its ruler at the start.
+        if (typeof body.motto === 'string') {
+          next.house_profiles ||= {};
+          const banner = {};
+          for (const key of ['preset', 'shape', 'field', 'c1', 'c2', 'emblem', 'ec']) {
+            const value = Number(body.banner?.[key]);
+            banner[key] = Number.isInteger(value) && value >= 0 && value <= 40 ? value : 0;
+          }
+          next.house_profiles[house] = {
+            motto: body.motto.replace(/\s+/g, ' ').trim().slice(0, 60),
+            banner: body.banner ? banner : next.house_profiles[house]?.banner || null
+          };
+        }
+        next.updated_at = new Date().toISOString();
+        return { game: next, response: { character } };
+      }
+    }));
+    return json(res, result.status, result.response);
   }
 
   if (req.method === 'POST' && subpath === '/characters/assign-army') {
@@ -1066,17 +1555,12 @@ async function handleGameApi(req, res, url, ctx, subpath) {
 
     const payload = await serial(ctx, async () => {
       await tickUnlocked(ctx);
-      ctx.game.state = assignCharacterToArmy(
-        ctx.game.state,
-        map,
-        constants,
-        {
-          house,
-          characterId: String(body.character_id || '').trim(),
-          position: String(body.position || '').trim() || null
-        }
-      );
-      ctx.game.updated_at = new Date().toISOString();
+      // The lord rides out from the capital; he takes command when he gets there.
+      ctx.game = startRide(ctx.game, map, constants, {
+        house,
+        characterId: String(body.character_id || '').trim(),
+        position: String(body.position || '').trim() || null
+      });
       await finalizeGame(ctx, ctx.game);
       return {
         house,
@@ -1152,6 +1636,49 @@ async function handleGameApi(req, res, url, ctx, subpath) {
     return json(res, result.status, result.response);
   }
 
+  if (req.method === 'POST' && subpath === '/diplomacy') {
+    const body = await readBody(req);
+    const house = String(body.house || '').trim();
+    const target = String(body.target || '').trim();
+    const action = String(body.action || '').trim().toUpperCase();
+    await requireHouse(ctx, req, house);
+
+    const result = await serial(ctx, () => runGameCommand(ctx, req, {
+      kind: 'DIPLOMACY',
+      status: 200,
+      house,
+      mutate: async game => {
+        const nowMs = Date.now();
+        let next;
+        if (action === 'OFFER_ALLIANCE') next = offerAlliance(game, constants, house, target, { nowMs, bride: body.bride === target ? target : house });
+        else if (action === 'ACCEPT_ALLIANCE') next = acceptAlliance(game, constants, house, target, { nowMs });
+        else if (action === 'DECLINE_ALLIANCE') next = declineAlliance(game, house, target, { nowMs });
+        else if (action === 'BREAK_ALLIANCE') next = breakAlliance(game, house, target, { nowMs });
+        else if (action === 'DECLARE_WAR') next = declareWar(game, constants, house, target, { nowMs });
+        else if (action === 'REQUEST_PASSAGE') next = requestPassage(game, constants, house, target, { nowMs });
+        else if (action === 'GRANT_PASSAGE') next = answerPassage(game, constants, house, target, true, { nowMs });
+        else if (action === 'DENY_PASSAGE' || action === 'REVOKE_PASSAGE') next = answerPassage(game, constants, house, target, false, { nowMs });
+        else if (action === 'PROPOSE_DEAL') next = proposeDeal(game, constants, map, house, target, { give: body.give, take: body.take }, { nowMs });
+        else if (action === 'ACCEPT_DEAL') next = acceptDeal(game, constants, map, house, target, { nowMs });
+        else if (action === 'DECLINE_DEAL') next = declineDeal(game, house, target, { nowMs });
+        else if (action === 'WITHDRAW_DEAL') next = declineDeal(game, house, target, { nowMs, withdraw: true });
+        else throw new Error(`unknown diplomacy action ${action}`);
+        const journalBefore = next.state.journal.length;
+        next = answerAiOffers(next, next.rounds?.ai_houses || [], { nowMs });
+        next = answerAiDeals(next, map, constants, next.rounds?.ai_houses || [], { nowMs });
+        // A House led by the AI answers a letter at once: the answer goes back with the reply.
+        const answer = action === 'PROPOSE_DEAL'
+          ? next.state.journal.slice(journalBefore).find(entry => ['DEAL_MADE', 'DEAL_REJECTED'].includes(entry.kind) && entry.from === house && entry.to === target) || null
+          : null;
+        // War among Houses camped on one land is fought at once; guests whose welcome has ended are led home.
+        next = processCampFights(next, map, constants, nowMs);
+        next = expelGuests(next, map, constants, nowMs);
+        return { game: next, response: { diplomacy: diplomacyView(next, house, knownHouses(next, house, constants.houses)), answer: answer ? { accepted: answer.kind === 'DEAL_MADE', reason: answer.reason || null, at: answer.at } : null } };
+      }
+    }));
+    return json(res, result.status, result.response);
+  }
+
   if (req.method === 'POST' && subpath === '/end-round') {
     const body = await readBody(req);
     const house = String(body.house || '').trim();
@@ -1169,21 +1696,145 @@ async function handleGameApi(req, res, url, ctx, subpath) {
     return json(res, result.status, result.response);
   }
 
-  if (req.method === 'POST' && subpath === '/recruit') {
+  if (req.method === 'POST' && subpath === '/agents') {
     const body = await readBody(req);
-    const command = normalizeCommand({
-      type: 'RECRUIT',
-      house: body.house,
-      territory: body.territory,
-      warriors: body.warriors
-    });
-    await requireHouse(ctx, req, command.house);
+    const house = String(body.house || '').trim();
+    await requireHouse(ctx, req, house);
+    const result = await serial(ctx, () => runGameCommand(ctx, req, {
+      kind: 'AGENT',
+      status: 200,
+      house,
+      mutate: async game => {
+        if (String(body.action).toUpperCase() === 'HIRE') {
+          const next = hireSpy(game, constants, house);
+          return { game: next, response: { agents: agentsView(next, house) } };
+        }
+        const sent = orderSpy(game, map, {
+          house,
+          agentId: body.agent_id,
+          from: String(body.from || ''),
+          target: String(body.target || '')
+        });
+        return { game: sent.game, response: { agent: sent.agent } };
+      }
+    }));
+    return json(res, result.status, result.response);
+  }
+
+  if (req.method === 'POST' && subpath === '/captives') {
+    const body = await readBody(req);
+    const house = String(body.house || '').trim();
+    await requireHouse(ctx, req, house);
 
     const result = await serial(ctx, () => runGameCommand(ctx, req, {
-      kind: command.type,
-      status: 201,
-      house: command.house,
-      mutate: async game => executeCommand(game, map, constants, command)
+      kind: 'CAPTIVE',
+      status: 200,
+      house,
+      mutate: async game => {
+        let next = captiveAction(game, map, constants, {
+          house,
+          characterId: String(body.character_id || '').trim(),
+          action: body.action,
+          amount: body.amount
+        });
+        // A House nobody plays answers at once.
+        next = processCharacters(next, map, constants);
+        return { game: next, response: { captives: captivesView(next, map, house) } };
+      }
+    }));
+    return json(res, result.status, result.response);
+  }
+
+  if (req.method === 'POST' && subpath === '/jobs/cancel') {
+    const body = await readBody(req);
+    const house = String(body.house || '').trim();
+    const jobId = String(body.job_id || '').trim();
+    await requireHouse(ctx, req, house);
+
+    const result = await serial(ctx, () => runGameCommand(ctx, req, {
+      kind: 'CANCEL_JOB',
+      status: 200,
+      house,
+      mutate: async game => {
+        const cancelled = cancelJob(game, { house, jobId });
+        return { game: cancelled.game, response: { job: cancelled.job } };
+      }
+    }));
+    return json(res, result.status, result.response);
+  }
+
+  if (req.method === 'POST' && ['/levy', '/drill', '/yard', '/port', '/bridge', '/hire', '/retrain', '/growth', '/capture-choice', '/bridge-burn', '/replenish', '/militia', '/intercept', '/grow', '/rebuild', '/hold', '/watch'].includes(subpath)) {
+    const body = await readBody(req);
+    const house = String(body.house || '').trim();
+    await requireHouse(ctx, req, house);
+    const result = await serial(ctx, () => runGameCommand(ctx, req, {
+      kind: subpath.slice(1).toUpperCase(),
+      status: 200,
+      house,
+      mutate: async game => {
+        const nowMs = Date.now();
+        const next = subpath === '/levy' ? raiseLevy(game, map, constants, house, body.counts, { nowMs })
+          : subpath === '/drill' ? startDrill(game, map, house, body.counts, { nowMs })
+            : subpath === '/port' ? buildPort(game, map, house, String(body.territory || ''), { nowMs })
+              : subpath === '/bridge' ? buildBridge(game, map, house, String(body.key || ''), { nowMs })
+              : subpath === '/bridge-burn' ? burnBridge(game, map, house, String(body.key || ''), { nowMs })
+                : subpath === '/hire' ? hireUnits(game, map, house, String(body.territory || ''), body.counts, { nowMs })
+                  : subpath === '/watch' ? setWatch(game, map, house, String(body.territory || ''), { nowMs })
+                  : subpath === '/hold' ? holdLine(game, map, house, String(body.territory || ''), { nowMs })
+                  : subpath === '/grow' ? queueGrowJob(game, map, house, String(body.territory || ''), { nowMs })
+                  : subpath === '/rebuild' ? queueRebuildJob(game, map, house, String(body.territory || ''), { nowMs })
+                  : subpath === '/intercept' ? orderIntercept(game, map, constants, house, { orderId: String(body.order_id || ''), from: String(body.from || ''), warriors: body.warriors, nowMs })
+                  : subpath === '/militia' ? raiseMilitia(game, map, house, String(body.territory || ''), body.count, { nowMs, day: Number(game.rounds?.number || 0) })
+                  : subpath === '/retrain' ? queueRetrainJob(game, map, house, { territory: String(body.territory || ''), from: body.from, to: body.to, count: body.count }, { nowMs }).game
+                  : subpath === '/replenish' ? replenishUnits(game, map, house, String(body.territory || ''), { nowMs })
+                    : subpath === '/growth' ? buildGrowth(game, map, house, String(body.territory || ''), { nowMs })
+                      : subpath === '/capture-choice' ? (() => {
+                        const chosen = structuredClone(game);
+                        applyCaptureChoice(chosen.state, String(body.territory || ''), house, String(body.choice || ''), { nowMs, map });
+                        chosen.updated_at = new Date(nowMs).toISOString();
+                        return chosen;
+                      })()
+              : buildYard(game, map, house, { nowMs });
+        return { game: next, response: { ok: true } };
+      }
+    }));
+    return json(res, result.status, result.response);
+  }
+
+  // Developer mode: the author's own account, in his own solo game.
+  if (req.method === 'POST' && subpath === '/dev') {
+    const body = await readBody(req);
+    const house = String(body.house || '').trim();
+    const player = await requireHouse(ctx, req, house);
+    if (!devAllowed(ctx.game, { handle: player?.profile_handle })) return json(res, 403, { error: 'режим разработчика недоступен' });
+    const result = await serial(ctx, () => runGameCommand(ctx, req, {
+      kind: 'DEV',
+      status: 200,
+      house,
+      mutate: async game => ({ game: devAction(game, house, String(body.action || '').toUpperCase(), body.value, { nowMs: Date.now() }), response: { ok: true } })
+    }));
+    return json(res, result.status, result.response);
+  }
+
+  if (req.method === 'POST' && subpath === '/orders/field') {
+    const body = await readBody(req);
+    const house = String(body.house || '').trim();
+    const orderId = String(body.order_id || '');
+    const action = String(body.action || '').toUpperCase();
+    await requireHouse(ctx, req, house);
+    const result = await serial(ctx, () => runGameCommand(ctx, req, {
+      kind: 'FIELD_ORDER',
+      status: 200,
+      house,
+      mutate: async game => {
+        const nowMs = Date.now();
+        let next;
+        if (action === 'HALT') next = haltOrder(game, house, orderId, { nowMs });
+        else if (action === 'RESUME') next = resumeOrder(game, house, orderId, { nowMs });
+        else if (action === 'REDIRECT') next = redirectOrder(game, map, constants, house, orderId, String(body.target || ''), { nowMs, halt_ratio: body.halt_ratio ?? null });
+        else throw new Error(`unknown field action ${action}`);
+        return { game: next, response: { ok: true } };
+      }
     }));
     return json(res, result.status, result.response);
   }
@@ -1206,6 +1857,54 @@ async function handleGameApi(req, res, url, ctx, subpath) {
     return json(res, result.status, result.response);
   }
 
+  // What the House sets out to do: named once, and never changed after.
+  // Standing by an ally: gold sent outright, or his war taken up as our own.
+  if (req.method === 'POST' && subpath === '/aid') {
+    const body = await readBody(req);
+    const house = String(body.house || '').trim();
+    await requireHouse(ctx, req, house);
+    const to = String(body.to || '').trim();
+    const result = await serial(ctx, () => runGameCommand(ctx, req, {
+      kind: 'AID',
+      status: 200,
+      house,
+      mutate: async game => ({
+        game: body.foe
+          ? joinAllyWar(game, house, to, String(body.foe), { nowMs: Date.now() })
+          : sendAid(game, house, to, body.gold, { nowMs: Date.now() }),
+        response: { ok: true }
+      })
+    }));
+    return json(res, result.status, result.response);
+  }
+
+  // Hurrying a work along, for gold.
+  if (req.method === 'POST' && subpath === '/job-hurry') {
+    const body = await readBody(req);
+    const house = String(body.house || '').trim();
+    await requireHouse(ctx, req, house);
+    const result = await serial(ctx, () => runGameCommand(ctx, req, {
+      kind: 'JOB_HURRY',
+      status: 200,
+      house,
+      mutate: async game => ({ game: hurryJob(game, { house, jobId: String(body.job_id || '') }, { nowMs: Date.now() }), response: { ok: true } })
+    }));
+    return json(res, result.status, result.response);
+  }
+
+  if (req.method === 'POST' && subpath === '/aspiration') {
+    const body = await readBody(req);
+    const house = String(body.house || '').trim();
+    await requireHouse(ctx, req, house);
+    const result = await serial(ctx, () => runGameCommand(ctx, req, {
+      kind: 'ASPIRATION',
+      status: 200,
+      house,
+      mutate: async game => ({ game: chooseAspiration(game, house, String(body.key || '').toUpperCase(), { nowMs: Date.now() }), response: { ok: true } })
+    }));
+    return json(res, result.status, result.response);
+  }
+
   if (req.method === 'POST' && subpath === '/orders') {
     const body = await readBody(req);
     const command = normalizeCommand({
@@ -1215,7 +1914,9 @@ async function handleGameApi(req, res, url, ctx, subpath) {
       from: body.from,
       to: body.to,
       warriors: body.warriors,
-      commander_id: body.commander_id || null
+      commander_id: body.commander_id || null,
+      ...(body.plan ? { plan: body.plan } : {}),
+      ...(Array.isArray(body.ranks) ? { ranks: body.ranks } : {})
     });
     await requireHouse(ctx, req, command.house);
 
@@ -1303,6 +2004,8 @@ async function tickDueGames({
   for (const gameId of ids) {
     try {
       const ctx = await loadContext(gameId);
+      // From here on `map` and `constants` are those of this game.
+      enterGameScope(ctx.game);
       await serial(ctx, () => tickUnlocked(ctx));
       results.push({
         game_id: gameId,
@@ -1342,6 +2045,11 @@ const server = http.createServer(async (req, res) => {
       return text(res, 200, html, 'text/html; charset=utf-8');
     }
 
+    if (req.method === 'GET' && (url.pathname === '/menu' || url.pathname === '/menu.html')) {
+      const html = fs.readFileSync(path.join(v6Root, 'online/menu.html'), 'utf8');
+      return text(res, 200, html, 'text/html; charset=utf-8');
+    }
+
     if (req.method === 'GET' && (url.pathname === '/lobby' || url.pathname === '/lobby.html')) {
       const html = fs.readFileSync(path.join(v6Root, 'online/lobby.html'), 'utf8');
       return text(res, 200, html, 'text/html; charset=utf-8');
@@ -1349,7 +2057,7 @@ const server = http.createServer(async (req, res) => {
 
     // Static assets: self-hosted fonts, the painted map and miniatures. Flat file
     // names in three known folders only, so no path can escape them.
-    const asset = url.pathname.match(/^\/assets\/(fonts|map|img)\/([a-z0-9][a-z0-9.-]*\.(woff2|svg|json|jpg|png))$/);
+    const asset = url.pathname.match(/^\/assets\/(fonts|map|img|lib|sfx|sfx\/voice)\/([a-z0-9][a-z0-9._-]*\.(woff2|svg|json|jpg|png|js|ogg))$/);
     if (req.method === 'GET' && asset) {
       const file = path.join(v6Root, 'online/assets', asset[1], asset[2]);
       if (!fs.existsSync(file)) return json(res, 404, { error: 'not found' });
@@ -1360,12 +2068,16 @@ const server = http.createServer(async (req, res) => {
         svg: 'image/svg+xml; charset=utf-8',
         json: 'application/json; charset=utf-8',
         jpg: 'image/jpeg',
-        png: 'image/png'
+        png: 'image/png',
+        js: 'text/javascript; charset=utf-8',
+        ogg: 'audio/ogg'
       }[asset[3]]);
       // Fonts never change; the map is rebuilt from the map data, so it is revalidated.
       res.setHeader(
         'cache-control',
-        fonts ? 'public, max-age=31536000, immutable' : asset[1] === 'img' ? 'public, max-age=86400' : 'public, max-age=300'
+        fonts || asset[1].startsWith('sfx')
+          ? 'public, max-age=31536000, immutable'
+          : asset[1] === 'img' ? 'public, max-age=86400' : 'public, max-age=300'
       );
       // The painted map is ~1.5 MB of SVG text; compressed once and kept in memory.
       const body = fs.readFileSync(file);
@@ -1392,6 +2104,15 @@ const server = http.createServer(async (req, res) => {
         limit: Number(body.limit || 100)
       });
       return json(res, 200, result);
+    }
+
+    // Which build is serving this page: the menu shows it under «Авторы», and
+    // it is the first thing to ask about when a page behaves oddly.
+    if (req.method === 'GET' && url.pathname === '/api/build') {
+      return json(res, 200, {
+        commit: process.env.AOB_BUILD_SHA || null,
+        revision: process.env.K_REVISION || null
+      });
     }
 
     if (req.method === 'POST' && url.pathname === '/api/profiles/register') {
@@ -1475,6 +2196,10 @@ const server = http.createServer(async (req, res) => {
       if (!gameId || !gameToken) throw new Error('game id and game token required');
 
       const ctx = await loadContext(gameId);
+
+      // From here on `map` and `constants` are those of this game.
+
+      enterGameScope(ctx.game);
       const player = await ctx.store.authenticateToken(gameToken);
       if (!player) throw new Error('invalid player token');
       await ctx.store.linkPlayerToProfile(player.id, profile.id);
@@ -1560,6 +2285,8 @@ const server = http.createServer(async (req, res) => {
 
       const gameId = presence.game.game_id;
       const ctx = await loadContext(gameId);
+      // From here on `map` and `constants` are those of this game.
+      enterGameScope(ctx.game);
       if (ctx.game.lifecycle?.status !== GAME_STATUS.RUNNING) {
         throw new Error('game is not watchable');
       }
@@ -1778,11 +2505,14 @@ const server = http.createServer(async (req, res) => {
     const scoped = gamePath(url.pathname);
     if (scoped && scoped.gameId !== 'join') {
       const ctx = await loadContext(scoped.gameId);
+      // From here on `map` and `constants` are those of this game.
+      enterGameScope(ctx.game);
       return await handleGameApi(req, res, url, ctx, scoped.subpath);
     }
 
     if (url.pathname.startsWith('/api/')) {
       const subpath = url.pathname.slice('/api'.length);
+      enterGameScope(defaultContext.game);
       return await handleGameApi(req, res, url, defaultContext, subpath);
     }
 
@@ -1795,9 +2525,34 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+// Games whose clock has run on while nobody was looking: every running game
+// that is due is loaded, so marches resolve and days turn whether or not a
+// player has the page open. Runs at start and then every half minute.
+async function wakeDueGames(nowMs = Date.now()) {
+  let ids = [];
+  try {
+    ids = await defaultContext.store.listDueGameIds(nowMs, 100);
+  } catch (error) {
+    console.error('listing due games failed', error);
+    return;
+  }
+  for (const gameId of ids) {
+    if (contexts.has(gameId)) continue;
+    try {
+      await loadContext(gameId);
+    } catch (error) {
+      console.error(`loading due game ${gameId} failed`, error);
+    }
+  }
+}
+
+wakeDueGames().catch(() => {});
+setInterval(() => { wakeDueGames().catch(() => {}); }, 30_000).unref();
+
 setInterval(() => {
   for (const ctx of contexts.values()) {
-    serial(ctx, () => tickUnlocked(ctx)).catch(error => {
+    // Each game ticks under its own map (generated maps differ from the classic one).
+    serial(ctx, () => { enterGameScope(ctx.game); return tickUnlocked(ctx); }).catch(error => {
       console.error(`background tick failed for ${ctx.gameId}`, error);
     });
   }

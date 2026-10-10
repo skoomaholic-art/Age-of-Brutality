@@ -1,0 +1,500 @@
+// Ranks of warriors, the levy and the drill.
+//
+// A warrior is not just a head: villages send peasants, towns send militia,
+// the capital sends men-at-arms, and the drill yard makes veterans and the
+// household guard out of them. In battle the ranks add up as strength (no
+// dice: numbers decide), and losses fall on the weakest first.
+//
+// The rules elsewhere still count heads (`warriors`). The ranks ride beside
+// them in `state.ranks[position][house] = [n0, n1, n2, n3, n4]` and are kept
+// in step after every change; marches carry their own ranks in
+// `order.action.ranks`.
+
+// The kinds of troops, weakest first. `gold` is the price of one man,
+// `upkeep` what he costs each dawn (games with people),
+// `where` the least settlement that can raise them (0 village, 1 town,
+// 2 capital), `guard` what each adds when holding a land (archers on walls).
+export const RANKS = Object.freeze([
+  { key: 'krestiane', name: 'Крестьяне', one: 'крестьянин', few: 'крестьянина', many: 'крестьян', power: 1, gold: 1, where: 0, guard: 0, upkeep: 0.25 },
+  { key: 'kopeyshiki', name: 'Копейщики', one: 'копейщик', few: 'копейщика', many: 'копейщиков', power: 2, gold: 2, where: 0, guard: 0, upkeep: 0.5 },
+  { key: 'luchniki', name: 'Лучники', one: 'лучник', few: 'лучника', many: 'лучников', power: 2, gold: 3, where: 0, guard: 1, upkeep: 0.5 },
+  { key: 'ratniki', name: 'Ратники', one: 'ратник', few: 'ратника', many: 'ратников', power: 3, gold: 5, where: 1, guard: 0, upkeep: 1 },
+  { key: 'serzhanty', name: 'Конные сержанты', one: 'конный сержант', few: 'конных сержанта', many: 'конных сержантов', power: 4, gold: 7, where: 1, guard: 0, upkeep: 1.5 },
+  { key: 'rytsari', name: 'Рыцари', one: 'рыцарь', few: 'рыцаря', many: 'рыцарей', power: 6, gold: 10, where: 2, guard: 0, upkeep: 2 }
+]);
+const N = RANKS.length;
+
+// The levy: who each kind of land sends, how many a day, at what price a head.
+export const LEVY = Object.freeze({
+  'Деревня': { rank: 0, perDay: 2, gold: 1 },
+  'Город': { rank: 1, perDay: 2, gold: 2 },
+  'Столица': { rank: 3, perDay: 1, gold: 3 }
+});
+export const LEVY_DAYS_STOCK = 3;
+
+// The drill: a rank higher for gold and time; the yard opens the top ranks.
+export const DRILL = Object.freeze({
+  maxWithoutYard: 3,        // up to ратники
+  maxWithYard: 5,           // up to рыцари
+  places: 6,                // warriors at drill at once
+  placesWithYard: 12,
+  dayShare: 1 / 3,          // a drill lasts a third of a game day
+  goldPerStep: [1, 1, 2, 2, 3] // to kind 1, 2, 3, 4, 5
+});
+export const YARD = Object.freeze({ gold: 8, dayShare: 1 / 2 });
+
+export const emptyComp = () => Array(N).fill(0);
+export const compSum = comp => (comp || []).reduce((a, b) => a + Number(b || 0), 0);
+export const compStrength = comp => (comp || []).reduce((a, n, i) => a + Number(n || 0) * RANKS[i].power, 0);
+
+// Games made before the six kinds stored five ranks: селяне, ополченцы,
+// ратники, латники, дружинники. They become крестьяне, копейщики, ратники,
+// конные сержанты and рыцари, so every old host keeps its strength.
+const OLD_TO_NEW = [0, 1, 3, 4, 5];
+function clean(comp) {
+  const out = emptyComp();
+  if (Array.isArray(comp) && comp.length === 5) {
+    comp.forEach((n, i) => { out[OLD_TO_NEW[i]] += Math.max(0, Math.floor(Number(n || 0))); });
+    return out;
+  }
+  for (let i = 0; i < N; i += 1) out[i] = Math.max(0, Math.floor(Number(comp?.[i] || 0)));
+  return out;
+}
+
+// Takes `k` heads off a composition, weakest first; returns what was taken.
+export function takeWeakest(comp, k) {
+  const taken = emptyComp();
+  let left = Math.max(0, k);
+  for (let i = 0; i < N && left > 0; i += 1) {
+    const n = Math.min(comp[i], left);
+    comp[i] -= n; taken[i] += n; left -= n;
+  }
+  return taken;
+}
+
+export function takeStrongest(comp, k) {
+  const taken = emptyComp();
+  let left = Math.max(0, k);
+  for (let i = N - 1; i >= 0 && left > 0; i -= 1) {
+    const n = Math.min(comp[i], left);
+    comp[i] -= n; taken[i] += n; left -= n;
+  }
+  return taken;
+}
+
+export function addComp(a, b) {
+  for (let i = 0; i < N; i += 1) a[i] += Number(b?.[i] || 0);
+  return a;
+}
+
+// Removes `b` from `a` where it can; returns what could not be removed.
+function subComp(a, b) {
+  const rest = emptyComp();
+  for (let i = 0; i < N; i += 1) {
+    const n = Math.min(a[i], Number(b?.[i] || 0));
+    a[i] -= n;
+    rest[i] = Number(b?.[i] || 0) - n;
+  }
+  return rest;
+}
+
+// "3 ратника, 2 селянина"
+export function describeComp(comp) {
+  const word = (rank, n) => {
+    const m10 = n % 10, m100 = n % 100;
+    if (m10 === 1 && m100 !== 11) return rank.one;
+    if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return rank.few;
+    return rank.many;
+  };
+  const parts = [];
+  for (let i = N - 1; i >= 0; i -= 1) if (comp?.[i] > 0) parts.push(`${comp[i]} ${word(RANKS[i], comp[i])}`);
+  return parts.join(', ');
+}
+
+// ---------- where warriors stand ----------
+
+export const guestKey = id => `g:${id}`;
+
+function headsAt(state, key, house) {
+  if (key.startsWith('g:')) return Number(state.guests?.[key.slice(2)]?.[house] || 0);
+  return Number(state.territories?.[key]?.warriors?.[house] ?? state.sea_nodes?.[key]?.warriors?.[house] ?? 0);
+}
+
+// Heads the ranks do not know yet (old games, hired by the old way) count as
+// villagers, so every older battle is decided as it was.
+function defaultRank() {
+  return 0;
+}
+
+function allPositions(state) {
+  const out = [];
+  for (const [id, t] of Object.entries(state.territories || {})) {
+    for (const [house, n] of Object.entries(t.warriors || {})) if (Number(n) > 0) out.push([id, house]);
+  }
+  for (const [id, node] of Object.entries(state.sea_nodes || {})) {
+    for (const [house, n] of Object.entries(node.warriors || {})) if (Number(n) > 0) out.push([id, house]);
+  }
+  for (const [id, byHouse] of Object.entries(state.guests || {})) {
+    for (const [house, n] of Object.entries(byHouse || {})) if (Number(n) > 0) out.push([guestKey(id), house]);
+  }
+  return out;
+}
+
+export function compAt(state, map, key, house) {
+  const stored = clean(state.ranks?.[key]?.[house]);
+  const heads = headsAt(state, key, house);
+  const sum = compSum(stored);
+  if (sum > heads) takeWeakest(stored, sum - heads);
+  else if (sum < heads) stored[defaultRank(map, key)] += heads - sum;
+  return stored;
+}
+
+function setComp(state, key, house, comp) {
+  state.ranks ||= {};
+  if (compSum(comp) <= 0) {
+    if (state.ranks[key]) {
+      delete state.ranks[key][house];
+      if (!Object.keys(state.ranks[key]).length) delete state.ranks[key];
+    }
+    return;
+  }
+  state.ranks[key] ||= {};
+  state.ranks[key][house] = clean(comp);
+}
+
+// Brings the ranks in step with the heads everywhere. Mutates `state`;
+// returns true when anything changed.
+export function reconcileRanks(state, map) {
+  const before = JSON.stringify(state.ranks || {});
+  const next = {};
+  for (const [key, house] of allPositions(state)) {
+    next[key] ||= {};
+    next[key][house] = compAt(state, map, key, house);
+  }
+  state.ranks = next;
+  // The full strength of each host (games with people): never below what stands there.
+  if (state.peak) {
+    for (const key of Object.keys(state.peak)) {
+      for (const house of Object.keys(state.peak[key])) {
+        if (!next[key]?.[house]) { delete state.peak[key][house]; continue; }
+        state.peak[key][house] = clean(state.peak[key][house]).map((n, i) => Math.max(n, next[key][house][i]));
+      }
+      if (!Object.keys(state.peak[key]).length) delete state.peak[key];
+    }
+  }
+  if (state.stars) {
+    for (const key of Object.keys(state.stars)) {
+      for (const house of Object.keys(state.stars[key])) if (!next[key]?.[house]) delete state.stars[key][house];
+      if (!Object.keys(state.stars[key]).length) delete state.stars[key];
+    }
+  }
+  return JSON.stringify(next) !== before;
+}
+
+// ---------- marches ----------
+
+// What a new march takes from its origin: the strongest free warriors, or a
+// composition asked for, as long as the origin has them free.
+export function ranksForMarch(game, map, action) {
+  const key = game.state.guests?.[action.from]?.[action.house] && !game.state.territories?.[action.from]?.warriors?.[action.house]
+    ? guestKey(action.from) : action.from;
+  const free = compAt(game.state, map, key, action.house);
+  for (const order of game.orders || []) {
+    if (order.status === 'PENDING' && order.action.house === action.house && order.action.from === action.from && order.action.ranks) {
+      subComp(free, order.action.ranks);
+    }
+  }
+  const asked = action.ranks ? clean(action.ranks) : null;
+  if (asked && compSum(asked) === Number(action.warriors)) {
+    const probe = [...free];
+    if (compSum(subComp(probe, asked)) === 0) return asked;
+  }
+  const comp = takeStrongest(free, Number(action.warriors));
+  // Warriors the ranks have not met yet stand at the bottom.
+  comp[0] += Math.max(0, Number(action.warriors) - compSum(comp));
+  return comp;
+}
+
+export function starsForMarch(game, action) {
+  const key = game.state.guests?.[action.from]?.[action.house] && !game.state.territories?.[action.from]?.warriors?.[action.house]
+    ? guestKey(action.from) : action.from;
+  return starsAt(game.state, key, action.house);
+}
+
+function orderComp(order) {
+  const comp = clean(order.action.ranks);
+  const heads = Number(order.action.warriors || 0);
+  const sum = compSum(comp);
+  if (sum > heads) takeWeakest(comp, sum - heads);
+  else if (sum < heads) comp[0] += heads - sum;
+  return comp;
+}
+
+// After a march has been settled: its ranks leave the origin and arrive with
+// the survivors. A won battle teaches: every third survivor rises a rank
+// (up to latniki; the household guard is made only on the drill yard).
+export function settleMarchRanks(before, after, map, order, journal) {
+  const house = order.action.house;
+  const comp = orderComp(order);
+  const fromKeys = [order.action.from, guestKey(order.action.from)];
+  const toKeys = [order.action.to, guestKey(order.action.to)];
+  after.ranks = structuredClone(before.ranks || {});
+  for (const key of fromKeys) {
+    const left = headsAt(before, key, house) - headsAt(after, key, house);
+    if (left <= 0) continue;
+    const stored = compAt(before, map, key, house);
+    const leaving = [...comp];
+    takeWeakest(leaving, compSum(leaving) - Math.min(left, compSum(leaving)));
+    const rest = subComp(stored, leaving);
+    takeWeakest(stored, compSum(rest));
+    setComp(after, key, house, stored);
+  }
+  for (const key of toKeys) {
+    const came = headsAt(after, key, house) - headsAt(before, key, house);
+    if (came <= 0) continue;
+    const arriving = [...comp];
+    takeWeakest(arriving, compSum(arriving) - Math.min(came, compSum(arriving)));
+    const stored = compAt(before, map, key, house);
+    const oldHeads = compSum(stored);
+    addComp(stored, arriving);
+    setComp(after, key, house, stored);
+    // A won fight gives the newcomers a star; the host then shares its experience.
+    // The host's full strength goes with it: the fallen of the march can be made good where it stands.
+    if (after.peak) {
+      addPeak(after, key, house, comp);
+      for (const fromKey of fromKeys) if (after.peak[fromKey]?.[house]) addPeak(after, fromKey, house, comp, -1);
+    }
+    const won = journal?.some(entry => (entry.kind === 'BATTLE' && entry.winner === house) || (entry.kind === 'WILD_BATTLE' && entry.success));
+    const marched = Math.min(MAX_STARS, Number(order.action.stars || 0) + (won ? 1 : 0));
+    setStars(after, key, house, mergeStars(starsAt(before, key, house), oldHeads, marched, compSum(arriving)));
+  }
+  // A defender who held his walls learns too.
+  for (const entry of journal || []) {
+    if (entry.kind !== 'BATTLE' || !entry.defender || entry.winner !== entry.defender) continue;
+    const key = order.action.to;
+    const heads = headsAt(after, key, entry.defender);
+    if (heads <= 0) continue;
+    const stored = compAt(before, map, key, entry.defender);
+    takeWeakest(stored, Math.max(0, compSum(stored) - heads));
+    setComp(after, key, entry.defender, stored);
+    setStars(after, key, entry.defender, starsAt(before, key, entry.defender) + 1);
+  }
+  reconcileRanks(after, map);
+}
+
+// Men leave one position for another outside a march (a retreat, guests sent
+// home, a garrison going home with a ceded land): the strongest go, with their
+// experience and their full strength; `losses` fall first on the weakest.
+// Call it before the heads themselves are moved. Returns the composition that went.
+export function moveRanks(state, map, fromKey, toKey, house, heads, { losses = 0 } = {}) {
+  const stored = compAt(state, map, fromKey, house);
+  if (losses > 0) takeWeakest(stored, Math.min(losses, compSum(stored)));
+  const going = takeStrongest(stored, Math.min(Math.max(0, heads), compSum(stored)));
+  going[0] += Math.max(0, heads - compSum(going));
+  setComp(state, fromKey, house, stored);
+  if (toKey && heads > 0) {
+    const there = compAt(state, map, toKey, house);
+    const oldHeads = compSum(there);
+    setComp(state, toKey, house, addComp(there, going));
+    setStars(state, toKey, house, mergeStars(starsAt(state, toKey, house), oldHeads, starsAt(state, fromKey, house), heads));
+    if (state.peak) {
+      addPeak(state, toKey, house, going);
+      if (state.peak[fromKey]?.[house]) addPeak(state, fromKey, house, going, -1);
+    }
+  }
+  return going;
+}
+
+// A host that stood nowhere (a marching army sent back, or camping as a
+// guest) joins the position `key`: `heads` survivors of `comp`, the losses
+// taken from the weakest. Call it before the heads themselves are added.
+export function arriveRanks(state, map, key, house, comp, heads, stars = 0) {
+  if (heads <= 0) return;
+  const coming = clean(comp);
+  const sum = compSum(coming);
+  if (sum > heads) takeWeakest(coming, sum - heads);
+  else if (sum < heads) coming[0] += heads - sum;
+  const there = compAt(state, map, key, house);
+  const oldHeads = compSum(there);
+  setComp(state, key, house, addComp(there, coming));
+  setStars(state, key, house, mergeStars(starsAt(state, key, house), oldHeads, stars, heads));
+  if (state.peak) addPeak(state, key, house, coming);
+}
+
+// Losses in a meeting on the road fall on the weakest of the marching army,
+// and leave the books of its origin too.
+export function loseOnRoad(state, map, order, losses) {
+  if (losses <= 0) return;
+  const comp = orderComp(order);
+  const lost = takeWeakest(comp, losses);
+  order.action.ranks = comp;
+  const key = state.territories?.[order.action.from] || state.sea_nodes?.[order.action.from] ? order.action.from : guestKey(order.action.from);
+  const stored = clean(state.ranks?.[key]?.[order.action.house]);
+  subComp(stored, lost);
+  setComp(state, key, order.action.house, stored);
+}
+
+// Strength of a host: its men by kind; archers add more when holding a land;
+// each star of experience adds a tenth.
+export function strengthOf(comp, heads, { defending = false, stars = 0 } = {}) {
+  const c = clean(comp);
+  const sum = compSum(c);
+  if (sum < heads) c[0] += heads - sum;
+  else if (sum > heads) takeWeakest(c, sum - heads);
+  let strength = compStrength(c);
+  if (defending) strength += c.reduce((a, n, i) => a + n * RANKS[i].guard, 0);
+  return Math.round(strength * (1 + 0.1 * Math.max(0, Math.min(3, Number(stars) || 0))));
+}
+
+// ---------- full strength: what a host had before its losses ----------
+// Kept only in games with people (state.peak exists). The gap between the
+// full strength and what stands is the wounded and fallen, to be made good.
+
+export function peakAt(state, map, key, house) {
+  const comp = compAt(state, map, key, house);
+  const peak = clean(state.peak?.[key]?.[house]);
+  return peak.map((n, i) => Math.max(n, comp[i]));
+}
+
+export function addPeak(state, key, house, comp, sign = 1) {
+  if (!state.peak) return;
+  state.peak[key] ||= {};
+  const now = clean(state.peak[key][house]);
+  const add = clean(comp);
+  state.peak[key][house] = now.map((n, i) => Math.max(0, n + sign * add[i]));
+}
+
+// ---------- experience: one to three stars for a host that has fought ----------
+
+export const MAX_STARS = 3;
+
+export function starsAt(state, key, house) {
+  return Math.max(0, Math.min(MAX_STARS, Number(state.stars?.[key]?.[house] || 0)));
+}
+
+export function setStars(state, key, house, stars) {
+  state.stars ||= {};
+  const value = Math.max(0, Math.min(MAX_STARS, Math.round(Number(stars) || 0)));
+  if (!value) {
+    if (state.stars[key]) { delete state.stars[key][house]; if (!Object.keys(state.stars[key]).length) delete state.stars[key]; }
+    return;
+  }
+  state.stars[key] ||= {};
+  state.stars[key][house] = value;
+}
+
+// Two hosts become one: the experience is shared by heads.
+export function mergeStars(oldStars, oldHeads, newStars, newHeads) {
+  const total = oldHeads + newHeads;
+  if (total <= 0) return 0;
+  return Math.round((oldStars * oldHeads + newStars * newHeads) / total);
+}
+
+// ---------- the levy ----------
+
+function dayMs(game) {
+  return Number(game.rounds?.round_duration_ms) > 0 ? Number(game.rounds.round_duration_ms) : 24 * 3600_000;
+}
+
+// How many men a land can send now: it gathers `perDay` a game day, up to three days' worth.
+export function levyStock(game, map, territoryId, nowMs) {
+  const type = map.territories.find(t => t.id === territoryId)?.type;
+  const rule = LEVY[type];
+  if (!rule) return 0;
+  const cap = rule.perDay * LEVY_DAYS_STOCK;
+  const mark = game.levy?.[territoryId];
+  if (!mark) return rule.perDay;
+  const grown = Number(mark.stock || 0) + (rule.perDay * Math.max(0, nowMs - Date.parse(mark.at))) / dayMs(game);
+  return Math.min(cap, grown);
+}
+
+export function levyView(game, map, house, nowMs) {
+  const kinds = ['Деревня', 'Город', 'Столица'].map(type => ({ rank: LEVY[type].rank, name: RANKS[LEVY[type].rank].name, gold: 0, available: 0, sources: 0 }));
+  for (const t of map.territories) {
+    const rule = LEVY[t.type];
+    if (!rule || game.state.territories[t.id]?.owner !== house) continue;
+    const kind = kinds.find(k => k.rank === rule.rank);
+    kind.gold = rule.gold;
+    kind.available += Math.floor(levyStock(game, map, t.id, nowMs));
+    kind.sources += 1;
+  }
+  return kinds;
+}
+
+// Draws `count` men of a rank from the lands that have the most to give.
+// Returns [{ territory, count }] and books the stock taken.
+export function drawLevy(game, map, house, rank, count, nowMs) {
+  const sources = map.territories
+    .filter(t => LEVY[t.type]?.rank === rank && game.state.territories[t.id]?.owner === house)
+    .map(t => ({ id: t.id, stock: levyStock(game, map, t.id, nowMs) }))
+    .sort((a, b) => b.stock - a.stock || (a.id < b.id ? -1 : 1));
+  const out = [];
+  let left = count;
+  for (const source of sources) {
+    if (left <= 0) break;
+    const n = Math.min(left, Math.floor(source.stock));
+    if (n <= 0) continue;
+    game.levy ||= {};
+    game.levy[source.id] = { stock: source.stock - n, at: new Date(nowMs).toISOString() };
+    out.push({ territory: source.id, count: n });
+    left -= n;
+  }
+  return out;
+}
+
+// ---------- the drill and the yard ----------
+
+export function yardOf(game, house) {
+  return game.yards?.[house] || null;
+}
+
+export function yardReady(game, house, nowMs) {
+  const yard = yardOf(game, house);
+  return Boolean(yard && Date.parse(yard.ready_at) <= nowMs);
+}
+
+export function drillingCount(game, house) {
+  return (game.drills?.[house] || []).reduce((sum, drill) => sum + compSum(drill.counts), 0);
+}
+
+// The capital garrison free for the drill: not on the march, not at the drill already.
+export function drillableComp(game, map, house) {
+  const capital = map.capitals?.[house];
+  if (!capital || game.state.territories[capital]?.owner !== house) return emptyComp();
+  const free = compAt(game.state, map, capital, house);
+  for (const order of game.orders || []) {
+    if (order.status === 'PENDING' && order.action.house === house && order.action.from === capital) subComp(free, orderComp(order));
+  }
+  for (const drill of game.drills?.[house] || []) subComp(free, drill.counts);
+  return free;
+}
+
+export function drillTime(game) {
+  return Math.round(dayMs(game) * DRILL.dayShare);
+}
+
+export function yardTime(game) {
+  return Math.round(dayMs(game) * YARD.dayShare);
+}
+
+export function nextRanksDueAt(game) {
+  const times = [];
+  for (const list of Object.values(game.drills || {})) for (const drill of list) times.push(drill.due_at);
+  for (const yard of Object.values(game.yards || {})) if (!yard.announced) times.push(yard.ready_at);
+  for (const land of Object.values(game.state?.territories || {})) if (land.port_ready_at) times.push(land.port_ready_at);
+  for (const bridge of Object.values(game.state?.bridges || {})) if (!bridge.built && bridge.ready_at) times.push(bridge.ready_at);
+  return times.sort()[0] || null;
+}
+
+// How many heads a damage takes: the weakest fall first, and each absorbs his power.
+export function headsLost(comp, heads, damage) {
+  const c = clean(comp);
+  const sum = compSum(c);
+  if (sum < heads) c[0] += heads - sum;
+  else if (sum > heads) takeWeakest(c, sum - heads);
+  let left = damage, lost = 0;
+  for (let i = 0; i < N && left > 0; i += 1) {
+    while (c[i] > 0 && left > 0) { c[i] -= 1; lost += 1; left -= RANKS[i].power; }
+  }
+  return lost;
+}

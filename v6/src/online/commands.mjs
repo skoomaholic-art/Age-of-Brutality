@@ -1,10 +1,10 @@
 import { queueTimedOrder } from './orders.mjs';
+import { planOf } from './plans.mjs';
 import { queueFortJob, queueRecruitJob } from './economy.mjs';
 import { assertRoundAction, spendRoundAction } from './rounds.mjs';
 
 export const COMMAND_TYPE = Object.freeze({
   MARCH: 'MARCH',
-  RECRUIT: 'RECRUIT',
   BUILD_FORT: 'BUILD_FORT'
 });
 
@@ -33,6 +33,14 @@ export function normalizeCommand(input) {
       warriors: positiveInt(input.warriors, 'warriors')
     };
 
+    // How the host is told to fight when it gets there.
+    if (input.plan) command.plan = planOf({ plan: input.plan });
+
+    // Which kinds go, when the House has named them: the host is split by hand.
+    if (Array.isArray(input.ranks)) {
+      command.ranks = input.ranks.map(n => Math.max(0, Math.floor(Number(n) || 0)));
+    }
+
     if (input.commander_id) {
       command.commander_id = requiredString(
         input.commander_id,
@@ -41,15 +49,6 @@ export function normalizeCommand(input) {
     }
 
     return command;
-  }
-
-  if (type === COMMAND_TYPE.RECRUIT) {
-    return {
-      type,
-      house: requiredString(input.house, 'house'),
-      territory: requiredString(input.territory, 'territory'),
-      warriors: positiveInt(input.warriors, 'warriors')
-    };
   }
 
   if (type === COMMAND_TYPE.BUILD_FORT) {
@@ -96,7 +95,9 @@ function queueCommand(game, map, constants, command, { nowMs }) {
         from: command.from,
         to: command.to,
         warriors: command.warriors,
-        commander_id: command.commander_id
+        commander_id: command.commander_id,
+        ...(command.plan ? { plan: command.plan } : {}),
+        ...(command.ranks ? { ranks: command.ranks } : {})
       },
       { nowMs }
     );
@@ -107,28 +108,6 @@ function queueCommand(game, map, constants, command, { nowMs }) {
       response: {
         command_type: command.type,
         order: queued.order
-      }
-    };
-  }
-
-  if (command.type === COMMAND_TYPE.RECRUIT) {
-    const queued = queueRecruitJob(
-      game,
-      constants,
-      {
-        house: command.house,
-        territory: command.territory,
-        warriors: command.warriors
-      },
-      { nowMs }
-    );
-
-    return {
-      game: queued.game,
-      command,
-      response: {
-        command_type: command.type,
-        job: queued.job
       }
     };
   }

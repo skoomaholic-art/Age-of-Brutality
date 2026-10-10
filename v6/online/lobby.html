@@ -8,6 +8,7 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/img/favicon-180.png">
 <style>
 /* Same illuminated-manuscript look as the game screen. */
+@font-face { font-family: 'Vek Gothic'; font-weight: 400; font-display: swap; src: url(/assets/fonts/vek-gothic.woff2) format('woff2'); }
 @font-face { font-family: Kurale; font-weight: 400; font-display: swap; src: url(/assets/fonts/kurale-cyrillic-400-normal.woff2) format('woff2'); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
 @font-face { font-family: Kurale; font-weight: 400; font-display: swap; src: url(/assets/fonts/kurale-latin-400-normal.woff2) format('woff2'); unicode-range: U+0000-00FF, U+2000-206F, U+2190-21FF, U+2212; }
 @font-face { font-family: Alegreya; font-weight: 400; font-display: swap; src: url(/assets/fonts/alegreya-cyrillic-400-normal.woff2) format('woff2'); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
@@ -63,7 +64,7 @@ main { width:min(980px,100%); margin:0 auto; padding:0 16px 60px; }
   border: 2px solid var(--ink); border-top: 0;
   box-shadow: 0 3px 0 var(--gold), 0 5px 0 var(--ink);
 }
-h1 { margin:0; font-family: Kurale, Alegreya, serif; font-weight:400; font-size:52px; line-height:1; text-shadow: 2px 2px 0 rgba(43,27,18,.55); }
+h1 { margin:0; font-family: 'Vek Gothic', Kurale, Alegreya, serif; font-weight:400; font-size:66px; line-height:1; text-shadow: 2px 2px 0 rgba(43,27,18,.55); }
 .lobby-sub { margin-top:6px; font-style:italic; font-size:18px; color:#f3d9c2; }
 .lobby-miniature {
   display:block; width:230px; height:auto; flex:0 0 auto;
@@ -75,7 +76,7 @@ h1 { margin:0; font-family: Kurale, Alegreya, serif; font-weight:400; font-size:
 .brand-mark { width:72px; height:72px; padding:10px; border-radius:50%; background:#14100d; border:2px solid var(--gold); box-shadow:0 0 0 2px var(--ink); flex:0 0 auto; }
 .maker { margin:36px auto 0; text-align:center; }
 .maker img { width:170px; height:auto; padding:14px 18px; background:#14100d; border:1.5px solid var(--ink); box-shadow:3px 3px 0 rgba(43,27,18,.3); }
-h2 { margin:0 0 12px; font-family: Kurale, Alegreya, serif; font-weight:400; font-size:27px; line-height:1.1; color: var(--vermilion-deep); }
+h2 { margin:0 0 12px; font-family: 'Vek Gothic', Kurale, Alegreya, serif; font-weight:400; font-size:34px; line-height:1.1; color: var(--vermilion-deep); }
 h3 { margin:0 0 8px; font-size:19px; font-weight:700; }
 .muted { color: var(--ink-soft); }
 .card {
@@ -83,6 +84,7 @@ h3 { margin:0 0 8px; font-size:19px; font-weight:700; }
   padding:22px; background: var(--vellum); box-shadow: 4px 4px 0 rgba(43,27,18,.22);
 }
 .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+.profile-split { display:grid; gap:4px; margin-top:10px; font-size:14px; }
 .create-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
 .section { margin-top:24px; }
 label { display:block; font-size:14px; font-style:italic; color: var(--ink-soft); margin:10px 0 4px; }
@@ -103,7 +105,7 @@ button.loading { opacity:.65; cursor:wait; }
 .account-grid { display:grid; grid-template-columns:1fr 1fr; gap:26px; }
 .account-head { display:flex; justify-content:space-between; gap:14px; align-items:center; }
 .account-head button { width:auto; min-width:120px; }
-.account-name { font-family: Kurale, Alegreya, serif; font-size:26px; line-height:1.1; }
+.account-name { font-family: 'Vek Gothic', Kurale, Alegreya, serif; font-size:32px; line-height:1.1; }
 .account-handle { margin-top:2px; color: var(--ink-soft); font-size:14px; font-style:italic; }
 .account-identity { display:flex; gap:14px; align-items:center; }
 .profile-avatar {
@@ -198,6 +200,7 @@ button.loading { opacity:.65; cursor:wait; }
 .game-meta { margin-top:3px; color: var(--ink-soft); font-size:15px; line-height:1.4; }
 .game-actions { display:flex; gap:8px; }
 .game-actions button { width:auto; min-width:130px; }
+.game-actions .leave-game { min-width:0; }
 .empty { border:1.5px dashed var(--rule); padding:18px; color: var(--ink-soft); font-style:italic; text-align:center; }
 .code { font-family: Kurale, Alegreya, serif; font-size:44px; letter-spacing:.14em; margin:4px 0 16px; color: var(--vermilion-deep); }
 .house-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
@@ -233,7 +236,7 @@ button.loading { opacity:.65; cursor:wait; }
   .room-topbar { flex-direction:column; }
   .room-topbar button { width:100%; }
   .lobby-miniature { display:none; }
-  h1 { font-size:40px; }
+  h1 { font-size:48px; }
 }
 </style>
 </head>
@@ -247,11 +250,12 @@ button.loading { opacity:.65; cursor:wait; }
         <div class="lobby-sub">Игровой центр</div>
       </div>
     </div>
+    <a class="to-menu" href="/menu.html">← В главное меню</a>
     <img class="lobby-miniature" src="/assets/img/brawl.jpg" alt="" width="560" height="366">
   </header>
 
   <section id="hub">
-    <section class="section card" id="account-card">
+    <section class="section card" id="account-card" data-view="profile social">
       <div id="account-signed-out">
         <h2>Профиль игрока</h2>
         <div class="muted" style="margin-bottom:12px">
@@ -299,6 +303,10 @@ button.loading { opacity:.65; cursor:wait; }
           <div class="profile-stat"><span>Поражения</span><b id="stat-losses">0</b></div>
           <div class="profile-stat"><span>В игре</span><b id="stat-time">0 мин</b></div>
         </div>
+        <div class="profile-split">
+          <div><b>С людьми</b> <span id="stat-people">0 игр</span><span class="muted"> · рейтинг MMR меняется только здесь</span></div>
+          <div><b>С ботами</b> <span id="stat-bots">0 игр</span></div>
+        </div>
 
         <div class="achievement-box">
           <h3>Достижения</h3>
@@ -309,7 +317,7 @@ button.loading { opacity:.65; cursor:wait; }
       </div>
     </section>
 
-    <section id="social-card" class="section card" style="display:none">
+    <section id="social-card" data-view="social" class="section card" style="display:none">
       <h2>Друзья и сообщения <span id="social-unread" class="unread-badge" style="display:none">0</span></h2>
       <div class="social-search">
         <input id="friend-search" maxlength="24" placeholder="Найти игрока по логину">
@@ -338,14 +346,14 @@ button.loading { opacity:.65; cursor:wait; }
       <div id="social-error" class="error"></div>
     </section>
 
-    <section class="section card">
-      <h2>Мои игры</h2>
+    <section class="section card" data-view="games">
+      <h2 id="games">Мои игры</h2>
       <div id="my-games" class="game-list">
         <div class="empty">Загружаем сохранённые партии...</div>
       </div>
     </section>
 
-    <section class="section card">
+    <section class="section card" data-view="rooms">
       <h2>Открытые комнаты</h2>
       <div class="muted" style="margin-bottom:12px">Публичные лобби, к которым можно подключиться без кода.</div>
       <div id="open-rooms" class="room-list">
@@ -353,19 +361,25 @@ button.loading { opacity:.65; cursor:wait; }
       </div>
     </section>
 
-    <section class="section">
-      <h2>Новая игра</h2>
+    <section class="section" data-view="new rooms">
+      <h2 id="new">Новая игра</h2>
       <div class="create-grid">
-        <div class="card">
+        <div class="card" data-card="solo">
           <h3>Соло</h3>
-          <div class="muted">Отдельная сохраняемая партия для одного игрока.</div>
+          <div class="muted">Ты против Домов под управлением ИИ на случайной карте.</div>
           <label>Дом</label>
           <select id="solo-house"></select>
+          <label>Темп партии</label>
+          <select id="solo-pace" class="pace-select">
+            <option value="fast">Быстрая: день за 10 минут, партия на час</option>
+            <option value="evening">Вечерняя: день за час</option>
+            <option value="classic">Долгая: день за сутки</option>
+          </select>
           <button id="create-solo" class="primary" style="margin-top:14px">Начать соло</button>
           <div id="solo-error" class="error"></div>
         </div>
 
-        <div class="card">
+        <div class="card" data-card="room">
           <h3>Открытая комната</h3>
           <div class="muted">Появится в общем списке комнат.</div>
           <label>Название комнаты</label>
@@ -374,11 +388,17 @@ button.loading { opacity:.65; cursor:wait; }
           <select id="public-house">
             <option value="">Выбрать позже</option>
           </select>
+          <label>Темп партии</label>
+          <select id="public-pace" class="pace-select">
+            <option value="fast">Быстрая: день за 10 минут, партия на час</option>
+            <option value="evening">Вечерняя: день за час</option>
+            <option value="classic">Долгая: день за сутки</option>
+          </select>
           <button id="create-public" class="primary" style="margin-top:14px">Создать открытую</button>
           <div id="public-error" class="error"></div>
         </div>
 
-        <div class="card">
+        <div class="card" data-card="room">
           <h3>Приватная комната</h3>
           <div class="muted">Вход только по коду приглашения.</div>
           <label>Название комнаты</label>
@@ -387,13 +407,19 @@ button.loading { opacity:.65; cursor:wait; }
           <select id="private-house">
             <option value="">Выбрать позже</option>
           </select>
+          <label>Темп партии</label>
+          <select id="private-pace" class="pace-select">
+            <option value="fast">Быстрая: день за 10 минут, партия на час</option>
+            <option value="evening">Вечерняя: день за час</option>
+            <option value="classic">Долгая: день за сутки</option>
+          </select>
           <button id="create-private" class="primary" style="margin-top:14px">Создать приватную</button>
           <div id="private-error" class="error"></div>
         </div>
       </div>
     </section>
 
-    <section class="section card">
+    <section class="section card" data-view="rooms">
       <h2>Войти по коду</h2>
       <div class="grid">
         <div>
@@ -528,6 +554,43 @@ button.loading { opacity:.65; cursor:wait; }
 </div>
 
 <script>
+// A visitor who comes without a game in hand is shown the title screen first.
+try {
+  const q = new URLSearchParams(location.search);
+  // Without a room in hand the lobby lives inside the main menu.
+  if (!q.get('game') && !q.get('view')) location.replace('/menu.html');
+  if (q.get('view')) document.documentElement.dataset.view = q.get('view');
+} catch {}
+const EMBED_VIEW = document.documentElement.dataset.view || '';
+// Inside the menu sheet, leaving for a room or a game takes the whole window.
+const goTo = url => { (EMBED_VIEW && window.top !== window ? window.top : window).location.href = url; };
+// The logo always leads back to the lobby.
+document.addEventListener('click', event => {
+  if (!event.target.closest('.brand, .brand-mark, header h1')) return;
+  try { sessionStorage.setItem('aob-menu-seen', '1'); } catch {}
+  goTo('/menu.html');
+});
+</script>
+<style>.brand, .brand-mark, header h1 { cursor: pointer; }
+.lobby-head { position: relative; }
+.to-menu { position: absolute; left: 18px; top: 10px; z-index: 2; padding: 5px 12px; border: 1.5px solid #2b1b12; background: #f2e6c8; color: #2b1b12; font: 15px Kurale, Alegreya, serif; text-decoration: none; box-shadow: 2px 2px 0 rgba(43,27,18,.35); }
+.to-menu:hover { background: #fff6dd; }
+.lobby-head .brand { margin-top: 26px; }
+html[data-view] body { background: transparent; }
+html[data-view] .lobby-head, html[data-view] footer.maker, html[data-view] #hub > section > h2:first-child { display: none; }
+html[data-view] main { padding: 4px 16px 24px; }
+html[data-view] #hub > section { display: none !important; }
+html[data-view="profile"] #hub > [data-view~="profile"], html[data-view="social"] #hub > [data-view~="social"],
+html[data-view="games"] #hub > [data-view~="games"], html[data-view="rooms"] #hub > [data-view~="rooms"],
+html[data-view="new"] #hub > [data-view~="new"] { display: block !important; }
+html[data-view="social"] #social-card[style*="none"] { display: none !important; }
+/* Solo in "Новая игра"; open and private rooms in "Сетевая игра". */
+html[data-view="new"] [data-card="room"], html[data-view="rooms"] [data-card="solo"] { display: none !important; }
+html[data-view] .create-grid { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)) !important; }
+/* Without a profile nothing can be started: the sign-in card comes first in every section. */
+html[data-view]:not(.signed-in) #hub > #account-card { display: block !important; }
+html[data-view]:not(.signed-in) #hub > #account-card::after { content: 'Сначала войдите или создайте профиль — без него игру не начать.'; display: block; margin-top: 10px; color: #9c2c1e; font-weight: 700; }</style>
+<script>
 const houses = ['Варкайр','Сайрвен','Ортайн','Эркай','Тасвар','Айрель'];
 const profileAvatars = [
   ['sigil-01','✦'],['sigil-02','♜'],['sigil-03','◆'],['sigil-04','▲'],
@@ -636,6 +699,7 @@ async function saveAvatarSelection() {
 function renderAccount() {
   const signedIn = Boolean(activeProfile && profileToken);
   $('account-signed-out').style.display = signedIn ? 'none' : 'block';
+  document.documentElement.classList.toggle('signed-in', signedIn);
   $('account-signed-in').style.display = signedIn ? 'block' : 'none';
   $('social-card').style.display = signedIn ? 'block' : 'none';
 
@@ -654,6 +718,9 @@ function renderAccount() {
     $('stat-wins').textContent = Number(stats.wins || 0);
     $('stat-losses').textContent = Number(stats.losses || 0);
     $('stat-time').textContent = formatPlayTime(stats.play_seconds || 0);
+    const split = part => Number(part?.games || 0) + ' игр · ' + Number(part?.wins || 0) + ' побед · ' + Number(part?.losses || 0) + ' поражений';
+    $('stat-people').textContent = split(stats.vs_people);
+    $('stat-bots').textContent = split(stats.vs_bots);
 
     const achievements = Array.isArray(stats.achievements) ? stats.achievements : [];
     $('achievement-list').innerHTML = achievements.length
@@ -912,12 +979,51 @@ async function loadMyGames() {
           </div>
         </div>
         <div class="game-actions">
-          <button class="primary" onclick="location.href='${target}'">${action}</button>
+          <button class="primary" onclick="goTo('${target}')">${action}</button>
+          <button class="leave-game" data-leave="${escapeHtml(item.game_id)}">Удалить</button>
         </div>
       </div>`;
   }).join('');
 
+  $('my-games').querySelectorAll('[data-leave]').forEach(button => {
+    button.onclick = () => leaveGame(
+      games.find(item => item.game_id === button.dataset.leave),
+      button
+    );
+  });
+
   return games;
+}
+
+// Leaving is final. In a running game with other players the House stays on
+// the map as an abandoned realm.
+async function leaveGame(item, button) {
+  if (!item) return;
+  const life = item.lifecycle || {};
+  const name = life.room_name || 'Игра';
+  const others = Number(life.player_count || 0) > 1;
+  const question = life.game_mode === 'SOLO' || !others
+    ? 'Удалить игру «' + name + '» навсегда? Восстановить её будет нельзя.'
+    : life.status === 'RUNNING'
+      ? 'Выйти из игры «' + name + '» навсегда?\n\n' +
+        'Твой Дом останется на карте брошенным государством, остальные игроки получат известие. ' +
+        'Вернуться в эту партию будет нельзя.'
+      : 'Выйти из комнаты «' + name + '»? Твой Дом освободится.';
+  if (!confirm(question)) return;
+
+  try {
+    await withBusy(button, 'Удаляем...', async () => {
+      await request(
+        '/api/games/' + encodeURIComponent(item.game_id) + '/leave',
+        { method:'POST' },
+        item.token || profileToken || localStorage.getItem('aob-token-' + item.game_id)
+      );
+      localStorage.removeItem('aob-token-' + item.game_id);
+    });
+  } catch (error) {
+    alert(friendlyError(error));
+  }
+  await loadHub();
 }
 
 function presenceLabel(presence) {
@@ -1099,7 +1205,7 @@ function bindSocialActions() {
         accept:true
       });
       if (data.game_id) {
-        location.href = '/lobby.html?game=' + encodeURIComponent(data.game_id);
+        goTo('/lobby.html?game=' + encodeURIComponent(data.game_id));
       } else {
         await loadSocial();
       }
@@ -1245,7 +1351,7 @@ function bindViewedProfileActions() {
           profile_id:watchButton.dataset.profileWatch
         });
         if (data.game_id) {
-          location.href = '/?game=' + encodeURIComponent(data.game_id);
+          goTo('/?game=' + encodeURIComponent(data.game_id));
         }
       } catch (error) {
         $('player-profile-error').textContent = friendlyError(error);
@@ -1412,7 +1518,7 @@ async function loadOpenRooms() {
         const id = button.dataset.publicGame;
         const existingToken = localStorage.getItem('aob-token-' + id);
         if (knownGameIds.has(id) && (profileToken || existingToken)) {
-          location.href = '/lobby.html?game=' + encodeURIComponent(id);
+          goTo('/lobby.html?game=' + encodeURIComponent(id));
           return;
         }
         if (!profileToken) {
@@ -1431,7 +1537,7 @@ async function loadOpenRooms() {
               profileAuth()
             );
             saveAccess(joined);
-            location.href = '/lobby.html?game=' + encodeURIComponent(joined.game_id);
+            goTo('/lobby.html?game=' + encodeURIComponent(joined.game_id));
           });
         } catch (error) {
           alert(friendlyError(error));
@@ -1455,7 +1561,95 @@ async function loadHub() {
   }
 }
 
-async function createMultiplayer(visibility, button, errorId, roomInputId, houseSelectId) {
+// Every "new game" card gets a map choice next to its tempo: a generated map
+// sized for the number of Houses, or the classic hand-made one (for tests).
+for (const prefix of ['solo', 'public', 'private']) {
+  const pace = $(prefix + '-pace');
+  if (!pace) continue;
+  const label = document.createElement('label');
+  label.textContent = 'Сколько Домов за столом';
+  const select = document.createElement('select');
+  select.id = prefix + '-map';
+  select.className = pace.className;
+  const houseWord = count => (count < 5 ? ' Дома' : ' Домов');
+  select.innerHTML = [2, 3, 4, 5, 6].map(count =>
+    '<option value="' + count + '"' + (count === 4 ? ' selected' : '') + '>' + count + houseWord(count) + '</option>').join('') +
+    '<option value="classic">Классическая карта, 6 Домов · для тестов</option>';
+  // The size of the world: any of them, with the one that fits the table marked.
+  const sizeLabel = document.createElement('label');
+  sizeLabel.textContent = 'Размер карты';
+  const size = document.createElement('select');
+  size.id = prefix + '-size';
+  size.className = pace.className;
+  const SIZES = [['small', 'Малая'], ['medium', 'Средняя'], ['large', 'Большая'], ['huge', 'Огромная']];
+  const fits = count => (count <= 2 ? 'small' : count <= 4 ? 'medium' : count === 5 ? 'large' : 'huge');
+  const SIZE_NOTE = {
+    small: 'Дома рядом, дорог много, война начинается сразу',
+    medium: 'Ровный простор: есть куда расти и за что драться',
+    large: 'Дальние походы, больше дикой середины',
+    huge: 'Огромный мир: долгие дороги, много вольных земель'
+  };
+  const sizeNote = document.createElement('div');
+  sizeNote.className = 'tiny';
+  // Until the creator picks a size themselves, it follows the recommendation.
+  let sizeChosen = false;
+  const syncSizes = () => {
+    const count = Number(select.value);
+    const best = Number.isInteger(count) ? fits(count) : null;
+    const keep = size.value;
+    size.innerHTML = SIZES.map(([value, name]) =>
+      '<option value="' + value + '">' + name + (value === best ? ' · рекомендуется' : '') + '</option>').join('');
+    size.value = sizeChosen && SIZES.some(([value]) => value === keep) ? keep : (best || 'medium');
+    size.disabled = select.value === 'classic';
+    season.disabled = select.value === 'classic';
+    sizeNote.textContent = size.disabled ? 'У классической карты свой размер.' : (SIZE_NOTE[size.value] || '');
+  };
+  size.addEventListener('change', () => { sizeChosen = true; syncSizes(); });
+  // Summer or winter: a winter world is white, its north deep in snow.
+  const seasonLabel = document.createElement('label');
+  seasonLabel.textContent = 'Время года';
+  const season = document.createElement('select');
+  season.id = prefix + '-season';
+  season.className = pace.className;
+  season.innerHTML = [['', 'Как выпадет'], ['summer', 'Лето'], ['winter', 'Зима: снега на севере, лёд у берегов']]
+    .map(([value, name]) => '<option value="' + value + '">' + name + '</option>').join('');
+
+  // The lie of the land: chosen or left to chance.
+  const shapeLabel = document.createElement('label');
+  shapeLabel.textContent = 'Ландшафт';
+  const shape = document.createElement('select');
+  shape.id = prefix + '-shape';
+  shape.className = pace.className;
+  shape.innerHTML = [['', 'Случайный'], ['mainland', 'Сплошная суша'], ['wheel', 'Материк'], ['peninsulas', 'Полуострова'], ['archipelago', 'Архипелаг'], ['inland', 'Внутреннее море'], ['atoll', 'Кольцо островов'], ['lake-isle', 'Остров в озере'], ['fjords', 'Фьорды'], ['shattered', 'Россыпь островов']]
+    .map(([value, name]) => '<option value="' + value + '">' + name + '</option>').join('');
+  // Shapes that need three Houses are not offered for two: they would come out as their kin.
+  const forTwo = { peninsulas: 'wheel', fjords: 'wheel', shattered: 'archipelago' };
+  const syncShapes = () => {
+    shape.disabled = select.value === 'classic';
+    for (const option of shape.options) {
+      const hidden = select.value === '2' && Boolean(forTwo[option.value]);
+      option.hidden = hidden;
+      option.disabled = hidden;
+    }
+    if (shape.selectedOptions[0]?.disabled) shape.value = forTwo[shape.value] || '';
+  };
+  select.addEventListener('change', () => { syncShapes(); syncSizes(); });
+  syncShapes();
+  syncSizes();
+  pace.after(label, select, sizeLabel, size, sizeNote, shapeLabel, shape, seasonLabel, season);
+}
+
+function mapChoice(prefix) {
+  const value = $(prefix + '-map')?.value || '4';
+  const shape = $(prefix + '-shape')?.value || '';
+  const size = $(prefix + '-size')?.value || '';
+  const season = $(prefix + '-season')?.value || '';
+  return value === 'classic'
+    ? { map: 'classic' }
+    : { map: 'random', houses_count: Number(value), ...(shape ? { shape } : {}), ...(size ? { size } : {}), ...(season ? { season } : {}) };
+}
+
+async function createMultiplayer(visibility, button, errorId, roomInputId, houseSelectId, paceSelectId) {
   $(errorId).textContent = '';
   try {
     await withBusy(button, 'Создаём...', async () => {
@@ -1466,11 +1660,13 @@ async function createMultiplayer(visibility, button, errorId, roomInputId, house
           display_name:displayName(),
           room_name:$(roomInputId).value.trim(),
           visibility,
+          pace:$(paceSelectId).value,
+          ...mapChoice(paceSelectId.replace('-pace', '')),
           house:$(houseSelectId).value || null
         })
       }, profileAuth());
       saveAccess(data);
-      location.href = '/lobby.html?game=' + encodeURIComponent(data.game_id);
+      goTo('/lobby.html?game=' + encodeURIComponent(data.game_id));
     });
   } catch (error) {
     $(errorId).textContent = friendlyError(error);
@@ -1587,11 +1783,13 @@ $('create-solo').onclick = async () => {
         body:JSON.stringify({
           display_name:displayName(),
           house:$('solo-house').value,
+          pace:$('solo-pace').value,
+          ...mapChoice('solo'),
           room_name:'Соло · ' + $('solo-house').value
         })
       }, profileAuth());
       saveAccess(data);
-      location.href = '/?game=' + encodeURIComponent(data.game_id);
+      goTo('/?game=' + encodeURIComponent(data.game_id));
     });
   } catch (error) {
     $('solo-error').textContent = friendlyError(error);
@@ -1599,10 +1797,10 @@ $('create-solo').onclick = async () => {
 };
 
 $('create-public').onclick = () =>
-  createMultiplayer('PUBLIC',$('create-public'),'public-error','public-room-name','public-house');
+  createMultiplayer('PUBLIC',$('create-public'),'public-error','public-room-name','public-house','public-pace');
 
 $('create-private').onclick = () =>
-  createMultiplayer('PRIVATE',$('create-private'),'private-error','private-room-name','private-house');
+  createMultiplayer('PRIVATE',$('create-private'),'private-error','private-room-name','private-house','private-pace');
 
 $('join-private').onclick = async () => {
   $('join-error').textContent = '';
@@ -1618,7 +1816,7 @@ $('join-private').onclick = async () => {
         })
       }, profileAuth());
       saveAccess(data);
-      location.href = '/lobby.html?game=' + encodeURIComponent(data.game_id);
+      goTo('/lobby.html?game=' + encodeURIComponent(data.game_id));
     });
   } catch (error) {
     $('join-error').textContent = friendlyError(error);
@@ -1677,7 +1875,8 @@ async function loadRoom() {
     const claims = life.house_claims || {};
     $('houses').innerHTML = '';
 
-    for (const house of houses) {
+    const roomHouses = life.houses || houses;
+    for (const house of roomHouses) {
       const ownerId = claims[house];
       const button = document.createElement('button');
       button.className = 'house' + (ownerId ? ' claimed' : '') + (me?.house === house ? ' mine' : '');
@@ -1705,9 +1904,11 @@ async function loadRoom() {
     }).join('');
 
     const isAdmin = me?.role === 'ADMIN';
-    const claimedCount = houses.filter(house => Boolean(claims[house])).length;
-    const missingCount = houses.length - claimedCount;
-    const canStart = isAdmin && !solo && life.status === 'LOBBY' && missingCount === 0;
+    const claimedCount = roomHouses.filter(house => Boolean(claims[house])).length;
+    const missingCount = roomHouses.length - claimedCount;
+    // Two players are enough: the House AI plays every House nobody took.
+    const needed = Math.max(0, 2 - claimedCount);
+    const canStart = isAdmin && !solo && life.status === 'LOBBY' && needed === 0;
 
     $('release-house').style.display =
       !solo && life.status === 'LOBBY' && me?.house ? 'block' : 'none';
@@ -1717,13 +1918,15 @@ async function loadRoom() {
     $('start').disabled = !canStart;
     $('start').textContent = canStart
       ? 'Начать игру'
-      : 'Начать игру · ждём ' + missingCount;
+      : 'Начать игру · нужно ещё ' + needed;
 
     $('start-hint').textContent =
       !solo && life.status === 'LOBBY'
         ? (missingCount === 0
             ? 'Все 6 Домов заняты. Хост может начинать партию.'
-            : 'Для текущих правил V6 нужны все 6 Домов. Занято: ' + claimedCount + '/6.')
+            : needed === 0
+              ? 'Занято ' + claimedCount + ' из 6. Можно начинать: свободные Дома возьмёт ИИ.'
+              : 'Нужно хотя бы 2 игрока с Домами. Занято: ' + claimedCount + ' из 6.')
         : '';
 
     $('open-game').style.display = life.status === 'RUNNING' ? 'block' : 'none';
@@ -1774,11 +1977,11 @@ $('start').onclick = async () => {
 };
 
 $('open-game').onclick = () => {
-  location.href = '/?game=' + encodeURIComponent(gameId);
+  goTo('/?game=' + encodeURIComponent(gameId));
 };
 
 $('refresh').onclick = loadRoom;
-$('back-menu').onclick = () => { location.href = '/lobby'; };
+$('back-menu').onclick = () => { location.href = '/menu.html'; };
 
 async function initialize() {
   await restoreProfileSession();

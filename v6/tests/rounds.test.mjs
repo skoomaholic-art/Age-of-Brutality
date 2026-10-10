@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadJson } from '../src/core/map.mjs';
+import { buildAdjacency, loadJson } from '../src/core/map.mjs';
 import { createOnlineGame } from '../src/online/store.mjs';
 import { executeCommand } from '../src/online/commands.mjs';
 import { processDueOrders } from '../src/online/orders.mjs';
@@ -22,6 +22,7 @@ const root = path.resolve(here, '..');
 const map = loadJson(path.join(root, 'src/data/map.v6.json'));
 const constants = loadJson(path.join(root, 'src/data/constants.v6.json'));
 const HOUSE = 'Варкайр';
+const adjacency = buildAdjacency(map.land_edges);
 const T0 = 1_000_000;
 
 // A started six-player game: every House is claimed by a (fake) player.
@@ -46,12 +47,24 @@ function tick(game, nowMs) {
   return processRounds(next, map, constants, { nowMs });
 }
 
-function recruit(game, house, nowMs, warriors = 1) {
+// Any ordinary command spends an action; a short march is the simplest of
+// them, and it can be repeated. The copy keeps a rejected command from
+// changing the game the test started with.
+function marchable(game, house) {
+  const capital = map.capitals[house];
+  const next = structuredClone(game);
+  next.state.territories[capital].warriors[house] = 12;
+  const targets = [...adjacency.get(capital)].filter(id => next.state.territories[id]);
+  return { game: next, capital, targets };
+}
+
+function act(game, house, nowMs, which = 0) {
+  const { game: seeded, capital, targets } = marchable(game, house);
   return executeCommand(
-    game,
+    seeded,
     map,
     constants,
-    { type: 'RECRUIT', house, territory: map.capitals[house], warriors },
+    { type: 'MARCH', house, from: capital, to: targets[which % targets.length], warriors: 1 },
     { nowMs }
   ).game;
 }
@@ -89,19 +102,20 @@ test('a game played in rounds is not paid by the wall-clock income timer', () =>
 
 test('each command spends one action and the fourth is rejected without changing the game', () => {
   let game = multiplayerGame();
-  game = recruit(game, HOUSE, T0 + 1);
-  game = recruit(game, HOUSE, T0 + 2);
-  game = recruit(game, HOUSE, T0 + 3);
+  game = act(game, HOUSE, T0 + 1, 0);
+  game = act(game, HOUSE, T0 + 2, 1);
+  game = act(game, HOUSE, T0 + 3, 2);
   assert.equal(houseRoundStatus(game, HOUSE).left, 0);
 
   const before = JSON.stringify(game);
-  assert.throws(() => recruit(game, HOUSE, T0 + 4), /no actions left this round/);
+  assert.throws(() => act(game, HOUSE, T0 + 4, 3), /no actions left this round/);
   assert.equal(JSON.stringify(game), before);
 });
 
 test('a command that is rejected on its own merits does not spend an action', () => {
   const game = multiplayerGame();
-  assert.throws(() => recruit(game, HOUSE, T0 + 1, 9), /recruit must be 1\.\.3/);
+  assert.throws(() => executeCommand(game, map, constants,
+    { type: 'BUILD_FORT', house: HOUSE, territory: map.capitals[HOUSE] }, { nowMs: T0 + 1 }), /столиц|capital/i);
   assert.equal(houseRoundStatus(game, HOUSE).left, 3);
 });
 
@@ -109,13 +123,13 @@ test('a House that ended its round cannot act or end it twice', () => {
   let game = multiplayerGame();
   game = passRound(game, HOUSE, T0 + 1);
   assert.equal(houseRoundStatus(game, HOUSE).done, true);
-  assert.throws(() => recruit(game, HOUSE, T0 + 2), /round already ended for this House/);
+  assert.throws(() => act(game, HOUSE, T0 + 2), /round already ended for this House/);
   assert.throws(() => passRound(game, HOUSE, T0 + 3), /round already ended for this House/);
 });
 
 test('the round advances only when every House is done and no order is still pending', () => {
   let game = multiplayerGame();
-  game = recruit(game, HOUSE, T0 + 1);
+  game = act(game, HOUSE, T0 + 1);
   game = passAll(game, T0 + 2, ['Сайрвен']);
 
   game = tick(game, T0 + 3);
@@ -123,7 +137,7 @@ test('the round advances only when every House is done and no order is still pen
 
   game = passRound(game, 'Сайрвен', T0 + 4);
   game = tick(game, T0 + 5);
-  assert.equal(game.rounds.number, 1, 'the recruit job is still pending');
+  assert.equal(game.rounds.number, 1, 'the building is still pending');
 
   const goldBefore = game.state.houses['Сайрвен'].gold;
   game = tick(game, T0 + 60_000);
@@ -139,7 +153,7 @@ test('a multiplayer round closes at its deadline even if a House never acts', ()
 
   game = tick(game, deadline - 1);
   assert.equal(game.rounds.number, 1);
-  assert.throws(() => recruit(game, HOUSE, deadline + 1), /round time expired/);
+  assert.throws(() => act(game, HOUSE, deadline + 1), /round time expired/);
 
   game = tick(game, deadline + 1);
   assert.equal(game.rounds.number, 2);
@@ -191,7 +205,7 @@ test('after the sixth round the game finishes itself and names the leader as win
   assert.deepEqual(roundsView(game).winners, ['Ортайн']);
   assert.equal(game.rounds.number, constants.rounds);
   assert.equal(calculateNextDueAt(game), null);
-  assert.throws(() => recruit(game, HOUSE, now + 1), /game is not running/);
+  assert.throws(() => act(game, HOUSE, now + 1), /game is not running/);
 
   assert.deepEqual(tick(game, now + 10 * 60_000), game, 'a finished game is left alone');
 });
@@ -203,7 +217,7 @@ test('games started before rounds existed keep the old real-time behaviour', () 
   assert.equal(roundsView(game), null);
   assert.ok(game.next_income_at, 'timer income stays on');
 
-  for (let i = 1; i <= 4; i += 1) game = recruit(game, HOUSE, T0 + i);
-  assert.equal(game.jobs.length, 4, 'no three-action limit without rounds');
+  for (let i = 0; i < 4; i += 1) game = act(game, HOUSE, T0 + i + 1, i);
+  assert.equal(game.orders.length, 4, 'no three-action limit without rounds');
   assert.equal(processRounds(game, map, constants, { nowMs: T0 + 10 }), game);
 });

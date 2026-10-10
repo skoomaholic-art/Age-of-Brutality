@@ -122,14 +122,12 @@ export function validateState(state, map, constants) {
 
     const entries = Object.entries(node.warriors || {})
       .filter(([,count]) => Number(count || 0) > 0);
-    const total = entries.reduce((sum,[,count]) => sum + Number(count || 0), 0);
 
-    if (total > constants.territory_warrior_cap) {
-      errors.push(`${id} exceeds sea waypoint warrior cap: ${total}`);
+    for (const [house, count] of entries) {
+      if (Number(count) > constants.territory_warrior_cap) errors.push(`${id}/${house} exceeds sea waypoint warrior cap: ${count}`);
     }
-    if (entries.length > 1) {
-      errors.push(`${id} contains armies from multiple houses`);
-    }
+    // Fleets of different Houses may lie at one sea point: there is no
+    // fighting at sea.
 
     for (const [house, count] of entries) {
       if (!constants.houses.includes(house)) {
@@ -138,7 +136,9 @@ export function validateState(state, map, constants) {
       if (!Number.isInteger(count) || count < 0) {
         errors.push(`${id}/${house} has invalid warrior count ${count}`);
       }
-      if (node.owner !== house) {
+      // A lone fleet owns its point; shared water belongs to nobody.
+      const expectedOwner = entries.length === 1 ? house : null;
+      if (node.owner !== expectedOwner) {
         errors.push(`${id} has ${count} warriors of ${house} while sea owner is ${node.owner}`);
       }
     }

@@ -26,7 +26,10 @@
     "Город": 2,
     "Деревня": 1,
     "Дикая земля": 0,
-    "Половина острова": 1
+    "Половина острова": 1,
+    "Большая деревня": 1,
+    "Малый город": 2,
+    "Пустошь": 0
   },
   "combat": {
     "base_defense": {
@@ -34,7 +37,10 @@
       "Город": 2,
       "Деревня": 1,
       "Дикая земля": 0,
-      "Половина острова": 0
+      "Половина острова": 0,
+      "Большая деревня": 1,
+      "Малый город": 2,
+      "Пустошь": 0
     },
     "fort_defense": 3,
     "support_bonus": 1,
@@ -57,24 +63,42 @@
         "foreign_influence": 0
       },
       "Город": {
-        "home_gold": 2,
+        "home_gold": 3,
         "foreign_gold": 1,
         "home_influence": 0,
         "foreign_influence": 0
       },
       "Деревня": {
         "home_gold": 1,
-        "foreign_gold": 0,
+        "foreign_gold": 1,
         "home_influence": 0,
         "foreign_influence": 0
       },
       "Дикая земля": {
-        "home_gold": 0,
-        "foreign_gold": 0,
+        "home_gold": 1,
+        "foreign_gold": 1,
         "home_influence": 0,
         "foreign_influence": 0
       },
       "Половина острова": {
+        "home_gold": 1,
+        "foreign_gold": 1,
+        "home_influence": 0,
+        "foreign_influence": 0
+      },
+      "Большая деревня": {
+        "home_gold": 2,
+        "foreign_gold": 1,
+        "home_influence": 0,
+        "foreign_influence": 0
+      },
+      "Малый город": {
+        "home_gold": 2,
+        "foreign_gold": 1,
+        "home_influence": 0,
+        "foreign_influence": 0
+      },
+      "Пустошь": {
         "home_gold": 0,
         "foreign_gold": 0,
         "home_influence": 0,

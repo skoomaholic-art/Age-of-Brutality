@@ -1,3 +1,6 @@
+import { landKind } from '../online/settlements.mjs';
+import { terrainGuard } from '../online/terrain.mjs';
+import { clearHoldAt, holdGuard } from '../online/stance.mjs';
 import { buildAdjacency } from './map.mjs';
 import { validateMarch, classifyDestination } from './movement.mjs';
 import { warriorsAt } from './state.mjs';
@@ -20,10 +23,20 @@ function temporary(x, label) {
   return n;
 }
 
+// What the land is now, for the look of the walls in a battle's reckoning.
+function t2Kind(state, map, id) {
+  return landKind(state, map, id) ?? map.territories.find(t => t.id === id)?.type;
+}
+
 export function baseDefense(map, state, constants, territoryId) {
   const t = map.territories.find(x => x.id === territoryId);
   if (!t) throw new Error(`unknown territory ${territoryId}`);
-  return Math.max(constants.combat.base_defense[t.type] ?? 0, state.territories[territoryId]?.fort ? constants.combat.fort_defense : 0);
+  const walls = Math.max(
+    constants.combat.base_defense[landKind(state, map, territoryId) ?? t.type] ?? constants.combat.base_defense[t.type] ?? 0,
+    state.territories[territoryId]?.fort ? constants.combat.fort_defense : 0
+  );
+  // The lie of the land counts on top of walls: a pass or a marsh is held hard.
+  return walls + terrainGuard(map, territoryId);
 }
 
 export function validateSupport(state, map, sideHouse, supportFrom, battleTerritory, attackerOrigin = null) {
@@ -75,12 +88,14 @@ export function resolveBattle(state, map, constants, action, options = {}) {
 
   const attackerStrength = action.warriors + attackerDie + attackerAttack + attackerSupport + attackerTempStrength;
   const defenderStrength = defenderWarriors + defenderDie + defenderAttack + defenderSupport + defenderTempStrength;
-  const defenderDefense = baseDefense(map,state,constants,action.to) + defenderCommanderDefense + defenderTempDefense;
+  const defenderDefense = baseDefense(map,state,constants,action.to) + defenderCommanderDefense + defenderTempDefense
+    + holdGuard(state, action.to, defenderHouse);
   const attackerDefenseValue = attackerDefense + attackerTempDefense;
   const damageToDefender = Math.max(0, Math.ceil(attackerStrength/2) - defenderDefense);
   const damageToAttacker = Math.max(0, Math.ceil(defenderStrength/2) - attackerDefenseValue);
-  const attackerLosses = Math.min(action.warriors, damageToAttacker);
-  const defenderLosses = Math.min(defenderWarriors, damageToDefender);
+  // Hardier warriors take more damage before they fall (online ranks); by default one head a point.
+  const attackerLosses = Math.min(action.warriors, typeof options.attackerLossesFor === 'function' ? options.attackerLossesFor(damageToAttacker) : damageToAttacker);
+  const defenderLosses = Math.min(defenderWarriors, typeof options.defenderLossesFor === 'function' ? options.defenderLossesFor(damageToDefender) : damageToDefender);
   const attackerSurvivors = action.warriors - attackerLosses;
   const defenderSurvivors = defenderWarriors - defenderLosses;
   const attackerWins = attackerStrength > defenderStrength;
@@ -100,6 +115,7 @@ export function resolveBattle(state, map, constants, action, options = {}) {
 
   if (attackerWins && attackerSurvivors > 0) {
     captured = true;
+    clearHoldAt(next, action.to);
     target.owner = action.house;
     target.warriors[action.house] = attackerSurvivors;
     if (defenderSurvivors > 0) {
@@ -131,6 +147,20 @@ export function resolveBattle(state, map, constants, action, options = {}) {
     damageToDefender, damageToAttacker, captured, defenderRetreatTo, defenderRemovedForNoRetreat,
     battle_vp_awarded_to:battleVpHouse, capital_capture_vp:capitalVp
   };
-  next.journal.push({kind:'BATTLE', ...result, attackerDie, defenderDie, attackerSupport, defenderSupport});
+  // What the fight was made of, so it can be read back afterwards.
+  const reckoning = {
+    walls: constants.combat.base_defense[t2Kind(state, map, action.to)] ?? 0,
+    fort: state.territories[action.to]?.fort ? constants.combat.fort_defense : 0,
+    terrain: terrainGuard(map, action.to),
+    dug: holdGuard(state, action.to, defenderHouse),
+    attacker_commander: attackerAttack,
+    defender_commander: defenderAttack,
+    attacker_guard: attackerDefenseValue,
+    defender_guard: defenderDefense,
+    damage_to_attackers: damageToAttacker,
+    damage_to_defenders: damageToDefender,
+    plan: options.plan || null
+  };
+  next.journal.push({kind:'BATTLE', ...result, reckoning, attackerDie, defenderDie, attackerSupport, defenderSupport});
   return {state:next, result};
 }

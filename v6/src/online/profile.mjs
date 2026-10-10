@@ -67,19 +67,35 @@ export function normalizeProfileStats(stats = {}) {
     losses: Math.max(0, Number(stats.losses || 0)),
     mmr: Math.max(0, Number.isFinite(Number(stats.mmr)) ? Number(stats.mmr) : PROFILE_MMR.initial),
     play_seconds: Math.max(0, Number(stats.play_seconds || 0)),
+    // Games against living rulers and against the AI are kept apart.
+    vs_people: splitStats(stats.vs_people),
+    vs_bots: splitStats(stats.vs_bots),
     achievements
   };
 }
 
-export function applyRankedResult(stats, { won }) {
+function splitStats(part = {}) {
+  return {
+    games: Math.max(0, Number(part?.games || 0)),
+    wins: Math.max(0, Number(part?.wins || 0)),
+    losses: Math.max(0, Number(part?.losses || 0))
+  };
+}
+
+// Rating moves only in games against people; games against bots are counted apart.
+export function applyRankedResult(stats, { won, vsPeople = true, rated = true }) {
   const next = normalizeProfileStats(stats);
   next.games_played += 1;
+  const part = vsPeople ? next.vs_people : next.vs_bots;
+  part.games += 1;
   if (won) {
     next.wins += 1;
-    next.mmr += PROFILE_MMR.winDelta;
+    part.wins += 1;
+    if (vsPeople && rated) next.mmr += PROFILE_MMR.winDelta;
   } else {
     next.losses += 1;
-    next.mmr = Math.max(0, next.mmr - PROFILE_MMR.lossDelta);
+    part.losses += 1;
+    if (vsPeople && rated) next.mmr = Math.max(0, next.mmr - PROFILE_MMR.lossDelta);
   }
   return next;
 }

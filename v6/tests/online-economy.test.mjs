@@ -42,7 +42,7 @@ test('timed recruitment reserves gold and completes later', () => {
   assert.equal(game.state.territories.W01.warriors['Варкайр'], 6);
 });
 
-test('timed fort refunds if territory changes owner before completion', () => {
+test('a fort begun in a land that falls is finished for the captor, unpaid', () => {
   let game = createOnlineGame(map, c, { nowMs: 3000 });
   game = normalizeOnlineEconomy(game, 3000, timing);
   game.state.territories.W03.owner = 'Варкайр';
@@ -55,9 +55,11 @@ test('timed fort refunds if territory changes owner before completion', () => {
   game.state.territories.W03.owner = 'Сайрвен';
   game = processEconomy(game, map, c, 3021, timing);
 
-  assert.equal(game.jobs[0].status, 'FAILED');
-  assert.equal(game.state.houses['Варкайр'].gold, 8);
-  assert.equal(game.state.territories.W03.fort, false);
+  assert.equal(game.jobs[0].status, 'RESOLVED');
+  assert.equal(game.jobs[0].seized_by, 'Сайрвен');
+  assert.equal(game.state.houses['Варкайр'].gold, 5, 'no refund');
+  assert.equal(game.state.territories.W03.fort, true);
+  assert.deepEqual(game.state.houses['Сайрвен'].forts, ['W03']);
 });
 
 
@@ -95,4 +97,36 @@ test('income missed over days of idling is paid in one step, not replayed pulse 
   // Nothing more is due until the next interval.
   const again = processEconomy(game, map, c, now + 1);
   assert.equal(again.state.houses[house].gold, game.state.houses[house].gold);
+});
+
+test('a levy paid for in a land that falls is raised for the captor', async () => {
+  const { cancelJob, CANCEL_DELAY_MS } = await import('../src/online/economy.mjs');
+  const house = c.houses[0];
+  const rival = c.houses[1];
+  const capital = map.capitals[house];
+  const now = Date.parse('2026-01-01T00:00:00Z');
+  let game = normalizeOnlineEconomy(createOnlineGame(map, c, { id: 'seize', nowMs: now}), now);
+  const goldBefore = game.state.houses[house].gold;
+  let queued = queueRecruitJob(game, c, { house, territory: capital, warriors: 2 }, { nowMs: now });
+  game = queued.game;
+  assert.equal(game.state.houses[house].gold, goldBefore - 2);
+
+  // The land falls before the levy is ready.
+  game.state.territories[capital].owner = rival;
+  game.state.territories[capital].warriors = { [rival]: 1 };
+  assert.throws(() => cancelJob(game, { house, jobId: queued.job.id }, { nowMs: now + 1 }), /захвачена/);
+  game = processEconomy(game, map, c, Date.parse(queued.job.due_at));
+  assert.equal(game.state.territories[capital].warriors[rival], 3, 'the captor gets the warriors');
+  assert.equal(game.state.houses[house].gold, goldBefore - 2, 'and the payer gets nothing back');
+  assert.ok(game.state.journal.some(e => e.kind === 'JOB_SEIZED' && e.captor === rival && e.house === house));
+
+  // Cancelling in time: ten seconds later the gold is back.
+  let fresh = normalizeOnlineEconomy(createOnlineGame(map, c, { id: 'cancel', nowMs: now}), now);
+  queued = queueRecruitJob(fresh, c, { house, territory: capital, warriors: 1 }, { nowMs: now, timing: { ...ONLINE_ECONOMY_TIMING, recruitBuildMs: 60_000 } });
+  const cancelled = cancelJob(queued.game, { house, jobId: queued.job.id }, { nowMs: now + 1000 });
+  fresh = processEconomy(cancelled.game, map, c, now + 1000 + CANCEL_DELAY_MS - 1);
+  assert.equal(fresh.jobs[0].status, 'PENDING', 'not before the countdown ends');
+  fresh = processEconomy(fresh, map, c, now + 1000 + CANCEL_DELAY_MS);
+  assert.equal(fresh.jobs[0].status, 'CANCELLED');
+  assert.equal(fresh.state.houses[house].gold, goldBefore);
 });
