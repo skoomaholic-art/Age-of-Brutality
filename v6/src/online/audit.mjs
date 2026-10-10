@@ -333,6 +333,15 @@ export function journalEntryToAudit(entry, map, game) {
     };
   }
 
+  if (entry.kind === 'RETRAIN_QUEUED') {
+    const kinds = ['крестьян', 'копейщиков', 'лучников', 'ратников', 'конных сержантов', 'рыцарей'];
+    return {
+      ...base,
+      message: `В земле ${territoryName(map, entry.territory)} ${entry.count} ${kinds[entry.from]} отданы в учение: станут ${kinds[entry.to]}. Уплачено ${entry.gold_spent} золота.`,
+      details: { house: entry.house, territory_id: entry.territory, from: entry.from, to: entry.to, count: entry.count, due_at: entry.due_at || null, at: entry.at || null }
+    };
+  }
+
   if (entry.kind === 'UNITS_HIRED' || entry.kind === 'UNITS_RETRAINED' || entry.kind === 'GROWTH_BUILT') {
     const where = territoryName(map, entry.territory);
     const kinds = ['крестьян', 'копейщиков', 'лучников', 'ратников', 'конных сержантов', 'рыцарей'];

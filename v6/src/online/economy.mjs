@@ -1,10 +1,12 @@
 import { calculateHouseIncome, applyIncomePulse } from '../core/economy.mjs';
 import { totalHouseWarriors, validateState } from '../core/state.mjs';
+import { applyRetrain, planRetrain } from './units.mjs';
 
 export const ONLINE_ECONOMY_TIMING = Object.freeze({
   incomeIntervalMs: 120_000,
   recruitBuildMs: 4_000,
-  fortBuildMs: 5_000
+  fortBuildMs: 5_000,
+  retrainBuildMs: 4_500
 });
 
 export function normalizeOnlineEconomy(game, nowMs = Date.now(), timing = ONLINE_ECONOMY_TIMING) {
@@ -99,6 +101,48 @@ export function queueRecruitJob(game, constants, {
     territory,
     warriors: count,
     gold_spent: count,
+    started_at: job.created_at,
+    due_at: job.due_at,
+    planned_duration_ms: duration
+  });
+  return { game: next, job };
+}
+
+// Men are not retrained in a breath: they go to learn, and the new banner is
+// raised over them when the lesson is done.
+export function queueRetrainJob(game, map, house, { territory, from, to, count }, { nowMs = Date.now(), timing = ONLINE_ECONOMY_TIMING } = {}) {
+  const plan = planRetrain(game, map, house, territory, from, to, count);
+  const next = normalizeOnlineEconomy(game, nowMs, timing);
+  const id = jobId(next);
+  const duration = Math.round(timing.retrainBuildMs * buildScale(next));
+  const job = {
+    id,
+    type: 'RETRAIN',
+    status: 'PENDING',
+    house,
+    territory,
+    from: plan.from,
+    to: plan.to,
+    count: plan.count,
+    gold_paid: plan.gold,
+    created_at: new Date(nowMs).toISOString(),
+    due_at: new Date(nowMs + duration).toISOString(),
+    failure_reason: null
+  };
+  next.next_job_id += 1;
+  next.state.houses[house].gold -= plan.gold;
+  next.jobs.push(job);
+  next.updated_at = new Date(nowMs).toISOString();
+  next.state.journal.push({
+    kind: 'RETRAIN_QUEUED',
+    job_id: id,
+    house,
+    houses: [house],
+    territory,
+    from: plan.from,
+    to: plan.to,
+    count: plan.count,
+    gold_spent: plan.gold,
     started_at: job.created_at,
     due_at: job.due_at,
     planned_duration_ms: duration
@@ -328,6 +372,7 @@ export function processEconomy(game, map, constants, nowMs = Date.now(), timing 
     try {
       if (job.type === 'RECRUIT') resolveRecruit(next, constants, job, nowMs);
       else if (job.type === 'FORT') resolveFort(next, map, constants, job, nowMs);
+      else if (job.type === 'RETRAIN') applyRetrain(next, map, job.house, job.territory, job.from, job.to, job.count, nowMs);
       else throw new Error(`unknown job type ${job.type}`);
 
       const errors = validateState(next.state, map, constants);

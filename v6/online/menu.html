@@ -134,6 +134,12 @@
       <b id="set-music-value">45%</b>
     </label>
     <p class="note">Своя музыка у лета, у зимы, у боя и у заглавного экрана.</p>
+    <label class="row">
+      <span>Речь воеводы</span>
+      <input id="set-voice" type="range" min="0" max="100" step="5">
+      <b id="set-voice-value">70%</b>
+    </label>
+    <p class="note">Живой голос: отклик рати, вести гонца и глашатая. Убавишь до нуля — отвечает рог.</p>
     <div class="row">
       <span>Полный экран</span>
       <button id="set-full">Развернуть</button>
@@ -214,7 +220,7 @@ document.addEventListener('fullscreenchange', fullLabel);
 // ---------- the voice of the century, at the gates ----------
 // The menu keeps the same two settings as the game and remembers them in the
 // same place, so a choice made here holds inside the century and back again.
-const SOUND_STORE = 'aob-sound', MUSIC_STORE = 'aob-music';
+const SOUND_STORE = 'aob-sound', MUSIC_STORE = 'aob-music', VOICE_STORE = 'aob-voice';
 const kept = (key, fallback) => {
   try {
     const value = localStorage.getItem(key);
@@ -222,7 +228,7 @@ const kept = (key, fallback) => {
   } catch { return fallback; }
 };
 const keep = (key, value) => { try { localStorage.setItem(key, String(value)); } catch { /* forbidden here */ } };
-let soundLevel = kept(SOUND_STORE, 0.7), musicLevel = kept(MUSIC_STORE, 0.45);
+let soundLevel = kept(SOUND_STORE, 0.25), musicLevel = kept(MUSIC_STORE, 0.4), voiceLevel = kept(VOICE_STORE, 0.7);
 let unlocked = false, theme = null;
 
 function ring(name, volume = 1) {
@@ -248,10 +254,25 @@ document.querySelectorAll('nav button').forEach(button => button.addEventListene
 }));
 
 const soundBar = document.getElementById('set-sound'), musicBar = document.getElementById('set-music');
+const voiceBar = document.getElementById('set-voice');
 const soundValue = document.getElementById('set-sound-value'), musicValue = document.getElementById('set-music-value');
+const voiceValue = document.getElementById('set-voice-value');
 const showLevels = () => {
   soundBar.value = Math.round(soundLevel * 100); soundValue.textContent = Math.round(soundLevel * 100) + '%';
   musicBar.value = Math.round(musicLevel * 100); musicValue.textContent = Math.round(musicLevel * 100) + '%';
+  voiceBar.value = Math.round(voiceLevel * 100); voiceValue.textContent = Math.round(voiceLevel * 100) + '%';
+};
+// The captain says a word, so the level can be judged by ear.
+const VOICE_SAMPLES = ['hail-01', 'hail-03', 'hail-05', 'hail-09'];
+let voiceTry = null;
+const voiceBarInput = () => {
+  voiceLevel = Number(voiceBar.value) / 100; keep(VOICE_STORE, voiceLevel); showLevels();
+  unlocked = true;
+  if (!voiceLevel) return;
+  if (voiceTry) { try { voiceTry.pause(); } catch { /* already still */ } }
+  voiceTry = new Audio('/assets/sfx/voice/' + VOICE_SAMPLES[Math.floor(Math.random() * VOICE_SAMPLES.length)] + '.ogg');
+  voiceTry.volume = Math.max(0, Math.min(1, voiceLevel));
+  voiceTry.play().catch(() => {});
 };
 soundBar.oninput = () => {
   soundLevel = Number(soundBar.value) / 100; keep(SOUND_STORE, soundLevel); showLevels();
@@ -262,6 +283,7 @@ musicBar.oninput = () => {
   unlocked = true;
   if (!musicLevel) hushTheme(); else playTheme();
 };
+voiceBar.oninput = voiceBarInput;
 showLevels();
 document.getElementById('set-full').onclick = () => fullButton.onclick();
 

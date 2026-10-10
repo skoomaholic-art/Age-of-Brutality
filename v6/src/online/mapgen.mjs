@@ -120,10 +120,18 @@ function spreadOf(size) {
 // Shapes that need at least three Houses fall back to a kin shape for two.
 const FOR_TWO = { peninsulas: 'wheel', fjords: 'wheel', shattered: 'archipelago' };
 
+// A world drawn at random is dry land more often than not: whole continents
+// cut by rivers and bays, with scattered islands as the rarer picture.
+const SHAPE_WEIGHT = {
+  wheel: 5, fjords: 4, peninsulas: 4, inland: 3,
+  'lake-isle': 2, archipelago: 1, atoll: 1, shattered: 1
+};
+
 export function pickMapShape(count, seed) {
   const random = seeded((Number(seed) || 1) ^ 0x51ed27);
   const shapes = count === 2 ? MAP_SHAPES.filter(s => !FOR_TWO[s]) : MAP_SHAPES;
-  const shape = shapes[Math.floor(random() * shapes.length)];
+  const bag = shapes.flatMap(name => Array(SHAPE_WEIGHT[name] || 1).fill(name));
+  const shape = bag[Math.floor(random() * bag.length)];
   const warp = MAP_WARPS[Math.floor(random() * MAP_WARPS.length)];
   return { shape, warp };
 }

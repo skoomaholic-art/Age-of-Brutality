@@ -234,7 +234,6 @@
     .fate-card .fx { display: block; width: 100%; max-width: none; font-size: 13px; line-height: 1.35; }
     .fate-card .good { color: #2e5d2a; } .fate-card .bad { color: #9a2a1a; }
     .fate-card button { margin-top: auto; }
-    .fate-later { display: block; margin: 12px auto 0; }
     .bad-note { color: #9a2a1a; }
     /* A (?) next to a control: hover, focus or tap shows what it does. */
     .hint { position: relative; display: inline-grid; place-items: center; width: 17px; height: 17px; margin-left: 5px; border: 1px solid currentColor; border-radius: 50%; font-size: 11px; font-weight: 700; line-height: 1; cursor: help; opacity: .75; vertical-align: middle; flex: 0 0 auto; font-family: Kurale, serif; }
@@ -770,6 +769,7 @@
     <div style="display:flex; gap:6px">
       <button id="ctl-sound" style="flex:1 1 0; min-width:0">🔊 Звуки</button>
       <button id="ctl-music" style="flex:1 1 0; min-width:0">🎶 Музыка</button>
+      <button id="ctl-voice" style="flex:1 1 0; min-width:0">🗣 Речь</button>
     </div>
     <button id="save-game">Занести в свиток</button>
     <button id="restore-game">Вернуть по свитку</button>
@@ -797,6 +797,7 @@
         <button class="bar-tab" data-pane="talmud">Талмуд знаний</button>
         <button id="bar-sound" title="Звуки века" style="padding:4px 9px">🔊</button>
         <button id="bar-music" title="Музыка века" style="padding:4px 9px">🎶</button>
+        <button id="bar-voice" title="Речь воеводы" style="padding:4px 9px">🗣</button>
         <button id="bar-full" title="Развернуть игру во весь экран" style="padding:4px 9px">⛶</button>
         <button id="bar-dev" title="Режим разработчика" style="padding:4px 9px" hidden>⚙</button>
         <div class="bar-status">
@@ -1013,11 +1014,6 @@
         </label>
       </div>
       <div id="manage-info" class="muted" style="margin-top:8px"></div>
-      <div class="economy-actions" id="old-recruit">
-        <button data-recruit="1">+1 воин<br><span class="tiny">1 золото</span></button>
-        <button data-recruit="2">+2 воина<br><span class="tiny">2 золота</span></button>
-        <button data-recruit="3">+3 воина<br><span class="tiny">3 золота</span></button>
-      </div>
       <button id="build-fort" class="fort-button">Возвести крепость · 3 золота</button>
       <div id="jobs" class="jobs muted">Мастера и вербовщики сидят без дела.</div>
     </div>
@@ -1152,7 +1148,7 @@ let soundUnlocked = false;
 let soundLevel = (() => {
   try {
     const kept = localStorage.getItem(SOUND_STORE);
-    return kept === null ? 0.7 : Math.max(0, Math.min(1, Number(kept) || 0));
+    return kept === null ? 0.25 : Math.max(0, Math.min(1, Number(kept) || 0));
   } catch { return 0.7; }
 })();
 // Two sounds of the same kind at once would clatter: each is held back briefly.
@@ -1181,7 +1177,7 @@ function playSound(name, { volume = 1, gap = 120 } = {}) {
 }
 
 function renderSound() {
-  const mark = soundLevel ? (soundLevel > 0.45 ? '🔊' : '🔉') : '🔇';
+  const mark = soundLevel ? (soundLevel > 0.2 ? '🔊' : '🔉') : '🔇';
   const title = soundLevel ? 'Звуки века: ' + Math.round(soundLevel * 100) + '% — нажми, чтобы убавить' : 'Звуки века выключены';
   const bar = $('bar-sound');
   if (bar) { bar.textContent = mark; bar.title = title; }
@@ -1192,7 +1188,7 @@ function renderSound() {
 
 // One press is one step quieter, and round again.
 function stepSound() {
-  soundLevel = soundLevel > 0.45 ? 0.35 : soundLevel > 0 ? 0 : 0.7;
+  soundLevel = soundLevel > 0.2 ? 0.12 : soundLevel > 0 ? 0 : 0.25;
   try { localStorage.setItem(SOUND_STORE, String(soundLevel)); } catch { /* this browser forbids it */ }
   renderSound();
   soundUnlocked = true;
@@ -1217,7 +1213,7 @@ function setupSound() {
 const NEWS_SOUNDS = {
   BATTLE: entry => (entry.details?.winner === house ? 'battle_won' : entry.details?.houses?.includes?.(house) || entry.details?.attacker === house || entry.details?.defender === house ? 'battle_lost' : 'battle'),
   FIELD_BATTLE: entry => (entry.details?.winner === house ? 'battle_won' : 'battle'),
-  WILD_BATTLE: () => 'battle',
+  WILD_BATTLE: entry => (entry.details?.house === house ? (entry.details?.success ? 'battle_won' : 'battle_lost') : 'battle'),
   MELEE: () => 'battle',
   HORDE_AWAKENED: () => 'horde',
   HORDE_UNLEASHED: () => 'horde',
@@ -1263,10 +1259,15 @@ function voiceForNews(item) {
   if (kind === 'ROUND_STARTED') return 'dawn-01';
   if (kind === 'GAME_FINISHED') return (about.winners || []).includes(house) ? 'victory-01' : null;
   if (!mine) return null;
-  if (kind === 'BATTLE' || kind === 'FIELD_BATTLE' || kind === 'MELEE' || kind === 'WILD_BATTLE') {
+  // A fight with free men has no winner written down, only whether the land fell.
+  if (kind === 'WILD_BATTLE') return about.success ? 'taken' : 'lost';
+  if (kind === 'BATTLE' || kind === 'FIELD_BATTLE' || kind === 'MELEE') {
+    if (!about.winner) return null;
     return about.winner === house ? 'won' : 'lost';
   }
-  if (kind === 'MARCH' || kind === 'NEUTRAL_CAPTURE' || kind === 'EMPTY_ENEMY_OCCUPATION') return 'arrive';
+  // Coming home is not taking a land: only a new land is «наша».
+  if (kind === 'NEUTRAL_CAPTURE' || kind === 'EMPTY_ENEMY_OCCUPATION') return 'taken';
+  if (kind === 'MARCH') return 'arrive';
   if (kind === 'REVOLT') return 'revolt-01';
   if (kind === 'HORDE_AWAKENED' || kind === 'HORDE_UNLEASHED' || kind === 'HORDE_TOOK' || kind === 'HORDE_SACKED') return 'horde-01';
   if (kind === 'STORM_HIT' || kind === 'STORM_ROSE') return 'storm-01';
@@ -1291,10 +1292,18 @@ const VOICE_LADY = new Set(['hail-01', 'hail-02', 'hail-04', 'hail-08', 'march-0
 const VOICE_GROUPS = {
   hail: ['hail-01', 'hail-02', 'hail-03', 'hail-04', 'hail-05', 'hail-06', 'hail-07', 'hail-08', 'hail-09', 'hail-10'],
   march: ['march-01', 'march-02', 'march-03', 'march-04', 'march-05', 'march-06'],
-  arrive: ['arrive-01', 'arrive-02', 'arrive-03'],
+  arrive: ['arrive-01', 'arrive-03'],          // «Мы на месте», «Встали лагерем»
+  taken: ['arrive-02'],                       // «Земля наша» — только о новой земле
   won: ['won-01', 'won-02'],
   lost: ['lost-01', 'lost-02']
 };
+const VOICE_STORE = 'aob-voice';
+let voiceLevel = (() => {
+  try {
+    const kept = localStorage.getItem(VOICE_STORE);
+    return kept === null ? 0.7 : Math.max(0, Math.min(1, Number(kept) || 0));
+  } catch { return 0.7; }
+})();
 let voiceAt = 0;
 let voiceNow = null;
 let voiceGuard = null;
@@ -1329,7 +1338,7 @@ function duckMusic(on) {
 }
 
 function playVoice(name, { gap = 2200 } = {}) {
-  if (!soundLevel || !soundUnlocked) return false;
+  if (!voiceLevel || !soundUnlocked) return false;
   const now = Date.now();
   if (now - voiceAt < gap) return false;
   const group = VOICE_GROUPS[name];
@@ -1342,7 +1351,7 @@ function playVoice(name, { gap = 2200 } = {}) {
   try {
     if (voiceNow) { voiceNow.pause(); duckMusic(false); }
     const audio = new Audio('/assets/sfx/voice/' + file + '.ogg');
-    audio.volume = Math.max(0, Math.min(1, soundLevel));
+    audio.volume = Math.max(0, Math.min(1, voiceLevel));
     voiceNow = audio;
     const done = () => {
       if (voiceNow !== audio) return;
@@ -1403,7 +1412,7 @@ const MUSIC_BATTLE_MS = 45_000;
 let musicLevel = (() => {
   try {
     const kept = localStorage.getItem(MUSIC_STORE);
-    return kept === null ? 0.45 : Math.max(0, Math.min(1, Number(kept) || 0));
+    return kept === null ? 0.4 : Math.max(0, Math.min(1, Number(kept) || 0));
   } catch { return 0.45; }
 })();
 let musicTrack = null;
@@ -1489,8 +1498,31 @@ function musicHeardNews(item) {
   }
 }
 
+function renderVoice() {
+  const mark = voiceLevel ? (voiceLevel > 0.4 ? '🗣' : '💬') : '🤐';
+  const title = voiceLevel ? 'Речь воеводы: ' + Math.round(voiceLevel * 100) + '% — нажми, чтобы убавить' : 'Речь молчит, отвечает рог';
+  const bar = $('bar-voice');
+  if (bar) { bar.textContent = mark; bar.title = title; }
+  const item = $('ctl-voice');
+  if (item) { item.textContent = mark + ' Речь'; item.title = title; }
+}
+
+function stepVoice() {
+  voiceLevel = voiceLevel > 0.4 ? 0.35 : voiceLevel > 0 ? 0 : 0.7;
+  try { localStorage.setItem(VOICE_STORE, String(voiceLevel)); } catch { /* this browser forbids it */ }
+  renderVoice();
+  soundUnlocked = true;
+  if (voiceLevel) playVoice('hail-09', { gap: 0 });
+  else playSound('hail', { volume: 0.85 });
+}
+
+function setupVoice() {
+  for (const id of ['bar-voice', 'ctl-voice']) if ($(id)) $(id).onclick = stepVoice;
+  renderVoice();
+}
+
 function renderMusic() {
-  const mark = musicLevel ? (musicLevel > 0.3 ? '🎶' : '🎵') : '🎼';
+  const mark = musicLevel ? (musicLevel > 0.25 ? '🎶' : '🎵') : '🎼';
   const title = musicLevel ? 'Музыка века: ' + Math.round(musicLevel * 100) + '% — нажми, чтобы убавить' : 'Музыка века умолкла';
   const bar = $('bar-music');
   if (bar) { bar.textContent = mark; bar.title = title; }
@@ -1499,7 +1531,7 @@ function renderMusic() {
 }
 
 function stepMusic() {
-  musicLevel = musicLevel > 0.3 ? 0.2 : musicLevel > 0 ? 0 : 0.45;
+  musicLevel = musicLevel > 0.25 ? 0.18 : musicLevel > 0 ? 0 : 0.4;
   try { localStorage.setItem(MUSIC_STORE, String(musicLevel)); } catch { /* this browser forbids it */ }
   renderMusic();
   soundUnlocked = true;
@@ -2429,14 +2461,22 @@ function hireBlock(id) {
   const t = territoryById(id);
   const level = t.type === 'Столица' ? 2 : t.type === 'Город' ? 1 : 0;
   const people = Number(snapshot.game.state.population?.[id] || 0);
+  // Men come from this land first, then from the House's neighbouring lands,
+  // and no neighbour gives away more than half of its people.
+  const around = (snapshot.map.land_edges || [])
+    .filter(edge => edge[0] === id || edge[1] === id)
+    .map(edge => (edge[0] === id ? edge[1] : edge[0]))
+    .filter(other => snapshot.game.state.territories?.[other]?.owner === house)
+    .reduce((sum, other) => sum + Math.floor(Number(snapshot.game.state.population?.[other] || 0) / 2), 0);
+  const pool = people + around;
   const rows = view.kinds.map(k => {
     const ok = k.where <= level;
     return '<div class="rank-row' + (ok ? '' : ' off') + '"><span><b>' + escapeHtml(k.name) + '</b> · сила ' + k.power + (k.guard ? ' (+' + k.guard + ' в обороне)' : '') +
       '<br><span class="tiny">' + k.gold + ' зол. за голову, содержание ' + k.upkeep + ' с рассветом' + (ok ? '' : ' · ' + KIND_WHERE[k.where]) + '</span></span>' +
-      '<input type="number" min="0" max="' + people + '" value="0" data-hire-kind="' + k.index + '" ' + (ok ? '' : 'disabled') + '></div>';
+      '<input type="number" min="0" max="' + pool + '" value="0" data-hire-kind="' + k.index + '" ' + (ok ? '' : 'disabled') + '></div>';
   }).join('');
-  return '<div class="rank-box"><div class="rank-head with-hint">Нанять войска' + hint('Войска нанимают в любой своей земле. Деревня даёт крестьян, копейщиков и лучников, город ещё ратников и конных сержантов, столица и рыцарей. Каждый нанятый — один из людей этой земли. Войско каждый рассвет просит содержания; не заплатишь — неоплаченные разойдутся.') + '</div>' +
-    '<div class="tiny">Людей в земле: <b>' + people + '</b>. Каждый нанятый — один из них. Новые люди прибывают, только если здесь есть ' + (level ? 'ярмарка' : 'поля') + '.' +
+  return '<div class="rank-box"><div class="rank-head with-hint">Нанять войска' + hint('Войска нанимают в любой своей земле. Деревня даёт крестьян, копейщиков и лучников, город ещё ратников и конных сержантов, столица и рыцарей. Людей берут сперва из самой земли, а если не хватает — из соседних своих земель, но ни одна не отдаёт больше половины своих. Войско каждый рассвет просит содержания; не заплатишь — неоплаченные разойдутся.') + '</div>' +
+    '<div class="tiny">Людей под рукой: <b>' + pool + '</b> — в самой земле ' + people + (around ? ', из соседних твоих земель ещё ' + around : '') + '. Каждый нанятый — один из них, и берут сперва здешних. Соседнее поселение отдаёт не больше половины своих людей. Новые люди прибывают, только если здесь есть ' + (level ? 'ярмарка' : 'поля') + '.' +
     (snapshot.game.upkeep ? ' Всё войско сейчас стоит <b>' + snapshot.game.upkeep.gold + '</b> золота с рассветом; не заплатишь — неоплаченные разойдутся.' : '') + '</div>' +
     rows + '<div class="acts"><span class="tiny" data-hire-total>0 золота</span><button class="primary costly" data-hire-go disabled>Нанять</button></div></div>';
 }
@@ -2594,7 +2634,6 @@ function menToTake(guards) {
 }
 
 // A land just taken: the taker decides its fate (as in Total War).
-const fateLater = new Set();
 const RISK_WORDS = { NONE: 'бунта не будет', LOW: 'беспорядки: земля даёт половину золота', HIGH: 'бунт на рассвете, если не поставить гарнизон' };
 const FATE_TEXT = {
   MERCY: 'Люди целы, порядок растёт. Казна ничего не получает.',
@@ -2603,7 +2642,8 @@ const FATE_TEXT = {
 };
 function renderFate() {
   const box = $('fate');
-  const pending = Object.entries(snapshot?.game?.capture_choices || {}).filter(([id]) => !fateLater.has(id));
+  // The fate of a taken land is settled on the spot: there is no putting it off.
+  const pending = Object.entries(snapshot?.game?.capture_choices || {});
   if (!pending.length || isSpectator) { box.classList.remove('show'); return; }
   const [id, choice] = pending[0];
   const t = territoryById(id);
@@ -2623,12 +2663,11 @@ function renderFate() {
       '<button class="' + (k === 'MERCY' ? '' : 'primary') + '" data-fate="' + k + '">Так и сделать</button></div>';
   }).join('');
   $('fate-body').innerHTML = '<div class="fate-lead">' + (choice.from ? 'Земля отнята у Дома ' + escapeHtml(choice.from) + ': люди насторожены.' : 'Вольные люди разбиты, земля покорилась.') +
-    ' Что сделать с поселением? Если не решить до рассвета, землю возьмут с миром.</div>' +
-    '<div class="fate-cards">' + cards + '</div><button class="fate-later" data-fate-later>Решить позже</button>';
+    ' Что сделать с поселением? Войско ждёт твоего слова здесь и сейчас.</div>' +
+    '<div class="fate-cards">' + cards + '</div>';
   box.classList.add('show');
   box.onclick = async event => {
     const pick = event.target.closest('[data-fate]');
-    if (event.target.closest('[data-fate-later]')) { fateLater.add(id); box.classList.remove('show'); return; }
     if (!pick) return;
     try {
       await api('/api/capture-choice', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ house, territory: id, choice: pick.dataset.fate }) });
@@ -2856,7 +2895,7 @@ function setupLand() {
     if (event.target.closest('[data-replenish]')) landCommand('/api/replenish', {});
     if (event.target.closest('[data-growth]')) landCommand('/api/growth', {});
     const fateOpen = event.target.closest('[data-fate-open]');
-    if (fateOpen) { fateLater.delete(fateOpen.dataset.fateOpen); $('fate').dataset.key = ''; renderFate(); }
+    if (fateOpen) { $('fate').dataset.key = ''; renderFate(); }
     const burn = event.target.closest('[data-bridge-burn]');
     if (burn) landCommand('/api/bridge-burn', { key: burn.dataset.bridgeBurn });
     const bridgeButton = event.target.closest('[data-bridge-build]');
@@ -3399,7 +3438,9 @@ function setupLens() {
   svg.addEventListener('pointerleave', () => { if (!pinned) lens.classList.remove('show'); });
   svg.addEventListener('click', event => {
     if (mapDragged) return;
-    const view = viewAt(event);
+    // A host is clicked to be commanded, not to be looked at: the glass lets go.
+    const onHost = Boolean(event.target.closest?.('.army-token'));
+    const view = onHost ? null : viewAt(event);
     pinned = Boolean(view);
     if (view) show(view, event); else lens.classList.remove('show');
     // A click on an army is also a click on the land it stands on.
@@ -3519,6 +3560,7 @@ function setupBar() {
   });
   setupSound();
   setupMusic();
+  setupVoice();
   setInterval(renderBarStatus, 1000);
   // The season under the map, and the war drums ebbing back into it.
   setInterval(updateMusic, 4000);
@@ -3742,6 +3784,17 @@ function newsFor(item) {
         : { rank: 6, art: 'neutral-taken', title: 'Земля занята', text: d.to + ' взят без боя: Дом ' + d.defender + ' оставил его без гарнизона.' };
     }
     return null;
+  }
+  if (item.type === 'WILD_BATTLE') {
+    if (!mine(d.house)) return null;
+    return d.success
+      ? { rank: 6, art: 'neutral-taken', title: 'Вольная земля взята', text: (d.to || '') + ' покорился. Пало наших: ' + (d.losses ?? 0) + '.' + (d.glory ? ' Слава +' + d.glory + '.' : '') }
+      : { rank: 6, art: 'order-failed', title: 'Приступ отбит', text: (d.to || '') + ' устоял: стражи осталось ' + (d.guards_left ?? 0) + '. Пало наших: ' + (d.losses ?? 0) + '.' };
+  }
+  if (item.type === 'CAPTURE_CHOICE' && mine(d.house)) {
+    const words = { MERCY: 'взята с миром', TRIBUTE: 'обложена данью', SACK: 'разграблена' };
+    const where = territoryById(d.territory_id)?.name || 'Земля';
+    return { rank: 4, art: 'neutral-taken', title: 'Судьба решена', text: where + ': ' + (words[d.choice] || 'решена') + '.', quiet: true };
   }
   if (item.type === 'NEUTRAL_CAPTURE' && mine(d.house)) {
     return /покорилась|УСПЕХ/.test(text)
@@ -6084,7 +6137,6 @@ function renderEconomy() {
   const influence = gain.influence ? ` +${gain.influence} влияния` : '';
   // Games with troop kinds hire in the land card, not here; income shows net of upkeep.
   const upkeep = snapshot?.game?.upkeep?.gold || 0;
-  $('old-recruit').hidden = unitsMode();
   $('income-rate').textContent = `+${gain.gold} золота${influence}` + (upkeep ? ` · войску −${upkeep} · чистыми ${gain.gold - upkeep >= 0 ? '+' : ''}${gain.gold - upkeep}` : '');
   $('income-countdown').textContent = economy.next_income_at
     ? timeLeft(economy.next_income_at)
@@ -6127,7 +6179,9 @@ function renderEconomy() {
       const territory = territoryById(job.territory)?.name || job.territory;
       const label = job.type === 'RECRUIT'
         ? `Сбор ${job.warriors} ${warriorWord(Number(job.warriors))}`
-        : 'Крепость';
+        : job.type === 'RETRAIN'
+          ? `Учение · ${job.count} ${(RANK_WORDS[job.to] || [])[0] || ''}`
+          : 'Крепость';
       const pending = job.status === 'PENDING';
       const status = job.seized_by
         ? 'досталось Дому ' + job.seized_by
@@ -6767,31 +6821,6 @@ $('end-round').addEventListener('click', async () => {
 $('manage-territory').addEventListener('change', event => {
   managedTerritory = event.target.value;
   renderEconomy();
-});
-
-document.querySelectorAll('[data-recruit]').forEach(button => {
-  button.addEventListener('click', async () => {
-    if (!managedTerritory) return;
-    const blocked = roundBlockReason();
-    if (blocked) {
-      alert(blocked);
-      return;
-    }
-    try {
-      await api('/api/recruit', {
-        method: 'POST',
-        headers: {'content-type':'application/json'},
-        body: JSON.stringify({
-          house,
-          territory: managedTerritory,
-          warriors: Number(button.dataset.recruit)
-        })
-      });
-      await refresh();
-    } catch (error) {
-      alert(sayError(error));
-    }
-  });
 });
 
 $('build-fort').addEventListener('click', async () => {

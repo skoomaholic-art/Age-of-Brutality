@@ -35,7 +35,7 @@ import { raiseLevy, startDrill, buildYard, buildPort, processRanks, ranksView } 
 import { buildBridge, burnBridge, seedCrossings, BRIDGE } from './bridges.mjs';
 import { processHordes, seedHeart, HEART } from './heart.mjs';
 import { devAction, devAllowed, devFastForward, isDevOwner } from './dev.mjs';
-import { NO_LIMIT, buildGrowth, hireUnits, replenishUnits, retrainUnits, seedPopulation, unitsView, upkeepOf, REPLENISH_STAR_SHARE } from './units.mjs';
+import { NO_LIMIT, buildGrowth, hireUnits, replenishUnits, seedPopulation, unitsView, upkeepOf, REPLENISH_STAR_SHARE } from './units.mjs';
 import { applyCaptureChoice, choiceOutcomes, seedOrder, ORDER } from './order.mjs';
 import { startRide, processRiders, ridersOf } from './riders.mjs';
 import { courtEffects } from './court.mjs';
@@ -44,7 +44,8 @@ import {
   cancelJob,
   economyView,
   normalizeOnlineEconomy,
-  processEconomy
+  processEconomy,
+  queueRetrainJob
 } from './economy.mjs';
 import {
   commandHouse,
@@ -1724,25 +1725,6 @@ async function handleGameApi(req, res, url, ctx, subpath) {
     return json(res, result.status, result.response);
   }
 
-  if (req.method === 'POST' && subpath === '/recruit') {
-    const body = await readBody(req);
-    const command = normalizeCommand({
-      type: 'RECRUIT',
-      house: body.house,
-      territory: body.territory,
-      warriors: body.warriors
-    });
-    await requireHouse(ctx, req, command.house);
-
-    const result = await serial(ctx, () => runGameCommand(ctx, req, {
-      kind: command.type,
-      status: 201,
-      house: command.house,
-      mutate: async game => executeCommand(game, map, constants, command)
-    }));
-    return json(res, result.status, result.response);
-  }
-
   if (req.method === 'POST' && ['/levy', '/drill', '/yard', '/port', '/bridge', '/hire', '/retrain', '/growth', '/capture-choice', '/bridge-burn', '/replenish'].includes(subpath)) {
     const body = await readBody(req);
     const house = String(body.house || '').trim();
@@ -1759,7 +1741,7 @@ async function handleGameApi(req, res, url, ctx, subpath) {
               : subpath === '/bridge' ? buildBridge(game, map, house, String(body.key || ''), { nowMs })
               : subpath === '/bridge-burn' ? burnBridge(game, map, house, String(body.key || ''), { nowMs })
                 : subpath === '/hire' ? hireUnits(game, map, house, String(body.territory || ''), body.counts, { nowMs })
-                  : subpath === '/retrain' ? retrainUnits(game, map, house, String(body.territory || ''), body.from, body.to, body.count, { nowMs })
+                  : subpath === '/retrain' ? queueRetrainJob(game, map, house, { territory: String(body.territory || ''), from: body.from, to: body.to, count: body.count }, { nowMs }).game
                   : subpath === '/replenish' ? replenishUnits(game, map, house, String(body.territory || ''), { nowMs })
                     : subpath === '/growth' ? buildGrowth(game, map, house, String(body.territory || ''), { nowMs })
                       : subpath === '/capture-choice' ? (() => {

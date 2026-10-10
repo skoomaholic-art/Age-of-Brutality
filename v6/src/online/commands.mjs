@@ -4,7 +4,6 @@ import { assertRoundAction, spendRoundAction } from './rounds.mjs';
 
 export const COMMAND_TYPE = Object.freeze({
   MARCH: 'MARCH',
-  RECRUIT: 'RECRUIT',
   BUILD_FORT: 'BUILD_FORT'
 });
 
@@ -41,15 +40,6 @@ export function normalizeCommand(input) {
     }
 
     return command;
-  }
-
-  if (type === COMMAND_TYPE.RECRUIT) {
-    return {
-      type,
-      house: requiredString(input.house, 'house'),
-      territory: requiredString(input.territory, 'territory'),
-      warriors: positiveInt(input.warriors, 'warriors')
-    };
   }
 
   if (type === COMMAND_TYPE.BUILD_FORT) {
@@ -107,28 +97,6 @@ function queueCommand(game, map, constants, command, { nowMs }) {
       response: {
         command_type: command.type,
         order: queued.order
-      }
-    };
-  }
-
-  if (command.type === COMMAND_TYPE.RECRUIT) {
-    const queued = queueRecruitJob(
-      game,
-      constants,
-      {
-        house: command.house,
-        territory: command.territory,
-        warriors: command.warriors
-      },
-      { nowMs }
-    );
-
-    return {
-      game: queued.game,
-      command,
-      response: {
-        command_type: command.type,
-        job: queued.job
       }
     };
   }

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { loadJson } from '../src/core/map.mjs';
 import { generateMap } from '../src/online/mapgen.mjs';
 import { createOnlineGame } from '../src/online/store.mjs';
-import { hireUnits, retrainUnits, buildGrowth, populationDawn, populationOnCapture, seedPopulation, kindsRaisedIn, PEOPLE, NO_LIMIT } from '../src/online/units.mjs';
+import { hireUnits, planRetrain, applyRetrain, buildGrowth, populationDawn, populationOnCapture, seedPopulation, kindsRaisedIn, PEOPLE, NO_LIMIT } from '../src/online/units.mjs';
 import { compAt, starsAt, setStars } from '../src/online/ranks.mjs';
 import { validateState } from '../src/core/state.mjs';
 
@@ -37,7 +37,25 @@ test('a village raises light troops, the capital all of them; every man hired is
   assert.equal(g.state.houses[H].gold, 200 - 5 - 20);
   assert.equal(g.state.population[capital], PEOPLE.start['Столица'] - 7);
   assert.equal(compAt(g.state, map, capital, H)[5], 2);
-  assert.throws(() => hireUnits(g, map, H, village, [99, 0, 0]), /осталось людей/);
+  assert.throws(() => hireUnits(g, map, H, village, [99, 0, 0]), /людей под рукой/);
+  assert.deepEqual(validateState(g.state, map, constants), []);
+});
+
+test('a land short of people is filled out from the neighbours, each giving half at most', () => {
+  let g = game();
+  const neighbours = (map.land_edges || [])
+    .filter(e => e[0] === village || e[1] === village)
+    .map(e => (e[0] === village ? e[1] : e[0]))
+    .filter(id => g.state.territories[id].owner === H);
+  assert.ok(neighbours.length, 'the village has a neighbour of the same House');
+  const here = g.state.population[village];
+  const share = Math.floor(g.state.population[neighbours[0]] / 2);
+  g = hireUnits(g, map, H, village, [here + 1, 0, 0]);
+  assert.equal(g.state.population[village], 0, 'the land gave all it had');
+  assert.equal(g.state.population[neighbours[0]], g.state.population[neighbours[0]], 'the rest came from the neighbours');
+  const taken = neighbours.reduce((sum, id) => sum + Math.max(0, PEOPLE.start[map.territories.find(t => t.id === id).type] - g.state.population[id]), 0);
+  assert.equal(taken, 1, 'only the one man missing was brought in');
+  assert.ok(share >= 1);
   assert.deepEqual(validateState(g.state, map, constants), []);
 });
 
@@ -53,7 +71,11 @@ test('retraining pays the difference; new men dilute the experience of a host', 
   g = hireUnits(g, map, H, capital, [4, 0, 0, 0, 0, 0]);
   const heads = g.state.territories[capital].warriors[H];
   setStars(g.state, capital, H, 3);
-  g = retrainUnits(g, map, H, capital, 0, 3, 2);
+  // The lesson is ordered first and learned later; here both at once.
+  const plan = planRetrain(g, map, H, capital, 0, 3, 2);
+  assert.equal(plan.gold, 8);
+  g.state.houses[H].gold -= plan.gold;
+  g = applyRetrain(structuredClone(g), map, H, capital, plan.from, plan.to, plan.count, 1000);
   assert.equal(compAt(g.state, map, capital, H)[3], 2);
   assert.equal(g.state.houses[H].gold, 200 - 4 - 8);
   g = hireUnits(g, map, H, capital, [heads, 0, 0, 0, 0, 0]);

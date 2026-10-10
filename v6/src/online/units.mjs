@@ -10,6 +10,7 @@
 // A village raises the light kinds, a town the middle ones, the capital all.
 // Troops already standing can be retrained into a better kind where that kind
 // is raised, for the difference in price.
+import { buildAdjacency } from '../core/map.mjs';
 import { orderOnCapture } from './order.mjs';
 import { heartOnCapture } from './heart.mjs';
 import { addPeak, peakAt, RANKS, compAt, emptyComp, mergeStars, reconcileRanks, setStars, starsAt } from './ranks.mjs';
@@ -70,6 +71,44 @@ function assertNewRules(game) {
   if (!game.state?.population) throw new Error(OLD_RULES);
 }
 
+// Where the men come from. A land gives its own people first; what it cannot
+// give is brought in from the House's neighbouring lands, but no settlement
+// gives away more than half of its people: a land stripped bare is no land.
+export const NEIGHBOUR_SHARE = 0.5;
+
+export function recruitPool(state, map, house, territory) {
+  const own = peopleAt(state, territory);
+  const adjacency = buildAdjacency(map.land_edges);
+  const near = [];
+  for (const id of adjacency.get(territory) || []) {
+    if (state.territories[id]?.owner !== house) continue;
+    const share = Math.floor(peopleAt(state, id) * NEIGHBOUR_SHARE);
+    if (share > 0) near.push({ id, share });
+  }
+  near.sort((a, b) => b.share - a.share || (a.id < b.id ? -1 : 1));
+  return { territory, own, near, total: own + near.reduce((sum, n) => sum + n.share, 0) };
+}
+
+// Takes the men out of the land and its neighbours, the land first.
+function drawPeople(state, pool, heads) {
+  const drawn = [];
+  let left = heads;
+  const takeHere = Math.min(pool.own, left);
+  if (takeHere > 0) {
+    state.population[pool.territory] = pool.own - takeHere;
+    drawn.push({ territory: pool.territory, people: takeHere });
+    left -= takeHere;
+  }
+  for (const near of pool.near) {
+    if (left <= 0) break;
+    const take = Math.min(near.share, left);
+    state.population[near.id] = peopleAt(state, near.id) - take;
+    drawn.push({ territory: near.id, people: take });
+    left -= take;
+  }
+  return drawn;
+}
+
 export function hireUnits(game, map, house, territory, counts, { nowMs = Date.now() } = {}) {
   assertNewRules(game);
   const land = game.state.territories[territory];
@@ -79,8 +118,8 @@ export function hireUnits(game, map, house, territory, counts, { nowMs = Date.no
   if (!heads) throw new Error('кого нанять?');
   const allowed = new Set(kindsRaisedIn(map, territory));
   want.forEach((n, i) => { if (n && !allowed.has(i)) throw new Error(`${RANKS[i].name} здесь не набираются: нужна ${RANKS[i].where === 2 ? 'столица' : 'земля с городом'}`); });
-  const people = peopleAt(game.state, territory);
-  if (heads > people) throw new Error(`в этой земле осталось людей: ${people}`);
+  const pool = recruitPool(game.state, map, house, territory);
+  if (heads > pool.total) throw new Error(`людей под рукой: ${pool.total} (в земле ${pool.own}, из округи ${pool.total - pool.own})`);
   const gold = want.reduce((sum, n, i) => sum + n * RANKS[i].gold, 0);
   if (Number(game.state.houses[house].gold || 0) < gold) throw new Error(`нужно ${gold} золота`);
 
@@ -91,7 +130,7 @@ export function hireUnits(game, map, house, territory, counts, { nowMs = Date.no
   const comp = compAt(state, map, territory, house);
   want.forEach((n, i) => { comp[i] += n; });
   state.houses[house].gold -= gold;
-  state.population[territory] = people - heads;
+  const drawn = drawPeople(state, pool, heads);
   state.territories[territory].warriors[house] = oldHeads + heads;
   state.ranks ||= {};
   state.ranks[territory] ||= {};
@@ -100,7 +139,7 @@ export function hireUnits(game, map, house, territory, counts, { nowMs = Date.no
   (state.peak[territory] ||= {})[house] = peakAt(game.state, map, territory, house).map((n, i) => n + want[i]);
   // Fresh men dilute the experience of the host they join.
   setStars(state, territory, house, mergeStars(starsAt(game.state, territory, house), oldHeads, 0, heads));
-  state.journal.push({ kind: 'UNITS_HIRED', house, houses: [house], territory, counts: want, gold, at: iso(nowMs) });
+  state.journal.push({ kind: 'UNITS_HIRED', house, houses: [house], territory, counts: want, gold, drawn, at: iso(nowMs) });
   next.updated_at = iso(nowMs);
   return next;
 }
@@ -155,7 +194,9 @@ export function replenishUnits(game, map, house, territory, { nowMs = Date.now()
 }
 
 // Turns `count` men of one kind into a better kind, for the difference in price.
-export function retrainUnits(game, map, house, territory, from, to, count, { nowMs = Date.now() } = {}) {
+// What a retraining would cost and whether it may be ordered at all. The men
+// learn over time, so this only settles the terms; `applyRetrain` finishes it.
+export function planRetrain(game, map, house, territory, from, to, count) {
   assertNewRules(game);
   const land = game.state.territories[territory];
   if (!land || land.owner !== house) throw new Error('переучивать можно только в своей земле');
@@ -164,17 +205,27 @@ export function retrainUnits(game, map, house, territory, from, to, count, { now
   if (!kindsRaisedIn(map, territory).includes(to)) throw new Error(`${RANKS[to].name} здесь не обучаются`);
   if (count < 1) throw new Error('сколько переучить?');
   const comp = compAt(game.state, map, territory, house);
-  // Men already on the march are not here to learn.
+  // Men already on the march, or already sent to learn, are not here.
   for (const order of game.orders || []) {
     if (order.status === 'PENDING' && order.action.house === house && order.action.from === territory && order.action.ranks) {
       for (let i = 0; i < comp.length; i += 1) comp[i] = Math.max(0, comp[i] - Number(order.action.ranks[i] || 0));
     }
   }
+  for (const job of game.jobs || []) {
+    if (job.status === 'PENDING' && job.type === 'RETRAIN' && job.house === house && job.territory === territory) {
+      comp[Number(job.from)] = Math.max(0, comp[Number(job.from)] - Number(job.count || 0));
+    }
+  }
   if (comp[from] < count) throw new Error(`${RANKS[from].name}: здесь свободно только ${comp[from]}`);
   const gold = (RANKS[to].gold - RANKS[from].gold) * count;
   if (Number(game.state.houses[house].gold || 0) < gold) throw new Error(`нужно ${gold} золота`);
-  const next = structuredClone(game);
+  return { from, to, count, gold };
+}
+
+// The lesson is learned: the men now stand under another banner.
+export function applyRetrain(next, map, house, territory, from, to, count, nowMs) {
   const stored = compAt(next.state, map, territory, house);
+  if (stored[from] < count) throw new Error(`${RANKS[from].name}: учиться уже некому`);
   stored[from] -= count;
   stored[to] += count;
   next.state.ranks ||= {};
@@ -187,9 +238,7 @@ export function retrainUnits(game, map, house, territory, from, to, count, { now
     peak[from] = Number(peak[from] || 0) - moved;
     peak[to] = Number(peak[to] || 0) + moved;
   }
-  next.state.houses[house].gold -= gold;
-  next.state.journal.push({ kind: 'UNITS_RETRAINED', house, houses: [house], territory, from, to, count, gold, at: iso(nowMs) });
-  next.updated_at = iso(nowMs);
+  next.state.journal.push({ kind: 'UNITS_RETRAINED', house, houses: [house], territory, from, to, count, gold: 0, at: iso(nowMs) });
   return next;
 }
 

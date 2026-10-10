@@ -51,6 +51,12 @@ function tick(game, nowMs) {
   return processRounds(next, map, constants, { nowMs });
 }
 
+// Lands of the House that could still take a fort: the simplest ordinary order.
+function fortLands(game) {
+  return Object.keys(game.state.territories)
+    .filter(id => game.state.territories[id].owner === HOUSE && !game.state.territories[id].fort && id !== CAPITAL);
+}
+
 function neighbourOfType(type) {
   const id = [...adjacency.get(CAPITAL)].find(
     other => map.territories.find(t => t.id === other).type === type
@@ -71,14 +77,16 @@ test('a game in days pays income at the start, sets a day clock and has no order
   assert.equal(Date.parse(game.rounds.deadline_at), T0 + DAY);
   assert.equal(roundsView(game).day_ms, DAY);
 
-  for (let i = 1; i <= 4; i += 1) {
+  const targets = [...adjacency.get(CAPITAL)];
+  game.state.territories[CAPITAL].warriors[HOUSE] = 12;
+  for (let i = 0; i < 4; i += 1) {
     game = executeCommand(
       game, map, constants,
-      { type: 'RECRUIT', house: HOUSE, territory: CAPITAL, warriors: 1 },
-      { nowMs: T0 + i }
+      { type: 'MARCH', house: HOUSE, from: CAPITAL, to: targets[i % targets.length], warriors: 1 },
+      { nowMs: T0 + i + 1 }
     ).game;
   }
-  assert.equal(game.jobs.length, 4, 'more than three orders in one day are fine');
+  assert.equal(game.orders.length, 4, 'more than three orders in one day are fine');
   assert.throws(() => passRound(game, HOUSE, T0 + 9), /rounds are not enabled/);
 });
 
@@ -92,13 +100,19 @@ test('one road takes a sixth of the game day and build times scale with it', () 
   game = march(game, CAPITAL, village, 2, T0 + 1);
   assert.equal(game.orders[0].duration_ms, DAY / 6);
 
+  const fortAt = fortLands(game)[0] || (() => {
+    const free = Object.keys(game.state.territories).find(id => !game.state.territories[id].owner);
+    game.state.territories[free].owner = HOUSE;
+    game.state.territories[free].warriors = { [HOUSE]: 1 };
+    return free;
+  })();
   game = executeCommand(
     game, map, constants,
-    { type: 'RECRUIT', house: HOUSE, territory: CAPITAL, warriors: 1 },
+    { type: 'BUILD_FORT', house: HOUSE, territory: fortAt },
     { nowMs: T0 + 2 }
   ).game;
   const built = Date.parse(game.jobs[0].due_at) - Date.parse(game.jobs[0].created_at);
-  assert.equal(built, Math.round(4_000 * (DAY / 18_000)));
+  assert.equal(built, Math.round(5_000 * (DAY / 18_000)), 'a fort takes its own time, scaled to the day');
 });
 
 test('the day changes on the clock while armies keep marching, and the days keep their length', () => {
