@@ -307,6 +307,11 @@
     .dip-sub button { padding: 1px 7px; font-size: 12px; font-style: normal; }
     /* The chronicler's glass: a closer look at an army under the cursor. */
     .army-token { cursor: help; pointer-events: auto; }
+    /* Until the first march is ordered, the player's own hosts breathe a little,
+       so a newcomer sees at once what to press. */
+    @keyframes first-move { 0%, 100% { opacity: .15; r: 8; } 50% { opacity: .5; r: 10.5; } }
+    .first-move-halo { fill: #e2b53e; animation: first-move 1.9s ease-in-out infinite; pointer-events: none; }
+    @media (prefers-reduced-motion: reduce) { .first-move-halo { animation: none; opacity: .3; } }
     .npc { cursor: help; }
     .npc .shield { stroke: #2b1b12; stroke-width: .75; stroke-linejoin: round; }
     .army-figure { transform-box: fill-box; transform-origin: 50% 100%; animation: army-rest 4.5s ease-in-out infinite; }
@@ -2303,7 +2308,8 @@ function renderLand() {
     if (unitsMode()) {
       body.innerHTML = '<div class="row"><span>Стоит здесь</span><b>' + here + ' ' + warriorWord(here) + (here ? ' · ' + starText(starsOf(landId, house)) : '') + '</b></div>' +
         (here ? '<div class="row"><span>Из них</span><b>' + escapeHtml(describeRanks(rankComp(landId, house))) + '</b></div>' : '') +
-        replenishBlock(landId) + hireBlock(landId) + spyRow;
+        replenishBlock(landId) + hireBlock(landId) +
+        (spyRow ? '<details class="more"' + (spyMoreOpen ? ' open' : '') + ' data-spy-more><summary>Тайные дела</summary>' + plainButtons(spyRow) + '</details>' : '');
       return;
     }
     body.innerHTML = '<div class="row"><span>Стоит здесь</span><b>' + here + ' ' + warriorWord(here) + '</b></div>' + spyRow +
@@ -2333,8 +2339,9 @@ function renderLand() {
       : '');
 }
 
-// The fold remembers whether it was open: a dawn's refresh must not shut it.
+// The folds remember whether they were open: a dawn's refresh must not shut them.
 let buildMoreOpen = false;
+let spyMoreOpen = false;
 
 // Only one button on a pane may shout; the rest are quiet.
 function onlyPrimary(html) { return html; }
@@ -2403,7 +2410,11 @@ function setupLand() {
     const hire = event.target.closest('[data-land-hire]');
     if (hire) landCommand('/api/recruit', { warriors: Number(hire.dataset.landHire) });
     const fold = event.target.closest('#land-body details.more > summary');
-    if (fold) buildMoreOpen = !fold.parentElement.open;
+    if (fold) {
+      const node = fold.parentElement;
+      if (node.hasAttribute('data-spy-more')) spyMoreOpen = !node.open;
+      else buildMoreOpen = !node.open;
+    }
     if (event.target.closest('[data-land-fort]')) landCommand('/api/fort', {});
     const readCounts = name => [0, 1, 2, 3].map(rank => Number($('land-body').querySelector('[data-' + name + '="' + rank + '"]')?.value || 0));
     if (event.target.closest('[data-levy-go]')) landCommand('/api/levy', { counts: readCounts('levy') });
@@ -3751,6 +3762,9 @@ function pumpDeals() {
   }
 }
 
+// Which Houses have their fold open: a refresh must not shut it.
+const dipMoreOpen = new Set();
+
 function renderDiplomacy() {
   const box = $('diplomacy');
   if (!box) return;
@@ -3783,7 +3797,7 @@ function renderDiplomacy() {
       }
     } else if (rel === 'ALLIANCE') {
       state = '<span class="dip-state ally">союз</span>';
-      buttons = '<button data-marry="' + escapeHtml(other) + '">Переговоры</button><button data-dip="BREAK_ALLIANCE" data-target="' + escapeHtml(other) + '">Расторгнуть</button>';
+      buttons = '<button data-marry="' + escapeHtml(other) + '">Написать письмо</button><button data-dip="BREAK_ALLIANCE" data-target="' + escapeHtml(other) + '">Расторгнуть</button>';
     } else if ((dip.deals_in || []).some(d => d.from === other)) {
       state = '<span class="dip-state">прислал письмо</span>';
       buttons = '<button class="primary" data-read="' + escapeHtml(other) + '">Прочесть</button>';
@@ -3798,7 +3812,7 @@ function renderDiplomacy() {
       state = '<span class="dip-state">ждём ответа</span>';
       buttons = '<button data-dip="DECLINE_ALLIANCE" data-target="' + escapeHtml(other) + '">Отозвать</button>';
     } else {
-      buttons = '<button class="primary" data-marry="' + escapeHtml(other) + '">Переговоры</button>' +
+      buttons = '<button class="primary" data-marry="' + escapeHtml(other) + '">Написать письмо</button>' +
         '<button data-dip="DECLARE_WAR" data-target="' + escapeHtml(other) + '">Бросить перчатку</button>';
     }
     // Right of passage, both ways.
@@ -3819,10 +3833,25 @@ function renderDiplomacy() {
     const wed = (dip.marriages || []).filter(m => [m.bride_house, m.groom_house].includes(other) && [m.bride_house, m.groom_house].includes(house))
       .map(m => '<span>' + escapeHtml(m.name + ' из Дома ' + m.bride_house + ' замужем в Доме ' + m.groom_house) + '</span>').join('');
     sub = wed + sub;
-    return '<div class="dip-row"><span class="dip-name"><span class="banner-mini">' + bannerSvg(bannerOf(other)) + '</span>' + escapeHtml(other) + marked + '</span>' + state + buttons + '</div>' +
-      (sub ? '<div class="dip-sub">' + sub + '</div>' : '');
+    // One loud action on the row — the letter; the rest waits under the fold.
+    const parts = buttons.split(/(?=<button)/).filter(Boolean);
+    const lead = parts.find(part => part.includes('class="primary"')) || parts[0] || '';
+    const rest = parts.filter(part => part !== lead).join('');
+    const folded = rest || sub;
+    return '<div class="dip-row"><span class="dip-name"><span class="banner-mini">' + bannerSvg(bannerOf(other)) + '</span>' + escapeHtml(other) + marked + '</span>' + state + lead + '</div>' +
+      (folded
+        ? '<details class="more dip-more"' + (dipMoreOpen.has(other) ? ' open' : '') + ' data-dip-more="' + tag + '"><summary>Ещё</summary>' +
+          (rest ? '<div class="dip-sub">' + rest + '</div>' : '') + (sub ? '<div class="dip-sub">' + sub + '</div>' : '') + '</details>'
+        : '');
   }).join('');
   box.innerHTML = rows + unknownNote(others.length - met.length);
+  box.querySelectorAll('details.dip-more > summary').forEach(summary => {
+    summary.addEventListener('click', () => {
+      const node = summary.parentElement;
+      const name = node.dataset.dipMore;
+      if (node.open) dipMoreOpen.delete(name); else dipMoreOpen.add(name);
+    });
+  });
   box.querySelectorAll('button[data-marry]').forEach(button => {
     button.onclick = () => openDeal(button.dataset.marry);
   });
@@ -4555,15 +4584,26 @@ function settlementFigure(kind, w, c, owner) {
 // An army on the map: the painted host in its House's colours with the number
 // of warriors on a small shield. A host on the march steps along and faces the
 // way it goes; one that stands shifts its weight now and then.
+// True while this House has never given an order in this game: the first
+// march is the one thing a newcomer should find.
+function awaitingFirstMove() {
+  if (!house || isSpectator || !snapshot?.game) return false;
+  if (snapshot.game.lifecycle?.status !== 'RUNNING') return false;
+  return !(snapshot.game.orders || []).some(order => order.action?.house === house);
+}
+
 function shieldToken(x, y, color, count, scale = 1, lens = '', who = null, moving = false, faceRight = false, wear = null) {
-  if (pixiScene && !moving) pixiScene.tokens.push({ x: x + (pixiScene.dx || 0), y: y + (pixiScene.dy || 0), color, count, scale, wear: Boolean(wear) });
+  const ours = who && who === house && !moving;
+  if (pixiScene && !moving) pixiScene.tokens.push({ x: x + (pixiScene.dx || 0), y: y + (pixiScene.dy || 0), color, count, scale, wear: Boolean(wear), halo: Boolean(ours && awaitingFirstMove()) });
   const slug = who && abandonedHouses()[who] ? 'abandoned' : HOUSE_SLUGS[who];
   // The map is redrawn often: the animation picks up where the clock is, not from its start.
   const figure = false
     ? `<g transform="scale(${faceRight ? -1 : 1} 1)"><image class="army-figure${moving ? ' marching' : ''}" style="animation-delay:-${Date.now() % (moving ? 700 : 4500)}ms" href="/assets/img/army-${slug}.png" x="-9" y="-13.5" width="18" height="18"></image></g>`
     : '';
   const badge = '';
-  return `<g class="army-token" ${lens} transform="translate(${x} ${y}) scale(${scale})">` + figure +
+  const halo = ours && awaitingFirstMove()
+    ? '<circle class="first-move-halo" cx="0" cy="0" r="9"></circle>' : '';
+  return `<g class="army-token" ${lens} transform="translate(${x} ${y}) scale(${scale})">` + halo + figure +
     `<g transform="${badge}">` +
     `<path class="shield" d="M-4.8 -5.4H4.8V.8Q4.8 4.9 0 6.4Q-4.8 4.9 -4.8 .8Z" fill="${color}"></path>` +
     '<path class="shield-shine" d="M-3.4 -4H3.4"></path>' +
@@ -5042,6 +5082,11 @@ function drawPixiMap(scene, key) {
   }
   for (const tk of scene.tokens) {
     const s = shieldGraphic(tk.color, tk.count, tk.scale);
+    if (tk.halo) {
+      const halo = new PIXI.Graphics();
+      halo.beginFill(0xe2b53e, 0.32); halo.drawCircle(0, 0, 9.6); halo.endFill();
+      s.addChildAt(halo, 0);
+    }
     if (tk.mark) s.addChild(leaderBadge(tk.mark));
     if (tk.wear) s.addChild(skullBadge());
     s.position.set(tk.x, tk.y);
