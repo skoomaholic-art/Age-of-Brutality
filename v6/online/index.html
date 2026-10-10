@@ -501,7 +501,16 @@
     .maker-banner { display: grid; grid-template-columns: 70px 1fr; gap: 10px; align-items: center; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--rule); }
     .banner-mini { display: inline-block; width: 15px; vertical-align: -5px; margin-right: 5px; }
     .maker-foot { grid-column: 1 / -1; display: flex; gap: 8px; justify-content: flex-end; }
-    @media (max-width: 640px) { .maker-card { grid-template-columns: 1fr; } }
+    @media (max-width: 640px) {
+      .maker-card { grid-template-columns: 1fr; }
+      /* On a phone the lord's portrait yields room: the name, the motto and
+         the two buttons must be on the first screen, not below the fold. */
+      .maker-card h3 { font-size: 25px; }
+      /* The portrait keeps its proportions: only its width is reined in, or
+         the painted parts of the living head would slide off the face. */
+      .maker-card .portrait-frame { max-width: 56vw; margin: 0 auto; }
+      .maker-foot { position: sticky; bottom: 0; padding-top: 8px; background: linear-gradient(to top, var(--parchment, #f2e6c8) 70%, transparent); }
+    }
     /* A living head: painted parts that blink, glance about, talk and gesture. */
     .live { position: relative; aspect-ratio: 270 / 350; animation: live-nod 3.4s ease-in-out infinite; transform-origin: 45% 100%; }
     .live img { position: absolute; display: block; }
@@ -3136,7 +3145,7 @@ function focusMapOn(id) {
   const c = snapshot?.map?.coordinates?.[id] || snapshot?.map?.sea_waypoints?.[id];
   if (!c) return;
   const w = Math.min(mapView.w, 320);
-  const h = w * (MAP_HOME.h / MAP_HOME.w);
+  const h = w * mapRatio();
   mapView = { x: c.x - w / 2, y: c.y - h / 2, w, h };
   clampMapView();
   applyMapView();
@@ -3444,7 +3453,7 @@ function newsFor(item) {
   if (item.type === 'HEART_SPIED') return { rank: 8, art: 'intrigue-exposed', title: 'Соглядатай вернулся', text };
   if (item.type === 'HEART_FOUND') return { rank: 9, art: 'capital-taken', title: 'Истинное Сердце открылось', text };
   if (item.type === 'HEART_TAKEN') return { rank: mine(d.house) ? 9 : 7, art: mine(d.house) ? 'capital-taken' : 'capital-lost', title: mine(d.house) ? 'Сердце земель твоё' : 'Сердце земель взято', text };
-  if (item.type === 'HEART_HELD') return { rank: 4, art: 'chronicle-day', title: 'Сердце земель держится', text };
+  if (item.type === 'HEART_HELD') return { rank: 4, art: 'chronicle-day', title: 'Сердце земель держится', text, quiet: true };
   if (item.type === 'HORDE_COUNTDOWN') return { rank: 9, art: 'war-declared', title: 'Знамения над миром', text };
   if (item.type === 'HORDE_UNLEASHED') return { rank: 10, art: 'war-declared', title: 'Печати пали', text };
   if (item.type === 'HORDE_AWAKENED') return { rank: mine(d.house) ? 10 : 6, art: 'war-declared', title: mine(d.house) ? 'Орда идёт на тебя' : 'Орда пробудилась', text };
@@ -3452,17 +3461,24 @@ function newsFor(item) {
   if (item.type === 'HORDE_SACKED') return { rank: mine(d.house) ? 10 : 6, art: 'capital-lost', title: mine(d.house) ? 'Тартары разорили твою столицу' : 'Столица разорена', text };
   if (item.type === 'HORDE_BROKEN') return { rank: mine(d.house) ? 9 : 5, art: 'battle-won', title: mine(d.house) ? 'Тартары разбиты' : 'Тартары разбиты', text };
   if (item.type === 'HORDE_SPENT') return { rank: mine(d.house) ? 7 : 4, art: 'battle-seen', title: 'Орда выдохлась', text };
-  if (item.type === 'HORDE_FORDING') return { rank: mine(d.house) ? 6 : 3, art: 'battle-seen', title: 'Тартары у реки', text };
+  if (item.type === 'HORDE_FORDING') return { rank: mine(d.house) ? 6 : 3, art: 'battle-seen', title: 'Тартары у реки', text, quiet: !mine(d.house) };
   // Weather and the road: what eats an army without a battle.
   if (item.type === 'STORM_ROSE') return { rank: 5, art: 'battle-seen', title: 'Буря на море', text };
   if (item.type === 'STORM_HIT') return { rank: mine(d.house) ? 7 : 3, art: 'battle-lost', title: 'Буря потрепала ладьи', text };
-  if (item.type === 'STORM_PASSED') return { rank: mine(d.house) ? 5 : 2, art: 'battle-seen', title: 'Буря прошла стороной', text };
-  if (item.type === 'ATTRITION') return { rank: 4, art: 'battle-lost', title: 'Потери без битвы', text };
-  if (item.type === 'SEA_TOLL') return { rank: mine(d.house) ? (Number(d.days || 0) >= 4 ? 8 : 6) : 3, art: 'battle-lost', title: 'Проклятье Одиссея', text, ok: 'К берегу!' };
-  if (item.type === 'COMMANDER_ASHORE') return { rank: 6, art: 'commander-returned', title: 'Воевода сошёл на берег', text };
+  if (item.type === 'STORM_PASSED') return { rank: mine(d.house) ? 5 : 2, art: 'battle-seen', title: 'Буря прошла стороной', text, quiet: !mine(d.house) };
+  // Non-battle losses are counted in the treasurer's account each dawn: one
+  // line there, not a card for every land that bleeds.
+  if (item.type === 'ATTRITION') return { rank: 4, art: 'battle-lost', title: 'Потери без битвы', text, quiet: true };
+  // The curse is cried when it first bites and again when it turns deadly;
+  // the dawns between are quiet.
+  if (item.type === 'SEA_TOLL') {
+    const days = Number(d.days || 0);
+    return { rank: mine(d.house) ? (days >= 4 ? 8 : 6) : 3, art: 'battle-lost', title: 'Проклятье Одиссея', text, ok: 'К берегу!', quiet: !mine(d.house) || !(days === 2 || days === 4) };
+  }
+  if (item.type === 'COMMANDER_ASHORE') return { rank: 6, art: 'commander-returned', title: 'Воевода сошёл на берег', text, quiet: true };
   if (item.type === 'COMMANDER_DROWNED') return { rank: 9, art: 'commander-dead', title: 'Воевода утонул', text };
   if (item.type === 'MARCH_LOST') return { rank: 7, art: 'order-failed', title: 'Рать не дошла', text };
-  if (item.type === 'MARCH_THINNED') return { rank: 5, art: 'order-failed', title: 'Рать поредела', text };
+  if (item.type === 'MARCH_THINNED') return { rank: 5, art: 'order-failed', title: 'Рать поредела', text, quiet: true };
   if (item.type === 'REVOLT') return { rank: mine(d.house) ? 8 : 4, art: 'land-lost', title: mine(d.house) ? 'Земля поднялась против тебя' : 'Бунт в землях', text };
   if (item.type === 'DESERTION') return { rank: 6, art: 'order-failed', title: 'Войско разбегается', text };
 
@@ -3569,7 +3585,9 @@ function announceNews() {
   lastNewsSeq = newest;
   const found = fresh
     .map(item => ({ item, news: newsFor(item) }))
-    .filter(entry => entry.news)
+    // Quiet news belongs in the list of tidings and in the dawn's account,
+    // not in a card over the map: a dawn must not bury the player in paper.
+    .filter(entry => entry.news && !entry.news.quiet)
     .sort((x, y) => y.news.rank - x.news.rank);
   // After a long absence only the weightiest news is cried; the rest waits in "Вести".
   newsQueue.push(...found.slice(0, 6));
@@ -4389,7 +4407,7 @@ function focusOnHome() {
   if (!c || !snapshot.game.visibility?.fog) return;
   homeFocused = true;
   const w = 330;
-  const h = w * (MAP_HOME.h / MAP_HOME.w);
+  const h = w * mapRatio();
   mapView = { x: c.x - w / 2, y: c.y - h / 2, w, h };
   clampMapView();
   applyMapView();
@@ -4424,23 +4442,45 @@ function heartAim() {
 }
 
 function goHome() {
-  mapView = { ...MAP_HOME };
+  mapView = { ...MAP_HOME, h: MAP_HOME.w * mapRatio() };
   const capital = snapshot?.map?.capitals?.[$('house').value];
   const c = capital && snapshot.map.coordinates?.[capital];
   if (c && matchMedia('(max-width: 760px), (pointer: coarse) and (max-width: 1000px)').matches) {
-    mapView.w = Math.min(MAP_HOME.w, 420);
-    mapView.h = mapView.w * (MAP_HOME.h / MAP_HOME.w);
-    mapView.x = c.x - mapView.w / 2;
-    mapView.y = c.y - mapView.h / 2;
+    // A phone opens on the House's own lands, not on the whole world: the
+    // realm itself, with a little room around it.
+    const own = (snapshot.map.territories || [])
+      .filter(t => t.house_sector === $('house').value)
+      .map(t => snapshot.map.coordinates[t.id])
+      .filter(Boolean);
+    const xs = own.map(p => p.x);
+    const ys = own.map(p => p.y);
+    const span = own.length
+      ? Math.max(Math.max(...xs) - Math.min(...xs), (Math.max(...ys) - Math.min(...ys)) / mapRatio())
+      : 220;
+    mapView.w = Math.max(200, Math.min(MAP_HOME.w, span * 1.45));
+    mapView.h = mapView.w * mapRatio();
+    const mid = own.length
+      ? { x: (Math.max(...xs) + Math.min(...xs)) / 2, y: (Math.max(...ys) + Math.min(...ys)) / 2 }
+      : c;
+    mapView.x = mid.x - mapView.w / 2;
+    mapView.y = mid.y - mapView.h / 2;
     clampMapView();
     homeShown = true;
   }
   applyMapView();
 }
 
+// The map window is tall on a phone and wide on a desktop: the view must take
+// the shape of the window it is shown in, or everything is letterboxed small.
+function mapRatio() {
+  const box = $('map')?.getBoundingClientRect();
+  if (box && box.width > 40 && box.height > 40) return box.height / box.width;
+  return MAP_HOME.h / MAP_HOME.w;
+}
+
 function clampMapView() {
   const bounds = mapArt?.bounds || { x0: -160, y0: -110, x1: 1000, y1: 660 };
-  const ratio = MAP_HOME.h / MAP_HOME.w;
+  const ratio = mapRatio();
   mapView.w = Math.max(150, Math.min(bounds.x1 - bounds.x0, mapView.w));
   mapView.h = mapView.w * ratio;
   mapView.x = Math.max(bounds.x0, Math.min(bounds.x1 - mapView.w, mapView.x));
@@ -4464,7 +4504,7 @@ function zoomMap(factor, anchor = null) {
   const applied = mapView.w / before;
   mapView.x = focus.x - (focus.x - mapView.x) * applied;
   mapView.y = focus.y - (focus.y - mapView.y) * applied;
-  mapView.h = mapView.w * (MAP_HOME.h / MAP_HOME.w);
+  mapView.h = mapView.w * mapRatio();
   clampMapView();
   applyMapView();
 }
