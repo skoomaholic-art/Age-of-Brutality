@@ -561,16 +561,24 @@ export function buildMapArt(map, options = {}) {
     return out;
   }).join('');
 
-  // Reefs: teeth of rock just under the water by a sea mark.
+  // Reefs: rocks awash, drawn low and broken, with foam breaking over them —
+  // never the tidy triangles of a mountain.
   const reefMarkup = (map.reefs || []).map(id => {
     const point = map.sea_waypoints?.[id];
     if (!point) return '';
     let out = '';
-    for (let i = 0; i < 5; i += 1) {
-      const x = point.x + (terrainRandom() - 0.5) * 26;
-      const y = point.y + (terrainRandom() - 0.5) * 20;
-      if (depthAt(x, y) > 0) continue;
-      out += `<path d="M${f1(x - 2.4)} ${f1(y)}l${f1(2.4)} ${f1(-3.2)}l${f1(2.4)} ${f1(3.2)}Z" fill="#5f7884" stroke="#2f4550" stroke-width=".4" opacity=".75"/>`;
+    for (let i = 0; i < 7; i += 1) {
+      const x = point.x + (terrainRandom() - 0.5) * 30;
+      const y = point.y + (terrainRandom() - 0.5) * 22;
+      if (depthAt(x, y) > -1) continue;
+      const w = 2.6 + terrainRandom() * 2.4;
+      const h = 0.9 + terrainRandom() * 1.1;
+      const tilt = (terrainRandom() - 0.5) * 1.6;
+      // A broken ridge of rock, barely above the water.
+      out += `<path d="M${f1(x - w)} ${f1(y)}l${f1(w * 0.42)} ${f1(-h * 1.5 + tilt)}l${f1(w * 0.3)} ${f1(h * 0.6)}l${f1(w * 0.5)} ${f1(-h * 1.9)}l${f1(w * 0.4)} ${f1(h * 1.8)}l${f1(w * 0.38)} ${f1(-h * 0.5)}Z"` +
+        ` fill="#4d6470" stroke="#26343c" stroke-width=".35" stroke-linejoin="round" opacity=".85"/>`;
+      // Foam breaking over the rock.
+      out += `<path d="M${f1(x - w * 1.2)} ${f1(y + 0.9)}q${f1(w * 0.6)} ${f1(-1.5)} ${f1(w * 1.2)} 0q${f1(w * 0.6)} ${f1(1.4)} ${f1(w * 1.2)} 0" fill="none" stroke="#eaf3f5" stroke-width=".55" stroke-linecap="round" opacity=".75"/>`;
     }
     return out;
   }).join('');

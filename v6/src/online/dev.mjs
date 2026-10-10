@@ -1,18 +1,19 @@
-// Developer mode, for the game's author: only in a solo game, only with the
-// developer key. It can lift the fog, make building and hiring instant, and
-// fill the treasury. Nothing here touches games with other people.
-import crypto from 'node:crypto';
+// Developer mode, for the game's author alone: only on his own account, and
+// only in a solo game of his. It can lift the fog, make building and hiring
+// instant, and fill the treasury. There is no key and no secret word: the
+// right comes with the account, so nobody else can turn it on.
+//
+// The owner's handle is set by AOB_DEV_HANDLE; without it, the author's own.
 
-const DEV_KEY_SHA256 = '9b96ba110300bbe482e70e521228d6857b1a723d6aa58cfe2a1b094da224a22c';
+export const DEV_HANDLE = String(process.env.AOB_DEV_HANDLE || 'skoomaholic').trim().toLowerCase();
 
-export function devKeyValid(key) {
-  if (!key) return false;
-  const digest = crypto.createHash('sha256').update(String(key)).digest('hex');
-  return crypto.timingSafeEqual(Buffer.from(digest), Buffer.from(DEV_KEY_SHA256));
+export function isDevOwner(profile) {
+  const handle = String(profile?.handle || '').trim().toLowerCase();
+  return Boolean(handle) && handle === DEV_HANDLE;
 }
 
-export function devAllowed(game, key) {
-  return devKeyValid(key) && game?.lifecycle?.game_mode === 'SOLO';
+export function devAllowed(game, profile) {
+  return isDevOwner(profile) && game?.lifecycle?.game_mode === 'SOLO';
 }
 
 const iso = ms => new Date(ms).toISOString();

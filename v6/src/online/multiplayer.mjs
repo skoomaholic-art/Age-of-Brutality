@@ -161,7 +161,8 @@ export function createPlayerRecord({
 
 export function publicPlayer(player) {
   if (!player) return null;
-  const { token_hash, ...safe } = player;
+  // Neither the secret of a seat nor the right of the author's account leaves the server.
+  const { token_hash, dev_owner, profile_handle, ...safe } = player;
   return safe;
 }
 

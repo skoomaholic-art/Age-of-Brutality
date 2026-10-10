@@ -34,7 +34,7 @@ import { normalizeOnlineSeaState } from './sea-navigation.mjs';
 import { raiseLevy, startDrill, buildYard, buildPort, processRanks, ranksView } from './levy.mjs';
 import { buildBridge, burnBridge, seedCrossings, BRIDGE } from './bridges.mjs';
 import { processHordes, seedHeart, HEART } from './heart.mjs';
-import { devAction, devAllowed, devFastForward } from './dev.mjs';
+import { devAction, devAllowed, devFastForward, isDevOwner } from './dev.mjs';
 import { NO_LIMIT, buildGrowth, hireUnits, replenishUnits, retrainUnits, seedPopulation, unitsView, upkeepOf, REPLENISH_STAR_SHARE } from './units.mjs';
 import { applyCaptureChoice, choiceOutcomes, seedOrder } from './order.mjs';
 import { startRide, processRiders, ridersOf } from './riders.mjs';
@@ -531,6 +531,9 @@ async function requirePlayer(ctx, req) {
 
   const player = await ctx.store.findPlayerByProfileId(profile.id);
   if (!player) throw new Error('profile is not a member of this game');
+  // Developer mode belongs to one account; everyone else never sees it.
+  player.profile_handle = profile.handle || null;
+  player.dev_owner = isDevOwner(profile);
   return player;
 }
 
@@ -696,7 +699,10 @@ function redactGameForPlayer(game, player) {
     ) {
       applyFog(clientGame, map, ownHouse);
     }
-    clientGame.dev = game.dev?.house === ownHouse ? { reveal: Boolean(game.dev.reveal), instant: Boolean(game.dev.instant) } : null;
+    // Only the author's own account is told that developer mode exists at all.
+    clientGame.dev = player?.dev_owner && game.lifecycle?.game_mode === 'SOLO'
+      ? { allowed: true, reveal: Boolean(game.dev?.reveal && game.dev.house === ownHouse), instant: Boolean(game.dev?.instant && game.dev.house === ownHouse) }
+      : null;
   }
 
   // Which hosts are bleeding without a battle, read off what this player can
@@ -1763,12 +1769,12 @@ async function handleGameApi(req, res, url, ctx, subpath) {
     return json(res, result.status, result.response);
   }
 
-  // Developer mode (solo games, developer key only).
+  // Developer mode: the author's own account, in his own solo game.
   if (req.method === 'POST' && subpath === '/dev') {
     const body = await readBody(req);
     const house = String(body.house || '').trim();
-    await requireHouse(ctx, req, house);
-    if (!devAllowed(ctx.game, body.key)) return json(res, 403, { error: 'режим разработчика недоступен' });
+    const player = await requireHouse(ctx, req, house);
+    if (!devAllowed(ctx.game, { handle: player?.profile_handle })) return json(res, 403, { error: 'режим разработчика недоступен' });
     const result = await serial(ctx, () => runGameCommand(ctx, req, {
       kind: 'DEV',
       status: 200,

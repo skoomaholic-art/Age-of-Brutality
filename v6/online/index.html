@@ -1102,22 +1102,24 @@ async function decodeResponse(res) {
   }
 }
 
-// ---------- developer mode (solo games, with the developer key) ----------
-const DEV_KEY_STORE = 'aob-dev-key';
-// The console: the ` or ё key (or five taps on the game's title) opens it.
-// `dev <key>` turns developer mode on for this browser.
+// ---------- developer mode (the author's own account, solo games) ----------
+// There is no key and no secret word: the server tells this page whether the
+// account it is signed in with owns developer mode. For everyone else the
+// console does not open at all, and nothing of it is in the game's data.
 function devLog(line) {
   const log = $('dev-log');
   log.textContent += line + '\n';
   log.scrollTop = log.scrollHeight;
 }
+function devOwner() {
+  return Boolean(snapshot?.game?.dev?.allowed);
+}
 function toggleConsole(show = $('dev-console').hidden) {
+  if (show && !devOwner()) return;
   $('dev-console').hidden = !show;
   if (show) setTimeout(() => $('dev-input').focus(), 0);
 }
 const DEV_HELP = [
-  'dev <ключ>      — включить режим разработчика в этом браузере',
-  'dev off         — выключить',
   'map on|off      — открыть всю карту',
   'fast on|off     — постройки и найм без ожидания',
   'gold <число>    — добавить золота',
@@ -1132,7 +1134,7 @@ async function runConsole(text) {
   devLog('> ' + text);
   const solo = snapshot?.game?.lifecycle?.game_mode === 'SOLO';
   const need = () => {
-    if (!devKey()) { devLog('Сначала: dev <ключ>'); return false; }
+    if (!devOwner()) { devLog('Режим разработчика привязан к учётной записи автора.'); return false; }
     if (!solo) { devLog('Режим разработчика работает только в одиночной игре.'); return false; }
     return true;
   };
@@ -1140,12 +1142,7 @@ async function runConsole(text) {
     if (!cmd) return;
     if (cmd === 'help' || cmd === '?') devLog(DEV_HELP);
     else if (cmd === 'clear') $('dev-log').textContent = '';
-    else if (cmd === 'dev') {
-      if (arg === 'off') { try { localStorage.removeItem(DEV_KEY_STORE); } catch {} devLog('Режим разработчика выключен.'); }
-      else if (arg) { try { localStorage.setItem(DEV_KEY_STORE, arg); } catch {} devLog('Ключ сохранён. Команды: help.'); }
-      else devLog(devKey() ? 'Режим разработчика включён.' : 'Режим разработчика выключен.');
-      renderDev();
-    } else if (cmd === 'map' && need()) { await devDo('REVEAL', arg !== 'off'); devLog('Карта ' + (arg === 'off' ? 'снова в тумане.' : 'открыта.')); }
+    else if (cmd === 'map' && need()) { await devDo('REVEAL', arg !== 'off'); devLog('Карта ' + (arg === 'off' ? 'снова в тумане.' : 'открыта.')); }
     else if (cmd === 'fast' && need()) { await devDo('INSTANT', arg !== 'off'); devLog('Без ожидания: ' + (arg === 'off' ? 'выкл.' : 'вкл.')); }
     else if (cmd === 'gold' && need()) { await devDo('GOLD', Number(arg) || 100); devLog('Золота добавлено: ' + (Number(arg) || 100) + '.'); }
     else if (cmd === 'panel' && need()) { $('dev-panel').hidden = false; }
@@ -1186,12 +1183,9 @@ function stormReport() {
     log.length ? 'Было:\n  ' + log.slice(-10).join('\n  ') : ''].filter(Boolean).join('\n');
 }
 
-function devKey() {
-  try { return localStorage.getItem(DEV_KEY_STORE) || ''; } catch { return ''; }
-}
 async function devDo(action, value) {
   try {
-    await api('/api/dev', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ house, key: devKey(), action, value }) });
+    await api('/api/dev', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ house, action, value }) });
     await refresh();
   } catch (error) {
     if ($('dev-console').hidden) alert(sayError(error));
@@ -1202,7 +1196,8 @@ function renderDev() {
   const solo = snapshot?.game?.lifecycle?.game_mode === 'SOLO';
   const button = $('bar-dev');
   if (!button) return;
-  button.hidden = !(devKey() && solo && house && !isSpectator);
+  button.hidden = !(devOwner() && solo && house && !isSpectator);
+  if (button.hidden) { $('dev-panel').hidden = true; if (!$('dev-console').hidden) toggleConsole(false); }
   const dev = snapshot?.game?.dev || {};
   if (document.activeElement?.id !== 'dev-reveal') $('dev-reveal').checked = Boolean(dev.reveal);
   if (document.activeElement?.id !== 'dev-instant') $('dev-instant').checked = Boolean(dev.instant);
