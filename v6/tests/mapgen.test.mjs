@@ -132,3 +132,24 @@ test('the size of the world is chosen apart from the number of Houses', () => {
   assert.equal(recommendedSize(2), 'small');
   assert.equal(recommendedSize(6), 'huge');
 });
+
+test('a world is made in a season of the creator’s choosing, and winter lies in the north', () => {
+  const houses = constants.houses.slice(0, 4);
+  const winter = generateMap(base, constants, { houses, seed: 55, shape: 'wheel', season: 'winter' });
+  const summer = generateMap(base, constants, { houses, seed: 55, shape: 'wheel', season: 'summer' });
+  assert.equal(winter.season, 'зима');
+  assert.equal(summer.season, 'лето');
+  assert.ok(Object.values(winter.terrain).includes('снега'), 'winter has snow somewhere');
+  assert.ok(!Object.values(summer.terrain).includes('снега'), 'summer has none');
+  assert.ok(!Object.values(winter.terrain).includes('пустыня'), 'and no desert in a winter world');
+  // The snows lie in the northern half.
+  const span = winter.art.bounds.y1 - winter.art.bounds.y0;
+  for (const [id, kind] of Object.entries(winter.terrain)) {
+    if (kind !== 'снега') continue;
+    assert.ok(winter.coordinates[id].y < span * 0.55, `${id} lies in the north`);
+  }
+  // Left to chance, both seasons come up over many seeds.
+  const seen = new Set();
+  for (let seed = 1; seed <= 40; seed += 1) seen.add(generateMap(base, constants, { houses, seed, shape: 'wheel' }).season);
+  assert.deepEqual([...seen].sort(), ['зима', 'лето']);
+});

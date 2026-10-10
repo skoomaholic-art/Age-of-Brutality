@@ -1601,9 +1601,19 @@ for (const prefix of ['solo', 'public', 'private']) {
       '<option value="' + value + '">' + name + (value === best ? ' · рекомендуется' : '') + '</option>').join('');
     size.value = sizeChosen && SIZES.some(([value]) => value === keep) ? keep : (best || 'medium');
     size.disabled = select.value === 'classic';
+    season.disabled = select.value === 'classic';
     sizeNote.textContent = size.disabled ? 'У классической карты свой размер.' : (SIZE_NOTE[size.value] || '');
   };
   size.addEventListener('change', () => { sizeChosen = true; syncSizes(); });
+  // Summer or winter: a winter world is white, its north deep in snow.
+  const seasonLabel = document.createElement('label');
+  seasonLabel.textContent = 'Время года';
+  const season = document.createElement('select');
+  season.id = prefix + '-season';
+  season.className = pace.className;
+  season.innerHTML = [['', 'Как выпадет'], ['summer', 'Лето'], ['winter', 'Зима: снега на севере, лёд у берегов']]
+    .map(([value, name]) => '<option value="' + value + '">' + name + '</option>').join('');
+
   // The lie of the land: chosen or left to chance.
   const shapeLabel = document.createElement('label');
   shapeLabel.textContent = 'Ландшафт';
@@ -1626,16 +1636,17 @@ for (const prefix of ['solo', 'public', 'private']) {
   select.addEventListener('change', () => { syncShapes(); syncSizes(); });
   syncShapes();
   syncSizes();
-  pace.after(label, select, sizeLabel, size, sizeNote, shapeLabel, shape);
+  pace.after(label, select, sizeLabel, size, sizeNote, shapeLabel, shape, seasonLabel, season);
 }
 
 function mapChoice(prefix) {
   const value = $(prefix + '-map')?.value || '4';
   const shape = $(prefix + '-shape')?.value || '';
   const size = $(prefix + '-size')?.value || '';
+  const season = $(prefix + '-season')?.value || '';
   return value === 'classic'
     ? { map: 'classic' }
-    : { map: 'random', houses_count: Number(value), ...(shape ? { shape } : {}), ...(size ? { size } : {}) };
+    : { map: 'random', houses_count: Number(value), ...(shape ? { shape } : {}), ...(size ? { size } : {}), ...(season ? { season } : {}) };
 }
 
 async function createMultiplayer(visibility, button, errorId, roomInputId, houseSelectId, paceSelectId) {

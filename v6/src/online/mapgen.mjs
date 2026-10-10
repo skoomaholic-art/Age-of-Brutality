@@ -104,6 +104,11 @@ export const MAP_SIZES = Object.freeze({
   huge: { name: 'огромная', spread: 1.5 }
 });
 export const MAP_SIZE_KEYS = Object.freeze(Object.keys(MAP_SIZES));
+
+// The season a world is made in. Summer is the old world; winter freezes the
+// north, whitens the land and ices the shallow water.
+export const MAP_SEASONS = Object.freeze({ summer: 'лето', winter: 'зима' });
+export const MAP_SEASON_KEYS = Object.freeze(Object.keys(MAP_SEASONS));
 // What fits a table of this many Houses best, as the lobby suggests it.
 export function recommendedSize(count) {
   return count <= 2 ? 'small' : count <= 4 ? 'medium' : count === 5 ? 'large' : 'huge';
@@ -138,8 +143,9 @@ export function mapPlan(count, shape = 'wheel', size = 'medium') {
   return { houses: count, shape, size: MAP_SIZES[size] ? size : 'medium', ringRadius, innerRing, islandPairs, borderlands, lands };
 }
 
-export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'wheel', warp = 'none', seaMesh = false, homePorts = true, size = 'medium' } = {}) {
+export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'wheel', warp = 'none', seaMesh = false, homePorts = true, size = 'medium', season = null } = {}) {
   if (!MAP_SIZES[size]) size = 'medium';
+  const askedSeason = MAP_SEASONS[season] ? season : null;
   if (!MAP_SHAPES.includes(shape)) shape = 'wheel';
   if (!MAP_WARPS.includes(warp)) warp = 'none';
   if (houses.length === 2 && FOR_TWO[shape]) shape = FOR_TWO[shape];
@@ -673,7 +679,8 @@ export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'whe
   // home lands and their neighbours are spared: a House is not walled in at
   // its own gate.
   const terrainRandom = seeded(((Number(seed) || 1) ^ 0x7ab31d) >>> 0);
-  const winter = terrainRandom() < 0.28;
+  // The creator may ask for a season; left to chance, winter comes now and then.
+  const winter = askedSeason ? askedSeason === 'winter' : terrainRandom() < 0.28;
   const homeOf = new Set(Object.values(capitals));
   const nextToHome = new Set();
   for (const [a, b] of [...edges].map(key => key.split('|'))) {
@@ -755,7 +762,7 @@ export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'whe
   };
   const outlookBefore = outlook(open);
   for (const [a, b] of landEdges) {
-    if (ridges.length >= Math.max(1, Math.round(territories.length / 12))) break;
+    if (ridges.length >= Math.max(2, Math.round(territories.length / 8))) break;
     // The wall lies against a mountain: at least one end must be mountain land.
     if (terrain[a] !== 'горы' && terrain[b] !== 'горы') continue;
     // Only in the no-man's land: a wall in a House's own sector would make
@@ -776,7 +783,9 @@ export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'whe
 
   // The same wall in every House's own sector: what is barred for one is
   // barred for all, so the start stays even. Half the maps get one.
-  if (terrainRandom() < 0.55) {
+  // Up to two such walls, so a mountain chain really divides the world.
+  for (let pass = 0; pass < 2; pass += 1) {
+  if (terrainRandom() < (pass ? 0.4 : 0.75)) {
     const sectorOf = id => territories.find(t => t.id === id)?.house_sector;
     const local = open.filter(([a, b]) => sectorOf(a) === sectorOf(b) && houses.includes(sectorOf(a)) && !homeOf.has(a) && !homeOf.has(b));
     const patterns = new Map();
@@ -801,6 +810,7 @@ export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'whe
       break;
     }
   }
+  }
 
   // Shallows in the open sea: a fleet that stops over them is torn by rocks.
   const reefs = Object.keys(seaWaypoints).filter(() => terrainRandom() < 0.12).sort();
@@ -822,7 +832,7 @@ export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'whe
     terrain,
     ridges,
     reefs,
-    season: winter ? 'зима' : null,
+    season: winter ? 'зима' : 'лето',
     sea_edges: [],
     ports: [...ports].sort(),
     capitals,

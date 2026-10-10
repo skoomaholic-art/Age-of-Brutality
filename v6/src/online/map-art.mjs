@@ -583,6 +583,51 @@ export function buildMapArt(map, options = {}) {
     return out;
   }).join('');
 
+  // ---------- winter ----------
+  // A world made in winter: the sea runs grey, fast ice clings to the shore,
+  // floes drift beyond it, and snow lies over everything on land.
+  const winter = map.season === 'зима';
+  const seaWinter = winter
+    ? `<rect ${'x="' + f1(BOUNDS.x0) + '" y="' + f1(BOUNDS.y0) + '" width="' + f1(BOUNDS.x1 - BOUNDS.x0) + '" height="' + f1(BOUNDS.y1 - BOUNDS.y0) + '"'} fill="#c6d6dd" opacity=".45"/>`
+    : '';
+  const floes = (() => {
+    if (!winter) return '';
+    const random = seeded(8231 + SEED);
+    let out = '';
+    for (let i = 0; i < 2200; i += 1) {
+      const x = BOUNDS.x0 + random() * (BOUNDS.x1 - BOUNDS.x0);
+      const y = BOUNDS.y0 + random() * (BOUNDS.y1 - BOUNDS.y0);
+      const depth = depthAt(x, y);
+      // Floes gather in the shallows near the shore, not in the deep.
+      if (depth > -0.5 || depth < -26) continue;
+      const w = 3.4 + random() * 7;
+      const h = w * (0.4 + random() * 0.35);
+      out += `<path d="M${f1(x)} ${f1(y)}l${f1(w * 0.5)} ${f1(-h * 0.6)}l${f1(w * 0.55)} ${f1(h * 0.3)}l${f1(-w * 0.3)} ${f1(h * 0.8)}l${f1(-w * 0.6)} ${f1(h * 0.1)}Z" fill="#e9f1f4" stroke="#b8c9d1" stroke-width=".3" opacity=".8"/>`;
+    }
+    return out;
+  })();
+  const fastIce = winter
+    ? `<path d="${coastPath}" fill="none" stroke="#e4eef2" stroke-width="9" stroke-linejoin="round" opacity=".75"/>` +
+      `<path d="${coastPath}" fill="none" stroke="#ffffff" stroke-width="4" stroke-linejoin="round" opacity=".55" stroke-dasharray="7 4"/>`
+    : '';
+  // The snow itself, over the fields and woods but under the towns.
+  const snowBlanket = winter
+    ? `<path d="${coastPath}" fill="#f4f9fb" opacity=".62"/>` +
+      // Drifts gather in the hollows: a few soft white swells over the white.
+      (() => {
+        const random = seeded(9311 + SEED);
+        let out = '';
+        for (let i = 0; i < 900; i += 1) {
+          const x = BOUNDS.x0 + random() * (BOUNDS.x1 - BOUNDS.x0);
+          const y = BOUNDS.y0 + random() * (BOUNDS.y1 - BOUNDS.y0);
+          if (depthAt(x, y) < 3) continue;
+          const w = 5 + random() * 11;
+          out += `<path d="M${f1(x - w)} ${f1(y)}q${f1(w)} ${f1(-w * 0.42)} ${f1(2 * w)} 0q${f1(-w)} ${f1(w * 0.3)} ${f1(-2 * w)} 0Z" fill="#ffffff" opacity=".5"/>`;
+        }
+        return out;
+      })()
+    : '';
+
   // ---------- settlements ----------
 
   function house(x, y, w, h, roof) {
@@ -719,11 +764,14 @@ export function buildMapArt(map, options = {}) {
   </defs>
   <rect ${box} fill="#93a5a3"/>
   <rect ${box} fill="url(#waves)"/>
+  ${seaWinter}
+  ${floes}
   <path d="${coastPath}" fill="none" stroke="#6b838c" stroke-width="15" stroke-linejoin="round" opacity=".45"/>
   <path d="${coastPath}" fill="none" stroke="#a9b9b4" stroke-width="13.6" stroke-linejoin="round"/>
   <path d="${coastPath}" fill="none" stroke="#5f7884" stroke-width="7.6" stroke-linejoin="round" opacity=".6"/>
   <path d="${coastPath}" fill="none" stroke="#b5c3bc" stroke-width="6.4" stroke-linejoin="round"/>
-  <path d="${coastPath}" fill="#afa457" stroke="#3a2a1c" stroke-width="1.1" stroke-linejoin="round"/>
+  ${fastIce}
+  <path d="${coastPath}" fill="${winter ? '#c3bf96' : '#afa457'}" stroke="#3a2a1c" stroke-width="1.1" stroke-linejoin="round"/>
   <g clip-path="url(#land)">
   <path d="${coastPath}" fill="none" stroke="#d2c27a" stroke-width="9" stroke-linejoin="round" opacity=".55"/>
   <path d="${pasture}" fill="#9aa04a" opacity=".55"/>
@@ -737,6 +785,7 @@ export function buildMapArt(map, options = {}) {
   ${terrainMarkup}
   ${ridgeMarkup}
   ${treeMarkup}
+  ${snowBlanket}
   </g>
   ${reefMarkup}
   ${sites.map(settlement).join('')}
@@ -753,6 +802,6 @@ export function buildMapArt(map, options = {}) {
     provinces,
     bounds: BOUNDS,
     crossings,
-    stats: { provinces: sites.length, trees: trees.length, fields: fields.length, rivers: rivers.length, terrain: terrainGlyphs.length, ridges: ridgeEdges.length }
+    stats: { provinces: sites.length, trees: trees.length, fields: fields.length, rivers: rivers.length, terrain: terrainGlyphs.length, ridges: ridgeEdges.length, winter }
   };
 }
