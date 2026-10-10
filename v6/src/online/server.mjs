@@ -36,7 +36,7 @@ import { buildBridge, burnBridge, seedCrossings, BRIDGE } from './bridges.mjs';
 import { processHordes, seedHeart, HEART } from './heart.mjs';
 import { devAction, devAllowed, devFastForward, isDevOwner } from './dev.mjs';
 import { NO_LIMIT, buildGrowth, hireUnits, replenishUnits, retrainUnits, seedPopulation, unitsView, upkeepOf, REPLENISH_STAR_SHARE } from './units.mjs';
-import { applyCaptureChoice, choiceOutcomes, seedOrder } from './order.mjs';
+import { applyCaptureChoice, choiceOutcomes, seedOrder, ORDER } from './order.mjs';
 import { startRide, processRiders, ridersOf } from './riders.mjs';
 import { courtEffects } from './court.mjs';
 import {
@@ -712,6 +712,8 @@ function redactGameForPlayer(game, player) {
   clientGame.attrition = attritionView(clientGame.state, map);
   // What each kind of ground does to an army, so the charter can say it.
   clientGame.terrain_kinds = TERRAIN;
+  // The thresholds of order, so the charter counts a revolt exactly as the dawn does.
+  clientGame.order_rules = ORDER;
   return clientGame;
 }
 

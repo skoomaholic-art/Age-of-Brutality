@@ -6,6 +6,8 @@ import { menToTakeWild, ringGlory } from './heart.mjs';
 import { aiHireChoice, hireUnits } from './units.mjs';
 import { buildPort } from './levy.mjs';
 import { canTake, garrisonToKeep, heartPlan, menToTake, wantsPeace } from './ai-heart.mjs';
+import { atHome } from './attrition.mjs';
+import { wearAt } from './terrain.mjs';
 import { proposeDeal } from './diplomacy.mjs';
 import { totalHouseWarriors } from '../core/state.mjs';
 import { resolvePendingCapitalHold } from '../core/scoring.mjs';
@@ -116,6 +118,9 @@ function heartCandidates(game, map, constants, house) {
   if (!plan) return [];
   const spareAt = id => warriorsOf(state, id, house) - garrisonNeeded(state, map, house, id);
   const command = (from, to, warriors) => ({ type: 'MARCH', house, from, to, warriors });
+  // Ground that eats men without a battle: worth stepping off, not worth camping on.
+  const wearOf = id => (atHome(map, id, house) ? null : wearAt(map, state, id, house));
+  const wearCost = id => Number(wearOf(id)?.rate || 0) * 6;
 
   // 1. Strike: from the stage onto the next land, with the fewest men that win.
   if (plan.target) {
@@ -128,7 +133,7 @@ function heartCandidates(game, map, constants, house) {
       const heart = plan.goal.kind === 'HEART' && plan.target === plan.goal.target ? 8 : 0;
       const war = owner && owner !== house && !areAllies(game, house, owner) && !inTruce(game, house, owner) ? -1 : 0;
       if (!(owner && (areAllies(game, house, owner) || inTruce(game, house, owner)))) {
-        out.push({ kind: 'STRIKE', value: 6 + heart + war, command: command(plan.stage, plan.target, warriors) });
+        out.push({ kind: 'STRIKE', value: 6 + heart + war - wearCost(plan.target) * 0.3, command: command(plan.stage, plan.target, warriors) });
       }
     }
   }
@@ -138,7 +143,12 @@ function heartCandidates(game, map, constants, house) {
     if (to !== plan.stage || from === plan.stage) continue;
     const spare = Math.min(spareAt(from), max);
     if (spare < 1) continue;
-    out.push({ kind: 'MUSTER', value: (plan.goal.kind === 'DEFEND' ? 7 : plan.goal.kind === 'HOLD' ? 5 : 4) + Math.min(2, spare * 0.3), command: command(from, to, spare) });
+    // Mustering out of ground that bleeds is worth more; mustering into it, less.
+    out.push({
+      kind: 'MUSTER',
+      value: (plan.goal.kind === 'DEFEND' ? 7 : plan.goal.kind === 'HOLD' ? 5 : 4) + Math.min(2, spare * 0.3) + wearCost(from) - wearCost(to),
+      command: command(from, to, spare)
+    });
   }
   // 3. Side gains: a free land next door that a land's spare men take on their own.
   for (const [key, max] of pairs) {
@@ -153,7 +163,19 @@ function heartCandidates(game, map, constants, house) {
     const unknownHeart = state.heart?.candidates?.includes(to) && to !== plan.goal.target;
     if (unknownHeart) continue;
     const glory = state.wild_taken?.[to] ? 0 : ringGlory(state, to);
-    out.push({ kind: 'CAPTURE_NEUTRAL', value: 2 + glory * 0.8 + territoryValue(map, constants, house, to) * 0.3, command: command(from, to, Math.min(spare, need + 1)) });
+    out.push({ kind: 'CAPTURE_NEUTRAL', value: 2 + glory * 0.8 + territoryValue(map, constants, house, to) * 0.3 - wearCost(to) * 0.4, command: command(from, to, Math.min(spare, need + 1)) });
+  }
+  // 4. Off the bad ground: men standing where the weather eats them, with
+  // nothing to do there, walk to the nearest land of their own that is kind.
+  for (const [key, max] of pairs) {
+    const [from, to] = key.split('>');
+    if (from === plan.stage || to === plan.target) continue;
+    const leaving = wearOf(from);
+    if (!leaving) continue;
+    if (state.territories[to]?.owner !== house || wearOf(to)) continue;
+    const spare = Math.min(warriorsOf(state, from, house) - 1, max);
+    if (spare < 1) continue;
+    out.push({ kind: 'OFF_BAD_GROUND', value: 3.2 + wearCost(from), command: command(from, to, spare) });
   }
   return out;
 }

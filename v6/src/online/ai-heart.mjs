@@ -8,6 +8,7 @@
 import { buildAdjacency } from '../core/map.mjs';
 import { compAt, headsLost, starsAt, strengthOf, takeStrongest } from './ranks.mjs';
 import { HEART, menToTakeWild } from './heart.mjs';
+import { TERRAIN } from './terrain.mjs';
 import { garrisonToHold, revoltRisk } from './order.mjs';
 import { peopleAt } from './units.mjs';
 import { inTruce, relationOf, RELATION } from './diplomacy.mjs';
@@ -131,7 +132,9 @@ export function heartPlan(game, map, constants, house, destinations = null) {
   if (!own.length) return null;
   const toGoal = distances(map, ways(map), goal.target);
   if (goal.kind === 'DEFEND' || goal.kind === 'HOLD') return { goal, stage: goal.target, target: null };
-  const stage = [...own].sort((a, b) => (toGoal.get(a) ?? 99) - (toGoal.get(b) ?? 99) || (a < b ? -1 : 1))[0];
+  const wears = id => (map.territories?.find(t => t.id === id)?.house_sector === house ? 0 : Number(TERRAIN[map.terrain?.[id]]?.wear || 0));
+  const stage = [...own].sort((a, b) =>
+    (toGoal.get(a) ?? 99) - (toGoal.get(b) ?? 99) || wears(a) - wears(b) || (a < b ? -1 : 1))[0];
   if ((toGoal.get(stage) ?? 99) >= 99) return null;
   // The next step: a land a march from the stage can reach, nearer the goal, not our own.
   const reach = destinations ? destinations(stage) : [...(roads(map).get(stage) || [])];

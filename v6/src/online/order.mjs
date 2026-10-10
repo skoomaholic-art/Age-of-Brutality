@@ -26,16 +26,19 @@ export const ORDER = Object.freeze({
   capital: 90,
   driftTo: 70,
   driftWithGarrisonTo: 90,
-  drift: 5,
-  garrisonDrift: 5,
+  // A land left to itself settles slowly; a garrison in its streets settles it fast.
+  drift: 3,
+  garrisonDrift: 7,
   disorder: 40,
-  revolt: 20,
-  revoltPeople: 6
+  revolt: 30,
+  revoltPeople: 6,
+  // The people rise where the garrison is thinner than a third of them.
+  garrisonShare: 3
 });
 
 export const CHOICES = Object.freeze({
   MERCY: { name: 'Взять с миром', order: 25, goldPerPerson: 0, peopleShare: 0 },
-  TRIBUTE: { name: 'Обложить данью', order: 0, goldPerPerson: 0.5, peopleShare: 0.1 },
+  TRIBUTE: { name: 'Обложить данью', order: -5, goldPerPerson: 0.5, peopleShare: 0.1 },
   SACK: { name: 'Разграбить', order: -30, goldPerPerson: 1.5, peopleShare: 0.35 }
 });
 
@@ -118,13 +121,13 @@ export function applyCaptureChoice(state, territory, house, choice, { nowMs = Da
 // How close a land is to rising: NONE, LOW (disorder), HIGH (it rises at the next dawn).
 export function revoltRisk(order, people, garrison) {
   if (order >= ORDER.disorder) return 'NONE';
-  if (order < ORDER.revolt && people >= ORDER.revoltPeople && garrison * 2 < people) return 'HIGH';
+  if (order < ORDER.revolt && people >= ORDER.revoltPeople && garrison * ORDER.garrisonShare < people) return 'HIGH';
   return 'LOW';
 }
 
-// The garrison that keeps a land in deep disorder from rising.
+// The garrison that keeps a land in deep disorder from rising: a third of its people.
 export function garrisonToHold(people) {
-  return Math.floor(people / 2) + 1;
+  return Math.max(1, Math.ceil(Number(people || 0) / ORDER.garrisonShare));
 }
 
 function landGold(map, constants, id, owner) {

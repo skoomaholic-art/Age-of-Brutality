@@ -6,7 +6,7 @@ import { loadJson } from '../src/core/map.mjs';
 import { generateMap } from '../src/online/mapgen.mjs';
 import { createOnlineGame } from '../src/online/store.mjs';
 import { seedPopulation, onLandTaken, NO_LIMIT } from '../src/online/units.mjs';
-import { seedOrder, orderDawn, applyCaptureChoice, choiceOutcomes, revoltRisk, ORDER } from '../src/online/order.mjs';
+import { seedOrder, orderDawn, applyCaptureChoice, choiceOutcomes, garrisonToHold, revoltRisk, ORDER } from '../src/online/order.mjs';
 import { seedHeart } from '../src/online/heart.mjs';
 import { validateState } from '../src/core/state.mjs';
 
@@ -46,7 +46,10 @@ test('a land taken from the wild is calm, one taken from a House sullen; the tak
   g = game();
   take(g, R, H);
   assert.equal(g.state.capture_choices[village], undefined, 'the AI decides at once');
-  assert.ok(g.state.journal.some(e => e.kind === 'CAPTURE_CHOICE' && e.choice === 'TRIBUTE'));
+  // Its choice is its own, but never one that would leave the land ready to rise.
+  const choice = g.state.journal.find(e => e.kind === 'CAPTURE_CHOICE');
+  assert.ok(choice, 'the AI wrote its decision in the chronicle');
+  assert.notEqual(revoltRisk(g.state.order[village], g.state.population[village], 0), 'HIGH');
 });
 
 test('mercy calms, sacking pays and brings the land to the edge of revolt', () => {
@@ -91,4 +94,27 @@ test('a big enough garrison holds a land in disorder, and order settles day by d
   orderDawn(choice.state, map, constants, 40);
   assert.equal(choice.state.capture_choices[village], undefined, 'an open choice falls to mercy');
   assert.ok(choice.state.journal.some(e => e.kind === 'CAPTURE_CHOICE' && e.choice === 'MERCY'));
+});
+
+test('a land taken by force and left all but empty rises at the next dawn; a third of its people as garrison holds it', () => {
+  // Tribute from a conquered land and a single man in its streets: the people rise.
+  const thin = game();
+  take(thin, H, R);
+  applyCaptureChoice(thin.state, village, H, 'TRIBUTE', { nowMs: 20 });
+  thin.state.territories[village].warriors = { [H]: 1 };
+  const people = thin.state.population[village];
+  assert.equal(revoltRisk(thin.state.order[village], people, 1), 'HIGH');
+  assert.deepEqual(orderDawn(thin.state, map, constants, 100), [village], 'the land is lost to the wild folk');
+  assert.equal(thin.state.territories[village].owner, null);
+
+  // The same land with a third of its people under arms stays, and settles.
+  const held = game();
+  take(held, H, R);
+  applyCaptureChoice(held.state, village, H, 'TRIBUTE', { nowMs: 20 });
+  const need = garrisonToHold(held.state.population[village]);
+  held.state.territories[village].warriors = { [H]: need };
+  const before = held.state.order[village];
+  assert.deepEqual(orderDawn(held.state, map, constants, 100), []);
+  assert.equal(held.state.territories[village].owner, H);
+  assert.ok(held.state.order[village] > before, 'a garrison settles the streets day by day');
 });
