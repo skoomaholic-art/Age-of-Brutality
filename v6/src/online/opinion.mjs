@@ -14,6 +14,11 @@ export const OPINION = Object.freeze({
   ceiling: 100,
   // How far a memory fades back towards indifference at every dawn.
   fade: 3,
+  // Quiet years are worth something of themselves: once nothing has been done
+  // for a couple of days, neighbours warm to each other, up to this much.
+  warmth: 15,
+  warmPerDawn: 1,
+  quietDays: 2,
   deeds: {
     ATTACKED: -35,        // marched on our land
     LAND_TAKEN: -25,      // and took it
@@ -28,7 +33,8 @@ export const OPINION = Object.freeze({
     MARRIAGE: 30,         // married into our House
     ALLIANCE: 25,         // stood with us
     HELPED: 20,           // fought on our side
-    NEIGHBOUR: -12        // came up to our border where there was nobody before
+    NEIGHBOUR: -12,       // came up to our border where there was nobody before
+    CLAIM_TAKEN: -18      // took a land we held for ours
   }
 });
 
@@ -67,9 +73,19 @@ export function nudgeOpinion(game, a, b, delta) {
 // A deed by `doer` against or for `about`, remembered by everyone who saw it.
 // The House it was done to remembers it fully; the rest of the world a third
 // as much, and only for the deeds that are nobody's private business.
+const SOUR = new Set(['ATTACKED', 'LAND_TAKEN', 'CAPITAL_TAKEN', 'WAR', 'OATH_BROKEN', 'SPY_CAUGHT', 'AMBUSHED', 'NEIGHBOUR', 'CLAIM_TAKEN']);
+
+// When each pair last had something done to it, in game days.
+function markGrudge(game, a, b) {
+  game.diplomacy ||= {};
+  game.diplomacy.last_grudge ||= {};
+  game.diplomacy.last_grudge[key(a, b)] = Number(game.rounds?.number || 0);
+}
+
 export function rememberDeed(game, { doer, about, deed, amount = 1, houses = [] }) {
   const worth = OPINION.deeds[deed];
   if (!worth || !doer || !about) return;
+  if (SOUR.has(deed)) markGrudge(game, about, doer);
   const full = deed === 'GIFT' ? worth * Math.max(1, Math.round(amount)) : worth;
   nudgeOpinion(game, about, doer, full);
   // A marriage or an alliance is felt on both sides; a blow only by the struck.
@@ -86,15 +102,34 @@ export function rememberDeed(game, { doer, about, deed, amount = 1, houses = [] 
 export function opinionDawn(game) {
   const ledger = game?.diplomacy?.opinion;
   if (!ledger) return;
-  for (const [pair, value] of Object.entries(ledger)) {
-    const now = Number(value || 0);
-    if (!now) { delete ledger[pair]; continue; }
-    const next = now > 0 ? Math.max(0, now - OPINION.fade) : Math.min(0, now + OPINION.fade);
-    if (next === 0) delete ledger[pair];
-    else ledger[pair] = next;
+  const day = Number(game.rounds?.number || 0);
+  const grudges = game.diplomacy.last_grudge || {};
+  const pairs = new Set([...Object.keys(ledger), ...Object.keys(grudges)]);
+  for (const pair of pairs) {
+    const now = Number(ledger[pair] || 0);
+    const last = Number(grudges[pair] ?? -99);
+    const quiet = day - last >= OPINION.quietDays;
+    if (now < 0) {
+      // An old grudge dulls; nothing else happens while it still stings.
+      const next = Math.min(0, now + OPINION.fade);
+      if (next === 0) delete ledger[pair];
+      else ledger[pair] = next;
+      continue;
+    }
+    // Nothing has been done for days: neighbours warm to each other a little,
+    // but only so far — quiet is not friendship.
+    if (quiet && now < OPINION.warmth) {
+      ledger[pair] = Math.min(OPINION.warmth, now + OPINION.warmPerDawn);
+      continue;
+    }
+    if (now > OPINION.warmth) {
+      const next = Math.max(OPINION.warmth, now - OPINION.fade);
+      ledger[pair] = next;
+      continue;
+    }
+    if (!now) delete ledger[pair];
   }
 }
-
 
 // Who stands on whose border. A House that was far away and is suddenly over
 // the fence is a worry, whatever it says: the first time it comes up to our
@@ -137,4 +172,43 @@ export function watchBorders(game, map, { nowMs = Date.now() } = {}) {
     known[house] = [...others].sort();
   }
   return changed;
+}
+
+// ---------- lands a House holds for its own ----------
+//
+// A House counts as its own not only what it holds but what lies at its gate:
+// the lands of its ancestral sector, and any free land its own march touches.
+// Taking such a land is not war, but it is not nothing either — the House that
+// calls it its own takes it ill.
+
+export function claimedBy(game, map, id) {
+  const state = game.state;
+  if (state?.territories?.[id]?.owner) return null;
+  const land = map.territories?.find(t => t.id === id);
+  if (!land) return null;
+  // The old sector of a House is its ancestral ground, whoever holds it now.
+  if (state?.houses?.[land.house_sector]) return land.house_sector;
+  // Otherwise: whichever House has most of its own lands around this one.
+  const near = {};
+  for (const [a, b] of map.land_edges || []) { (near[a] ||= []).push(b); (near[b] ||= []).push(a); }
+  const count = {};
+  for (const other of near[id] || []) {
+    const owner = state?.territories?.[other]?.owner;
+    if (!owner) continue;
+    count[owner] = (count[owner] || 0) + 1;
+  }
+  const best = Object.entries(count).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0];
+  return best && best[1] >= 2 ? best[0] : null;
+}
+
+// A free land has changed hands: whoever held it for his own takes it ill.
+export function claimTaken(game, map, id, taker, { nowMs = Date.now() } = {}) {
+  const claimant = claimedBy({ ...game, state: { ...game.state, territories: { ...game.state.territories, [id]: { ...game.state.territories[id], owner: null } } } }, map, id);
+  if (!claimant || claimant === taker) return false;
+  rememberDeed(game, { doer: taker, about: claimant, deed: 'CLAIM_TAKEN' });
+  game.state.journal.push({
+    kind: 'CLAIM_TAKEN', house: claimant, houses: [claimant, taker], taker, territory: id,
+    at: new Date(nowMs).toISOString()
+  });
+  return true;
 }

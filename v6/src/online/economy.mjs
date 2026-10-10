@@ -454,6 +454,30 @@ export function processEconomy(game, map, constants, nowMs = Date.now(), timing 
   return next;
 }
 
+// Hurrying a work along: double pay to the masters, and what is left of the
+// waiting is cut in half. The price follows how much waiting is bought.
+export function hurryJob(game, { house, jobId }, { nowMs = Date.now() } = {}) {
+  const next = structuredClone(game);
+  const job = (next.jobs || []).find(item => item.id === jobId);
+  if (!job || job.house !== house) throw new Error('такого дела у твоего Дома нет');
+  if (job.status !== 'PENDING') throw new Error('это дело уже решено');
+  if (job.cancel_at) throw new Error('гонец с отменой уже в пути');
+  const left = Date.parse(job.due_at) - nowMs;
+  if (left <= 1000) throw new Error('дело и так вот-вот будет готово');
+  const day = Number(next.rounds?.round_duration_ms || 600000);
+  const gold = Math.max(1, Math.ceil((left / day) * 6));
+  if (Number(next.state.houses[house].gold || 0) < gold) throw new Error(`нужно ${gold} золота`);
+  next.state.houses[house].gold -= gold;
+  job.due_at = new Date(nowMs + Math.round(left / 2)).toISOString();
+  job.hurried = Number(job.hurried || 0) + gold;
+  next.state.journal.push({
+    kind: 'JOB_HURRIED', job_id: job.id, house, houses: [house], territory: job.territory,
+    job_type: job.type, gold_spent: gold, due_at: job.due_at, at: new Date(nowMs).toISOString()
+  });
+  next.updated_at = new Date(nowMs).toISOString();
+  return next;
+}
+
 // Calling a levy or a building off takes a moment: the order is carried out
 // after a countdown, and until then the work can still fall to a captor.
 export const CANCEL_DELAY_MS = 10_000;

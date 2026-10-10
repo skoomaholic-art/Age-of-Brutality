@@ -2979,6 +2979,33 @@ const RICHES_WORDS = {
   'каменоломня': ['Каменоломня', 'Добрый камень: +1 золота с рассветом.']
 };
 
+// A free land that somebody holds for his own: his ancestral ground, or a
+// land his own march has grown around.
+function claimOf(id) {
+  if (snapshot.game.state.territories?.[id]?.owner) return null;
+  const t = territoryById(id);
+  if (!t) return null;
+  if (t.house_sector && colors[t.house_sector]) return { house: t.house_sector, old: true };
+  const near = {};
+  for (const [a, b] of snapshot.map.land_edges || []) { (near[a] ||= []).push(b); (near[b] ||= []).push(a); }
+  const count = {};
+  for (const other of near[id] || []) {
+    const owner = snapshot.game.state.territories?.[other]?.owner;
+    if (owner) count[owner] = (count[owner] || 0) + 1;
+  }
+  const best = Object.entries(count).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0];
+  return best && best[1] >= 2 ? { house: best[0], old: false } : null;
+}
+
+function claimRow(id) {
+  const claim = claimOf(id);
+  if (!claim) return '';
+  const word = claim.old
+    ? (claim.house === house ? 'твой Дом считает её исконно своей' : 'Дом ' + claim.house + ' считает её исконно своей')
+    : (claim.house === house ? 'она в кольце твоих земель — твой интерес' : 'она в кольце земель Дома ' + claim.house + ' — его интерес');
+  return '<div class="row"><span class="with-hint">Чьи интересы' + hint('Вольную землю, которую Дом держит за свою, он без обиды не отдаёт: кто её возьмёт, того при том дворе запомнят.') + '</span><b>' + escapeHtml(word) + '</b></div>';
+}
+
 function richesRow(id) {
   const key = snapshot?.game?.state?.riches?.[id];
   const word = RICHES_WORDS[key];
@@ -3039,9 +3066,10 @@ function renderLandWorks(id) {
     if (job.territory !== id || job.status !== 'PENDING') continue;
     const label = (WORK_WORDS[job.type] || (() => job.type))(job);
     const when = job.cancel_at ? 'отзыв: ' + timeLeft(job.cancel_at) : timeLeft(job.due_at);
-    const cancel = !job.cancel_at && job.house === house
-      ? '<button data-cancel-job="' + escapeHtml(job.id) + '" title="Отмена займёт 10 секунд">Отозвать</button>' : '';
-    rows.push('<div class="work-row"><span>' + escapeHtml(label) + '</span>' + cancel + '<span class="when">' + escapeHtml(when) + '</span></div>');
+    const own = job.house === house && !job.cancel_at;
+    const cancel = own ? '<button data-cancel-job="' + escapeHtml(job.id) + '" title="Отмена займёт 10 секунд">Отозвать</button>' : '';
+    const hurry = own ? '<button data-hurry-job="' + escapeHtml(job.id) + '" title="Доплатить мастерам: ждать вдвое меньше">Поторопить</button>' : '';
+    rows.push('<div class="work-row"><span>' + escapeHtml(label) + '</span>' + hurry + cancel + '<span class="when">' + escapeHtml(when) + '</span></div>');
   }
   // A port and a bridge are not jobs, but they are work all the same.
   const st = snapshot.game.state.territories?.[id];
@@ -3100,6 +3128,7 @@ function renderLand() {
       terrainRow(landId) + richesRow(landId) +
       '<div class="row"><span>Возведено</span><b>' + ([st.fort ? 'крепость' : '', hasPort(landId) ? 'порт' : ''].filter(Boolean).join(', ') || 'нет') + '</b></div>' +
       '<div class="row"><span>Исконно</span><b>' + escapeHtml(t.house_sector && colors[t.house_sector] ? 'земля Дома ' + t.house_sector : t.house_sector || 'вольная земля') + '</b></div>' +
+      claimRow(landId) +
       '<div class="row"><span>Прежде владели</span><b>' + escapeHtml(past.length ? past.join(', ') : 'никто') + '</b></div>' +
       bridgeRows(landId, false) + rebuildBlock(landId) +
       '<div class="lore">' + escapeHtml(LAND_LORE[Math.abs(hash) % LAND_LORE.length]) + '</div>' + guestsBlock(mine);
@@ -4828,6 +4857,13 @@ function renderDiplomacy() {
           '<button data-dip="DENY_PASSAGE" data-target="' + tag + '">Отказать</button>';
       } else if ((dip.passage_to || []).includes(other)) {
         sub += 'твои дороги ему открыты <button data-dip="REVOKE_PASSAGE" data-target="' + tag + '">Закрыть</button>';
+      }
+      // Standing by an ally: gold outright, or his war taken up as our own.
+      if (rel === 'ALLIANCE') {
+        sub += '<button data-aid="' + tag + '">Послать золото</button>';
+        for (const foe of (dip.ally_wars?.[other] || [])) {
+          sub += '<button data-join-war="' + tag + '" data-foe="' + escapeHtml(foe) + '">Вступить в войну против Дома ' + escapeHtml(foe) + '</button>';
+        }
       }
       if ((dip.passage_from || []).includes(other)) sub += '<span>его дороги открыты тебе</span>';
       else if ((dip.passage_asked_out || []).includes(other)) sub += '<span>ты просишь прохода, ответа нет</span>';
@@ -7678,6 +7714,26 @@ $('field-close').onclick = closeField;
 $('chase-close').onclick = closeChase;
 // Naming the aspiration of the House.
 document.addEventListener('click', async event => {
+  const aid = event.target.closest('[data-aid]');
+  if (aid) {
+    const most = Number(snapshot?.game?.diplomacy?.aid_most || 20);
+    const asked = prompt('Сколько золота послать союзнику? (до ' + most + ')', '5');
+    if (!asked) return;
+    try {
+      await api('/api/aid', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ house, to: aid.dataset.aid, gold: Number(asked) }) });
+      await refresh();
+    } catch (error) { alert(sayError(error)); }
+    return;
+  }
+  const join = event.target.closest('[data-join-war]');
+  if (join) {
+    if (!confirm('Вступить в войну на стороне союзника? Это война.')) return;
+    try {
+      await api('/api/aid', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ house, to: join.dataset.joinWar, foe: join.dataset.foe }) });
+      await refresh();
+    } catch (error) { alert(sayError(error)); }
+    return;
+  }
   const pick = event.target.closest('[data-aspire]');
   if (!pick) return;
   if (!confirm('Назвать путь Дома? Это навсегда.')) return;
@@ -7745,6 +7801,36 @@ document.addEventListener('click', event => {
   if (ransom) {
     const found = (characterData?.characters || []).find(item => item.id === ransom.dataset.openRansom);
     if (found?.captivity?.ransom_amount) { togglePane(null); showDecision(ransomDecision(found)); }
+  }
+});
+
+// Works anywhere on the page: the queue in the land window and the list in the
+// realm pane are the same works.
+document.addEventListener('click', async event => {
+  const hurry = event.target.closest('[data-hurry-job]');
+  if (hurry) {
+    hurry.disabled = true;
+    try {
+      await api('/api/job-hurry', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ house, job_id: hurry.dataset.hurryJob })
+      });
+      await refresh();
+      if (landId) renderLandWorks(landId);
+    } catch (error) { alert(sayError(error)); hurry.disabled = false; }
+    return;
+  }
+  const cancelAnywhere = event.target.closest('[data-cancel-job]');
+  if (cancelAnywhere && !cancelAnywhere.closest('#jobs')) {
+    cancelAnywhere.disabled = true;
+    try {
+      await api('/api/jobs/cancel', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ house, job_id: cancelAnywhere.dataset.cancelJob })
+      });
+      await refresh();
+      if (landId) renderLandWorks(landId);
+    } catch (error) { alert(sayError(error)); cancelAnywhere.disabled = false; }
   }
 });
 

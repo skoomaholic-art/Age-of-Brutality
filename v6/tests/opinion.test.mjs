@@ -36,16 +36,35 @@ test('gold given in a bargain is weighed by the amount', () => {
   assert.equal(opinionOf(game, 'B', 'A'), OPINION.deeds.GIFT * 5);
 });
 
-test('every dawn dulls an old grudge, and a forgotten one is struck off the book', () => {
+test('every dawn dulls an old grudge until nothing is left of it', () => {
   const game = world();
   nudgeOpinion(game, 'B', 'A', -OPINION.fade - 1);
-  nudgeOpinion(game, 'C', 'A', 2);
   opinionDawn(game);
   assert.equal(opinionOf(game, 'B', 'A'), -1);
-  assert.equal(opinionOf(game, 'C', 'A'), 0);
-  assert.equal(game.diplomacy.opinion['C>A'], undefined, 'nothing is kept once it is forgotten');
   opinionDawn(game);
   assert.equal(opinionOf(game, 'B', 'A'), 0);
+  assert.equal(game.diplomacy.opinion['B>A'], undefined, 'nothing is kept once it is forgotten');
+});
+
+test('quiet years of themselves turn indifference into good will, but only so far', () => {
+  const game = world();
+  game.rounds = { number: 1 };
+  // A blow today: nothing warms while it still stings.
+  rememberDeed(game, { doer: 'A', about: 'B', deed: 'ATTACKED' });
+  opinionDawn(game);
+  assert.ok(opinionOf(game, 'B', 'A') < 0);
+
+  // Days pass with nothing done, and the grudge wears out and turns the corner.
+  for (let day = 2; day < 40; day += 1) {
+    game.rounds.number = day;
+    opinionDawn(game);
+  }
+  assert.equal(opinionOf(game, 'B', 'A'), OPINION.warmth, 'neighbours warm up to a point and no further');
+  assert.equal(opinionWord(OPINION.warmth), 'приязнь');
+
+  // And a fresh blow undoes it at once.
+  rememberDeed(game, { doer: 'A', about: 'B', deed: 'ATTACKED' });
+  assert.ok(opinionOf(game, 'B', 'A') < 0);
 });
 
 test('a House that comes up to our border where there was nobody is a worry', async () => {

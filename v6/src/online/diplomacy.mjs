@@ -417,6 +417,9 @@ export function diplomacyView(game, house, known = null) {
     // Whose roads are open to us, and to whom ours are.
     passage_from: Object.keys(passage).filter(host => passage[host].includes(house)),
     passage_to: [...(passage[house] || [])],
+    // Allies we may stand by, and whose wars we could take up.
+    ally_wars: Object.fromEntries((known || []).filter(other => areAllies(game, house, other)).map(other => [other, warsOfAlly(game, house, other)])),
+    aid_most: AID.most,
     // What every House this one has met thinks of it, and what it thinks of them.
     opinion_of_me: Object.fromEntries((known || []).map(other => [other, opinionOf(game, other, house)])),
     my_opinion: Object.fromEntries((known || []).map(other => [other, opinionOf(game, house, other)])),
@@ -689,4 +692,56 @@ export function dealsView(game, map, house) {
     if (from === house) deals_out.push({ to, ...view });
   }
   return { deals_in, deals_out };
+}
+
+// ---------- standing by an ally ----------
+// Between allies there is no need for letters back and forth: gold is sent
+// outright, and a House may take up its ally's war as its own.
+
+export const AID = Object.freeze({ most: 20 });
+
+export function sendAid(game, house, to, gold, { nowMs = Date.now() } = {}) {
+  if (!areAllies(game, house, to)) throw new Error('подмогу шлют только союзнику');
+  const amount = Math.max(1, Math.floor(Number(gold) || 0));
+  if (amount > AID.most) throw new Error(`за раз посылают не больше ${AID.most} золота`);
+  if (Number(game.state.houses?.[house]?.gold || 0) < amount) throw new Error('в казне столько нет');
+  const next = structuredClone(game);
+  next.state.houses[house].gold -= amount;
+  next.state.houses[to].gold = Number(next.state.houses[to].gold || 0) + amount;
+  rememberDeed(next, { doer: house, about: to, deed: 'GIFT', amount });
+  next.state.journal.push({
+    kind: 'AID_SENT', house, houses: [house, to], to, gold: amount, at: new Date(nowMs).toISOString()
+  });
+  stamp(next, nowMs);
+  return next;
+}
+
+// Whose wars an ally is fighting that we are not.
+export function warsOfAlly(game, house, ally) {
+  const out = [];
+  for (const [key, value] of Object.entries(game?.diplomacy?.relations || {})) {
+    if (value !== RELATION.WAR) continue;
+    const [a, b] = key.split('::');
+    if (![a, b].includes(ally)) continue;
+    const foe = a === ally ? b : a;
+    if (foe === house) continue;
+    if (relationOf(game, house, foe) === RELATION.WAR) continue;
+    if (relationOf(game, house, foe) === RELATION.ALLIANCE) continue;
+    out.push(foe);
+  }
+  return [...new Set(out)];
+}
+
+// Taking up an ally's war: war is declared on his enemy, and he remembers it.
+export function joinAllyWar(game, house, ally, foe, { nowMs = Date.now() } = {}) {
+  if (!areAllies(game, house, ally)) throw new Error('воевать за того, кто тебе не союзник, незачем');
+  if (!warsOfAlly(game, house, ally).includes(foe)) throw new Error('твой союзник с этим Домом не воюет');
+  const next = structuredClone(game);
+  declareWarInPlace(next, house, foe, { nowMs, cause: 'ALLY_DEFENSE' });
+  rememberDeed(next, { doer: house, about: ally, deed: 'HELPED' });
+  next.state.journal.push({
+    kind: 'WAR_JOINED', house, houses: [house, ally, foe], ally, foe, at: new Date(nowMs).toISOString()
+  });
+  stamp(next, nowMs);
+  return next;
 }

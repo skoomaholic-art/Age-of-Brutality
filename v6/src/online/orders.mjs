@@ -37,7 +37,7 @@ import { COLD, isWinter } from './seasons.mjs';
 import { processAmbushes } from './intercept.mjs';
 import { standDown } from './stance.mjs';
 import { planLosses, planOf, planStrength } from './plans.mjs';
-import { rememberDeed } from './opinion.mjs';
+import { claimTaken, rememberDeed } from './opinion.mjs';
 import { giftOf } from './aspiration.mjs';
 
 export const ONLINE_TIMING = Object.freeze({
@@ -920,6 +920,13 @@ export function processDueOrders(game, map, constants, nowMs = Date.now()) {
       const ownerBefore = next.state.territories?.[liveOrder.action.to]?.owner ?? null;
       const ownerAfter = resolved.state.territories?.[liveOrder.action.to]?.owner ?? null;
       if (ownerAfter && ownerAfter !== ownerBefore) onLandTaken({ ...next, state: resolved.state }, map, liveOrder.action.to, ownerBefore, nowMs);
+      // A free land somebody held for his own: he takes it ill.
+      if (ownerAfter && !ownerBefore) {
+        const before = { ...next, state: next.state };
+        next.state = resolved.state;
+        claimTaken({ ...next, state: next.state }, map, liveOrder.action.to, ownerAfter, { nowMs });
+        void before;
+      }
       next.state = resolved.state;
       liveOrder.status = 'RESOLVED';
       liveOrder.resolved_at = new Date(nowMs).toISOString();

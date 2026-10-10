@@ -250,6 +250,38 @@ export function journalEntryToAudit(entry, map, game) {
     };
   }
 
+  if (entry.kind === 'JOB_HURRIED') {
+    return {
+      ...base,
+      message: `В ${territoryName(map, entry.territory)} мастерам доплатили ${entry.gold_spent} золота: дело пойдёт вдвое скорее.`,
+      details: { house: entry.house, territory_id: entry.territory, job_type: entry.job_type, gold_spent: entry.gold_spent, due_at: entry.due_at || null, at: entry.at || null }
+    };
+  }
+
+  if (entry.kind === 'CLAIM_TAKEN') {
+    return {
+      ...base,
+      message: `Дом ${entry.taker} взял ${territoryName(map, entry.territory)} — землю, которую твой Дом держал за свою. При дворе этого не забудут.`,
+      details: { house: entry.house, taker: entry.taker, territory_id: entry.territory, houses: entry.houses || [], at: entry.at || null }
+    };
+  }
+
+  if (entry.kind === 'AID_SENT') {
+    return {
+      ...base,
+      message: `Дом ${entry.house} послал союзнику ${entry.gold} золота.`,
+      details: { house: entry.house, to: entry.to, gold: entry.gold, houses: entry.houses || [], at: entry.at || null }
+    };
+  }
+
+  if (entry.kind === 'WAR_JOINED') {
+    return {
+      ...base,
+      message: `Дом ${entry.house} вступил в войну на стороне Дома ${entry.ally} против Дома ${entry.foe}.`,
+      details: { house: entry.house, ally: entry.ally, foe: entry.foe, houses: entry.houses || [], at: entry.at || null }
+    };
+  }
+
   if (entry.kind === 'NEW_NEIGHBOUR') {
     return {
       ...base,

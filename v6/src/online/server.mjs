@@ -43,6 +43,7 @@ import {
   ONLINE_ECONOMY_TIMING,
   cancelJob,
   economyView,
+  hurryJob,
   normalizeOnlineEconomy,
   processEconomy,
   queueGrowJob,
@@ -93,7 +94,10 @@ import {
   acceptDeal,
   declineDeal,
   answerAiDeals,
-  dealsView
+  dealsView,
+  sendAid,
+  joinAllyWar,
+  warsOfAlly
 } from './diplomacy.mjs';
 import { processRounds } from './ai.mjs';
 import {
@@ -1854,6 +1858,40 @@ async function handleGameApi(req, res, url, ctx, subpath) {
   }
 
   // What the House sets out to do: named once, and never changed after.
+  // Standing by an ally: gold sent outright, or his war taken up as our own.
+  if (req.method === 'POST' && subpath === '/aid') {
+    const body = await readBody(req);
+    const house = String(body.house || '').trim();
+    await requireHouse(ctx, req, house);
+    const to = String(body.to || '').trim();
+    const result = await serial(ctx, () => runGameCommand(ctx, req, {
+      kind: 'AID',
+      status: 200,
+      house,
+      mutate: async game => ({
+        game: body.foe
+          ? joinAllyWar(game, house, to, String(body.foe), { nowMs: Date.now() })
+          : sendAid(game, house, to, body.gold, { nowMs: Date.now() }),
+        response: { ok: true }
+      })
+    }));
+    return json(res, result.status, result.response);
+  }
+
+  // Hurrying a work along, for gold.
+  if (req.method === 'POST' && subpath === '/job-hurry') {
+    const body = await readBody(req);
+    const house = String(body.house || '').trim();
+    await requireHouse(ctx, req, house);
+    const result = await serial(ctx, () => runGameCommand(ctx, req, {
+      kind: 'JOB_HURRY',
+      status: 200,
+      house,
+      mutate: async game => ({ game: hurryJob(game, { house, jobId: String(body.job_id || '') }, { nowMs: Date.now() }), response: { ok: true } })
+    }));
+    return json(res, result.status, result.response);
+  }
+
   if (req.method === 'POST' && subpath === '/aspiration') {
     const body = await readBody(req);
     const house = String(body.house || '').trim();
