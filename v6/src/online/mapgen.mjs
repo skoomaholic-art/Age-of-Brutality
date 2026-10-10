@@ -344,11 +344,21 @@ export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'whe
       linkNearest(far, 1, 1);
     }
   } else {
+    // The march between two realms does not lie halfway: it leans towards one
+    // of them. So every House has a near neighbour on one hand and a far one
+    // on the other — and since it leans the same way all round the ring, every
+    // House has exactly one of each. The world gets a shape without anybody
+    // getting a better start.
+    const LEAN = 0.36;
     for (let i = 0; i < count; i += 1) {
       const next = (i + 1) % count;
       const a = polar(R, angles[i]);
       const b = polar(R, angles[next]);
-      site(`P${i + 1}`, { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, 'Дикая земля', 'Пограничье', takeName());
+      const id = site(`P${i + 1}`, { x: a.x + (b.x - a.x) * LEAN, y: a.y + (b.y - a.y) * LEAN }, 'Дикая земля', 'Пограничье', takeName());
+      // The march touches both realms: neighbours share a border and can come
+      // at each other without walking through the middle of the world.
+      linkNearest(id, i, 1);
+      linkNearest(id, next, 1);
     }
     if (!hub) {
       // An inland sea in the middle: the homes and borderlands make a ring around it.

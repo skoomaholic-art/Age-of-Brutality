@@ -216,3 +216,55 @@ test('the picture is cut to the lands: the world fills its own frame', () => {
     }
   }
 });
+
+test('realms touch: a House has neighbours on its borders, not only across the middle of the world', () => {
+  for (const shape of ['wheel', 'mainland']) {
+    for (const count of [3, 4, 6]) {
+      const houses = constants.houses.slice(0, count);
+      const world = generateMap(base, { ...constants, houses }, { houses, seed: 17 + count, shape });
+      const near = {};
+      for (const [a, b] of world.land_edges) { (near[a] ||= []).push(b); (near[b] ||= []).push(a); }
+      const steps = (from, to) => {
+        const seen = new Map([[from, 0]]);
+        const queue = [from];
+        while (queue.length) {
+          const at = queue.shift();
+          if (at === to) return seen.get(at);
+          for (const next of near[at] || []) if (!seen.has(next)) { seen.set(next, seen.get(at) + 1); queue.push(next); }
+        }
+        return Infinity;
+      };
+      const caps = Object.entries(world.capitals);
+      const profiles = caps.map(([house, id]) =>
+        caps.filter(([other]) => other !== house).map(([, other]) => steps(id, other)).sort((a, b) => a - b).join(','));
+      // The same road profile for everyone: nobody is born cornered.
+      assert.equal(new Set(profiles).size, 1, `${shape}/${count}: ${[...new Set(profiles)].join(' | ')}`);
+      // And the nearest neighbour is nearer than the far side of the world.
+      const sorted = profiles[0].split(',').map(Number);
+      assert.ok(sorted[0] <= 4, `${shape}/${count}: the nearest neighbour is ${sorted[0]} roads away`);
+      if (count > 3) assert.ok(sorted[sorted.length - 1] > sorted[0], `${shape}/${count}: all neighbours are equally far`);
+      // Nobody is reached only through the free city: there are roads round it.
+      const hub = 'X0';
+      if (world.territories.some(t => t.id === hub)) {
+        const without = {};
+        for (const [a, b] of world.land_edges) {
+          if (a === hub || b === hub) continue;
+          (without[a] ||= []).push(b); (without[b] ||= []).push(a);
+        }
+        const reach = (from, to) => {
+          const seen = new Set([from]);
+          const queue = [from];
+          while (queue.length) {
+            const at = queue.shift();
+            if (at === to) return true;
+            for (const next of without[at] || []) if (!seen.has(next)) { seen.add(next); queue.push(next); }
+          }
+          return false;
+        };
+        for (let i = 1; i < caps.length; i += 1) {
+          assert.ok(reach(caps[0][1], caps[i][1]), `${shape}/${count}: ${caps[i][0]} is reached only through the free city`);
+        }
+      }
+    }
+  }
+});
