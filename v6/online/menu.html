@@ -67,6 +67,22 @@
   .sheet header { display: flex; align-items: center; justify-content: space-between; padding: 12px 18px 8px; font: 26px Kurale, Georgia, serif; color: #7d2217; }
   .sheet header button { all: unset; cursor: pointer; font: 22px Kurale, serif; color: #2b1b12; padding: 2px 10px; border: 1.5px solid #2b1b12; background: #f2e6c8; }
   .sheet iframe { flex: 1; border: 0; width: 100%; background: transparent; }
+  /* Settings live in the menu itself, not in the lobby's frame. */
+  .sheet .local { flex: 1; overflow: auto; padding: 10px 22px 22px; font: 17px/1.4 Kurale, Georgia, serif; color: #2b1b12; }
+  .sheet .local .row { display: flex; align-items: center; gap: 14px; padding: 14px 0 4px; }
+  .sheet .local .row > span { flex: 0 0 170px; font-size: 20px; }
+  .sheet .local .row > b { flex: 0 0 64px; text-align: right; font-size: 18px; }
+  .sheet .local input[type=range] { flex: 1; min-width: 120px; accent-color: #7d2217; height: 28px; }
+  .sheet .local button { all: unset; cursor: pointer; padding: 7px 16px; border: 1.5px solid #2b1b12; background: #f2e6c8; font: 17px Kurale, Georgia, serif; }
+  .sheet .local button:hover { background: #fff6dd; }
+  .sheet .local h3 { margin: 18px 0 4px; font-size: 20px; color: #7d2217; font-weight: normal; }
+  .sheet .local p { margin: 0 0 6px; max-width: 62ch; }
+  .sheet .local .note { margin: 0 0 10px; padding-bottom: 12px; border-bottom: 1px solid rgba(43,27,18,.18); color: #5a4433; font-size: 15px; }
+  @media (max-width: 760px) {
+    .sheet .local .row { flex-wrap: wrap; }
+    .sheet .local .row > span { flex: 1 0 100%; }
+    .sheet .local input[type=range] { flex: 1 1 60%; }
+  }
   @media (max-width: 760px) { .sheet { left: 2vw; } }
   #hint { position: fixed; left: 50%; bottom: 6vh; transform: translateX(-50%); width: min(520px, 88vw); padding: 14px 18px; z-index: 9; background: #f2e6c8; color: #2b1b12; border: 2px solid #2b1b12; font: 17px/1.35 Kurale, Georgia, serif; box-shadow: 0 8px 30px rgba(0,0,0,.6); }
   .mark { position: absolute; right: 1cqw; bottom: 1cqh; width: 3.4cqh; opacity: .8; }
@@ -96,14 +112,51 @@
       <button data-view="social">Друзья</button>
       <button data-view="profile">Профиль</button>
       <button id="m-full">Во весь экран</button>
-      <button disabled title="Скоро">Настройки</button>
-      <button disabled title="Скоро">Авторы</button>
+      <button data-local="settings">Настройки</button>
+      <button data-local="credits">Авторы</button>
     </nav>
     <img class="snail" src="/assets/img/menu-snail.png" alt="">
   </div>
   <img class="mark" src="/assets/img/s-mark.png" alt="Skoomaholic Dev">
 </div>
-<div class="sheet" id="sheet"><header><span id="sheet-title"></span><button id="sheet-close" title="Закрыть">✕</button></header><iframe id="sheet-frame" title="Раздел меню"></iframe></div>
+<div class="sheet" id="sheet"><header><span id="sheet-title"></span><button id="sheet-close" title="Закрыть">✕</button></header>
+  <iframe id="sheet-frame" title="Раздел меню"></iframe>
+  <div class="local" id="sheet-local" hidden>
+    <label class="row">
+      <span>Звуки века</span>
+      <input id="set-sound" type="range" min="0" max="100" step="5">
+      <b id="set-sound-value">70%</b>
+    </label>
+    <p class="note">Рога, сеча, монеты, вести. Отклик рати на нажатие тоже здесь.</p>
+    <label class="row">
+      <span>Музыка века</span>
+      <input id="set-music" type="range" min="0" max="100" step="5">
+      <b id="set-music-value">45%</b>
+    </label>
+    <p class="note">Своя музыка у лета, у зимы, у боя и у заглавного экрана.</p>
+    <div class="row">
+      <span>Полный экран</span>
+      <button id="set-full">Развернуть</button>
+      <b></b>
+    </div>
+    <p class="note">На iPhone вместо этого добавь игру на экран «Домой» — она откроется без панелей браузера.</p>
+  </div>
+  <div class="local" id="sheet-credits" hidden>
+    <h3>Жестокий Век</h3>
+    <p>Настольная игра и её цифровая версия — Skoomaholic Dev.</p>
+    <h3>Замысел и правила</h3>
+    <p>Skoomaholic. Шесть Домов, Сердце Века, Орда, тайны и предательства — всё оттуда.</p>
+    <h3>Облик</h3>
+    <p>Средневековые миниатюры и маргиналии в духе «страдающего средневековья»; карта,
+      гербы, портреты и живые лица собраны для этой игры.</p>
+    <h3>Голос века</h3>
+    <p>Звуки и музыка написаны числами для этой игры: рога, колокола, барабаны,
+      ветер и четыре темы — лето, зима, бой, победа.</p>
+    <h3>Работа над кодом</h3>
+    <p>Claude (Anthropic) — в паре с автором.</p>
+    <p class="note" id="credits-build">Сборка неизвестна.</p>
+  </div>
+</div>
 <script>
 // The lobby opens the menu first; this flag tells it the visitor has been here.
 const go = url => { try { sessionStorage.setItem('aob-menu-seen', '1'); } catch {} location.href = url; };
@@ -116,17 +169,37 @@ const cont = document.getElementById('m-continue');
 if (last) { cont.disabled = false; cont.onclick = () => go('/?game=' + encodeURIComponent(last)); }
 // Every section of the old lobby opens here, inside the menu.
 const sheet = document.getElementById('sheet'), frame = document.getElementById('sheet-frame');
-const closeSheet = () => { sheet.classList.remove('on'); frame.removeAttribute('src'); document.querySelectorAll('nav button.on').forEach(b => b.classList.remove('on')); };
-document.querySelectorAll('nav button[data-view]').forEach(button => button.onclick = () => {
-  if (button.classList.contains('on')) return closeSheet();
+const locals = { settings: document.getElementById('sheet-local'), credits: document.getElementById('sheet-credits') };
+const closeSheet = () => {
+  sheet.classList.remove('on'); frame.removeAttribute('src'); frame.hidden = false;
+  for (const pane of Object.values(locals)) pane.hidden = true;
+  document.querySelectorAll('nav button.on').forEach(b => b.classList.remove('on'));
+};
+const openSheet = button => {
+  if (button.classList.contains('on')) { closeSheet(); return false; }
   closeSheet(); button.classList.add('on');
   document.getElementById('sheet-title').textContent = button.textContent;
-  frame.src = '/lobby.html?view=' + button.dataset.view; sheet.classList.add('on');
+  sheet.classList.add('on');
+  return true;
+};
+document.querySelectorAll('nav button[data-view]').forEach(button => button.onclick = () => {
+  if (openSheet(button)) frame.src = '/lobby.html?view=' + button.dataset.view;
+});
+// Settings belong to the menu itself and open without the lobby's frame.
+document.querySelectorAll('nav button[data-local]').forEach(button => button.onclick = () => {
+  if (!openSheet(button)) return;
+  frame.hidden = true;
+  locals[button.dataset.local].hidden = false;
 });
 document.getElementById('sheet-close').onclick = closeSheet;
 addEventListener('keydown', event => { if (event.key === 'Escape') closeSheet(); });
 const fullButton = document.getElementById('m-full');
-const fullLabel = () => { fullButton.textContent = document.fullscreenElement ? 'Выйти из полного экрана' : 'Во весь экран'; };
+const fullLabel = () => {
+  const out = Boolean(document.fullscreenElement);
+  fullButton.textContent = out ? 'Выйти из полного экрана' : 'Во весь экран';
+  const twin = document.getElementById('set-full');
+  if (twin) twin.textContent = out ? 'Свернуть' : 'Развернуть';
+};
 const standalone = navigator.standalone || matchMedia('(display-mode: standalone)').matches;
 fullButton.onclick = () => {
   const root = document.documentElement;
@@ -137,6 +210,69 @@ fullButton.onclick = () => {
 const showHint = text => { let box = document.getElementById('hint'); if (!box) { box = document.createElement('div'); box.id = 'hint'; box.onclick = () => box.remove(); document.body.append(box); } box.textContent = text; };
 if (standalone) fullButton.hidden = true;
 document.addEventListener('fullscreenchange', fullLabel);
+
+// ---------- the voice of the century, at the gates ----------
+// The menu keeps the same two settings as the game and remembers them in the
+// same place, so a choice made here holds inside the century and back again.
+const SOUND_STORE = 'aob-sound', MUSIC_STORE = 'aob-music';
+const kept = (key, fallback) => {
+  try {
+    const value = localStorage.getItem(key);
+    return value === null ? fallback : Math.max(0, Math.min(1, Number(value) || 0));
+  } catch { return fallback; }
+};
+const keep = (key, value) => { try { localStorage.setItem(key, String(value)); } catch { /* forbidden here */ } };
+let soundLevel = kept(SOUND_STORE, 0.7), musicLevel = kept(MUSIC_STORE, 0.45);
+let unlocked = false, theme = null;
+
+function ring(name, volume = 1) {
+  if (!soundLevel || !unlocked) return;
+  const audio = new Audio('/assets/sfx/' + name + '.ogg');
+  audio.volume = Math.max(0, Math.min(1, soundLevel * volume));
+  audio.play().catch(() => {});
+}
+
+// The title screen's own theme, quieter than anything inside the game.
+function playTheme() {
+  if (!musicLevel || !unlocked) return;
+  if (!theme) { theme = new Audio('/assets/sfx/music_menu.ogg'); theme.loop = true; theme.preload = 'none'; }
+  theme.volume = Math.max(0, Math.min(1, musicLevel * 0.55));
+  theme.play().catch(() => {});
+}
+function hushTheme() { if (theme) { try { theme.pause(); } catch { /* already still */ } } }
+const wake = () => { if (unlocked) return; unlocked = true; playTheme(); };
+addEventListener('pointerdown', wake, { once: true });
+addEventListener('keydown', wake, { once: true });
+document.querySelectorAll('nav button').forEach(button => button.addEventListener('click', () => {
+  if (!button.disabled) ring('tap', 0.5);
+}));
+
+const soundBar = document.getElementById('set-sound'), musicBar = document.getElementById('set-music');
+const soundValue = document.getElementById('set-sound-value'), musicValue = document.getElementById('set-music-value');
+const showLevels = () => {
+  soundBar.value = Math.round(soundLevel * 100); soundValue.textContent = Math.round(soundLevel * 100) + '%';
+  musicBar.value = Math.round(musicLevel * 100); musicValue.textContent = Math.round(musicLevel * 100) + '%';
+};
+soundBar.oninput = () => {
+  soundLevel = Number(soundBar.value) / 100; keep(SOUND_STORE, soundLevel); showLevels();
+  unlocked = true; ring('select', 0.8);
+};
+musicBar.oninput = () => {
+  musicLevel = Number(musicBar.value) / 100; keep(MUSIC_STORE, musicLevel); showLevels();
+  unlocked = true;
+  if (!musicLevel) hushTheme(); else playTheme();
+};
+showLevels();
+document.getElementById('set-full').onclick = () => fullButton.onclick();
+
+// Which build is open right now — the first thing to ask about when something is odd.
+fetch('/api/build').then(r => r.json()).then(build => {
+  const line = document.getElementById('credits-build');
+  const commit = build.commit ? String(build.commit).slice(0, 7) : null;
+  line.textContent = commit || build.revision
+    ? 'Сборка ' + [commit, build.revision].filter(Boolean).join(' · ')
+    : 'Сборка из рук разработчика.';
+}).catch(() => {});
 
 // Living faces. Each eye: centre x, y and size in pixels of the 1672x941 painting.
 const EYES = [[781,338,13,9,0],[807,329,10,8,0],[596,577,12,8,1],[616,575,9,8,1],[636,601,6,6,2],[1458,494,6,5,3],[1470,496,6,5,3],[1519,484,5,5,4],[1533,488,6,5,4],[1565,495,6,5,5],[1578,497,6,5,5]];

@@ -2030,6 +2030,15 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, result);
     }
 
+    // Which build is serving this page: the menu shows it under «Авторы», and
+    // it is the first thing to ask about when a page behaves oddly.
+    if (req.method === 'GET' && url.pathname === '/api/build') {
+      return json(res, 200, {
+        commit: process.env.AOB_BUILD_SHA || null,
+        revision: process.env.K_REVISION || null
+      });
+    }
+
     if (req.method === 'POST' && url.pathname === '/api/profiles/register') {
       const body = await readBody(req);
       const profile = createProfileRecord({
