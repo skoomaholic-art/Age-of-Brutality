@@ -744,7 +744,7 @@ function redactGameForPlayer(game, player) {
   // What each kind of ground does to an army, so the charter can say it.
   clientGame.terrain_kinds = TERRAIN;
   // What this House set out to do, and how far along it is.
-  if (ownHouse) clientGame.aspiration = aspirationView(game, map, ownHouse);
+  if (player?.house) clientGame.aspiration = aspirationView(game, map, player.house);
   // The thresholds of order, so the charter counts a revolt exactly as the dawn does.
   clientGame.order_rules = ORDER;
   return clientGame;
