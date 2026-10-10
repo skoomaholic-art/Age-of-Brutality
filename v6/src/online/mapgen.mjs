@@ -343,6 +343,36 @@ export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'whe
     }
   }
 
+  // Nowhere a host can never reach: on a world of dry land every land must have
+  // a road to it, and the whole country must hang together. Islands are not
+  // counted — they are reached by ship, and a dry world has none of them.
+  if (form.dry) {
+    const roadsOf = () => {
+      const near = {};
+      for (const key of edges) { const [a, b] = key.split('|'); (near[a] ||= []).push(b); (near[b] ||= []).push(a); }
+      return near;
+    };
+    const walkable = ids => {
+      const near = roadsOf();
+      const seen = new Set([ids]);
+      const queue = [ids];
+      while (queue.length) for (const next of near[queue.shift()] || []) if (!seen.has(next)) { seen.add(next); queue.push(next); }
+      return seen;
+    };
+    const main = sites.find(site => site.type === 'Столица');
+    for (let pass = 0; pass < sites.length; pass += 1) {
+      const reached = walkable(main.id);
+      const stranded = sites.find(site => !site.small && !reached.has(site.id));
+      if (!stranded) break;
+      // The nearest land that can already be reached gets a road to it.
+      const nearest = sites
+        .filter(site => reached.has(site.id))
+        .sort((a, b) => dist(a.pos, stranded.pos) - dist(b.pos, stranded.pos))[0];
+      if (!nearest) break;
+      link(stranded.id, nearest.id);
+    }
+  }
+
   // The sea: a ring of waypoints around the land, one off every home and one
   // off every border, with islands at the border waypoints.
   const mainlandReach = Math.max(...sites.map(s => Math.hypot(s.pos.x, s.pos.y)));

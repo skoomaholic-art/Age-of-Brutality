@@ -2730,6 +2730,16 @@ function growthButton(id) {
 // said outright, so nobody presses a button that cannot work.
 const GROW_STEPS = { 'Деревня': { into: 'Большая деревня', gold: 6, people: 14 }, 'Большая деревня': { into: 'Малый город', gold: 10, people: 20 }, 'Малый город': { into: 'Город', gold: 16, people: 28 } };
 
+// Whether this land could climb a step right now: there is a step, nobody is
+// building it yet, and the people and the gold are there.
+function canGrowNow(id) {
+  const step = GROW_STEPS[landKindOf(id)];
+  if (!step || !unitsMode()) return false;
+  if ((snapshot.game.jobs || []).some(job => job.status === 'PENDING' && job.territory === id && job.type === 'GROW')) return false;
+  const people = Math.floor(Number(snapshot.game.state.population?.[id] || 0));
+  return people >= step.people && Number(snapshot.game.state.houses?.[house]?.gold || 0) >= step.gold;
+}
+
 function growButton(id) {
   if (!unitsMode()) return '';
   const kind = landKindOf(id);
@@ -2828,6 +2838,8 @@ function hasPort(id) {
 }
 
 function portButton(t, st) {
+  // A world of dry land has no sea at all: there is nothing to say about ports.
+  if (!Object.keys(snapshot.map.sea_waypoints || {}).length) return '';
   if (!snapshot.map.buildable_ports) return '<button class="wide" disabled>' + ((snapshot.map.ports || []).includes(t.id) ? 'Порт стоит издавна' : 'Земля не выходит к воде') + '</button>';
   if (hasPort(t.id)) return '<button class="wide" disabled>Порт стоит: отсюда выходят в море</button>';
   if (!(snapshot.map.ports || []).includes(t.id)) return '<button class="wide" disabled>Порт · земля не выходит к воде</button>';
@@ -3160,7 +3172,7 @@ function renderLand() {
   const fortRow = '<div class="with-hint">' + goldButton('data-land-fort', fortNote || 'Возвести крепость · 3 золота', 3, fortNote) + hint('Крепость прибавляет обороне земли 3: нападающему нужно больше силы, а гарнизон теряет меньше. В столице не строится — её стены и так крепки.') + '</div>';
   // One thing worth doing here now stands first; the rest waits under a fold.
   const rows = [
-    ['grow', growButton(t.id), Boolean(GROW_STEPS[landKindOf(t.id)])],
+    ['grow', growButton(t.id), canGrowNow(t.id)],
     ['growth', growthButton(t.id), !snapshot.game.state.growth?.[t.id]],
     ['fort', fortRow, !fortNote],
     ['port', portButton(t, st), snapshot.map.buildable_ports && !hasPort(t.id) && (snapshot.map.ports || []).includes(t.id) && !st.port_ready_at],
