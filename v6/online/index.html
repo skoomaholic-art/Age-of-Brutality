@@ -1277,15 +1277,14 @@ function voiceForNews(item) {
 // Recorded by the author: a captain at your side, a rider from the field, a
 // herald in the hall. Ten of the lines were read twice, for a lord and for a
 // lady, and the House's own ruler decides which is heard.
-const VOICE_TAKES = {
-  'hail-01': 1, 'hail-02': 1, 'hail-03': 1, 'hail-04': 1, 'hail-05': 1, 'hail-06': 1,
-  'hail-07': 1, 'hail-08': 1, 'hail-09': 1, 'hail-10': 1,
-  'march-01': 1, 'march-02': 1, 'march-03': 1, 'march-04': 1, 'march-05': 1, 'march-06': 1,
-  'deny-01': 1, 'deny-02': 1, 'deny-03': 1, 'deny-04': 1,
-  'arrive-01': 1, 'arrive-02': 1, 'arrive-03': 1,
-  'won-01': 4, 'won-02': 1, 'lost-01': 1, 'lost-02': 1,
-  'revolt-01': 2, 'horde-01': 1, 'storm-01': 1, 'dawn-01': 1, 'victory-01': 1
-};
+const VOICE_FILES = new Set([
+  'hail-01', 'hail-02', 'hail-03', 'hail-04', 'hail-05', 'hail-06', 'hail-07', 'hail-08', 'hail-09', 'hail-10',
+  'march-01', 'march-02', 'march-03', 'march-04', 'march-05', 'march-06',
+  'deny-01', 'deny-02', 'deny-03', 'deny-04',
+  'arrive-01', 'arrive-02', 'arrive-03',
+  'won-01', 'won-02', 'lost-01', 'lost-02',
+  'revolt-01', 'horde-01', 'storm-01', 'dawn-01', 'victory-01'
+]);
 // Which of them were also read with «миледи» and «госпожа».
 const VOICE_LADY = new Set(['hail-01', 'hail-02', 'hail-04', 'hail-08', 'march-05',
   'deny-01', 'lost-01', 'revolt-01', 'dawn-01', 'victory-01']);
@@ -1335,11 +1334,9 @@ function playVoice(name, { gap = 2200 } = {}) {
   if (now - voiceAt < gap) return false;
   const group = VOICE_GROUPS[name];
   const pick = group ? group[Math.floor(Math.random() * group.length)] : name;
-  if (!VOICE_TAKES[pick]) return false;
-  const takes = VOICE_TAKES[pick];
-  const nth = takes > 1 ? Math.floor(Math.random() * takes) : 0;
+  if (!VOICE_FILES.has(pick)) return false;
   const lady = VOICE_LADY.has(pick) && ladyRules();
-  const file = pick + (lady ? '-f' : '') + (nth ? '-' + (nth + 1) : '');
+  const file = pick + (lady ? '-f' : '');
   voiceSaid = VOICE_WORDS[pick] ? VOICE_WORDS[pick][lady ? 1 : 0] || VOICE_WORDS[pick][0] : null;
   voiceAt = now;
   try {
