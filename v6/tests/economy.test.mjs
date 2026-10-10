@@ -25,10 +25,11 @@ test('canonical income distinguishes home territory from occupation', () => {
 
 test('full island bonus is granted only when both halves are controlled', () => {
   const s = createInitialState(map, c);
+  // Every land pays its owner something, a half-island included.
   s.territories['S03-A'].owner = 'Варкайр';
-  assert.deepEqual(calculateHouseIncome(s, map, c, 'Варкайр'), { gold: 4, influence: 1 });
+  assert.deepEqual(calculateHouseIncome(s, map, c, 'Варкайр'), { gold: 5, influence: 1 });
   s.territories['S03-B'].owner = 'Варкайр';
-  assert.deepEqual(calculateHouseIncome(s, map, c, 'Варкайр'), { gold: 5, influence: 2 });
+  assert.deepEqual(calculateHouseIncome(s, map, c, 'Варкайр'), { gold: 7, influence: 2 });
 });
 
 test('recruit costs one gold per warrior and respects caps', () => {

@@ -64,19 +64,19 @@
       },
       "Деревня": {
         "home_gold": 1,
-        "foreign_gold": 0,
+        "foreign_gold": 1,
         "home_influence": 0,
         "foreign_influence": 0
       },
       "Дикая земля": {
-        "home_gold": 0,
-        "foreign_gold": 0,
+        "home_gold": 1,
+        "foreign_gold": 1,
         "home_influence": 0,
         "foreign_influence": 0
       },
       "Половина острова": {
-        "home_gold": 0,
-        "foreign_gold": 0,
+        "home_gold": 1,
+        "foreign_gold": 1,
         "home_influence": 0,
         "foreign_influence": 0
       }

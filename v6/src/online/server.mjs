@@ -68,7 +68,7 @@ import { generateMap, MAX_HOUSES, MIN_HOUSES, MAP_SEASON_KEYS, MAP_SHAPES, MAP_S
 import { processEncounters } from './encounters.mjs';
 import { expelGuests } from './guests.mjs';
 import { processCampFights } from './melee.mjs';
-import { agentsView, attachSpy, hireSpy, processAgents, wayfarersView } from './agents.mjs';
+import { agentsView, hireSpy, orderSpy, processAgents, wayfarersView } from './agents.mjs';
 import { captiveAction, captivesView, processCharacters, rescueStrandedCommanders } from './fate.mjs';
 import {
   acceptAlliance,
@@ -1676,7 +1676,12 @@ async function handleGameApi(req, res, url, ctx, subpath) {
           const next = hireSpy(game, constants, house);
           return { game: next, response: { agents: agentsView(next, house) } };
         }
-        const sent = attachSpy(game, map, { house, agentId: body.agent_id, band: body.band, target: String(body.target || '') });
+        const sent = orderSpy(game, map, {
+          house,
+          agentId: body.agent_id,
+          from: String(body.from || ''),
+          target: String(body.target || '')
+        });
         return { game: sent.game, response: { agent: sent.agent } };
       }
     }));

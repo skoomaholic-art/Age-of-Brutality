@@ -238,6 +238,18 @@ export function journalEntryToAudit(entry, map, game) {
     };
   }
 
+  if (entry.kind === 'SPY_WAITING' || entry.kind === 'SPY_JOINED') {
+    const where = territoryName(map, entry.territory);
+    const mark = territoryName(map, entry.target);
+    return {
+      ...base,
+      message: entry.kind === 'SPY_WAITING'
+        ? `${entry.agent_name} ждёт попутчиков в земле ${where}: с ближайшей ватагой пойдёт к ${mark}.`
+        : `${entry.agent_name} вышел из ${where} с ватагой путников. Они идут своей дорогой и завернут к ${mark}.`,
+      details: { house: entry.house, territory_id: entry.territory, target_id: entry.target, agent_name: entry.agent_name, arrive_at: entry.arrive_at || null, at: entry.at || null }
+    };
+  }
+
   if (entry.kind === 'SPY_ARRIVED' || entry.kind === 'SPY_RETURNED') {
     const territory = territoryName(map, entry.territory);
     return {

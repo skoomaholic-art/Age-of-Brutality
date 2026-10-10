@@ -2802,20 +2802,37 @@ let spyMoreOpen = false;
 function onlyPrimary(html) { return html; }
 function plainButtons(html) { return html.replace(/class="wide costly primary"/g, 'class="wide costly"'); }
 
-// Wayfarers resting in this land; with a free spy one of them can take him along.
+// Who is passing through this land, and the spy's errand from here. A spy is
+// told where to go and waits: the next band that stops here takes him along.
 function guestsBlock(mine) {
   const here = buildWayfarers().filter(band => { const now = wayfarerNow(band); return now.resting && now.from === landId; });
-  if (!here.length) return '<div class="row" style="margin-top:6px"><span>Путники</span><b>никого</b></div>';
-  const idle = (characterData?.agents?.list || []).some(agent => agent.status === 'IDLE');
-  return '<div class="built" style="margin-top:8px">Сейчас здесь гостят:</div>' + here.map(band => {
-    const kind = WAYFARERS[band.kind];
-    const stops = [...new Set(band.path)].filter(id => id !== landId);
-    const pick = mine && idle
-      ? '<select data-spy-target="' + band.id + '" style="width:100%;margin-top:4px">' + stops.map(id => '<option value="' + id + '">' + escapeHtml(mapNodeById(id)?.name || id) + '</option>').join('') + '</select>' +
-        '<button class="wide" data-spy-band="' + band.id + '">Примкнуть шпиона к группе</button>'
-      : mine ? '<div class="tiny">Свободного шпиона нет: нанять можно во вкладке «Нанять».</div>' : '';
-    return '<div class="captive-row"><b>' + kind.name + '</b><div class="tiny">идут дальше в ' + escapeHtml(mapNodeById(wayfarerNow(band).to)?.name || '') + '</div>' + pick + '</div>';
-  }).join('');
+  const passing = here.length
+    ? '<div class="built" style="margin-top:8px">Сейчас здесь гостят:</div>' + here.map(band => {
+      const kind = WAYFARERS[band.kind];
+      return '<div class="captive-row"><b>' + kind.name + '</b><div class="tiny">идут дальше в ' +
+        escapeHtml(mapNodeById(wayfarerNow(band).to)?.name || '') + '</div></div>';
+    }).join('')
+    : '<div class="row" style="margin-top:6px"><span>Путники</span><b>никого</b></div>';
+  if (!mine) return passing;
+  const agents = characterData?.agents?.list || [];
+  const waiting = agents.find(agent => agent.status === 'WAITING' && agent.from === landId);
+  if (waiting) {
+    return passing + '<div class="built" style="margin-top:8px">' + escapeHtml(waiting.name) +
+      ' ждёт попутчиков здесь. Цель: <b>' + escapeHtml(mapNodeById(waiting.target)?.name || '') + '</b>.' +
+      (waiting.wait_until ? ' Ближайшая ватага придёт ' + escapeHtml(timeLeft(waiting.wait_until)) + '.' : '') + '</div>';
+  }
+  const idle = agents.find(agent => agent.status === 'IDLE');
+  if (!idle) return passing + '<div class="tiny" style="margin-top:6px">Свободного шпиона нет: нанять можно во вкладке «Нанять».</div>';
+  const lands = Object.keys(snapshot.game.state.territories || {})
+    .filter(id => id !== landId)
+    .map(id => ({ id, name: mapNodeById(id)?.name || id }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+  return passing +
+    '<div class="built" style="margin-top:8px">Отправить ' + escapeHtml(idle.name) + ' отсюда</div>' +
+    '<select data-spy-target style="width:100%;margin-top:4px">' +
+    lands.map(land => '<option value="' + escapeHtml(land.id) + '">' + escapeHtml(land.name) + '</option>').join('') + '</select>' +
+    '<button class="wide" data-spy-send>Дать тайный приказ</button>' +
+    '<div class="tiny">Он дождётся здесь ближайшей ватаги путников, примкнёт к ней и уйдёт с нею. Ватага пойдёт своей дорогой, по деревням и городам, и лишь под конец завернёт к цели.</div>';
 }
 
 async function agentCommand(body) {
@@ -2901,18 +2918,17 @@ function setupLand() {
     const bridgeButton = event.target.closest('[data-bridge-build]');
     if (bridgeButton) landCommand('/api/bridge', { key: bridgeButton.dataset.bridgeBuild });
     if (event.target.closest('[data-hire-spy]')) agentCommand({ action: 'HIRE' });
-    const join = event.target.closest('[data-spy-band]');
-    if (join) {
-      const band = Number(join.dataset.spyBand);
-      const targetId = $('land-body').querySelector('[data-spy-target="' + band + '"]').value;
-      agentCommand({ action: 'ATTACH', band, target: targetId }).then(data => {
+    if (event.target.closest('[data-spy-send]')) {
+      const targetId = $('land-body').querySelector('[data-spy-target]')?.value;
+      if (targetId) agentCommand({ action: 'ATTACH', from: landId, target: targetId }).then(data => {
         if (!data?.agent) return;
-        const kind = WAYFARERS[buildWayfarers().find(item => item.id === band).kind];
         showDecision({
-          key: 'spy-sent', art: 'intrigue-exposed', from: 'Твой Тайный приказ', title: 'Шпион в пути',
-          text: data.agent.name + ' примкнул к группе «' + kind.name + '» и выйдет вместе с ней. Группа идёт своей дорогой, через деревни и города, и придёт в ' +
-            (mapNodeById(data.agent.target)?.name || '') + ' через ' + timeLeft(data.agent.arrive_at) + '.',
-          terms: 'На месте он откроет тебе эту землю и её соседей на полдня, потом вернётся с другими путниками.',
+          key: 'spy-sent', art: 'intrigue-exposed', from: 'Твой Тайный приказ', title: 'Шпион ждёт попутчиков',
+          text: data.agent.name + ' остался в земле ' + (mapNodeById(landId)?.name || '') +
+            '. Ближайшая ватага путников — шуты, богомольцы, бродяги, — что станет здесь на ночлег, возьмёт его с собою' +
+            (data.agent.wait_until ? ' (ждать около ' + timeLeft(data.agent.wait_until) + ')' : '') + '.',
+          terms: 'Ватага пойдёт своей дорогой, по деревням и городам, и лишь под конец завернёт к цели — ' +
+            (mapNodeById(data.agent.target)?.name || '') + '. Там он откроет тебе эту землю и её соседей на полдня.',
           buttons: [{ label: 'Ступай с богом', primary: true }]
         });
       });
