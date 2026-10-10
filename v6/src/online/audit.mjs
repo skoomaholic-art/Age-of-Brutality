@@ -250,6 +250,22 @@ export function journalEntryToAudit(entry, map, game) {
     };
   }
 
+  if (entry.kind === 'WATCH_SET') {
+    return {
+      ...base,
+      message: `В ${territoryName(map, entry.territory)} поставлен догляд: у ворот спрашивают всякого путника. День всякий чужой лазутчик здесь будет взят.`,
+      details: { house: entry.house, territory_id: entry.territory, until: entry.until || null, at: entry.at || null }
+    };
+  }
+
+  if (entry.kind === 'SPY_CAUGHT') {
+    return {
+      ...base,
+      message: `В ${territoryName(map, entry.territory)} взяли лазутчика: ${entry.agent_name} из Дома ${entry.against}. Больше он не вернётся.`,
+      details: { house: entry.house, houses: entry.houses || [], against: entry.against, agent_name: entry.agent_name, territory_id: entry.territory, at: entry.at || null }
+    };
+  }
+
   if (entry.kind === 'HOLDING_LINE' || entry.kind === 'STOOD_DOWN') {
     const where = territoryName(map, entry.territory);
     return {

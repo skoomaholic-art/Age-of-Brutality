@@ -522,6 +522,13 @@
     .land-tab.on { background: var(--ink); color: var(--vellum); }
     .land-tab:disabled { opacity: .45; }
     .land-body { padding: 9px 10px 10px; font-size: 13.5px; line-height: 1.35; }
+    /* Everything under way in this land, in one place over the tabs. */
+    .land-works { display: none; padding: 7px 10px; border-bottom: 1px solid var(--rule); background: rgba(201,162,58,.12); font-size: 12.5px; }
+    .land-works.show { display: block; }
+    .land-works b { font-family: Kurale, serif; font-weight: 400; }
+    .work-row { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
+    .work-row .when { margin-left: auto; color: var(--ink-soft); white-space: nowrap; }
+    .work-row button { padding: 1px 7px; font-size: 11.5px; }
     .land-body .row { display: flex; justify-content: space-between; gap: 10px; padding: 2px 0; border-bottom: 1px dotted var(--rule); }
     .land-body .lore { margin-top: 7px; font-style: italic; }
     .land-body .acts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 6px; }
@@ -882,6 +889,7 @@
           <button class="land-tab" data-land="hire">Нанять</button>
           <button class="land-tab" data-land="build">Строить</button>
         </div>
+        <div id="land-works" class="land-works"></div>
         <div id="land-body" class="land-body"></div>
       </div>
       <div id="decision" class="decision">
@@ -2756,6 +2764,18 @@ function holdBlock(id) {
     '</div>' + (on ? '<div class="tiny">Рать стоит насмерть: +2 к обороне.</div>' : '');
 }
 
+// Gate-keepers over our own land: a day in which any stranger's spy coming to
+// look at it is taken at the gate.
+function watchBlock(id) {
+  const st = snapshot.game.state.territories?.[id];
+  if (!st || st.owner !== house) return '';
+  const watch = snapshot.game.state.watchmen?.[id];
+  const live = watch && watch.house === house && Date.parse(watch.until) > Date.now();
+  if (live) return '<div class="tiny">Догляд у ворот: ещё ' + escapeHtml(timeLeft(watch.until)) + '. Чужой лазутчик здесь будет взят.</div>';
+  return '<div class="with-hint">' + goldButton('data-watch', 'Поставить догляд · 2 золота', 2) +
+    hint('У ворот спрашивают всякого путника. День всякий чужой шпион, посланный смотреть эту землю, будет взят, и Дом его потеряет.') + '</div>';
+}
+
 function levyBlock() {
   const view = snapshot.game.ranks_view;
   if (!view) return '';
@@ -2974,6 +2994,41 @@ function orderRow(id, owner) {
   return '<div class="row"><span class="with-hint">Порядок' + help + '</span><b>' + order + ' · ' + word + '</b></div>' + note + pending;
 }
 
+// Everything under way in this land — hiring, building, growing, drilling, a
+// bridge over the river — in one line each, over the tabs, so nothing is
+// hidden behind a tab nobody opened.
+const WORK_WORDS = {
+  RECRUIT: job => 'Сбор ' + job.warriors + ' ' + warriorWord(Number(job.warriors)),
+  FORT: () => 'Крепость',
+  RETRAIN: job => 'Учение · ' + job.count + ' ' + ((RANK_WORDS[job.to] || [])[0] || ''),
+  GROW: job => 'Поселение растёт до: ' + (job.into || ''),
+  REBUILD: () => 'Деревня на пепелище'
+};
+
+function renderLandWorks(id) {
+  const box = $('land-works');
+  if (!box) return;
+  const rows = [];
+  for (const job of (economy?.jobs || [])) {
+    if (job.territory !== id || job.status !== 'PENDING') continue;
+    const label = (WORK_WORDS[job.type] || (() => job.type))(job);
+    const when = job.cancel_at ? 'отзыв: ' + timeLeft(job.cancel_at) : timeLeft(job.due_at);
+    const cancel = !job.cancel_at && job.house === house
+      ? '<button data-cancel-job="' + escapeHtml(job.id) + '" title="Отмена займёт 10 секунд">Отозвать</button>' : '';
+    rows.push('<div class="work-row"><span>' + escapeHtml(label) + '</span>' + cancel + '<span class="when">' + escapeHtml(when) + '</span></div>');
+  }
+  // A port and a bridge are not jobs, but they are work all the same.
+  const st = snapshot.game.state.territories?.[id];
+  if (st?.port_ready_at) rows.push('<div class="work-row"><span>Порт</span><span class="when">' + escapeHtml(timeLeft(st.port_ready_at)) + '</span></div>');
+  for (const [key, c] of Object.entries(snapshot.game.state.river_crossings || {})) {
+    if (c.a !== id && c.b !== id) continue;
+    const bridge = snapshot.game.state.bridges?.[key];
+    if (bridge?.ready_at) rows.push('<div class="work-row"><span>Мост на дороге на ' + escapeHtml(territoryById(c.a === id ? c.b : c.a)?.name || '') + '</span><span class="when">' + escapeHtml(timeLeft(bridge.ready_at)) + '</span></div>');
+  }
+  box.innerHTML = rows.length ? '<b>В работе</b>' + rows.join('') : '';
+  box.classList.toggle('show', rows.length > 0);
+}
+
 function renderLand() {
   const card = $('land-card');
   const t = landId ? territoryById(landId) : null;
@@ -2987,6 +3042,7 @@ function renderLand() {
     tab.disabled = tab.dataset.land !== 'info' && !mine;
     tab.classList.toggle('on', tab.dataset.land === landTab);
   });
+  renderLandWorks(landId);
   const body = $('land-body');
   if (body.contains(document.activeElement) && ['SELECT', 'INPUT'].includes(document.activeElement.tagName)) return;
   const seen = !snapshot.game.visibility?.fog || (snapshot.game.visibility.visible || []).includes(landId);
@@ -3030,12 +3086,13 @@ function renderLand() {
     const spies = characterData?.agents;
     const spyRow = spies ? '<div class="with-hint">' + goldButton('data-hire-spy', 'Шпион · ' + spies.cost + ' золота (' + spies.list.length + ' из ' + spies.max + ')', spies.cost, spies.list.length >= spies.max ? 'шпионов уже ' + spies.max : '') +
       hint('Шпион прячется среди путников и идёт с ними. Дойдя до земли, он на время открывает её и соседей. Шпион у Сердца или рядом с ним узнаёт, истинное ли оно.') + '</div>' : '';
+    const watchRow = watchBlock(landId);
     if (unitsMode()) {
       body.innerHTML = '<div class="row"><span>Стоит здесь</span><b>' + here + ' ' + warriorWord(here) +
         (here ? ' · ' + starText(starsOf(landId, house)) : '') + '</b></div>' +
         (here ? '<div class="row"><span>Из них</span><b>' + escapeHtml(describeRanks(rankComp(landId, house))) + '</b></div>' : '') +
         holdBlock(landId) + replenishBlock(landId) + hireBlock(landId) +
-        (spyRow ? '<details class="more"' + (spyMoreOpen ? ' open' : '') + ' data-spy-more><summary>Тайные дела</summary>' + plainButtons(spyRow) + '</details>' : '');
+        (spyRow || watchRow ? '<details class="more"' + (spyMoreOpen ? ' open' : '') + ' data-spy-more><summary>Тайные дела</summary>' + plainButtons(spyRow) + watchRow + '</details>' : '');
       return;
     }
     body.innerHTML = '<div class="row"><span>Стоит здесь</span><b>' + here + ' ' + warriorWord(here) + '</b></div>' + spyRow +
@@ -3185,6 +3242,7 @@ function setupLand() {
     if (event.target.closest('[data-growth]')) landCommand('/api/growth', {});
     if (event.target.closest('[data-grow]')) landCommand('/api/grow', {});
     if (event.target.closest('[data-hold]')) landCommand('/api/hold', {});
+    if (event.target.closest('[data-watch]')) landCommand('/api/watch', {});
     if (event.target.closest('[data-rebuild]')) landCommand('/api/rebuild', {});
     if (event.target.closest('[data-militia-go]')) {
       const box = $('land-body').querySelector('[data-militia-count]');
@@ -4256,6 +4314,15 @@ function newsFor(item) {
   if (item.type === 'MARCH_THINNED') return { rank: 5, art: 'order-failed', title: 'Рать поредела', text, quiet: true };
   if (item.type === 'REVOLT') return { rank: mine(d.house) ? 8 : 4, art: 'land-lost', title: mine(d.house) ? 'Земля поднялась против тебя' : 'Бунт в землях', text };
   if (item.type === 'DESERTION') return { rank: 6, art: 'order-failed', title: 'Войско разбегается', text };
+
+  if (item.type === 'SPY_CAUGHT') {
+    const ours = mine(d.house);
+    return {
+      rank: 7, art: 'intrigue-exposed',
+      title: ours ? 'Взяли чужого лазутчика' : 'Наш лазутчик схвачен',
+      text, ok: ours ? 'Так ему и надо' : 'Горькая весть'
+    };
+  }
 
   if (item.type === 'AMBUSH') {
     const ours = mine(d.house);
@@ -7511,7 +7578,12 @@ addEventListener('keydown', event => { if (event.key === 'Escape' && (origin || 
 $('map').addEventListener('contextmenu', event => { if (origin || fieldRedirect) { event.preventDefault(); clearChoice(); } });
 $('via-toggle').onclick = () => { viaPick = !viaPick; renderSelection(); };
 $('via-clear').onclick = () => { viaPoints = []; viaPick = false; renderSelection(); };
-setInterval(() => { if (fieldOrderId) renderField(); if (chaseOrderId) renderChase(); }, 1000);
+setInterval(() => {
+  if (fieldOrderId) renderField();
+  if (chaseOrderId) renderChase();
+  // The work queue counts down even while the land card sits open.
+  if (landId && $('land-card')?.classList.contains('show')) renderLandWorks(landId);
+}, 1000);
 setupLens();
 setupLand();
 setupDev();

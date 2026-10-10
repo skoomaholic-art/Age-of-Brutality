@@ -10,7 +10,7 @@ import { normalizeAudit } from '../src/online/audit.mjs';
 import { startRounds } from '../src/online/rounds.mjs';
 import { visiblePositions } from '../src/online/fog.mjs';
 import { bandNow, buildWayfarers, wayfarerLegMs } from '../src/online/wayfarers.mjs';
-import { hireSpy, orderSpy, processAgents, SPY_COST } from '../src/online/agents.mjs';
+import { hireSpy, orderSpy, processAgents, setWatch, watchOver, SPY_COST, WATCH } from '../src/online/agents.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const map = loadJson(path.join(root, 'src/data/map.v6.json'));
@@ -100,4 +100,35 @@ test('a spy waits for company, rides to his mark and opens the land', () => {
   assert.equal(done.agents[HOUSE][0].status, 'IDLE');
   assert.equal(done.agents[HOUSE][0].missions, 1);
   assert.equal(done.state.spy_sight?.[HOUSE], undefined);
+});
+
+
+test('a watch at the gate takes the spy who comes to look', () => {
+  let game = started('watch-test');
+  const legMs = wayfarerLegMs(game);
+  game = hireSpy(game, constants, HOUSE, { nowMs: T0 });
+
+  const band = buildWayfarers(game, map)[0];
+  let now = T0;
+  while (!bandNow(band, legMs, now).resting) now += 1000;
+  const here = bandNow(band, legMs, now).from;
+  game.state.territories[here].owner = HOUSE;
+  const target = band.path.find(id => id !== here && game.state.territories[id]);
+
+  // The House that owns the mark sets gate-keepers over it.
+  const THEM = 'Сайрвен';
+  game.state.territories[target].owner = THEM;
+  game.state.houses[THEM].gold = 10;
+  game = setWatch(game, map, THEM, target, { nowMs: now });
+  assert.ok(watchOver(game.state, target, now));
+  assert.equal(game.state.houses[THEM].gold, 10 - WATCH.gold);
+  assert.throws(() => setWatch(game, map, THEM, target, { nowMs: now }), /уже стоит/);
+
+  const sent = orderSpy(game, map, { house: HOUSE, agentId: 'S1', from: here, target }, { nowMs: now });
+  const aboard = processAgents(sent.game, map, { nowMs: now });
+  const arrive = Date.parse(aboard.agents[HOUSE][0].arrive_at);
+  const caught = processAgents(aboard, map, { nowMs: arrive });
+  assert.deepEqual(caught.agents[HOUSE], [], 'the spy is gone');
+  assert.ok(caught.state.journal.some(e => e.kind === 'SPY_CAUGHT' && e.against === HOUSE));
+  assert.equal(caught.state.spy_sight?.[HOUSE]?.[target], undefined, 'he sent no word home');
 });

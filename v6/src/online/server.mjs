@@ -73,7 +73,7 @@ import { generateMap, MAX_HOUSES, MIN_HOUSES, MAP_SEASON_KEYS, MAP_SHAPES, MAP_S
 import { processEncounters } from './encounters.mjs';
 import { expelGuests } from './guests.mjs';
 import { processCampFights } from './melee.mjs';
-import { agentsView, hireSpy, orderSpy, processAgents, wayfarersView } from './agents.mjs';
+import { agentsView, hireSpy, orderSpy, processAgents, setWatch, wayfarersView } from './agents.mjs';
 import { captiveAction, captivesView, processCharacters, rescueStrandedCommanders } from './fate.mjs';
 import {
   acceptAlliance,
@@ -1746,7 +1746,7 @@ async function handleGameApi(req, res, url, ctx, subpath) {
     return json(res, result.status, result.response);
   }
 
-  if (req.method === 'POST' && ['/levy', '/drill', '/yard', '/port', '/bridge', '/hire', '/retrain', '/growth', '/capture-choice', '/bridge-burn', '/replenish', '/militia', '/intercept', '/grow', '/rebuild', '/hold'].includes(subpath)) {
+  if (req.method === 'POST' && ['/levy', '/drill', '/yard', '/port', '/bridge', '/hire', '/retrain', '/growth', '/capture-choice', '/bridge-burn', '/replenish', '/militia', '/intercept', '/grow', '/rebuild', '/hold', '/watch'].includes(subpath)) {
     const body = await readBody(req);
     const house = String(body.house || '').trim();
     await requireHouse(ctx, req, house);
@@ -1762,6 +1762,7 @@ async function handleGameApi(req, res, url, ctx, subpath) {
               : subpath === '/bridge' ? buildBridge(game, map, house, String(body.key || ''), { nowMs })
               : subpath === '/bridge-burn' ? burnBridge(game, map, house, String(body.key || ''), { nowMs })
                 : subpath === '/hire' ? hireUnits(game, map, house, String(body.territory || ''), body.counts, { nowMs })
+                  : subpath === '/watch' ? setWatch(game, map, house, String(body.territory || ''), { nowMs })
                   : subpath === '/hold' ? holdLine(game, map, house, String(body.territory || ''), { nowMs })
                   : subpath === '/grow' ? queueGrowJob(game, map, house, String(body.territory || ''), { nowMs })
                   : subpath === '/rebuild' ? queueRebuildJob(game, map, house, String(body.territory || ''), { nowMs })

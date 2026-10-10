@@ -10,6 +10,9 @@ import { bandNow, buildWayfarers, nextArrival, spyRound, wayfarerLegMs } from '.
 
 export const SPY_COST = 3;
 export const MAX_SPIES = 2;
+// A watch set over one's own land: for a day, any stranger's spy who comes to
+// look at it is taken at the gate.
+export const WATCH = Object.freeze({ gold: 2, dayShare: 1 });
 
 const SPY_NAMES = ['Тихон', 'Савва', 'Мышь', 'Кривой', 'Лука', 'Грач', 'Немой', 'Щегол'];
 
@@ -33,6 +36,41 @@ export function hireSpy(game, constants, house, { nowMs = Date.now() } = {}) {
   mine.push({ id, name: SPY_NAMES[(next.next_agent_id + house.length) % SPY_NAMES.length], status: 'IDLE', missions: 0 });
   next.updated_at = new Date(nowMs).toISOString();
   return next;
+}
+
+// A watch over one of our own lands: gate-keepers, questions asked of every
+// traveller. It lasts a day and takes whatever spy comes looking in that time.
+export function setWatch(game, map, house, territory, { nowMs = Date.now() } = {}) {
+  const land = game.state.territories?.[territory];
+  if (!land) throw new Error('такой земли нет');
+  if (land.owner !== house) throw new Error('догляд ставят в своей земле');
+  const standing = game.state.watchmen?.[territory];
+  if (standing && Date.parse(standing.until) > nowMs) throw new Error('догляд здесь уже стоит');
+  const purse = game.state.houses[house];
+  if (Number(purse.gold || 0) < WATCH.gold) throw new Error(`нужно ${WATCH.gold} золота`);
+  const next = structuredClone(game);
+  const day = Number(next.rounds?.round_duration_ms || 600000);
+  next.state.houses[house].gold -= WATCH.gold;
+  next.state.watchmen ||= {};
+  next.state.watchmen[territory] = {
+    house,
+    until: new Date(nowMs + Math.round(day * WATCH.dayShare)).toISOString()
+  };
+  next.state.journal.push({
+    kind: 'WATCH_SET', house, houses: [house], territory,
+    until: next.state.watchmen[territory].until, at: new Date(nowMs).toISOString()
+  });
+  next.updated_at = new Date(nowMs).toISOString();
+  return next;
+}
+
+// Whoever keeps a watch over this land right now, if anybody does.
+export function watchOver(state, territory, nowMs) {
+  const watch = state?.watchmen?.[territory];
+  if (!watch || Date.parse(watch.until) <= nowMs) return null;
+  // A watch dies with the hand that set it: lose the land, lose the gate-keepers.
+  if (state.territories?.[territory]?.owner !== watch.house) return null;
+  return watch;
 }
 
 // A spy is given his mark and sent to wait in one of the House's lands. He
@@ -135,6 +173,19 @@ export function processAgents(game, map, { nowMs = Date.now() } = {}) {
       next.state.spy_sight ||= {};
       const sight = (next.state.spy_sight[house] ||= {});
       if (agent.status === 'TRAVEL') {
+        // Gate-keepers at the mark: the spy is taken before he sees anything.
+        const caught = watchOver(next.state, agent.target, nowMs);
+        if (caught && caught.house !== house) {
+          next.state.journal.push({
+            kind: 'SPY_CAUGHT', house: caught.house, houses: [caught.house, house],
+            against: house, agent_name: agent.name, territory: agent.target,
+            at: new Date(nowMs).toISOString()
+          });
+          const mine = next.agents[house];
+          const at = mine.indexOf(agent);
+          if (at >= 0) mine.splice(at, 1);
+          continue;
+        }
         agent.status = 'WATCH';
         agent.until = new Date(nowMs + watchMs(next)).toISOString();
         sight[agent.target] = agent.until;
