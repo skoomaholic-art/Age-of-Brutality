@@ -35,6 +35,17 @@ export const TERRAIN = Object.freeze({
   }
 });
 
+// Away from its own realm a host feeds itself: what it loses every dawn to
+// hunger, sickness and desertion, on top of whatever the ground does to it. On
+// a land the House has taken it is less — the country is made to feed it — and
+// on nobody's or an enemy's ground it is more.
+export const SUPPLY = Object.freeze({
+  held: 0.03,
+  foreign: 0.06,
+  why: 'без обоза',
+  text: 'Рать стоит вдали от своих земель: кормится чем придётся, и люди убывают.'
+});
+
 // A fleet standing over a reef is holed by the rocks; a storm is worse still.
 export const REEF_SHARE = 0.12;
 export const STORM_SHARE = 0.18;
@@ -88,10 +99,18 @@ export function wearAt(map, state, id, house, season = null) {
   const here = TERRAIN[kind];
   // In winter even open ground takes its toll of a host quartered abroad.
   const cold = season === WINTER ? COLD.wear : 0;
-  const rate = (here?.wear || 0) + cold;
+  // And a host away from its own realm lives off the country: it wears thin
+  // even on good ground, and worse where nobody is obliged to feed it. This is
+  // what gives a march its price and its rhythm — strike, take, hold, bring up
+  // the baggage — instead of one host walking the world for ever.
+  const held = state?.territories?.[id]?.owner === house;
+  const supply = held ? SUPPLY.held : SUPPLY.foreign;
+  const rate = (here?.wear || 0) + cold + supply;
   if (rate <= 0) return null;
   if (!here || here.wear <= 0) {
-    return { rate, why: COLD.why, text: 'Зима: мороз и бескормица уносят людей, стоящих на чужой земле.', terrain: kind };
+    return cold
+      ? { rate, why: COLD.why, text: 'Зима: мороз и бескормица уносят людей, стоящих на чужой земле.', terrain: kind }
+      : { rate, why: SUPPLY.why, text: SUPPLY.text, terrain: kind };
   }
   return {
     rate, why: here.why,

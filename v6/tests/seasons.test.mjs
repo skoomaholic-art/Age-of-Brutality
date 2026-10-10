@@ -1,6 +1,7 @@
 // The turning year: two days of summer, two of winter, and round again.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { SUPPLY } from '../src/online/terrain.mjs';
 import { COLD, SUMMER, WINTER, seasonOfDay, seasonNow, seasonTurnsOn } from '../src/online/seasons.mjs';
 import { roadSlow, wearAt, PLAIN } from '../src/online/terrain.mjs';
 
@@ -22,12 +23,18 @@ test('winter is heavier on the road and takes its own from a host abroad', () =>
   assert.ok(roadSlow(map, 'A', 'B', WINTER) > roadSlow(map, 'A', 'B', SUMMER));
   assert.equal(roadSlow(map, 'A', 'B', WINTER), roadSlow(map, 'A', 'B') * COLD.slow);
 
-  // Open ground costs nothing in summer and bites in winter.
+  // Open ground abroad costs a host its baggage in summer and the cold besides
+  // in winter.
   const state = { territories: { B: { warriors: {} } } };
-  assert.equal(wearAt(map, state, 'B', 'Дом', SUMMER), null);
+  const summer = wearAt(map, state, 'B', 'Дом', SUMMER);
+  assert.equal(summer.rate, SUPPLY.foreign);
+  assert.equal(summer.why, SUPPLY.why);
   const cold = wearAt(map, state, 'B', 'Дом', WINTER);
-  assert.equal(cold.rate, COLD.wear);
+  assert.equal(cold.rate, COLD.wear + SUPPLY.foreign);
   assert.equal(cold.why, COLD.why);
+  // On ground the House has taken the country feeds it, and it wears less.
+  const held = { territories: { B: { warriors: {}, owner: 'Дом' } } };
+  assert.ok(wearAt(map, held, 'B', 'Дом', SUMMER).rate < summer.rate);
 
   // Rough ground is worse still in winter than in summer.
   const mountainsSummer = wearAt(map, state, 'A', 'Дом', SUMMER);

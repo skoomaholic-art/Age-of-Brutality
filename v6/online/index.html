@@ -148,8 +148,9 @@
     .province.legal { fill: rgba(44,74,134,.34); stroke: #172c5c; stroke-width: 1.5; stroke-dasharray: 4 2; }
     .province.legal:hover { fill: rgba(44,74,134,.5); }
     .province.target { fill: rgba(179,49,31,.36); stroke: var(--vermilion); stroke-width: 2.8; }
-    .province.fogged { fill: rgba(28,24,18,.18); }
-    .province.fogged:hover { fill: rgba(28,24,18,.1); }
+    .province.fogged { fill: rgba(26,21,16,.22); }
+    .province.unknown, .province.unknown:hover { fill: rgb(154,162,171); }
+    .province.fogged:hover { fill: rgba(26,21,16,.12); }
     #pixi-layer { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
     /* With the WebGL map the SVG is only an invisible sheet for clicks and the glass. */
     #map.pixi-on > image, #map.pixi-on #map-clouds { display: none; }
@@ -5321,7 +5322,7 @@ function setupPixiFog() {
       sprite.height = w * 0.42;
       if (random() < 0.5) sprite.scale.x *= -1;
       sprite.tint = tints[Math.floor(random() * tints.length)];
-      const cloud = { sprite, far: size > 1, reach: 70 * size, x: x + (random() - 0.5) * 12 * size, y: y + (random() - 0.5) * 6 * size, phase: random() * 6.283, speed: 0.25 + random() * 0.35, on: true, alpha: 1, drift: 0 };
+      const cloud = { sprite, far: size >= 2, reach: 70 * size, x: x + (random() - 0.5) * 12 * size, y: y + (random() - 0.5) * 6 * size, phase: random() * 6.283, speed: 0.25 + random() * 0.35, on: true, alpha: 1, drift: 0 };
       sprite.position.set(cloud.x, cloud.y);
       fogLayer.addChild(sprite);
       pixiFog.clouds.push(cloud);
@@ -5335,9 +5336,12 @@ function setupPixiFog() {
     for (let y = cy - span; y < cy + span; y += 38, row += 1) {
       for (let x = cx - span + (row % 2 ? 40 : 0); x < cx + span; x += 80) if (!inner(x, y)) addCloud(x, y, 2);
     }
+    // Fewer clouds, each a little bigger: the whole country is divided into
+    // lands now, so the fog covers far more ground than it used to, and tens of
+    // thousands of little sprites brought the drawing to its knees.
     row = 0;
-    for (let y = b.y0 - pad; y < b.y1 + pad; y += 19, row += 1) {
-      for (let x = b.x0 - pad + (row % 2 ? 20 : 0); x < b.x1 + pad; x += 40) addCloud(x, y, 1);
+    for (let y = b.y0 - pad; y < b.y1 + pad; y += 30, row += 1) {
+      for (let x = b.x0 - pad + (row % 2 ? 32 : 0); x < b.x1 + pad; x += 64) addCloud(x, y, 1.5);
     }
 
     app.ticker.add(() => {
@@ -5395,22 +5399,28 @@ function setupPixiFog() {
 function updatePixiFog(explored, art, coords) {
   const key = (explored ? [...explored].sort().join(',') : 'open') + '|' + (snapshot?.game?.state?.heart?.candidates || []).join(',');
   if (key === pixiFog.key) return;
-  const first = pixiFog.key === null;
+  // The first picture of the fog is not drifted into: when the clouds are first
+  // told what this House knows, they are simply there. Fading in from nothing
+  // left the whole map bare for as long as the fade lasted.
+  const first = pixiFog.key === null || pixiFog.key.startsWith('open|');
   pixiFog.key = key;
   pixiFog.polys ||= Object.fromEntries(Object.entries(art).map(([id, shape]) => [id, parseRings(shape.d)]));
   const known = [];
   const hidden = [];
   const edge = [];
   const hiddenEdge = [];
-  // Every border of every land, known or not: the open country between lands
-  // is part of the same world and is not hidden either.
-  const anyEdge = [];
+  // How far from a land's own seat its ground may reach: the whole country is
+  // divided now, and an outer province's outline can run along the edge of the
+  // world, so a cloud is only counted as standing on a known land when it is
+  // both inside its border and near its seat.
+  const reach = mapStep() * 2.4;
   if (explored) {
     for (const [id, rings] of Object.entries(pixiFog.polys)) {
-      for (const ring of rings) for (const point of ring) anyEdge.push(point);
       if (!explored.has(id)) { hidden.push(rings); for (const ring of rings) for (const point of ring) hiddenEdge.push(point); continue; }
-      known.push(rings);
-      for (const ring of rings) for (const point of ring) edge.push(point);
+      known.push({ rings, x: coords[id]?.x ?? 0, y: coords[id]?.y ?? 0, has: Boolean(coords[id]) });
+      for (const ring of rings) for (const point of ring) {
+        if (!coords[id] || Math.hypot(point[0] - coords[id].x, point[1] - coords[id].y) <= reach) edge.push(point);
+      }
     }
     for (const id of explored) if (!art[id] && coords[id]) edge.push([coords[id].x, coords[id].y, 58]);
     // The Hearts, once they appear, shine through the clouds for everyone.
@@ -5424,27 +5434,19 @@ function updatePixiFog(explored, art, coords) {
       }
     }
   }
-  // A world of dry land has no sea to hide: the clouds there only stand beyond
-  // the edge of the world, and everything inside the frame is open country.
-  const dry = !Object.keys(snapshot?.map?.sea_waypoints || {}).length;
   for (const cloud of pixiFog.clouds) {
     let on = Boolean(explored);
-    if (on && dry && !cloud.far) on = false;
-    else if (on && !cloud.far) {
-      // The lie of the land is known to everyone from the first day: where the
-      // hills and rivers are is no secret, and a player who sees nothing but
-      // cloud sees no world at all. What stays hidden is who holds a land and
-      // what stands on it — the dark fill over an unknown province says that.
-      // Only open water nobody has sailed is still closed by cloud.
-      if (known.some(rings => inRings(rings, cloud.x, cloud.y))) on = false;
-      else if (hidden.some(rings => inRings(rings, cloud.x, cloud.y))) on = false;
-      else if (anyEdge.some(p => {
-        const dx = p[0] - cloud.x, dy = p[1] - cloud.y;
-        return dx * dx + dy * dy < 46 * 46;
-      })) on = false;
+    if (on && !cloud.far) {
+      // Nobody is given the world. A House knows the ground it holds and what
+      // lies next to it; everything else is under cloud — not only who holds a
+      // land, but whether there is any land there at all. Take a land and the
+      // next ring opens, and so a realm finds out where it is by walking.
+      if (known.some(land => (!land.has || Math.hypot(cloud.x - land.x, cloud.y - land.y) <= reach)
+        && inRings(land.rings, cloud.x, cloud.y))) on = false;
       else {
         // Clouds lie on every unknown land right up to its border. Over water
         // they part only where the known shore is nearer than any unknown one.
+        const overHidden = hidden.some(rings => inRings(rings, cloud.x, cloud.y));
         let near = Infinity;
         for (const p of edge) {
           const dx = p[0] - cloud.x, dy = p[1] - cloud.y, d = dx * dx + dy * dy;
@@ -5452,6 +5454,7 @@ function updatePixiFog(explored, art, coords) {
           if (d < near) near = d;
         }
         if (near === 0) on = false;
+        else if (overHidden) on = near >= 5 * 5;
         else if (near < 40 * 40) {
           let far = Infinity;
           for (const p of hiddenEdge) { const dx = p[0] - cloud.x, dy = p[1] - cloud.y, d = dx * dx + dy * dy; if (d < far) far = d; }
@@ -5572,9 +5575,12 @@ function goHome() {
   mapView = { ...MAP_HOME, h: MAP_HOME.w * mapRatio() };
   const capital = snapshot?.map?.capitals?.[$('house').value];
   const c = capital && snapshot.map.coordinates?.[capital];
-  if (c && matchMedia('(max-width: 760px), (pointer: coarse) and (max-width: 1000px)').matches) {
-    // A phone opens on the House's own lands, not on the whole world: the
-    // realm itself, with a little room around it.
+  // While the fog stands, «home» is the House's own country — not the whole
+  // world, which it has not earned the sight of yet.
+  const closeIn = Boolean(snapshot?.game?.visibility?.fog)
+    || matchMedia('(max-width: 760px), (pointer: coarse) and (max-width: 1000px)').matches;
+  if (c && closeIn) {
+    // The realm itself, with a little room around it.
     const own = (snapshot.map.territories || [])
       .filter(t => t.house_sector === $('house').value)
       .map(t => snapshot.map.coordinates[t.id])
@@ -5608,10 +5614,16 @@ function mapRatio() {
 function clampMapView() {
   const bounds = mapArt?.bounds || { x0: -160, y0: -110, x1: 1000, y1: 660 };
   const ratio = mapRatio();
-  mapView.w = Math.max(150, Math.min(bounds.x1 - bounds.x0, mapView.w));
+  // Under fog the eye may wander past the edge of the known world into the
+  // clouds: a frame that stopped dead at the border would tell a House whether
+  // it sits in the middle of the world or in its corner before it has earned
+  // that knowledge. Beyond the lands there is only cloud to see.
+  const fogged = Boolean(snapshot?.game?.visibility?.fog);
+  const pad = fogged ? Math.min(360, Math.max(160, mapView.w * 0.5)) : 0;
+  mapView.w = Math.max(150, Math.min(bounds.x1 - bounds.x0 + pad * 2, mapView.w));
   mapView.h = mapView.w * ratio;
-  mapView.x = Math.max(bounds.x0, Math.min(bounds.x1 - mapView.w, mapView.x));
-  mapView.y = Math.max(bounds.y0, Math.min(bounds.y1 - mapView.h, mapView.y));
+  mapView.x = Math.max(bounds.x0 - pad, Math.min(bounds.x1 + pad - mapView.w, mapView.x));
+  mapView.y = Math.max(bounds.y0 - pad, Math.min(bounds.y1 + pad - mapView.h, mapView.y));
 }
 
 function mapPointFromEvent(event) {
@@ -6004,10 +6016,12 @@ function shadeFor(fills, color, alpha) {
 function provinceStyle(g, rings, cls, fills = null) {
   const has = name => cls.includes(name);
   let fill = null, line = null, dash = null;
-  // Dark lands: known ground, unknown hand. The veil only dims the picture —
-  // the whole country is divided into lands now, so a heavy one would black out
-  // the map on the first day.
-  if (has('fogged')) fill = [0x1a1510, 0.22];
+  // Dark lands: ground the House has seen but does not hold — dimmed, not hidden.
+  if (has('fogged') && !has('unknown')) fill = [0x1a1510, 0.22];
+  // What it has never walked is not shown to it at all: a flat field of mist.
+  // Not the shape of the land, not its rivers, not where it lies in the world —
+  // a realm finds that out by marching, land by land.
+  if (has('unknown')) fill = [0x9aa2ab, 1];
   if (has('dim')) fill = [0x1e140a, 0.45];
   if (has('selectable')) { line = [0xfff8e6, 1.2]; dash = [3, 2.2]; }
   if (has('origin')) { fill = [0xfff8e6, 0.2]; line = [0xfff8e6, 2.6]; dash = null; }
@@ -6034,7 +6048,7 @@ function drawPixiHover() {
   if (!pixiMap.hoverId) return;
   const node = document.querySelector(`#map .province[data-id="${pixiMap.hoverId}"]`);
   const cls = node ? [...node.classList] : [];
-  const tone = cls.includes('fogged') ? [0xfff8e6, 0.12] : cls.includes('legal') ? [0x2c4a86, 0.18] : [0xfff8e6, 0.18];
+  const tone = cls.includes('unknown') ? [0x9aa2ab, 0.04] : cls.includes('fogged') ? [0xfff8e6, 0.12] : cls.includes('legal') ? [0x2c4a86, 0.18] : [0xfff8e6, 0.18];
   g.beginFill(tone[0], tone[1]);
   fillRings(g, provinceRings(pixiMap.hoverId));
   g.endFill();
@@ -6723,6 +6737,8 @@ function renderMap() {
     if (t.id === target) classes.push('target');
     if (origin && t.id !== origin && !legalTargets.has(t.id) && t.id !== target) classes.push('dim');
     if (fogVisible && owner !== house) classes.push('fogged');
+    // Ground the House has never walked: not dimmed but hidden outright.
+    if (explored && !explored.has(t.id)) classes.push('unknown');
 
     scene.provinces.push({ id: t.id, cls: classes });
     if (snapshot.map.buildable_ports && hasPort(t.id) && (!explored || explored.has(t.id))) scene.ports.push({ x: c.x - 13, y: c.y + 6 });
