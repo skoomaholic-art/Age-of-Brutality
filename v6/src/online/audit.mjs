@@ -250,13 +250,24 @@ export function journalEntryToAudit(entry, map, game) {
     };
   }
 
+  if (entry.kind === 'SEASON_TURNED') {
+    const winter = entry.season === 'зима';
+    return {
+      ...base,
+      message: winter
+        ? 'Пришла зима: дороги замело, рати идут медленнее, а стужа берёт своё с тех, кто стоит на чужой земле.'
+        : 'Пришло лето: снега сошли, дороги просохли, рати снова идут скоро.',
+      details: { season: entry.season, round: entry.round || null, at: entry.at || null }
+    };
+  }
+
   if (entry.kind === 'SPY_ARRIVED' || entry.kind === 'SPY_RETURNED') {
     const territory = territoryName(map, entry.territory);
     return {
       ...base,
       message: entry.kind === 'SPY_ARRIVED'
         ? `Шпион на месте: ${entry.agent_name} вошёл в ${territory} с путниками и шлёт вести.`
-        : `Шпион вернулся: ${entry.agent_name} ушёл из ${territory} с другими путниками и снова при дворе.`,
+        : `Шпион отсмотрел своё: ${entry.agent_name} ушёл из ${territory} с другими путниками и снова при дворе — можно слать опять.`,
       details: { house: entry.house, agent_name: entry.agent_name, territory_id: entry.territory, territory, at: entry.at || null }
     };
   }

@@ -133,21 +133,27 @@ test('the size of the world is chosen apart from the number of Houses', () => {
   assert.equal(recommendedSize(6), 'huge');
 });
 
-test('a world is made in a season of the creator’s choosing, and winter lies in the north', () => {
+test('a world is made in a season of the creator’s choosing; snows lie north and sands south in either', () => {
   const houses = constants.houses.slice(0, 4);
   const winter = generateMap(base, constants, { houses, seed: 55, shape: 'wheel', season: 'winter' });
   const summer = generateMap(base, constants, { houses, seed: 55, shape: 'wheel', season: 'summer' });
   assert.equal(winter.season, 'зима');
   assert.equal(summer.season, 'лето');
-  assert.ok(Object.values(winter.terrain).includes('снега'), 'winter has snow somewhere');
-  assert.ok(!Object.values(summer.terrain).includes('снега'), 'summer has none');
-  assert.ok(!Object.values(winter.terrain).includes('пустыня'), 'and no desert in a winter world');
-  // The snows lie in the northern half.
-  const span = winter.art.bounds.y1 - winter.art.bounds.y0;
-  for (const [id, kind] of Object.entries(winter.terrain)) {
-    if (kind !== 'снега') continue;
-    assert.ok(winter.coordinates[id].y < span * 0.55, `${id} lies in the north`);
+  // The season a world is born in only says which weather it opens with: the
+  // year turns while it is played, so the ground itself is laid out the same.
+  assert.deepEqual(winter.terrain, summer.terrain);
+  // Over many worlds both snows and sands turn up, each at its own end of the map.
+  let snows = 0;
+  let sands = 0;
+  for (let seed = 1; seed <= 25; seed += 1) {
+    const world = generateMap(base, constants, { houses, seed, shape: 'wheel' });
+    const span = world.art.bounds.y1 - world.art.bounds.y0;
+    for (const [id, kind] of Object.entries(world.terrain)) {
+      if (kind === 'снега') { snows += 1; assert.ok(world.coordinates[id].y < span * 0.55, `${id} lies in the north`); }
+      if (kind === 'пустыня') { sands += 1; assert.ok(world.coordinates[id].y > span * 0.45, `${id} lies in the south`); }
+    }
   }
+  assert.ok(snows > 0 && sands > 0, 'both snows and sands are laid somewhere');
   // Left to chance, both seasons come up over many seeds.
   const seen = new Set();
   for (let seed = 1; seed <= 40; seed += 1) seen.add(generateMap(base, constants, { houses, seed, shape: 'wheel' }).season);

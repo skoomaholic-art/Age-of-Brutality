@@ -7,6 +7,7 @@
 
 import { moveRanks, guestKey } from './ranks.mjs';
 import { wearAt, TERRAIN } from './terrain.mjs';
+import { seasonNow } from './seasons.mjs';
 
 // A House's own realm: the lands that have always been its own. There its men
 // are fed, quartered and doctored, so the weather and the road take nobody.
@@ -36,13 +37,14 @@ export function wearLoss(men, rate, lot) {
  * One dawn of non-battle losses on land. Mutates `game.state`; returns the
  * losses it took.
  */
-export function attritionDawn(game, map, nowMs = Date.now()) {
+export function attritionDawn(game, map, nowMs = Date.now(), season = null) {
   const state = game.state;
   const day = Number(game.rounds?.number || 0);
+  season ||= seasonNow(game, map);
   const out = [];
   const take = (id, house, men, key) => {
     if (atHome(map, id, house)) return 0;
-    const wear = wearAt(map, state, id, house);
+    const wear = wearAt(map, state, id, house, season);
     if (!wear) return 0;
     const lot = hash(`${game.id}:${day}:${id}:${house}`);
     const lost = wearLoss(men, wear.rate, lot);
@@ -91,11 +93,11 @@ export function attritionDawn(game, map, nowMs = Date.now()) {
  * how many men it stands to lose by the next dawn. Built from what the House
  * can actually see, so it tells nothing the fog hides.
  */
-export function attritionView(state, map) {
+export function attritionView(state, map, season = null) {
   const view = {};
   const note = (id, house, men) => {
     if (atHome(map, id, house)) return;
-    const wear = wearAt(map, state, id, house);
+    const wear = wearAt(map, state, id, house, season);
     if (!wear || men <= 1) return;
     const lost = Math.max(1, Math.floor(men * wear.rate));
     (view[id] ||= {})[house] = { why: wear.why, text: wear.text, men: Math.min(men - 1, lost) };

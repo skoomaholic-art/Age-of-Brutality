@@ -11,6 +11,8 @@
 // map.reefs    [seaWaypointId, ...]  shallows that tear a fleet's hulls
 // map.season   'зима' on a winter map, else null
 
+import { COLD, WINTER } from './seasons.mjs';
+
 export const PLAIN = 'равнина';
 
 export const TERRAIN = Object.freeze({
@@ -47,10 +49,11 @@ export function terrainInfo(map, id) {
 }
 
 // How much longer a march over this road takes: the mean of both ends.
-export function roadSlow(map, a, b) {
+export function roadSlow(map, a, b, season = null) {
   const slowA = TERRAIN[terrainOf(map, a)]?.slow ?? 1;
   const slowB = TERRAIN[terrainOf(map, b)]?.slow ?? 1;
-  return (slowA + slowB) / 2;
+  // Winter lies on every road alike: snow, mud and short days.
+  return ((slowA + slowB) / 2) * (season === WINTER ? COLD.slow : 1);
 }
 
 export function isReef(map, id) {
@@ -66,7 +69,7 @@ export function stormAt(state, id) {
  * Why a host standing here bleeds without a battle, and how hard. Returns null
  * on safe ground. Used both by the dawn and by the skull the client shows.
  */
-export function wearAt(map, state, id, house) {
+export function wearAt(map, state, id, house, season = null) {
   if (map?.sea_waypoints?.[id]) {
     const days = Number(state?.sea_nodes?.[id]?.days_at_sea?.[house] || 0);
     const storm = stormAt(state, id);
@@ -77,6 +80,16 @@ export function wearAt(map, state, id, house) {
   }
   const kind = terrainOf(map, id);
   const here = TERRAIN[kind];
-  if (!here || here.wear <= 0) return null;
-  return { rate: here.wear, why: here.why, text: here.lore, terrain: kind };
+  // In winter even open ground takes its toll of a host quartered abroad.
+  const cold = season === WINTER ? COLD.wear : 0;
+  const rate = (here?.wear || 0) + cold;
+  if (rate <= 0) return null;
+  if (!here || here.wear <= 0) {
+    return { rate, why: COLD.why, text: 'Зима: мороз и бескормица уносят людей, стоящих на чужой земле.', terrain: kind };
+  }
+  return {
+    rate, why: here.why,
+    text: cold ? `${here.lore} Зимой стужа берёт своё сверх того.` : here.lore,
+    terrain: kind
+  };
 }

@@ -722,21 +722,68 @@ export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'whe
   // The hollow where the marshes lie.
   const bogAt = { x: mid.x + (terrainRandom() - 0.5) * spanX * 0.6, y: mid.y + (terrainRandom() - 0.5) * spanY * 0.6 };
   const bogReach = Math.max(52, Math.min(spanX, spanY) * 0.24);
+  // The crossroads of the world: the lands that lie on the short road from one
+  // capital to another, and the narrow necks every army must pass. Rough
+  // ground falls there by choice — a mountain pass or a marsh crossing is a
+  // place worth holding, and a war is fought over it instead of around it.
+  const roadsOf = {};
+  for (const [a, b] of [...edges].map(key => key.split('|'))) {
+    (roadsOf[a] ||= []).push(b);
+    (roadsOf[b] ||= []).push(a);
+  }
+  const roadBetween = (from, to) => {
+    const came = new Map([[from, null]]);
+    const queue = [from];
+    while (queue.length) {
+      const at = queue.shift();
+      if (at === to) break;
+      for (const next of (roadsOf[at] || []).slice().sort()) {
+        if (came.has(next)) continue;
+        came.set(next, at);
+        queue.push(next);
+      }
+    }
+    if (!came.has(to)) return [];
+    const out = [];
+    for (let id = came.get(to); id && id !== from; id = came.get(id)) out.push(id);
+    return out;
+  };
+  const traffic = new Map();
+  const capitalList = Object.values(capitals);
+  for (let i = 0; i < capitalList.length; i += 1) {
+    for (let j = i + 1; j < capitalList.length; j += 1) {
+      for (const id of roadBetween(capitalList[i], capitalList[j])) traffic.set(id, (traffic.get(id) || 0) + 1);
+    }
+  }
+  const busiest = Math.max(1, ...traffic.values());
+  const strategic = new Set([...traffic]
+    .filter(([id, n]) => n >= Math.max(2, busiest * 0.5) && !homeOf.has(id) && !nextToHome.has(id))
+    .map(([id]) => id));
+
   const terrain = {};
   for (const t of territories) {
     if (homeOf.has(t.id)) continue;
     const here = coordinates[t.id];
     const wild = t.type === 'Дикая земля';
-    // Home ground is kinder than the wild middle, and the gate of a capital kindest of all.
-    const soften = (wild ? 1 : 0.6) * (houses.includes(t.house_sector) ? 0.5 : 1) * (nextToHome.has(t.id) ? 0.4 : 1);
+    const own = houses.includes(t.house_sector);
+    // The wild middle is rough, a House's own sector is kind, and the gate of a
+    // capital kindest of all. A crossroads is rough whoever holds it.
+    const soften = (wild ? 0.85 : 0.55)
+      * (own ? 0.22 : 1)
+      * (nextToHome.has(t.id) ? 0.35 : 1)
+      * (strategic.has(t.id) ? 1.8 : 1);
     const toChain = Math.abs((here.x - chainAt.x) * chainN.x + (here.y - chainAt.y) * chainN.y);
     const toBog = Math.hypot(here.x - bogAt.x, here.y - bogAt.y);
     const band = here.y / spanY; // 0 at the north edge, 1 at the south
     if (toChain < chainWidth && terrainRandom() < 0.85 * soften) { terrain[t.id] = 'горы'; continue; }
     if (toBog < bogReach && terrainRandom() < 0.7 * soften) { terrain[t.id] = 'болота'; continue; }
-    if (winter && band < 0.3 && terrainRandom() < 0.8 * soften) { terrain[t.id] = 'снега'; continue; }
-    if (!winter && band > 0.7 && terrainRandom() < 0.7 * soften) { terrain[t.id] = 'пустыня'; continue; }
-    if (terrainRandom() < 0.22 * soften) terrain[t.id] = winter ? 'снега' : terrainRandom() < 0.5 ? 'горы' : 'болота';
+    // The north lies under snow and the south is sand, whatever the season:
+    // the year turns, but the lie of the land does not.
+    if (band < 0.26 && terrainRandom() < 0.62 * soften) { terrain[t.id] = 'снега'; continue; }
+    if (band > 0.74 && terrainRandom() < 0.58 * soften) { terrain[t.id] = 'пустыня'; continue; }
+    if (terrainRandom() < 0.2 * soften) terrain[t.id] = terrainRandom() < 0.5 ? 'горы' : 'болота';
+    // A crossroads left plain by the lot is still given a pass to hold.
+    else if (strategic.has(t.id) && terrainRandom() < 0.5) terrain[t.id] = terrainRandom() < 0.6 ? 'горы' : 'болота';
   }
 
   // A wall of rock closes some roads for good. Only between two mountain

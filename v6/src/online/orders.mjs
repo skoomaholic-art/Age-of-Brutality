@@ -33,6 +33,8 @@ import {
   onlinePositionWarriors
 } from './route-planner.mjs';
 
+import { COLD, isWinter } from './seasons.mjs';
+
 export const ONLINE_TIMING = Object.freeze({
   landSegmentMs: 3_000,
   landMaxMs: 5_000,
@@ -256,8 +258,10 @@ export function queueTimedOrder(
   action = scaleRoute(hydratedAction, scale);
   let next = structuredClone(game);
   const id = `O${String(next.next_order_id).padStart(6, '0')}`;
+  // Winter lies on the road: the same march takes longer between the snows.
   const durationMs = Math.round(
     travelDurationMs(next.state, map, constants, action, timing) * scale
+      * (isWinter(game, map) ? COLD.slow : 1)
   );
   const availableWarriors =
     onlinePositionWarriors(game.state, action.from, action.house) -

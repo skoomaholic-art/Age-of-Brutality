@@ -64,6 +64,7 @@ import { applyFog, knownHouses, recordExploration, recordLandHistory } from './f
 import { attritionView } from './attrition.mjs';
 import { processStorms } from './storms.mjs';
 import { TERRAIN } from './terrain.mjs';
+import { seasonNow, seasonTurnsOn } from './seasons.mjs';
 import { generateMap, MAX_HOUSES, MIN_HOUSES, MAP_SEASON_KEYS, MAP_SHAPES, MAP_SIZE_KEYS, MAP_WARPS, pickMapShape, recommendedSize } from './mapgen.mjs';
 import { processEncounters } from './encounters.mjs';
 import { expelGuests } from './guests.mjs';
@@ -209,12 +210,14 @@ function mapSpecFrom(body, { defaultHouses }) {
 
 const mapArtCache = new Map();
 
-async function mapArtFor(scope) {
-  if (!mapArtCache.has(scope.key)) {
+async function mapArtFor(scope, season = null) {
+  // Summer and winter are two pictures of the same world; each is painted once.
+  const key = season ? `${scope.key}|${season}` : scope.key;
+  if (!mapArtCache.has(key)) {
     if (mapArtCache.size > 12) mapArtCache.delete(mapArtCache.keys().next().value);
-    mapArtCache.set(scope.key, (async () => {
+    mapArtCache.set(key, (async () => {
       const { buildMapArt } = await import('./map-art.mjs');
-      const art = buildMapArt(scope.map, {
+      const art = buildMapArt(season ? { ...scope.map, season } : scope.map, {
         bounds: scope.map.art.bounds,
         // Big maps are painted on a coarser grid so they are ready quickly.
         step: Math.max(1.6, 1.6 * Math.sqrt(((scope.map.art.bounds.x1 - scope.map.art.bounds.x0) * (scope.map.art.bounds.y1 - scope.map.art.bounds.y0)) / 1.2e6)),
@@ -229,7 +232,7 @@ async function mapArtFor(scope) {
       };
     })());
   }
-  return mapArtCache.get(scope.key);
+  return mapArtCache.get(key);
 }
 const characterCatalog = loadJson(path.join(v6Root, 'src/data/characters.v6.json'));
 
@@ -712,7 +715,9 @@ function redactGameForPlayer(game, player) {
 
   // Which hosts are bleeding without a battle, read off what this player can
   // actually see, so the skulls tell nothing the fog hides.
-  clientGame.attrition = attritionView(clientGame.state, map);
+  clientGame.attrition = attritionView(clientGame.state, map, seasonNow(game, map));
+  // Summer or winter right now, and the day the weather turns.
+  clientGame.season = { now: seasonNow(game, map), turns_on: seasonTurnsOn(game, map), born: map.season || null };
   // What each kind of ground does to an army, so the charter can say it.
   clientGame.terrain_kinds = TERRAIN;
   // The thresholds of order, so the charter counts a revolt exactly as the dawn does.
@@ -1339,7 +1344,8 @@ async function handleGameApi(req, res, url, ctx, subpath) {
   if (req.method === 'GET' && artFile) {
     const scope = gameScope.getStore();
     if (!scope?.key) return json(res, 404, { error: 'this game uses the classic map' });
-    const art = await mapArtFor(scope);
+    const asked = url.searchParams.get('s');
+    const art = await mapArtFor(scope, asked === 'зима' || asked === 'лето' ? asked : null);
     const svg = artFile[1] === 'terrain.svg';
     res.writeHead(200, {
       'content-type': svg ? 'image/svg+xml' : 'application/json; charset=utf-8',

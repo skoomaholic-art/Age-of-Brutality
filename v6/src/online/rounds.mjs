@@ -6,6 +6,7 @@ import { stormsDawn } from './storms.mjs';
 import { heartDawn } from './heart.mjs';
 import { populationDawn, upkeepDawn } from './units.mjs';
 import { orderDawn } from './order.mjs';
+import { seasonOfDay } from './seasons.mjs';
 import { buildVictoryStatus } from '../core/victory.mjs';
 
 // Online adaptation of the tabletop round structure (Rules §4), in two modes.
@@ -121,7 +122,7 @@ function beginRound(next, map, constants, number, nowMs, timing) {
   // A squall may rise over the water where somebody's fleet is out.
   if (number > 1) stormsDawn(next, map, nowMs);
   // Rough ground takes its own: mountains, marshes, sands and snows.
-  if (number > 1) attritionDawn(next, map, nowMs);
+  if (number > 1) attritionDawn(next, map, nowMs, seasonOfDay(map, number));
   // A game of the Heart: the wild guard grows back, the Heart pays its holder.
   rounds.heart_reached = number > 1 ? heartDawn(next, map, constants, nowMs, number) : [];
   // Lands with fields or a fair gain people.
@@ -183,6 +184,15 @@ function beginRound(next, map, constants, number, nowMs, timing) {
     );
   }
 
+  // The year turns: two days of summer, two days of winter, and round again.
+  const season = seasonOfDay(map, number);
+  if (number > 1 && season !== seasonOfDay(map, number - 1)) {
+    next.state.journal.push({
+      kind: 'SEASON_TURNED', season, houses: rounds.houses || constants.houses,
+      round: number, at: iso(nowMs)
+    });
+  }
+  next.state.season = season;
   next.state.round = number;
   next.state.cycle = 1;
   next.state.journal.push({
