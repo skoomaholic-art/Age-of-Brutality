@@ -1859,7 +1859,9 @@ async function handleGameApi(req, res, url, ctx, subpath) {
       from: body.from,
       to: body.to,
       warriors: body.warriors,
-      commander_id: body.commander_id || null
+      commander_id: body.commander_id || null,
+      ...(body.plan ? { plan: body.plan } : {}),
+      ...(Array.isArray(body.ranks) ? { ranks: body.ranks } : {})
     });
     await requireHouse(ctx, req, command.house);
 

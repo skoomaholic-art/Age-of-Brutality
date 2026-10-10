@@ -916,6 +916,7 @@ export function journalEntryToAudit(entry, map, game) {
         captured: entry.captured,
         captor: entry.captor,
         order_id: entry.order_id || null,
+        reckoning: entry.reckoning || null,
         at: entry.at || null,
         ...timingFields(entry)
       }
@@ -953,6 +954,7 @@ export function journalEntryToAudit(entry, map, game) {
         defender_removed_for_no_retreat: entry.defenderRemovedForNoRetreat,
         battle_vp_awarded_to: entry.battle_vp_awarded_to,
         capital_capture_vp: entry.capital_capture_vp,
+        reckoning: entry.reckoning || null,
         order_id: entry.order_id || null,
         ...timingFields(entry)
       }

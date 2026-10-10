@@ -23,6 +23,11 @@ function temporary(x, label) {
   return n;
 }
 
+// What the land is now, for the look of the walls in a battle's reckoning.
+function t2Kind(state, map, id) {
+  return landKind(state, map, id) ?? map.territories.find(t => t.id === id)?.type;
+}
+
 export function baseDefense(map, state, constants, territoryId) {
   const t = map.territories.find(x => x.id === territoryId);
   if (!t) throw new Error(`unknown territory ${territoryId}`);
@@ -142,6 +147,20 @@ export function resolveBattle(state, map, constants, action, options = {}) {
     damageToDefender, damageToAttacker, captured, defenderRetreatTo, defenderRemovedForNoRetreat,
     battle_vp_awarded_to:battleVpHouse, capital_capture_vp:capitalVp
   };
-  next.journal.push({kind:'BATTLE', ...result, attackerDie, defenderDie, attackerSupport, defenderSupport});
+  // What the fight was made of, so it can be read back afterwards.
+  const reckoning = {
+    walls: constants.combat.base_defense[t2Kind(state, map, action.to)] ?? 0,
+    fort: state.territories[action.to]?.fort ? constants.combat.fort_defense : 0,
+    terrain: terrainGuard(map, action.to),
+    dug: holdGuard(state, action.to, defenderHouse),
+    attacker_commander: attackerAttack,
+    defender_commander: defenderAttack,
+    attacker_guard: attackerDefenseValue,
+    defender_guard: defenderDefense,
+    damage_to_attackers: damageToAttacker,
+    damage_to_defenders: damageToDefender,
+    plan: options.plan || null
+  };
+  next.journal.push({kind:'BATTLE', ...result, reckoning, attackerDie, defenderDie, attackerSupport, defenderSupport});
   return {state:next, result};
 }

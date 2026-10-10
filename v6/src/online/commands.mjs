@@ -1,4 +1,5 @@
 import { queueTimedOrder } from './orders.mjs';
+import { planOf } from './plans.mjs';
 import { queueFortJob, queueRecruitJob } from './economy.mjs';
 import { assertRoundAction, spendRoundAction } from './rounds.mjs';
 
@@ -31,6 +32,9 @@ export function normalizeCommand(input) {
       to: requiredString(input.to, 'to'),
       warriors: positiveInt(input.warriors, 'warriors')
     };
+
+    // How the host is told to fight when it gets there.
+    if (input.plan) command.plan = planOf({ plan: input.plan });
 
     // Which kinds go, when the House has named them: the host is split by hand.
     if (Array.isArray(input.ranks)) {
@@ -91,7 +95,9 @@ function queueCommand(game, map, constants, command, { nowMs }) {
         from: command.from,
         to: command.to,
         warriors: command.warriors,
-        commander_id: command.commander_id
+        commander_id: command.commander_id,
+        ...(command.plan ? { plan: command.plan } : {}),
+        ...(command.ranks ? { ranks: command.ranks } : {})
       },
       { nowMs }
     );

@@ -30,6 +30,8 @@ import { areAllies, declareWarInPlace, relationOf, RELATION } from './diplomacy.
 import { arriveRanks, compAt, guestKey, headsLost, MAX_STARS, moveRanks, reconcileRanks, starsAt, strengthOf } from './ranks.mjs';
 import { rulerLeadBonus } from './court.mjs';
 import { clearHoldAt, holdGuard } from './stance.mjs';
+import { planLosses, planStrength } from './plans.mjs';
+import { terrainGuard } from './terrain.mjs';
 import { fateDice, recoveryMs, settleFate } from './fate.mjs';
 import { nearestOwnLand } from './guests.mjs';
 import { onLandTaken } from './units.mjs';
@@ -172,9 +174,17 @@ export function fightOnLand(game, map, constants, land, aggressor, target, force
     declareWarInPlace(game, a.house, d.house, { nowMs, cause: a.house === aggressor && d.house === target ? 'ATTACK' : 'ALLY_DEFENSE' });
   }
 
+  // The plan the marching host carries: press the attack, or spare the men.
+  const planFor = m => (m.kind === 'MARCH' && force?.plan ? { plan: force.plan } : null);
   const wallsWith = members => members.some(m => m.kind === 'GARRISON');
   const att = sideStrength(attackers);
   const def = sideStrength(defenders);
+  for (const m of [...attackers, ...defenders]) {
+    const plan = planFor(m);
+    if (!plan) continue;
+    if (attackers.includes(m)) att.strength += planStrength(plan);
+    else def.strength += planStrength(plan);
+  }
   const walls = owner ? baseDefense(map, state, constants, land) : 0;
   // Whoever dug in here stands behind his own ditches as well as the walls.
   const dug = members => members.reduce((most, m) => Math.max(most, holdGuard(state, land, m.house)), 0);
@@ -185,7 +195,9 @@ export function fightOnLand(game, map, constants, land, aggressor, target, force
 
   const apply = (members, damage) => share(damage, members).forEach((points, i) => {
     const m = members[i];
-    m.lost = Math.min(m.heads, headsLost(m.comp, m.heads, points));
+    const plan = planFor(m);
+    const raw = headsLost(m.comp, m.heads, points);
+    m.lost = Math.min(m.heads, plan ? planLosses(plan, raw) : raw);
     m.survivors = m.heads - m.lost;
   });
   apply(attackers, toAttackers);
@@ -276,6 +288,18 @@ export function fightOnLand(game, map, constants, land, aggressor, target, force
     defenderRemovedForNoRetreat: removed,
     attackerDie: BATTLE_DIE,
     defenderDie: BATTLE_DIE,
+    // The reckoning of the field, so the fight can be read back afterwards.
+    reckoning: {
+      walls,
+      terrain: terrainGuard(map, land),
+      attacker_guard: attDefense,
+      defender_guard: defDefense,
+      attacker_dug: dug(attackers),
+      defender_dug: dug(defenders),
+      damage_to_attackers: toAttackers,
+      damage_to_defenders: toDefenders,
+      plan: force?.plan || null
+    },
     at: iso(nowMs)
   };
   state.journal.push(entry);

@@ -1005,6 +1005,14 @@
               <option value="0.25">на ¼ пути</option>
             </select>
           </label>
+          <label class="split-count">
+            <span class="muted">Как биться</span>
+            <select id="battle-plan">
+              <option value="EVEN">как придётся</option>
+              <option value="CHARGE">натиском</option>
+              <option value="CAREFUL">осторожно</option>
+            </select>
+          </label>
           <label id="commander-row" class="split-commander" style="display:none">
             <span class="muted">Воевода</span>
             <select id="commander"></select>
@@ -4429,6 +4437,36 @@ const NEWS_WORDS = {
 };
 const newsQueue = [];
 
+// The reckoning of a fight, line by line: what each side brought, what the
+// ground and the walls were worth, and what it cost.
+const PLAN_WORDS = { CHARGE: 'натиском', CAREFUL: 'осторожно', EVEN: 'как придётся' };
+
+function battleReckoning(item) {
+  const d = item.details || {};
+  const r = d.reckoning;
+  if (!r && !d.attacker_strength) return '';
+  const row = (label, value) => '<div class="row"><span>' + escapeHtml(label) + '</span><b>' + escapeHtml(String(value)) + '</b></div>';
+  const side = (name, strength, losses, survivors) =>
+    row(name || '—', strength + ' силы · −' + (losses || 0) + ' · осталось ' + (survivors || 0));
+  const out = ['<div class="rank-box"><div class="rank-head">Разбор сечи</div>'];
+  out.push(side(d.attacker + ' (нападал)', d.attacker_strength || 0, d.attacker_losses, d.attacker_survivors));
+  out.push(side(d.defender + ' (оборонялся)', d.defender_strength || 0, d.defender_losses, d.defender_survivors));
+  if (r) {
+    const ground = [];
+    if (r.walls) ground.push('стены ' + r.walls);
+    if (r.fort) ground.push('крепость ' + r.fort);
+    if (r.terrain) ground.push('земля ' + r.terrain);
+    if (r.dug || r.defender_dug) ground.push('рвы ' + (r.dug || r.defender_dug));
+    if (ground.length) out.push(row('Оборона места', ground.join(' · ')));
+    if (r.plan && r.plan !== 'EVEN') out.push(row('Замысел', PLAN_WORDS[r.plan] || r.plan));
+    if (r.damage_to_defenders != null) out.push(row('Урон по ним', r.damage_to_defenders));
+    if (r.damage_to_attackers != null) out.push(row('Урон по нам', r.damage_to_attackers));
+  }
+  out.push(row('Итог', d.captured ? 'земля взята' : 'земля устояла'));
+  out.push('</div>');
+  return out.join('');
+}
+
 function newsWindow(item, news) {
   const buttons = [{ label: news.ok || NEWS_WORDS[news.art] || 'Да будет так', primary: true }];
   const d = item.details || {};
@@ -4450,6 +4488,7 @@ function newsWindow(item, news) {
     from: item.at ? new Date(item.at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '',
     title: news.title,
     text: news.text,
+    extra: ['BATTLE', 'FIELD_BATTLE', 'MELEE'].includes(item.type) ? battleReckoning(item) : '',
     buttons
   };
 }
@@ -7203,6 +7242,7 @@ async function sendOrder(confirmed = false) {
       ...action,
       ...(picked && picked.sum === warriors ? { ranks: picked.ranks } : {}),
       commander_id: commanderId,
+      plan: $('battle-plan')?.value || 'EVEN',
       halt_ratio: Number($('halt-ratio').value) || null,
       via: viaPoints
     })

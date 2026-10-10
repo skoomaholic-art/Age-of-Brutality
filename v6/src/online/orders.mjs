@@ -36,6 +36,7 @@ import {
 import { COLD, isWinter } from './seasons.mjs';
 import { processAmbushes } from './intercept.mjs';
 import { standDown } from './stance.mjs';
+import { planLosses, planOf, planStrength } from './plans.mjs';
 
 export const ONLINE_TIMING = Object.freeze({
   landSegmentMs: 3_000,
@@ -716,13 +717,15 @@ function resolveOrder(state,map,constants,gameId,order,nowMs,recovery) {
     {
       attackerDie,
       defenderDie,
+      plan:planOf(order.action),
       attackerCommander:commanderStats(attackerCommander),
       defenderCommander:commanderStats(defenderCommander),
       // Ranks add up as strength: a guardsman counts as five peasants.
       // Ranks add up as strength; a ruler leading in person adds one more.
-      attackerStrengthModifier:strengthOf(order.action.ranks,Number(action.warriors),{stars:order.action.stars})-Number(action.warriors)+rulerLeadBonus(attackerCommander),
+      attackerStrengthModifier:strengthOf(order.action.ranks,Number(action.warriors),{stars:order.action.stars})-Number(action.warriors)+rulerLeadBonus(attackerCommander)+planStrength(order.action),
       defenderStrengthModifier:strengthOf(state.ranks?.[action.to]?.[defenderHouse],defenders,{defending:true,stars:starsAt(state,action.to,defenderHouse)})-defenders+rulerLeadBonus(defenderCommander),
-      attackerLossesFor:damage=>headsLost(order.action.ranks,Number(action.warriors),damage),
+      // The plan the host was given tells on its own dead as well as on its blows.
+      attackerLossesFor:damage=>Math.min(Number(action.warriors),planLosses(order.action,headsLost(order.action.ranks,Number(action.warriors),damage))),
       defenderLossesFor:damage=>headsLost(state.ranks?.[action.to]?.[defenderHouse],defenders,damage)
     }
   );
@@ -814,7 +817,8 @@ function meleeArrival(game, map, constants, order, nowMs) {
   origin.warriors[house] = Number(origin.warriors[house] || 0) - Number(action.warriors);
   if (origin.warriors[house] <= 0) delete origin.warriors[house];
   const { result } = fightOnLand(g, map, constants, action.to, house, master, {
-    house, heads: Number(action.warriors), ranks: order.action.ranks, stars: order.action.stars || 0, commanderId: order.commander_id || null, from: action.from
+    house, heads: Number(action.warriors), ranks: order.action.ranks, stars: order.action.stars || 0,
+    commanderId: order.commander_id || null, from: action.from, plan: planOf(order.action)
   }, { nowMs });
   return { game: g, state: g.state, result: { ...result, kind: 'MELEE', route_path: [...(action.path || [])], commander_id: order.commander_id || null } };
 }
