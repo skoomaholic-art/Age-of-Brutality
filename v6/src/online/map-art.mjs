@@ -201,6 +201,21 @@ export function buildMapArt(map, options = {}) {
   }
   const mainMass = [...massHeads.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? -1;
 
+  // Which land a point belongs to: the nearest settlement of its own shore,
+  // with the border wandering a little instead of running dead straight.
+  const nearestSite = (x, y, mass) => {
+    const wx = x + fbm(x / 26, y / 26, 41 + SEED, 2) * 9;
+    const wy = y + fbm(x / 26, y / 26, 53 + SEED, 2) * 9;
+    let nearest = Infinity;
+    let owner = -1;
+    for (let s = 0; s < sites.length; s += 1) {
+      if (massIndex.get(sites[s].mass) !== mass) continue;
+      const d = (wx - sites[s].x) ** 2 + (wy - sites[s].y) ** 2;
+      if (d < nearest) { nearest = d; owner = s; }
+    }
+    return owner;
+  };
+
   const landMass = new Int16Array(COLS * ROWS).fill(-1);
   const province = new Int16Array(COLS * ROWS).fill(-1);
   const openLand = new Uint8Array(COLS * ROWS); // country beyond the roads, claimed by nobody
@@ -222,6 +237,9 @@ export function buildMapArt(map, options = {}) {
         coastDepth[index] = Math.min(19, far + 13);
         landMass[index] = mainMass;
         openLand[index] = 1;
+        // Wild as it is, this ground still belongs to the nearest land: there
+        // are no corners of the world that are nobody's and cannot be entered.
+        province[index] = nearestSite(x, y, mainMass);
         continue;
       }
 
@@ -270,23 +288,11 @@ export function buildMapArt(map, options = {}) {
       coastDepth[index] = depth;
       if (depth <= 0) continue;
       landMass[index] = bestMass;
-      // Open country belongs to no House and to no province: it is only painted.
-      if (open) { openLand[index] = 1; continue; }
-
-      // Province borders wander a little instead of running dead straight.
-      const wx = x + fbm(x / 26, y / 26, 41 + SEED, 2) * 9;
-      const wy = y + fbm(x / 26, y / 26, 53 + SEED, 2) * 9;
-      let nearest = Infinity;
-      let owner = -1;
-      for (let s = 0; s < sites.length; s += 1) {
-        if (massIndex.get(sites[s].mass) !== bestMass) continue;
-        const d = (wx - sites[s].x) ** 2 + (wy - sites[s].y) ** 2;
-        if (d < nearest) {
-          nearest = d;
-          owner = s;
-        }
-      }
-      province[index] = owner;
+      // Open country is wild, but it is not nobody's: woods and hills beyond
+      // the roads belong to the land they lie nearest to, so the whole map is
+      // divided and there is no ground a host cannot walk into.
+      if (open) openLand[index] = 1;
+      province[index] = nearestSite(x, y, bestMass);
     }
   }
 
@@ -315,7 +321,9 @@ export function buildMapArt(map, options = {}) {
 
   const provinces = {};
   sites.forEach((site, s) => {
-    const rings = traceMask(index => province[index] === s, { smooth: 1, minStep: 1.4, minArea: 6 });
+    // Provinces now cover the whole country, so their outlines are longer:
+    // traced a little coarser, they stay the same shape at a fraction of the weight.
+    const rings = traceMask(index => province[index] === s, { smooth: 1, minStep: 2.6, minArea: 24 });
     provinces[site.id] = {
       d: rings.map(ringPath).join(''),
       x: site.x,

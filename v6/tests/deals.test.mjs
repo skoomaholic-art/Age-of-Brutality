@@ -65,7 +65,7 @@ test('a deal in two halves: gold for a land, sealed by the other House', () => {
   game = acceptDeal(game, constants, map, RIVAL, HOUSE, { nowMs: T0 });
   assert.equal(game.state.territories[NEXT].owner, HOUSE);
   assert.equal(game.state.territories[NEXT].warriors[RIVAL] || 0, 0, 'the old garrison leaves');
-  assert.equal(game.state.houses[HOUSE].gold, 8);
+  assert.equal(game.state.houses[HOUSE].gold, 20 - 12, 'the gold promised is paid');
   assert.equal(game.state.houses[RIVAL].gold, rivalGold + 12);
   assert.ok(game.state.journal.some(e => e.kind === 'DEAL_MADE'));
 });

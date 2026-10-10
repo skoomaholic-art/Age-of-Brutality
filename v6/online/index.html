@@ -148,8 +148,8 @@
     .province.legal { fill: rgba(44,74,134,.34); stroke: #172c5c; stroke-width: 1.5; stroke-dasharray: 4 2; }
     .province.legal:hover { fill: rgba(44,74,134,.5); }
     .province.target { fill: rgba(179,49,31,.36); stroke: var(--vermilion); stroke-width: 2.8; }
-    .province.fogged { fill: rgba(16,17,20,.45); }
-    .province.fogged:hover { fill: rgba(16,17,20,.33); }
+    .province.fogged { fill: rgba(28,24,18,.18); }
+    .province.fogged:hover { fill: rgba(28,24,18,.1); }
     #pixi-layer { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
     /* With the WebGL map the SVG is only an invisible sheet for clicks and the glass. */
     #map.pixi-on > image, #map.pixi-on #map-clouds { display: none; }
@@ -5402,8 +5402,12 @@ function updatePixiFog(explored, art, coords) {
   const hidden = [];
   const edge = [];
   const hiddenEdge = [];
+  // Every border of every land, known or not: the open country between lands
+  // is part of the same world and is not hidden either.
+  const anyEdge = [];
   if (explored) {
     for (const [id, rings] of Object.entries(pixiFog.polys)) {
+      for (const ring of rings) for (const point of ring) anyEdge.push(point);
       if (!explored.has(id)) { hidden.push(rings); for (const ring of rings) for (const point of ring) hiddenEdge.push(point); continue; }
       known.push(rings);
       for (const ring of rings) for (const point of ring) edge.push(point);
@@ -5420,9 +5424,13 @@ function updatePixiFog(explored, art, coords) {
       }
     }
   }
+  // A world of dry land has no sea to hide: the clouds there only stand beyond
+  // the edge of the world, and everything inside the frame is open country.
+  const dry = !Object.keys(snapshot?.map?.sea_waypoints || {}).length;
   for (const cloud of pixiFog.clouds) {
     let on = Boolean(explored);
-    if (on && !cloud.far) {
+    if (on && dry && !cloud.far) on = false;
+    else if (on && !cloud.far) {
       // The lie of the land is known to everyone from the first day: where the
       // hills and rivers are is no secret, and a player who sees nothing but
       // cloud sees no world at all. What stays hidden is who holds a land and
@@ -5430,6 +5438,10 @@ function updatePixiFog(explored, art, coords) {
       // Only open water nobody has sailed is still closed by cloud.
       if (known.some(rings => inRings(rings, cloud.x, cloud.y))) on = false;
       else if (hidden.some(rings => inRings(rings, cloud.x, cloud.y))) on = false;
+      else if (anyEdge.some(p => {
+        const dx = p[0] - cloud.x, dy = p[1] - cloud.y;
+        return dx * dx + dy * dy < 46 * 46;
+      })) on = false;
       else {
         // Clouds lie on every unknown land right up to its border. Over water
         // they part only where the known shore is nearer than any unknown one.
@@ -5992,7 +6004,10 @@ function shadeFor(fills, color, alpha) {
 function provinceStyle(g, rings, cls, fills = null) {
   const has = name => cls.includes(name);
   let fill = null, line = null, dash = null;
-  if (has('fogged')) fill = [0x101114, 0.6];
+  // Dark lands: known ground, unknown hand. The veil only dims the picture —
+  // the whole country is divided into lands now, so a heavy one would black out
+  // the map on the first day.
+  if (has('fogged')) fill = [0x1a1510, 0.22];
   if (has('dim')) fill = [0x1e140a, 0.45];
   if (has('selectable')) { line = [0xfff8e6, 1.2]; dash = [3, 2.2]; }
   if (has('origin')) { fill = [0xfff8e6, 0.2]; line = [0xfff8e6, 2.6]; dash = null; }

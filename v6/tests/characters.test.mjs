@@ -191,7 +191,8 @@ test('full March cannot leave a commander behind with zero warriors', () => {
     house:'Варкайр',
     from:'W01',
     to:'W02',
-    warriors:4,
+    // The whole host: not a man left under the lord who stays.
+    warriors:constants.start_warriors,
     commander_id:null
   }, {
     nowMs:30_000,

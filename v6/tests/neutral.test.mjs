@@ -24,7 +24,7 @@ test('failed neutral capture loses at most one warrior and returns control uncha
   assert.equal(result.success,false);
   assert.equal(result.loss,1);
   assert.equal(n.territories.W02.owner,null);
-  assert.equal(n.territories.W01.warriors['Варкайр'],3);
+  assert.equal(n.territories.W01.warriors['Варкайр'],c.start_warriors-1,'the fallen man is gone, the rest are home');
 });
 
 test('successful neutral capture moves group, takes control and grants VP-W1 once',()=>{

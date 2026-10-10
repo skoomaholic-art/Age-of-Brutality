@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { calculateHouseIncome } from '../src/core/economy.mjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildAdjacency, loadJson } from '../src/core/map.mjs';
@@ -85,7 +86,7 @@ test('starting a game opens round 1 with income paid and three actions per House
   assert.equal(game.state.round, 1);
   assert.equal(game.next_income_at, null);
   // 8 starting gold + 4 from the home capital.
-  assert.equal(game.state.houses[HOUSE].gold, 12);
+  assert.equal(game.state.houses[HOUSE].gold, constants.start_gold + calculateHouseIncome(game.state, map, constants, HOUSE).gold);
   for (const house of constants.houses) {
     assert.deepEqual(
       { left: houseRoundStatus(game, house).left, done: houseRoundStatus(game, house).done },

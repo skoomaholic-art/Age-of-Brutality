@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { calculateHouseIncome } from '../src/core/economy.mjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadJson, buildAdjacency } from '../src/core/map.mjs';
@@ -73,7 +74,7 @@ test('a game in days pays income at the start, sets a day clock and has no order
   let game = daysGame();
   assert.equal(game.rounds.mode, 'days');
   // Land income and what the lords at court give at dawn.
-  assert.equal(game.state.houses[HOUSE].gold, 12 + houseCourtTotals(game.state, HOUSE, map.capitals).gold);
+  assert.equal(game.state.houses[HOUSE].gold, constants.start_gold + calculateHouseIncome(game.state, map, constants, HOUSE).gold + houseCourtTotals(game.state, HOUSE, map.capitals).gold);
   assert.equal(Date.parse(game.rounds.deadline_at), T0 + DAY);
   assert.equal(roundsView(game).day_ms, DAY);
 
@@ -197,7 +198,7 @@ test('a House sees its own lands and their neighbours, and nothing of armies bey
   assert.equal(remembered.state.territories[far].owner, RIVAL, 'an explored land shows its owner');
   assert.deepEqual(remembered.state.territories[far].warriors, {}, 'but not its garrison');
   assert.equal(remembered.exploration, undefined, 'what others explored is not sent');
-  assert.equal(client.state.territories[CAPITAL].warriors[HOUSE], 4);
+  assert.equal(client.state.territories[CAPITAL].warriors[HOUSE], constants.start_warriors);
   assert.equal(client.visibility.visible.includes(far), false);
   assert.ok(
     Object.values(client.state.characters).every(character => character.house === HOUSE),

@@ -45,7 +45,7 @@ test('persistent prototype queues and resolves a timed friendly March', () => {
   game = processDueOrders(game, map, constants, 1_011);
 
   assert.equal(game.orders[0].status, 'RESOLVED');
-  assert.equal(game.state.territories.W01.warriors['Варкайр'], 3);
+  assert.equal(game.state.territories.W01.warriors['Варкайр'], constants.start_warriors - 1);
   assert.equal(game.state.territories.W02.warriors['Варкайр'], 1);
 });
 
@@ -59,7 +59,8 @@ test('pending orders reserve warriors and prevent double spending', () => {
     house: 'Варкайр',
     from: 'W01',
     to: 'W02',
-    warriors: 3
+    // All but the last man: what is left cannot be sent anywhere again.
+    warriors: constants.start_warriors - 1
   };
 
   game = queueTimedOrder(game, map, constants, first, {

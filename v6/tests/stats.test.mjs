@@ -48,8 +48,8 @@ test('game stats aggregate current resources and event counters', () => {
   };
 
   const stats = buildGameStats(game, map, constants, 6000);
-  assert.equal(stats.houses['Варкайр'].gold, 8);
-  assert.equal(stats.houses['Варкайр'].warriors, 4);
+  assert.equal(stats.houses['Варкайр'].gold, constants.start_gold);
+  assert.equal(stats.houses['Варкайр'].warriors, constants.start_warriors);
   assert.equal(stats.houses['Варкайр'].marches, 1);
   assert.equal(stats.houses['Варкайр'].neutral_captures, 1);
   assert.equal(stats.houses['Варкайр'].warriors_recruited, 3);

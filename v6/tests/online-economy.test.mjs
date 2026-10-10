@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { calculateHouseIncome } from '../src/core/economy.mjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadJson } from '../src/core/map.mjs';
@@ -21,7 +22,7 @@ test('online income pulse accrues while game is persistent', () => {
   let game = createOnlineGame(map, c, { nowMs: 1000 });
   game = normalizeOnlineEconomy(game, 1000, timing);
   game = processEconomy(game, map, c, 1101, timing);
-  assert.equal(game.state.houses['Варкайр'].gold, 12);
+  assert.equal(game.state.houses['Варкайр'].gold, c.start_gold + calculateHouseIncome(game.state, map, c, 'Варкайр').gold);
   assert.equal(game.state.houses['Варкайр'].influence, 4);
 });
 
@@ -34,12 +35,12 @@ test('timed recruitment reserves gold and completes later', () => {
     warriors: 2
   }, { nowMs: 2000, timing }).game;
 
-  assert.equal(game.state.houses['Варкайр'].gold, 6);
-  assert.equal(game.state.territories.W01.warriors['Варкайр'], 4);
+  assert.equal(game.state.houses['Варкайр'].gold, c.start_gold - 2);
+  assert.equal(game.state.territories.W01.warriors['Варкайр'], c.start_warriors);
 
   game = processEconomy(game, map, c, 2021, timing);
   assert.equal(game.jobs[0].status, 'RESOLVED');
-  assert.equal(game.state.territories.W01.warriors['Варкайр'], 6);
+  assert.equal(game.state.territories.W01.warriors['Варкайр'], c.start_warriors + 2);
 });
 
 test('a fort begun in a land that falls is finished for the captor, unpaid', () => {
@@ -51,13 +52,13 @@ test('a fort begun in a land that falls is finished for the captor, unpaid', () 
     territory: 'W03'
   }, { nowMs: 3000, timing }).game;
 
-  assert.equal(game.state.houses['Варкайр'].gold, 5);
+  assert.equal(game.state.houses['Варкайр'].gold, c.start_gold - c.economy.fort_cost);
   game.state.territories.W03.owner = 'Сайрвен';
   game = processEconomy(game, map, c, 3021, timing);
 
   assert.equal(game.jobs[0].status, 'RESOLVED');
   assert.equal(game.jobs[0].seized_by, 'Сайрвен');
-  assert.equal(game.state.houses['Варкайр'].gold, 5, 'no refund');
+  assert.equal(game.state.houses['Варкайр'].gold, c.start_gold - c.economy.fort_cost, 'no refund');
   assert.equal(game.state.territories.W03.fort, true);
   assert.deepEqual(game.state.houses['Сайрвен'].forts, ['W03']);
 });

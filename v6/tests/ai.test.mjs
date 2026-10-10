@@ -62,7 +62,8 @@ test('the AI never strips its capital below a garrison', () => {
     const capital = map.capitals[house];
     for (const candidate of rankAiCommands(game, map, constants, house)) {
       if (candidate.command.type !== 'MARCH' || candidate.command.from !== capital) continue;
-      assert.ok(candidate.command.warriors <= 2, `${house} would send ${candidate.command.warriors} of 4`);
+      const keep = constants.start_warriors - candidate.command.warriors;
+      assert.ok(keep >= 2, `${house} would send ${candidate.command.warriors} of ${constants.start_warriors} and leave ${keep} behind`);
     }
   }
 });

@@ -69,9 +69,9 @@ test('sync audit keeps a cursor and does not duplicate journal events', () => {
   });
   assert.equal(game.audit_log.length, 1);
   assert.equal(emitted.length, 1);
-  assert.equal(game.audit_log[0].stats.houses['Варкайр'].gold, 8);
+  assert.equal(game.audit_log[0].stats.houses['Варкайр'].gold, constants.start_gold);
   assert.equal(game.audit_log[0].stats.houses['Варкайр'].victory_points, 0);
-  assert.equal(game.audit_log[0].stats.houses['Варкайр'].warriors, 4);
+  assert.equal(game.audit_log[0].stats.houses['Варкайр'].warriors, constants.start_warriors);
   assert.equal(game.audit_log[0].session.actions_total, 0);
 
   game = syncAuditFromJournal(game, map, {
