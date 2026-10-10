@@ -19,6 +19,7 @@ import { legalDefenderRetreats } from '../core/combat.mjs';
 import { moveRanks } from './ranks.mjs';
 import { peopleAt } from './units.mjs';
 import { leadArmiesAway } from './guests.mjs';
+import { RAZE_GOLD_PER_HEAD, razeLand } from './settlements.mjs';
 
 export const ORDER = Object.freeze({
   fromWild: 60,
@@ -39,7 +40,9 @@ export const ORDER = Object.freeze({
 export const CHOICES = Object.freeze({
   MERCY: { name: 'Взять с миром', order: 25, goldPerPerson: 0, peopleShare: 0 },
   TRIBUTE: { name: 'Обложить данью', order: -5, goldPerPerson: 0.5, peopleShare: 0.1 },
-  SACK: { name: 'Разграбить', order: -30, goldPerPerson: 1.5, peopleShare: 0.35 }
+  SACK: { name: 'Разграбить', order: -30, goldPerPerson: 1.5, peopleShare: 0.35 },
+  // Nothing is left standing and nobody holds it: the land itself is undone.
+  RAZE: { name: 'Разорить дотла', order: 0, goldPerPerson: RAZE_GOLD_PER_HEAD, peopleShare: 1, razes: true }
 });
 
 function iso(ms) {
@@ -74,6 +77,8 @@ export function orderOnCapture(state, territory, house, previousOwner, { nowMs =
 
 export function aiCaptureChoice(state, territory, house) {
   const outcomes = choiceOutcomes(state, territory);
+  // A land that will rise again whatever is done with it is burnt instead.
+  if (outcomes.MERCY.risk === 'HIGH' && outcomes.TRIBUTE.risk === 'HIGH') return 'RAZE';
   if (outcomes.TRIBUTE.risk === 'HIGH' && outcomes.MERCY.risk !== 'HIGH') return 'MERCY';
   const gold = Number(state.houses?.[house]?.gold || 0);
   if (gold < 2 && outcomes.SACK.risk !== 'HIGH' && outcomes.SACK.gold > outcomes.TRIBUTE.gold) return 'SACK';
@@ -108,6 +113,12 @@ export function applyCaptureChoice(state, territory, house, choice, { nowMs = Da
   if (!pending) throw new Error('судьба этой земли уже решена');
   if (pending.house !== house) throw new Error('решение не за тобой');
   const outcome = choiceOutcomes(state, territory)[choice];
+  // Burning it to the ground is its own undoing: no order, no owner, no land.
+  if (rule.razes) {
+    if (state.capture_choices) delete state.capture_choices[territory];
+    razeLand(state, null, territory, house, { nowMs });
+    return;
+  }
   state.population[territory] = Math.max(0, peopleAt(state, territory) - outcome.people_lost);
   state.houses[house].gold = Number(state.houses[house].gold || 0) + outcome.gold;
   state.order[territory] = outcome.order_after;

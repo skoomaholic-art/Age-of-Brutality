@@ -1,12 +1,16 @@
 import { calculateHouseIncome, applyIncomePulse } from '../core/economy.mjs';
 import { totalHouseWarriors, validateState } from '../core/state.mjs';
 import { applyRetrain, planRetrain } from './units.mjs';
+import { REBUILD, assertCanGrow, assertCanRebuild, growLand, raiseVillage } from './settlements.mjs';
 
 export const ONLINE_ECONOMY_TIMING = Object.freeze({
   incomeIntervalMs: 120_000,
   recruitBuildMs: 4_000,
   fortBuildMs: 5_000,
-  retrainBuildMs: 4_500
+  retrainBuildMs: 4_500,
+  // Growing a settlement and raising a village on ashes are measured in days.
+  growBuildMs: 9_000,
+  rebuildMs: 7_000
 });
 
 export function normalizeOnlineEconomy(game, nowMs = Date.now(), timing = ONLINE_ECONOMY_TIMING) {
@@ -110,6 +114,58 @@ export function queueRecruitJob(game, constants, {
 
 // Men are not retrained in a breath: they go to learn, and the new banner is
 // raised over them when the lesson is done.
+// A settlement climbing a step: village, great village, small town, town.
+export function queueGrowJob(game, map, house, territory, { nowMs = Date.now(), timing = ONLINE_ECONOMY_TIMING } = {}) {
+  const step = assertCanGrow(game.state, map, house, territory);
+  if ((game.jobs || []).some(job => job.status === 'PENDING' && job.territory === territory && (job.type === 'GROW' || job.type === 'REBUILD'))) {
+    throw new Error('здесь уже строят');
+  }
+  const next = normalizeOnlineEconomy(game, nowMs, timing);
+  const id = jobId(next);
+  const job = {
+    id, type: 'GROW', status: 'PENDING', house, territory,
+    into: step.into, gold_paid: step.gold,
+    created_at: new Date(nowMs).toISOString(),
+    due_at: new Date(nowMs + Math.round(timing.growBuildMs * buildScale(next) * step.dayShare * 2)).toISOString(),
+    failure_reason: null
+  };
+  next.next_job_id += 1;
+  next.state.houses[house].gold -= step.gold;
+  next.jobs.push(job);
+  next.updated_at = new Date(nowMs).toISOString();
+  next.state.journal.push({
+    kind: 'GROW_QUEUED', job_id: id, house, houses: [house], territory,
+    into: step.into, gold_spent: step.gold, due_at: job.due_at, at: new Date(nowMs).toISOString()
+  });
+  return next;
+}
+
+// Raising a village on a burnt land: the House must stand there with men.
+export function queueRebuildJob(game, map, house, territory, { nowMs = Date.now(), timing = ONLINE_ECONOMY_TIMING } = {}) {
+  assertCanRebuild(game.state, map, house, territory);
+  if ((game.jobs || []).some(job => job.status === 'PENDING' && job.territory === territory && job.type === 'REBUILD')) {
+    throw new Error('здесь уже строят');
+  }
+  const next = normalizeOnlineEconomy(game, nowMs, timing);
+  const id = jobId(next);
+  const job = {
+    id, type: 'REBUILD', status: 'PENDING', house, territory,
+    gold_paid: REBUILD.gold,
+    created_at: new Date(nowMs).toISOString(),
+    due_at: new Date(nowMs + Math.round(timing.rebuildMs * buildScale(next))).toISOString(),
+    failure_reason: null
+  };
+  next.next_job_id += 1;
+  next.state.houses[house].gold -= REBUILD.gold;
+  next.jobs.push(job);
+  next.updated_at = new Date(nowMs).toISOString();
+  next.state.journal.push({
+    kind: 'REBUILD_QUEUED', job_id: id, house, houses: [house], territory,
+    gold_spent: REBUILD.gold, due_at: job.due_at, at: new Date(nowMs).toISOString()
+  });
+  return next;
+}
+
 export function queueRetrainJob(game, map, house, { territory, from, to, count }, { nowMs = Date.now(), timing = ONLINE_ECONOMY_TIMING } = {}) {
   const plan = planRetrain(game, map, house, territory, from, to, count);
   const next = normalizeOnlineEconomy(game, nowMs, timing);
@@ -373,6 +429,14 @@ export function processEconomy(game, map, constants, nowMs = Date.now(), timing 
       if (job.type === 'RECRUIT') resolveRecruit(next, constants, job, nowMs);
       else if (job.type === 'FORT') resolveFort(next, map, constants, job, nowMs);
       else if (job.type === 'RETRAIN') applyRetrain(next, map, job.house, job.territory, job.from, job.to, job.count, nowMs);
+      else if (job.type === 'GROW') {
+        if (next.state.territories[job.territory]?.owner !== job.house) throw new Error('земля больше не твоя');
+        growLand(next.state, map, job.territory, job.house, job.into, { nowMs });
+      }
+      else if (job.type === 'REBUILD') {
+        assertCanRebuild(next.state, map, job.house, job.territory);
+        raiseVillage(next.state, map, job.territory, job.house, { nowMs });
+      }
       else throw new Error(`unknown job type ${job.type}`);
 
       const errors = validateState(next.state, map, constants);

@@ -1,3 +1,4 @@
+import { landKind } from './settlements.mjs';
 // Troops and people (games of the Heart).
 //
 // Every land has its people. Troops are hired in a land for gold, and every
@@ -16,11 +17,11 @@ import { heartOnCapture } from './heart.mjs';
 import { addPeak, peakAt, RANKS, compAt, emptyComp, mergeStars, reconcileRanks, setStars, starsAt } from './ranks.mjs';
 
 export const PEOPLE = Object.freeze({
-  start: { 'Столица': 30, 'Город': 20, 'Деревня': 12, 'Дикая земля': 4, 'Половина острова': 6 },
-  growth: { 'Столица': 3, 'Город': 2, 'Деревня': 1, 'Дикая земля': 1, 'Половина острова': 1 },
+  start: { 'Столица': 30, 'Город': 20, 'Малый город': 18, 'Большая деревня': 16, 'Деревня': 12, 'Дикая земля': 4, 'Половина острова': 6, 'Пустошь': 0 },
+  growth: { 'Столица': 3, 'Город': 2, 'Малый город': 2, 'Большая деревня': 1, 'Деревня': 1, 'Дикая земля': 1, 'Половина острова': 1, 'Пустошь': 0 },
   // Growth stops at twice the starting number.
   capFactor: 2,
-  growthGold: { 'Столица': 6, 'Город': 5, 'Деревня': 3, 'Дикая земля': 3, 'Половина острова': 3 },
+  growthGold: { 'Столица': 6, 'Город': 5, 'Малый город': 5, 'Большая деревня': 4, 'Деревня': 3, 'Дикая земля': 3, 'Половина острова': 3 },
   takenFromWild: 0.1,
   takenFromHouse: 0.2
 });
@@ -28,13 +29,15 @@ export const PEOPLE = Object.freeze({
 // A game played with troop kinds and people, without limits on troops.
 export const NO_LIMIT = 9999;
 
-const LEVEL = { 'Деревня': 0, 'Дикая земля': 0, 'Половина острова': 0, 'Город': 1, 'Столица': 2 };
+const LEVEL = { 'Пустошь': 0, 'Деревня': 0, 'Большая деревня': 0, 'Дикая земля': 0, 'Половина острова': 0, 'Малый город': 1, 'Город': 1, 'Столица': 2 };
 
 export function unitsMode(state) {
   return Boolean(state?.population);
 }
 
-function landType(map, id) {
+// What the land is now: a village that has grown is a town for every rule.
+function landType(map, id, state = null) {
+  if (state) return landKind(state, map, id);
   return map.territories.find(t => t.id === id)?.type;
 }
 
@@ -52,8 +55,8 @@ export function seedPopulation(game, map) {
   return game;
 }
 
-export function kindsRaisedIn(map, id) {
-  const level = LEVEL[landType(map, id)] ?? 0;
+export function kindsRaisedIn(map, id, state = null) {
+  const level = LEVEL[landType(map, id, state)] ?? 0;
   return RANKS.map((rank, i) => i).filter(i => RANKS[i].where <= level);
 }
 

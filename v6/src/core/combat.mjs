@@ -1,3 +1,4 @@
+import { landKind } from '../online/settlements.mjs';
 import { buildAdjacency } from './map.mjs';
 import { validateMarch, classifyDestination } from './movement.mjs';
 import { warriorsAt } from './state.mjs';
@@ -23,7 +24,7 @@ function temporary(x, label) {
 export function baseDefense(map, state, constants, territoryId) {
   const t = map.territories.find(x => x.id === territoryId);
   if (!t) throw new Error(`unknown territory ${territoryId}`);
-  return Math.max(constants.combat.base_defense[t.type] ?? 0, state.territories[territoryId]?.fort ? constants.combat.fort_defense : 0);
+  return Math.max(constants.combat.base_defense[landKind(state, map, territoryId) ?? t.type] ?? constants.combat.base_defense[t.type] ?? 0, state.territories[territoryId]?.fort ? constants.combat.fort_defense : 0);
 }
 
 export function validateSupport(state, map, sideHouse, supportFrom, battleTerritory, attackerOrigin = null) {

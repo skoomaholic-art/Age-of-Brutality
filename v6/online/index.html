@@ -1817,6 +1817,15 @@ function territoryById(id) {
   return snapshot.map.territories.find(t => t.id === id);
 }
 
+// What the land is now: a village that has grown, or a land burnt to ashes,
+// is no longer what the map was drawn with.
+function landKindOf(id) {
+  return snapshot?.game?.state?.tier?.[id] || territoryById(id)?.type || null;
+}
+function isWasteLand(id) {
+  return landKindOf(id) === 'Пустошь';
+}
+
 function mapNodeById(id) {
   const territory = territoryById(id);
   if (territory) return territory;
@@ -1905,7 +1914,13 @@ function effectsBlock(character) {
   const here = character.mode === 'ARMY' ? 'army' : 'court';
   const list = (items, where, title) => '<div class="fx-col' + (where === here ? ' now' : '') + '"><b>' + title + (where === here ? ' · сейчас' : '') + '</b>' +
     (items.length ? items.map(item => '<span class="' + (item.bad ? 'bad' : 'good') + '">' + escapeHtml(item.text) + '</span>').join('') : '<span class="muted">ничего особого</span>') + '</div>';
-  return '<div class="fx">' + list(fx.court, 'court', 'При Дворе') + list(fx.army, 'army', 'В рати') + '</div>';
+  // Two lords with the same gifts read alike: say outright where the difference is.
+  const sanom = character.role === 'RULER'
+    ? '<div class="tiny">Сан государя: +1 влияния, пока он на троне; +1 к силе, когда ведёт рать сам, но тогда трон пустует (−1 влияния). Остальное — от его даров, а не от сана.</div>'
+    : character.role === 'HEIR'
+      ? '<div class="tiny">Сан наследника сам по себе не даёт ничего: он берёт своё, когда сядет на трон. Всё, что ниже, — его собственные дары.</div>'
+      : '';
+  return '<div class="fx">' + list(fx.court, 'court', 'При Дворе') + list(fx.army, 'army', 'В рати') + '</div>' + sanom;
 }
 
 function renderCharacters() {
@@ -2619,7 +2634,8 @@ function hireBlock(id) {
   const view = snapshot.game.units_view;
   if (!view) return '';
   const t = territoryById(id);
-  const level = t.type === 'Столица' ? 2 : t.type === 'Город' ? 1 : 0;
+  const kindNow = landKindOf(t.id) || t.type;
+  const level = kindNow === 'Столица' ? 2 : (kindNow === 'Город' || kindNow === 'Малый город') ? 1 : 0;
   const people = Number(snapshot.game.state.population?.[id] || 0);
   // Men come from this land first, then from the House's neighbouring lands,
   // and no neighbour gives away more than half of its people.
@@ -2685,12 +2701,45 @@ function replenishBlock(id) {
 function growthButton(id) {
   if (!unitsMode()) return '';
   const t = territoryById(id);
-  const fair = t.type === 'Город' || t.type === 'Столица';
-  const gold = snapshot.game.units_view?.growth_gold?.[t.type] ?? 3;
-  const per = snapshot.game.units_view?.growth_per_dawn?.[t.type] ?? 1;
+  const kindHere = landKindOf(t.id) || t.type;
+  const fair = kindHere === 'Город' || kindHere === 'Малый город' || kindHere === 'Столица';
+  const gold = snapshot.game.units_view?.growth_gold?.[kindHere] ?? 3;
+  const per = snapshot.game.units_view?.growth_per_dawn?.[kindHere] ?? 1;
   if (snapshot.game.state.growth?.[id]) return '<button class="wide" disabled>' + (fair ? 'Ярмарка' : 'Поля') + ' есть: +' + per + ' людей с каждым рассветом</button>';
   return '<div class="with-hint">' + goldButton('data-growth', (fair ? 'Ярмарка' : 'Поля') + ' · ' + gold + ' золота (+' + per + ' людей каждый рассвет)', gold) +
     hint('Люди сами не прибывают. ' + (fair ? 'Ярмарка' : 'Поля') + ' приводят новых людей каждый рассвет, до двойного числа против начального. Из людей нанимают войска и пополняют потери.') + '</div>';
+}
+
+// Climbing a step: village, great village, small town, town. What it takes is
+// said outright, so nobody presses a button that cannot work.
+const GROW_STEPS = { 'Деревня': { into: 'Большая деревня', gold: 6, people: 14 }, 'Большая деревня': { into: 'Малый город', gold: 10, people: 20 }, 'Малый город': { into: 'Город', gold: 16, people: 28 } };
+
+function growButton(id) {
+  if (!unitsMode()) return '';
+  const kind = landKindOf(id);
+  const step = GROW_STEPS[kind];
+  if (!step) return '';
+  const working = (snapshot.game.jobs || []).some(job => job.status === 'PENDING' && job.territory === id && job.type === 'GROW');
+  if (working) return '<button class="wide" disabled>Поселение растёт…</button>';
+  const people = Math.floor(Number(snapshot.game.state.population?.[id] || 0));
+  const short = people < step.people ? 'Нужно ' + step.people + ' душ, здесь ' + people : '';
+  return '<div class="with-hint">' +
+    goldButton('data-grow', short || ('Поднять до: ' + step.into + ' · ' + step.gold + ' золота'), step.gold, short) +
+    hint('Поселение растёт по ступеням: деревня, большая деревня, малый город, город. Чем выше ступень, тем больше дохода, людей и лучше войска, что в ней собирают. Нужны золото и люди, и стройка занимает время.') +
+    '</div>';
+}
+
+// Raising a village on a burnt land: men must stand on the ashes.
+function rebuildBlock(id) {
+  if (!isWasteLand(id)) return '';
+  const men = Number(snapshot.game.state.territories?.[id]?.warriors?.[house] || 0);
+  const working = (snapshot.game.jobs || []).some(job => job.status === 'PENDING' && job.territory === id && job.type === 'REBUILD');
+  if (working) return '<div class="rank-box"><div class="rank-head">Пепелище</div><div class="tiny">Деревню поднимают заново…</div></div>';
+  const why = men < 1 ? 'Нужно стоять здесь с воинами' : '';
+  return '<div class="rank-box"><div class="rank-head">Пепелище</div>' +
+    '<div class="tiny">Здесь не живут: ни дохода, ни людей, ни войска. Через эту землю ходят, и только. Приведи воинов — и подними деревню заново.</div>' +
+    '<div class="with-hint">' + goldButton('data-rebuild', why || 'Поднять деревню · 8 золота', 8, why) +
+    hint('На пепелище можно поставить деревню: 4 души, порядок 55. Дальше она растёт как любая другая.') + '</div></div>';
 }
 
 function levyBlock() {
@@ -2831,7 +2880,8 @@ const RISK_WORDS = { NONE: 'бунта не будет', LOW: 'беспоряд�
 const FATE_TEXT = {
   MERCY: 'Люди целы, порядок растёт. Казна ничего не получает.',
   TRIBUTE: 'Немного золота сразу. Часть людей уходит, порядок прежний.',
-  SACK: 'Много золота сразу. Многие гибнут или бегут, порядок рушится: жди бунта.'
+  SACK: 'Много золота сразу. Многие гибнут или бегут, порядок рушится: жди бунта.',
+  RAZE: 'Всё золото, что есть в домах, и ничего больше. Поселения не станет: пустошь, в которой никто не живёт и никому не принадлежит. Через неё ходят, и только. Поднять деревню на пепелище сможет всякий, кто встанет там с воинами.'
 };
 function renderFate() {
   const box = $('fate');
@@ -2845,14 +2895,17 @@ function renderFate() {
   box.dataset.key = key;
   $('fate-title').textContent = 'Взята земля ' + (t?.name || id);
   const people = Number(snapshot.game.state.population?.[id] || 0);
-  const cards = ['MERCY', 'TRIBUTE', 'SACK'].map(k => {
+  const cards = ['MERCY', 'TRIBUTE', 'SACK', 'RAZE'].filter(k => choice.outcomes[k]).map(k => {
     const o = choice.outcomes[k];
+    const razed = k === 'RAZE';
     return '<div class="fate-card"><h4>' + escapeHtml(o.name) + '</h4>' +
       '<div class="fx">' + FATE_TEXT[k] + '</div>' +
       '<div class="fx ' + (o.gold ? 'good' : '') + '">Золото: +' + o.gold + '</div>' +
       '<div class="fx ' + (o.people_lost ? 'bad' : 'good') + '">Люди: ' + (o.people_lost ? '−' + o.people_lost : 'без потерь') + ' (было ' + people + ')</div>' +
-      '<div class="fx">Порядок станет: <b>' + o.order_after + '</b></div>' +
-      '<div class="fx ' + (o.risk === 'NONE' ? 'good' : 'bad') + '">' + RISK_WORDS[o.risk] + '</div>' +
+      (razed
+        ? '<div class="fx bad">Земля станет ничьей пустошью</div><div class="fx bad">Ни дохода, ни людей, ни войска</div>'
+        : '<div class="fx">Порядок станет: <b>' + o.order_after + '</b></div>' +
+          '<div class="fx ' + (o.risk === 'NONE' ? 'good' : 'bad') + '">' + RISK_WORDS[o.risk] + '</div>') +
       '<button class="' + (k === 'MERCY' ? '' : 'primary') + '" data-fate="' + k + '">Так и сделать</button></div>';
   }).join('');
   $('fate-body').innerHTML = '<div class="fate-lead">' + (choice.from ? 'Земля отнята у Дома ' + escapeHtml(choice.from) + ': люди насторожены.' : 'Вольные люди разбиты, земля покорилась.') +
@@ -2914,7 +2967,7 @@ function renderLand() {
   const mine = st.owner === house;
   card.classList.add('show');
   $('land-name').textContent = t.name;
-  $('land-kind').textContent = t.type;
+  $('land-kind').textContent = landKindOf(t.id) || t.type;
   document.querySelectorAll('.land-tab').forEach(tab => {
     tab.disabled = tab.dataset.land !== 'info' && !mine;
     tab.classList.toggle('on', tab.dataset.land === landTab);
@@ -2951,7 +3004,7 @@ function renderLand() {
       '<div class="row"><span>Возведено</span><b>' + ([st.fort ? 'крепость' : '', hasPort(landId) ? 'порт' : ''].filter(Boolean).join(', ') || 'нет') + '</b></div>' +
       '<div class="row"><span>Исконно</span><b>' + escapeHtml(t.house_sector && colors[t.house_sector] ? 'земля Дома ' + t.house_sector : t.house_sector || 'вольная земля') + '</b></div>' +
       '<div class="row"><span>Прежде владели</span><b>' + escapeHtml(past.length ? past.join(', ') : 'никто') + '</b></div>' +
-      bridgeRows(landId, false) +
+      bridgeRows(landId, false) + rebuildBlock(landId) +
       '<div class="lore">' + escapeHtml(LAND_LORE[Math.abs(hash) % LAND_LORE.length]) + '</div>' + guestsBlock(mine);
     return;
   }
@@ -2980,6 +3033,7 @@ function renderLand() {
   const fortRow = '<div class="with-hint">' + goldButton('data-land-fort', fortNote || 'Возвести крепость · 3 золота', 3, fortNote) + hint('Крепость прибавляет обороне земли 3: нападающему нужно больше силы, а гарнизон теряет меньше. В столице не строится — её стены и так крепки.') + '</div>';
   // One thing worth doing here now stands first; the rest waits under a fold.
   const rows = [
+    ['grow', growButton(t.id), Boolean(GROW_STEPS[landKindOf(t.id)])],
     ['growth', growthButton(t.id), !snapshot.game.state.growth?.[t.id]],
     ['fort', fortRow, !fortNote],
     ['port', portButton(t, st), snapshot.map.buildable_ports && !hasPort(t.id) && (snapshot.map.ports || []).includes(t.id) && !st.port_ready_at],
@@ -3114,6 +3168,8 @@ function setupLand() {
     }
     if (event.target.closest('[data-replenish]')) landCommand('/api/replenish', {});
     if (event.target.closest('[data-growth]')) landCommand('/api/growth', {});
+    if (event.target.closest('[data-grow]')) landCommand('/api/grow', {});
+    if (event.target.closest('[data-rebuild]')) landCommand('/api/rebuild', {});
     if (event.target.closest('[data-militia-go]')) {
       const box = $('land-body').querySelector('[data-militia-count]');
       landCommand('/api/militia', { count: Number(box?.value || 1) });
@@ -6349,7 +6405,7 @@ function renderMap() {
     scene.provinces.push({ id: t.id, cls: classes });
     if (snapshot.map.buildable_ports && hasPort(t.id) && (!explored || explored.has(t.id))) scene.ports.push({ x: c.x - 13, y: c.y + 6 });
     borders.push(`<path d="${shape.d}"></path>`);
-    zones.push(`<path class="${classes.join(' ')}" data-id="${t.id}" d="${shape.d}"><title>${escapeHtml(t.name)} · ${escapeHtml(t.type)}</title></path>`);
+    zones.push(`<path class="${classes.join(' ')}" data-id="${t.id}" d="${shape.d}"><title>${escapeHtml(t.name)} · ${escapeHtml(landKindOf(t.id) || t.type)}</title></path>`);
 
     let note = '';
     if (t.id === origin) note = 'откуда';
@@ -6370,10 +6426,18 @@ function renderMap() {
     }
 
     if (capital) castles.push(capitalCastle(t.id, c, owner));
-    else if (t.type === 'Город') castles.push(settlementFigure('city', CITY_SIZE, c, owner));
-    else if (t.type === 'Деревня') castles.push(settlementFigure('village', VILLAGE_SIZE, c, owner));
-    else if (t.type === 'Дикая земля') castles.push(settlementFigure('wild', WILD_SIZE, c, null));
-    else if (t.type === 'Половина острова') castles.push(settlementFigure('island', ISLAND_SIZE, c, null));
+    else {
+      // What stands there now: a village that has grown shows bigger, a land
+      // burnt to the ground shows as a ruin.
+      const kind = landKindOf(t.id) || t.type;
+      if (kind === 'Пустошь') castles.push(settlementFigure('village-abandoned', VILLAGE_SIZE, c, null));
+      else if (kind === 'Город') castles.push(settlementFigure('city', CITY_SIZE, c, owner));
+      else if (kind === 'Малый город') castles.push(settlementFigure('city', CITY_SIZE * 0.82, c, owner));
+      else if (kind === 'Большая деревня') castles.push(settlementFigure('village', VILLAGE_SIZE * 1.22, c, owner));
+      else if (kind === 'Деревня') castles.push(settlementFigure('village', VILLAGE_SIZE, c, owner));
+      else if (kind === 'Дикая земля') castles.push(settlementFigure('wild', WILD_SIZE, c, null));
+      else if (kind === 'Половина острова') castles.push(settlementFigure('island', ISLAND_SIZE, c, null));
+    }
     if (total && owner) {
       const tx = capital ? c.x + 21 : t.type === 'Город' ? c.x + 14 : t.type === 'Деревня' ? c.x + 11 : c.x + 8.5;
       const ty = capital ? c.y - 1 : c.y - 5;

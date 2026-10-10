@@ -1,13 +1,16 @@
 import { validateMarch, classifyDestination } from './movement.mjs';
 import { grantOnce } from './scoring.mjs';
+import { isWaste, landKind } from '../online/settlements.mjs';
 
 function validDie(x) { return Number.isInteger(x) && x >= 1 && x <= 6; }
 
-export function neutralResistance(map, constants, territoryId) {
+export function neutralResistance(map, constants, territoryId, state = null) {
   const t = map.territories.find(x => x.id === territoryId);
   if (!t) throw new Error(`unknown territory ${territoryId}`);
+  // Ashes hold nobody: a burnt land is walked into, not stormed.
+  if (state && isWaste(state, territoryId)) return 0;
   if (Number.isInteger(t.resistance)) return t.resistance;
-  const value = constants.neutral_resistance[t.type];
+  const value = constants.neutral_resistance[state ? landKind(state, map, territoryId) ?? t.type : t.type];
   if (!Number.isInteger(value)) throw new Error(`territory ${territoryId} has no neutral resistance`);
   return value;
 }

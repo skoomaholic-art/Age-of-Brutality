@@ -250,6 +250,35 @@ export function journalEntryToAudit(entry, map, game) {
     };
   }
 
+  if (entry.kind === 'LAND_RAZED') {
+    return {
+      ...base,
+      message: `${territoryName(map, entry.territory)} разорена дотла: ${entry.people_lost} душ сгинуло, в казну легло ${entry.gold} золота. Там теперь пустошь, и она ничья.`,
+      details: { house: entry.house, territory_id: entry.territory, gold: entry.gold, people_lost: entry.people_lost, at: entry.at || null }
+    };
+  }
+
+  if (entry.kind === 'LAND_REBUILT') {
+    return {
+      ...base,
+      message: `На пепелище ${territoryName(map, entry.territory)} снова стоит деревня.`,
+      details: { house: entry.house, territory_id: entry.territory, at: entry.at || null }
+    };
+  }
+
+  if (entry.kind === 'LAND_GREW' || entry.kind === 'GROW_QUEUED' || entry.kind === 'REBUILD_QUEUED') {
+    const where = territoryName(map, entry.territory);
+    return {
+      ...base,
+      message: entry.kind === 'LAND_GREW'
+        ? `${where} поднялась: теперь это ${String(entry.into || '').toLowerCase()}.`
+        : entry.kind === 'GROW_QUEUED'
+          ? `В ${where} начали стройку: поселение поднимают до «${entry.into}». Отдано ${entry.gold_spent} золота.`
+          : `На пепелище ${where} начали ставить деревню. Отдано ${entry.gold_spent} золота.`,
+      details: { house: entry.house, territory_id: entry.territory, into: entry.into || null, gold_spent: entry.gold_spent || 0, at: entry.at || null }
+    };
+  }
+
   if (entry.kind === 'AMBUSH_LAID') {
     return {
       ...base,

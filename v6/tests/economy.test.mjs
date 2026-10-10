@@ -18,9 +18,10 @@ test('canonical income distinguishes home territory from occupation', () => {
   const s = createInitialState(map, c);
   assert.deepEqual(calculateHouseIncome(s, map, c, 'Варкайр'), { gold: 4, influence: 1 });
 
+  // A town at home pays three, one taken from another House pays one.
   s.territories.W05.owner = 'Варкайр';
   s.territories.W12.owner = 'Варкайр';
-  assert.deepEqual(calculateHouseIncome(s, map, c, 'Варкайр'), { gold: 7, influence: 1 });
+  assert.deepEqual(calculateHouseIncome(s, map, c, 'Варкайр'), { gold: 8, influence: 1 });
 });
 
 test('full island bonus is granted only when both halves are controlled', () => {

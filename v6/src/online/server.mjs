@@ -45,6 +45,8 @@ import {
   economyView,
   normalizeOnlineEconomy,
   processEconomy,
+  queueGrowJob,
+  queueRebuildJob,
   queueRetrainJob
 } from './economy.mjs';
 import {
@@ -1743,7 +1745,7 @@ async function handleGameApi(req, res, url, ctx, subpath) {
     return json(res, result.status, result.response);
   }
 
-  if (req.method === 'POST' && ['/levy', '/drill', '/yard', '/port', '/bridge', '/hire', '/retrain', '/growth', '/capture-choice', '/bridge-burn', '/replenish', '/militia', '/intercept'].includes(subpath)) {
+  if (req.method === 'POST' && ['/levy', '/drill', '/yard', '/port', '/bridge', '/hire', '/retrain', '/growth', '/capture-choice', '/bridge-burn', '/replenish', '/militia', '/intercept', '/grow', '/rebuild'].includes(subpath)) {
     const body = await readBody(req);
     const house = String(body.house || '').trim();
     await requireHouse(ctx, req, house);
@@ -1759,6 +1761,8 @@ async function handleGameApi(req, res, url, ctx, subpath) {
               : subpath === '/bridge' ? buildBridge(game, map, house, String(body.key || ''), { nowMs })
               : subpath === '/bridge-burn' ? burnBridge(game, map, house, String(body.key || ''), { nowMs })
                 : subpath === '/hire' ? hireUnits(game, map, house, String(body.territory || ''), body.counts, { nowMs })
+                  : subpath === '/grow' ? queueGrowJob(game, map, house, String(body.territory || ''), { nowMs })
+                  : subpath === '/rebuild' ? queueRebuildJob(game, map, house, String(body.territory || ''), { nowMs })
                   : subpath === '/intercept' ? orderIntercept(game, map, constants, house, { orderId: String(body.order_id || ''), from: String(body.from || ''), warriors: body.warriors, nowMs })
                   : subpath === '/militia' ? raiseMilitia(game, map, house, String(body.territory || ''), body.count, { nowMs, day: Number(game.rounds?.number || 0) })
                   : subpath === '/retrain' ? queueRetrainJob(game, map, house, { territory: String(body.territory || ''), from: body.from, to: body.to, count: body.count }, { nowMs }).game

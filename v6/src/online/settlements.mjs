@@ -1,0 +1,129 @@
+// How a settlement grows, and how it is wiped off the earth.
+//
+// A land is born as the map made it — a village, a town, a capital. From there
+// it climbs: village, great village, small town, town. Each step costs gold
+// and time and wants people enough to be worth the name, and each one feeds
+// the House better and lets it raise better men.
+//
+// The other way is shorter. A House that takes a land may burn it to the
+// ground: the people are gone, nobody owns it, no gold comes from it and no
+// man is raised there. Armies walk through the ashes freely. Later anyone who
+// stands there with men may raise a village on the ruin and begin again.
+//
+// What a land is right now lives in state.tier[id]; where there is nothing
+// written, it is what the map says.
+
+export const WASTE = 'Пустошь';
+
+// The ladder, lowest first. A capital is nobody's step: it stands apart.
+export const LADDER = Object.freeze(['Деревня', 'Большая деревня', 'Малый город', 'Город']);
+
+export const GROWS = Object.freeze({
+  'Деревня': { into: 'Большая деревня', gold: 6, people: 14, dayShare: 1 / 2 },
+  'Большая деревня': { into: 'Малый город', gold: 10, people: 20, dayShare: 3 / 4 },
+  'Малый город': { into: 'Город', gold: 16, people: 28, dayShare: 1 }
+});
+
+// Raising a village on a burnt land.
+export const REBUILD = Object.freeze({ gold: 8, people: 4, order: 55, dayShare: 1 / 2 });
+
+// What a sacking to the ground is worth, in gold for every soul.
+export const RAZE_GOLD_PER_HEAD = 2;
+
+// What the land is now: what has been built or burnt, else what the map says.
+export function landKind(state, map, id) {
+  const written = state?.tier?.[id];
+  if (written) return written;
+  return map?.territories?.find(t => t.id === id)?.type ?? null;
+}
+
+export function isWaste(state, id) {
+  return state?.tier?.[id] === WASTE;
+}
+
+export function setKind(state, id, kind) {
+  state.tier ||= {};
+  state.tier[id] = kind;
+}
+
+// Whether this land can be grown, and what stands in the way.
+export function growthStep(state, map, house, id) {
+  const kind = landKind(state, map, id);
+  const step = GROWS[kind];
+  if (!step) return null;
+  const land = state.territories?.[id];
+  const people = Math.floor(Number(state.population?.[id] || 0));
+  return {
+    from: kind,
+    into: step.into,
+    gold: step.gold,
+    people_needed: step.people,
+    people,
+    ours: land?.owner === house,
+    enough_people: people >= step.people,
+    gold_enough: Number(state.houses?.[house]?.gold || 0) >= step.gold,
+    dayShare: step.dayShare
+  };
+}
+
+export function assertCanGrow(state, map, house, id) {
+  const step = growthStep(state, map, house, id);
+  if (!step) throw new Error('этой земле некуда расти');
+  if (!step.ours) throw new Error('это не твоя земля');
+  if (!step.enough_people) throw new Error(`для этого нужно ${step.people_needed} душ, а здесь ${step.people}`);
+  if (!step.gold_enough) throw new Error(`нужно ${step.gold} золота`);
+  return step;
+}
+
+// Burns a land to the ground. The people are gone, the land is nobody's, and
+// what stood on it stands no more.
+export function razeLand(state, map, id, house, { nowMs = Date.now() } = {}) {
+  const land = state.territories?.[id];
+  if (!land) throw new Error('такой земли нет');
+  const people = Math.floor(Number(state.population?.[id] || 0));
+  const gold = people * RAZE_GOLD_PER_HEAD;
+  setKind(state, id, WASTE);
+  state.population ||= {};
+  state.population[id] = 0;
+  if (state.growth) delete state.growth[id];
+  if (state.order) delete state.order[id];
+  delete land.fort;
+  delete land.port;
+  land.owner = null;
+  land.warriors = {};
+  state.houses[house].gold = Number(state.houses[house].gold || 0) + gold;
+  state.journal.push({
+    kind: 'LAND_RAZED', house, houses: [house], territory: id,
+    gold, people_lost: people, at: new Date(nowMs).toISOString()
+  });
+  return gold;
+}
+
+// Raising a village on the ashes: the House must stand there with men.
+export function assertCanRebuild(state, map, house, id) {
+  if (!isWaste(state, id)) throw new Error('эта земля не разорена');
+  const land = state.territories?.[id];
+  const men = Number(land?.warriors?.[house] || 0);
+  if (men < 1) throw new Error('на пепелище надо стоять с воинами');
+  if (Number(state.houses?.[house]?.gold || 0) < REBUILD.gold) throw new Error(`нужно ${REBUILD.gold} золота`);
+  return true;
+}
+
+export function raiseVillage(state, map, id, house, { nowMs = Date.now() } = {}) {
+  setKind(state, id, 'Деревня');
+  state.population ||= {};
+  state.population[id] = REBUILD.people;
+  state.territories[id].owner = house;
+  state.order ||= {};
+  state.order[id] = REBUILD.order;
+  state.journal.push({
+    kind: 'LAND_REBUILT', house, houses: [house], territory: id, at: new Date(nowMs).toISOString()
+  });
+}
+
+export function growLand(state, map, id, house, into, { nowMs = Date.now() } = {}) {
+  setKind(state, id, into);
+  state.journal.push({
+    kind: 'LAND_GREW', house, houses: [house], territory: id, into, at: new Date(nowMs).toISOString()
+  });
+}
