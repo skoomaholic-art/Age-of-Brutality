@@ -61,6 +61,7 @@ import {
 } from './rounds.mjs';
 import { applyFog, knownHouses, recordExploration, recordLandHistory } from './fog.mjs';
 import { attritionView } from './attrition.mjs';
+import { processStorms } from './storms.mjs';
 import { TERRAIN } from './terrain.mjs';
 import { generateMap, MAX_HOUSES, MIN_HOUSES, MAP_SHAPES, MAP_WARPS, pickMapShape } from './mapgen.mjs';
 import { processEncounters } from './encounters.mjs';
@@ -566,6 +567,7 @@ async function tickUnlocked(ctx) {
   processed = processRanks(processed, map, nowMs);
   // The Horde woken by a false Heart marches on.
   processed = processHordes(processed, map, constants, nowMs);
+  processed = processStorms(processed, map, nowMs);
   processed = processRounds(processed, map, constants, { nowMs });
   processed = processCharacters(processed, map, constants, { nowMs });
   processed = processRiders(processed, map, constants, nowMs);

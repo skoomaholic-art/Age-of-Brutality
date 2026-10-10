@@ -878,6 +878,22 @@ export function journalEntryToAudit(entry, map, game) {
     };
   }
 
+  if (entry.kind.startsWith('STORM_')) {
+    const where = entry.position ? `морская веха ${entry.position}` : 'открытое море';
+    const words = {
+      STORM_ROSE: `Небо почернело над водами (${where}): встала буря, и никто не ведает, куда её понесёт.`,
+      STORM_HIT: `Буря настигла ладьи Дома ${entry.house} (${where}): волной смыло ${entry.lost}, осталось ${entry.left}.`,
+      STORM_PASSED: `Буря прошла стороной мимо ладей Дома ${entry.house} (${where}): кормчие отстояли, все целы.`,
+      STORM_SPENT: `Буря над водами (${where}) выдохлась, и море улеглось.`
+    };
+    return {
+      ...base,
+      ...(entry.house ? { visibility: 'PRIVATE' } : {}),
+      message: words[entry.kind] || 'Буря на море.',
+      details: { house: entry.house || null, place_node: entry.position || null, lost: entry.lost ?? null, at: entry.at || null }
+    };
+  }
+
   if (entry.kind === 'ATTRITION') {
     const where = territoryName(map, entry.territory);
     const words = {

@@ -1122,6 +1122,8 @@ const DEV_HELP = [
   'fast on|off     — постройки и найм без ожидания',
   'gold <число>    — добавить золота',
   'panel           — показать панель с кнопками',
+  'horde           — где Орда и что о ней писала летопись',
+  'storm           — бури на море',
   'clear           — очистить консоль'
 ].join('\n');
 async function runConsole(text) {
@@ -1147,11 +1149,43 @@ async function runConsole(text) {
     else if (cmd === 'fast' && need()) { await devDo('INSTANT', arg !== 'off'); devLog('Без ожидания: ' + (arg === 'off' ? 'выкл.' : 'вкл.')); }
     else if (cmd === 'gold' && need()) { await devDo('GOLD', Number(arg) || 100); devLog('Золота добавлено: ' + (Number(arg) || 100) + '.'); }
     else if (cmd === 'panel' && need()) { $('dev-panel').hidden = false; }
+    else if (cmd === 'horde') devLog(hordeReport());
+    else if (cmd === 'storm') devLog(stormReport());
     else if (!['map', 'fast', 'gold', 'panel'].includes(cmd)) devLog('Нет такой команды. help — список.');
   } catch (error) {
     devLog('Ошибка: ' + sayError(error));
   }
 }
+// What became of the Horde: where it stands now and every line the chronicle
+// has about it. Read-only, so it needs no key.
+function hordeReport() {
+  const state = snapshot?.game?.state;
+  if (!state) return 'Игра ещё не загружена.';
+  const live = (state.hordes || []).map(h =>
+    h.id + ': ' + h.men + ' всадников у ' + (mapNodeById(h.at)?.name || h.at) +
+    ', идёт на Дом ' + h.against + ', следующий шаг ' + (h.next_at ? new Date(h.next_at).toLocaleTimeString('ru-RU') : '—') +
+    (h.path?.length ? ', путь: ' + h.path.map(id => mapNodeById(id)?.name || id).join(' → ') : ''));
+  const log = (snapshot.game.audit_log || []).filter(item => String(item.type).startsWith('HORDE_') || String(item.type).startsWith('HEART'))
+    .map(item => (item.at ? new Date(item.at).toLocaleTimeString('ru-RU') + ' ' : '') + item.type + ': ' + item.message);
+  const heart = state.heart
+    ? 'Сердца: ' + (state.heart.candidates || []).map(id => mapNodeById(id)?.name || id).join(', ') +
+      '; раскрыты ложными: ' + ((state.heart.revealed || []).map(id => mapNodeById(id)?.name || id).join(', ') || 'нет') +
+      '; истинное: ' + (state.heart.territory ? (mapNodeById(state.heart.territory)?.name || state.heart.territory) : 'не открыто')
+    : 'В этой партии Сердца земель нет.';
+  return [heart, live.length ? 'Орда сейчас:\n  ' + live.join('\n  ') : 'Орды на карте нет.',
+    log.length ? 'Летопись:\n  ' + log.slice(-20).join('\n  ') : 'Летопись о Сердце и Орде молчит.'].join('\n');
+}
+
+function stormReport() {
+  const state = snapshot?.game?.state;
+  if (!state) return 'Игра ещё не загружена.';
+  const live = (state.storms || []).map(w => w.id + ': у вехи ' + w.at + ', следующий шаг ' + new Date(w.next_at).toLocaleTimeString('ru-RU'));
+  const log = (snapshot.game.audit_log || []).filter(item => String(item.type).startsWith('STORM_'))
+    .map(item => item.type + ': ' + item.message);
+  return [live.length ? 'Бури сейчас:\n  ' + live.join('\n  ') : 'Бурь на море нет.',
+    log.length ? 'Было:\n  ' + log.slice(-10).join('\n  ') : ''].filter(Boolean).join('\n');
+}
+
 function devKey() {
   try { return localStorage.getItem(DEV_KEY_STORE) || ''; } catch { return ''; }
 }
@@ -2833,6 +2867,20 @@ function lensFor(node) {
       ]
     };
   }
+  if (node.dataset.lensStorm) {
+    const storm = (state.storms || []).find(w => w.id === node.dataset.lensStorm);
+    if (!storm) return null;
+    return {
+      title: 'Буря на море',
+      art: 'war-declared',
+      lines: [
+        'Чёрная туча ходит по водам без пути',
+        'Ладьи, что под ней окажутся, может потрепать, а может и миновать',
+        'Выдыхается сама через день-другой',
+        'На суше её не чувствуют'
+      ]
+    };
+  }
   if (node.dataset.lensHorde) {
     const horde = (state.hordes || []).find(h => h.id === node.dataset.lensHorde);
     if (!horde) return null;
@@ -2896,7 +2944,7 @@ function setupLens() {
   // A click on a standard pins the glass open until the next click elsewhere.
   let pinned = false;
   const viewAt = event => {
-    const node = event.target.closest?.('.army-token');
+    const node = event.target.closest?.('.army-token, .storm-mark');
     const npc = event.target.closest?.('.npc');
     return npc ? wayfarerLens(Number(npc.dataset.npc)) : node ? lensFor(node) : null;
   };
@@ -3378,6 +3426,30 @@ function newsFor(item) {
       ok: 'Взглянуть на мир'
     };
   }
+  // The Heart of the lands and the Horde it looses: the loudest news of the century.
+  if (item.type === 'HEARTS_APPEARED') return { rank: 9, art: 'war-declared', title: 'Восстали Сердца земель', text };
+  if (item.type === 'HEART_RUMOUR') return { rank: 5, art: 'chronicle-day', title: 'Слух о ложном Сердце', text };
+  if (item.type === 'HEART_SPIED') return { rank: 8, art: 'intrigue-exposed', title: 'Соглядатай вернулся', text };
+  if (item.type === 'HEART_FOUND') return { rank: 9, art: 'capital-taken', title: 'Истинное Сердце открылось', text };
+  if (item.type === 'HEART_TAKEN') return { rank: mine(d.house) ? 9 : 7, art: mine(d.house) ? 'capital-taken' : 'capital-lost', title: mine(d.house) ? 'Сердце земель твоё' : 'Сердце земель взято', text };
+  if (item.type === 'HEART_HELD') return { rank: 4, art: 'chronicle-day', title: 'Сердце земель держится', text };
+  if (item.type === 'HORDE_COUNTDOWN') return { rank: 9, art: 'war-declared', title: 'Знамения над миром', text };
+  if (item.type === 'HORDE_UNLEASHED') return { rank: 10, art: 'war-declared', title: 'Печати пали', text };
+  if (item.type === 'HORDE_AWAKENED') return { rank: mine(d.house) ? 10 : 6, art: 'war-declared', title: mine(d.house) ? 'Орда идёт на тебя' : 'Орда пробудилась', text };
+  if (item.type === 'HORDE_TOOK') return { rank: mine(d.house) ? 9 : 5, art: 'land-lost', title: mine(d.house) ? 'Тартары взяли твою землю' : 'Тартары жгут земли', text };
+  if (item.type === 'HORDE_SACKED') return { rank: mine(d.house) ? 10 : 6, art: 'capital-lost', title: mine(d.house) ? 'Тартары разорили твою столицу' : 'Столица разорена', text };
+  if (item.type === 'HORDE_BROKEN') return { rank: mine(d.house) ? 9 : 5, art: 'battle-won', title: mine(d.house) ? 'Тартары разбиты' : 'Тартары разбиты', text };
+  if (item.type === 'HORDE_SPENT') return { rank: mine(d.house) ? 7 : 4, art: 'battle-seen', title: 'Орда выдохлась', text };
+  if (item.type === 'HORDE_FORDING') return { rank: mine(d.house) ? 6 : 3, art: 'battle-seen', title: 'Тартары у реки', text };
+  // Weather and the road: what eats an army without a battle.
+  if (item.type === 'STORM_ROSE') return { rank: 5, art: 'battle-seen', title: 'Буря на море', text };
+  if (item.type === 'STORM_HIT') return { rank: mine(d.house) ? 7 : 3, art: 'battle-lost', title: 'Буря потрепала ладьи', text };
+  if (item.type === 'STORM_PASSED') return { rank: mine(d.house) ? 5 : 2, art: 'battle-seen', title: 'Буря прошла стороной', text };
+  if (item.type === 'ATTRITION') return { rank: 4, art: 'battle-lost', title: 'Потери без битвы', text };
+  if (item.type === 'SEA_TOLL') return { rank: 5, art: 'battle-lost', title: 'Море берёт своё', text };
+  if (item.type === 'REVOLT') return { rank: mine(d.house) ? 8 : 4, art: 'land-lost', title: mine(d.house) ? 'Земля поднялась против тебя' : 'Бунт в землях', text };
+  if (item.type === 'DESERTION') return { rank: 6, art: 'order-failed', title: 'Войско разбегается', text };
+
   if (item.type === 'ROUND_STARTED' && daysGame()) {
     return { rank: 3, art: 'day-change', title: 'Настал день ' + (d.round || ''), text: 'Солнце встало над Домами. Казначей принёс отчёт.' + (d.ledger ? '\n\n' + ledgerText(d.ledger) : '') };
   }
@@ -3428,7 +3500,11 @@ const NEWS_WORDS = {
   'execution-done': 'Так кончают враги',
   'release-received': 'С возвращением',
   'release-done': 'Милость запомнят',
-  'ransom-demand': 'Обдумаем'
+  'ransom-demand': 'Обдумаем',
+  'chronicle-day': 'Запомним',
+  'intrigue-exposed': 'Славно сработано',
+  'land-lost': 'Мы это запомним',
+  'battle-seen': 'Пусть будет так'
 };
 const newsQueue = [];
 
@@ -4953,6 +5029,16 @@ function drawPixiMap(scene, key) {
     labels.addChild(anchor);
   }
   const tokens = new PIXI.Container();
+  for (const st of scene.storms || []) {
+    const g = new PIXI.Graphics();
+    g.beginFill(0x1d2b36, 0.32); g.drawCircle(0, 0, 11); g.endFill();
+    g.lineStyle({ width: 1.5, color: 0xe8eef2, alpha: 0.9, cap: PIXI.LINE_CAP.ROUND });
+    g.moveTo(-7, -3); g.quadraticCurveTo(0, -8, 7, -3); g.quadraticCurveTo(2, 1, -2, -2); g.quadraticCurveTo(1, 2, 6, 1);
+    g.lineStyle({ width: 1.1, color: 0xe2b53e, alpha: 1, cap: PIXI.LINE_CAP.ROUND });
+    g.moveTo(1, 4); g.lineTo(-2, 9); g.lineTo(1, 9); g.lineTo(-1, 13);
+    g.position.set(st.x, st.y);
+    tokens.addChild(g);
+  }
   for (const tk of scene.tokens) {
     const s = shieldGraphic(tk.color, tk.count, tk.scale);
     if (tk.mark) s.addChild(leaderBadge(tk.mark));
@@ -5218,7 +5304,7 @@ function renderMap() {
     : snapshot.map.sea_edges;
 
   // The same picture is described once more for the WebGL layer.
-  const scene = pixiScene = { hearts: [], realms: realmIds, ports: [], provinces: [], castles: [], lanes: [], routes: [], waypoints: [], ribbons: [], notes: [], tokens: [], bridges: [], dx: 0, dy: 0 };
+  const scene = pixiScene = { hearts: [], realms: realmIds, ports: [], provinces: [], castles: [], lanes: [], routes: [], waypoints: [], ribbons: [], notes: [], tokens: [], bridges: [], storms: [], dx: 0, dy: 0 };
   const lines = [];
   // Where ports are built, the sea net shows only as far as it is known. A
   // shore with a port joins it fully; any other shore faintly, for landing only.
@@ -5353,6 +5439,19 @@ function renderMap() {
       tokens.push(shieldToken(c.x - 10 - shift * 9, c.y + 4, colors[guest] || '#8a7a5c', here, 0.9,
         `data-lens-at="${t.id}" data-lens-house="${escapeHtml(guest)}"`, guest, false, false, wearAtPos(t.id, guest)));
     }
+  }
+
+  // A storm wandering the open water: a dark swirl where it stands.
+  for (const storm of state.storms || []) {
+    const c = coords[storm.at];
+    if (!c) continue;
+    scene.storms.push({ x: c.x, y: c.y });
+    tokens.push('<g class="storm-mark" data-lens-storm="' + escapeHtml(storm.id) + '" transform="translate(' + c.x + ' ' + c.y + ')">' +
+      '<circle r="11" fill="#1d2b36" opacity=".32"/>' +
+      '<path d="M-7 -3q7 -5 14 0q-5 4 -9 1q3 4 8 3" fill="none" stroke="#e8eef2" stroke-width="1.5" stroke-linecap="round" opacity=".9"/>' +
+      '<path d="M-6 3q6 -4 12 0" fill="none" stroke="#e8eef2" stroke-width="1.2" stroke-linecap="round" opacity=".7"/>' +
+      '<path d="M1 4l-3 5h3l-2 4" fill="none" stroke="#e2b53e" stroke-width="1.1" stroke-linecap="round"/>' +
+      '</g>');
   }
 
   // The Horde woken by a false Heart: a black shield where it stands now.

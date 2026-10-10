@@ -2,6 +2,7 @@ import { applyIncomePulse } from '../core/economy.mjs';
 import { applyCourtDawn } from './court.mjs';
 import { applySeaToll } from './sea-toll.mjs';
 import { attritionDawn } from './attrition.mjs';
+import { stormsDawn } from './storms.mjs';
 import { heartDawn } from './heart.mjs';
 import { populationDawn, upkeepDawn } from './units.mjs';
 import { orderDawn } from './order.mjs';
@@ -117,6 +118,8 @@ function beginRound(next, map, constants, number, nowMs, timing) {
   const afterIncome = purse(next.state);
   // Men long out at sea sicken and drown: the toll of the sea, every dawn.
   applySeaToll(next.state, nowMs);
+  // A squall may rise over the water where somebody's fleet is out.
+  if (number > 1) stormsDawn(next, map, nowMs);
   // Rough ground takes its own: mountains, marshes, sands and snows.
   if (number > 1) attritionDawn(next, map, nowMs);
   // A game of the Heart: the wild guard grows back, the Heart pays its holder.

@@ -8,6 +8,7 @@ import { createOnlineGame } from '../src/online/store.mjs';
 import { listQueueableMarches } from '../src/online/orders.mjs';
 import { attritionDawn, attritionView, wearLoss } from '../src/online/attrition.mjs';
 import { TERRAIN, roadSlow, terrainOf, wearAt } from '../src/online/terrain.mjs';
+import { stormsDawn, processStorms, STORM } from '../src/online/storms.mjs';
 import { validateState } from '../src/core/state.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -98,4 +99,58 @@ test('the skull tells the host why it bleeds: rough ground, the open sea, a reef
   g.state.sea_nodes[seaId].days_at_sea = { [H]: 2 };
   assert.equal(wearAt(map, g.state, seaId, H).why, 'в море');
   assert.equal(wearAt({ ...map, reefs: [seaId] }, g.state, seaId, H).why, 'на рифах');
+});
+
+test('a storm rises over the water now and then, wanders without a plan, and may or may not tear a fleet', () => {
+  const g = game();
+  const seaIds = Object.keys(map.sea_waypoints);
+  const at = seaIds[0];
+  g.state.sea_nodes[at].warriors = { [H]: 12 };
+  g.state.ranks = { [at]: { [H]: [6, 0, 0, 6, 0, 0] } };
+  // Without fleets at sea no storm ever rises.
+  const quiet = game();
+  assert.equal(stormsDawn(quiet, map, 1000), null, 'no fleet, no storm');
+  // The lot decides: over many days a storm comes, but not every day.
+  let risen = 0;
+  for (let day = 2; day < 40; day += 1) {
+    const probe = game();
+    probe.id = `storm-${day}`;
+    probe.rounds.number = day;
+    probe.state.sea_nodes[at].warriors = { [H]: 12 };
+    if (stormsDawn(probe, map, 1000)) risen += 1;
+  }
+  assert.ok(risen > 2 && risen < 20, `бурь за 38 рассветов: ${risen}`);
+
+  // One that has risen wanders and blows itself out.
+  let storm = null;
+  let seed = 2;
+  let world = null;
+  while (!storm && seed < 60) {
+    world = game();
+    world.id = `wander-${seed}`;
+    world.rounds.number = seed;
+    world.state.sea_nodes[at].warriors = { [H]: 12 };
+    storm = stormsDawn(world, map, 1000);
+    seed += 1;
+  }
+  assert.ok(storm, 'a storm was raised');
+  assert.ok(map.sea_waypoints[storm.at], 'it stands on the open water');
+  // Fleets on every water: wherever the wind takes it, it meets one.
+  world.state.ranks ||= {};
+  for (const id of seaIds) {
+    world.state.sea_nodes[id] ||= { owner: null, warriors: {} };
+    world.state.sea_nodes[id].warriors = { [H]: 12 };
+    world.state.sea_nodes[id].owner = H;
+    world.state.ranks[id] = { [H]: [6, 0, 0, 6, 0, 0] };
+  }
+  const step = Math.round(600_000 * STORM.stepShare);
+  let next = processStorms(world, map, 1000 + step);
+  assert.equal(next.state.storms.length, 1);
+  next = processStorms(next, map, 1000 + Math.round(600_000 * (STORM.days + 1)));
+  assert.equal(next.state.storms.length, 0, 'it blew itself out');
+  assert.ok(next.state.journal.some(e => e.kind === 'STORM_SPENT'));
+  assert.ok(next.state.journal.some(e => e.kind === 'STORM_HIT' || e.kind === 'STORM_PASSED'), 'it either struck or passed by');
+  const men = Object.values(next.state.sea_nodes).reduce((sum, node) => sum + Number(node.warriors?.[H] || 0), 0);
+  assert.ok(men >= 1, 'never the last man');
+  assert.deepEqual(validateState(next.state, map, constants), []);
 });
