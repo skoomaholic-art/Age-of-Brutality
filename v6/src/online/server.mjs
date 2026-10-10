@@ -1790,7 +1790,7 @@ async function handleGameApi(req, res, url, ctx, subpath) {
                     : subpath === '/growth' ? buildGrowth(game, map, house, String(body.territory || ''), { nowMs })
                       : subpath === '/capture-choice' ? (() => {
                         const chosen = structuredClone(game);
-                        applyCaptureChoice(chosen.state, String(body.territory || ''), house, String(body.choice || ''), { nowMs });
+                        applyCaptureChoice(chosen.state, String(body.territory || ''), house, String(body.choice || ''), { nowMs, map });
                         chosen.updated_at = new Date(nowMs).toISOString();
                         return chosen;
                       })()

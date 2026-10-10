@@ -13,6 +13,9 @@
 // What a land is right now lives in state.tier[id]; where there is nothing
 // written, it is what the map says.
 
+import { moveRanks } from './ranks.mjs';
+import { nearestOwnLand as nearestOwnLandFor } from './guests.mjs';
+
 export const WASTE = 'Пустошь';
 
 // The ladder, lowest first. A capital is nobody's step: it stands apart.
@@ -82,6 +85,28 @@ export function razeLand(state, map, id, house, { nowMs = Date.now() } = {}) {
   if (!land) throw new Error('такой земли нет');
   const people = Math.floor(Number(state.population?.[id] || 0));
   const gold = people * RAZE_GOLD_PER_HEAD;
+
+  // The hosts standing there do not burn with the town: they fall back to the
+  // nearest land of their own. Only men with nowhere to go are lost. The ashes
+  // are nobody's from this moment, so nobody falls back onto them.
+  land.owner = null;
+  const leaving = [];
+  for (const [who, count] of Object.entries(land.warriors || {})) {
+    const men = Math.floor(Number(count || 0));
+    if (men <= 0) continue;
+    const home = map ? nearestOwnLandFor(state, map, who, id) : null;
+    if (home && home !== id) {
+      moveRanks(state, map, id, home, who, men);
+      const there = state.territories[home];
+      there.warriors ||= {};
+      there.warriors[who] = Number(there.warriors[who] || 0) + men;
+      leaving.push({ house: who, men, to: home });
+    } else {
+      moveRanks(state, map, id, null, who, 0, { losses: men });
+      leaving.push({ house: who, men, to: null });
+    }
+  }
+
   setKind(state, id, WASTE);
   state.population ||= {};
   state.population[id] = 0;
@@ -94,7 +119,7 @@ export function razeLand(state, map, id, house, { nowMs = Date.now() } = {}) {
   state.houses[house].gold = Number(state.houses[house].gold || 0) + gold;
   state.journal.push({
     kind: 'LAND_RAZED', house, houses: [house], territory: id,
-    gold, people_lost: people, at: new Date(nowMs).toISOString()
+    gold, people_lost: people, fell_back: leaving, at: new Date(nowMs).toISOString()
   });
   return gold;
 }

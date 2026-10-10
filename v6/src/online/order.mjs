@@ -65,14 +65,14 @@ export function seedOrder(game, map) {
 }
 
 // A land changed hands: its order starts low, and the taker may choose its fate.
-export function orderOnCapture(state, territory, house, previousOwner, { nowMs = Date.now(), ai = false } = {}) {
+export function orderOnCapture(state, territory, house, previousOwner, { nowMs = Date.now(), ai = false, map = null } = {}) {
   if (!state.order) return;
   state.order[territory] = previousOwner ? ORDER.fromHouse : ORDER.fromWild;
   state.capture_choices ||= {};
   state.capture_choices[territory] = { house, from: previousOwner || null, at: iso(nowMs) };
   // A House led by the AI decides at once: mercy where tribute would leave the
   // people ready to rise, sack when its purse is empty, tribute otherwise.
-  if (ai) applyCaptureChoice(state, territory, house, aiCaptureChoice(state, territory, house), { nowMs });
+  if (ai) applyCaptureChoice(state, territory, house, aiCaptureChoice(state, territory, house), { nowMs, map });
 }
 
 export function aiCaptureChoice(state, territory, house) {
@@ -104,7 +104,7 @@ export function choiceOutcomes(state, territory) {
   }));
 }
 
-export function applyCaptureChoice(state, territory, house, choice, { nowMs = Date.now() } = {}) {
+export function applyCaptureChoice(state, territory, house, choice, { nowMs = Date.now(), map = null } = {}) {
   if (!state.population) throw new Error('в этом веке судьбу земель не решают');
   const rule = CHOICES[choice];
   if (!rule) throw new Error('такого решения нет');
@@ -116,7 +116,7 @@ export function applyCaptureChoice(state, territory, house, choice, { nowMs = Da
   // Burning it to the ground is its own undoing: no order, no owner, no land.
   if (rule.razes) {
     if (state.capture_choices) delete state.capture_choices[territory];
-    razeLand(state, null, territory, house, { nowMs });
+    razeLand(state, map, territory, house, { nowMs });
     return;
   }
   state.population[territory] = Math.max(0, peopleAt(state, territory) - outcome.people_lost);

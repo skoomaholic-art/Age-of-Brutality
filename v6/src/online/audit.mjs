@@ -359,7 +359,8 @@ export function journalEntryToAudit(entry, map, game) {
   if (entry.kind === 'LAND_RAZED') {
     return {
       ...base,
-      message: `${territoryName(map, entry.territory)} разорена дотла: ${entry.people_lost} душ сгинуло, в казну легло ${entry.gold} золота. Там теперь пустошь, и она ничья.`,
+      message: `${territoryName(map, entry.territory)} разорена дотла: ${entry.people_lost} душ сгинуло, в казну легло ${entry.gold} золота. Там теперь пустошь, и она ничья.`
+        + ((entry.fell_back || []).some(item => item.to) ? ` Рать отошла в ${territoryName(map, (entry.fell_back || []).find(item => item.to).to)}.` : ''),
       details: { house: entry.house, territory_id: entry.territory, gold: entry.gold, people_lost: entry.people_lost, at: entry.at || null }
     };
   }

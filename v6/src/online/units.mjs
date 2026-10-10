@@ -363,7 +363,7 @@ export function onLandTaken(game, map, territory, previousOwner, nowMs = Date.no
   heartOnCapture(game, map, territory, house, nowMs);
   if (!state.population) return;
   populationOnCapture(state, territory, previousOwner);
-  if (house) orderOnCapture(state, territory, house, previousOwner, { nowMs, ai: (game.rounds?.ai_houses || []).includes(house) });
+  if (house) orderOnCapture(state, territory, house, previousOwner, { nowMs, map, ai: (game.rounds?.ai_houses || []).includes(house) });
 }
 
 // A land changed hands: some of its people flee or fall.

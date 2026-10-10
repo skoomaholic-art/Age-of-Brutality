@@ -80,8 +80,18 @@ test('a land burnt to the ground is nobody’s, pays nothing, and can be raised 
   assert.ok(outcomes.RAZE, 'burning it down is one of the choices');
   assert.equal(outcomes.RAZE.people_lost, 12);
 
+  // The host that burned the town is standing in it.
+  const home = map.capitals[HOUSE];
+  game.state.territories[home].owner = HOUSE;
+  game.state.territories[id].warriors = { [HOUSE]: 3 };
+  const atHomeBefore = Number(game.state.territories[home].warriors?.[HOUSE] || 0);
+
   const goldBefore = game.state.houses[HOUSE].gold;
-  applyCaptureChoice(game.state, id, HOUSE, 'RAZE', { nowMs: T0 });
+  applyCaptureChoice(game.state, id, HOUSE, 'RAZE', { nowMs: T0, map });
+
+  // It does not burn with the town: it falls back to the nearest land of ours.
+  assert.deepEqual(game.state.territories[id].warriors, {});
+  assert.equal(Number(game.state.territories[home].warriors[HOUSE] || 0), atHomeBefore + 3);
   assert.ok(isWaste(game.state, id));
   assert.equal(game.state.territories[id].owner, null, 'the ashes belong to nobody');
   assert.equal(game.state.population[id], 0);
