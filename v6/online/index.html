@@ -2194,6 +2194,17 @@ function renderFate() {
   };
 }
 
+// What the ground here does to an army: how it slows a march and what it costs.
+function terrainRow(id) {
+  const kind = snapshot?.map?.terrain?.[id];
+  const info = kind && snapshot?.game?.terrain_kinds?.[kind];
+  if (!info) return '';
+  const slow = Math.round((info.slow - 1) * 100);
+  const wear = Math.round(info.wear * 100);
+  return '<div class="row"><span class="with-hint">Земля' + hint(info.lore) + '</span><b>' + escapeHtml(info.name) + '</b></div>' +
+    '<div class="tiny bad-note">Поход сюда и отсюда дольше на ' + slow + '%' + (wear ? '; войско здесь теряет около ' + wear + '% людей каждый рассвет' : '') + '.</div>';
+}
+
 // Order of a land of one's own, and how close it is to rising.
 function orderRow(id, owner) {
   const order = snapshot.game.state.order?.[id];
@@ -2243,6 +2254,7 @@ function renderLand() {
       (seen && garrison && unitsMode() ? '<div class="row"><span>Опыт</span><b>' + starText(starsOf(landId, st.owner)) + '</b></div>' : '') +
       (unitsMode() && st.owner && (seen || mine) ? orderRow(landId, st.owner) : '') +
       (unitsMode() && (seen || mine) ? '<div class="row"><span>Население</span><b>' + Number(snapshot.game.state.population?.[landId] || 0) + (snapshot.game.state.growth?.[landId] ? ' · растёт' : '') + '</b></div>' : '') +
+      terrainRow(landId) +
       '<div class="row"><span>Возведено</span><b>' + ([st.fort ? 'крепость' : '', hasPort(landId) ? 'порт' : ''].filter(Boolean).join(', ') || 'нет') + '</b></div>' +
       '<div class="row"><span>Исконно</span><b>' + escapeHtml(t.house_sector && colors[t.house_sector] ? 'земля Дома ' + t.house_sector : t.house_sector || 'вольная земля') + '</b></div>' +
       '<div class="row"><span>Прежде владели</span><b>' + escapeHtml(past.length ? past.join(', ') : 'никто') + '</b></div>' +
@@ -2868,6 +2880,9 @@ function lensFor(node) {
     moving ? (moving.halted ? 'стоит лагерем на дороге: ' + place : 'в походе: ' + place + ', ещё ' + timeLeft(moving.due_at))
       : (node.dataset.lensHouse ? 'в гостях: ' : 'стоит: ') + place
   ];
+  // The skull: this host is melting away without a battle.
+  const wear = at ? wearAtPos(at, node.dataset.lensHouse || owner) : null;
+  if (wear) lines.push('☠ Небоевые потери ' + wear.why + ': к рассвету не станет ' + wear.men + ' ' + warriorWord(wear.men) + '. ' + (wear.text || ''));
   const slug = abandonedHouses()[owner] ? 'abandoned' : HOUSE_SLUGS[owner];
   const mood = weak ? 'sad' : moving ? 'angry' : 'calm';
   // No painted head in the glass: only the host itself.
@@ -2955,6 +2970,7 @@ const TALMUD = [
   ['О людях, порядке и бунтах', 'В новых веках у каждой земли свои люди. Всякий нанятый воин берётся из них, и сами по себе они не прибывают: нужны поля в деревне или ярмарка в городе. Войск можно держать сколько угодно, лишь бы хватало золота и людей. Деревня даёт крестьян, копейщиков и лучников, город ещё ратников и конных сержантов, а рыцарей набирают только в столице. Побывавший в бою отряд получает звезду опыта, до трёх, и каждая прибавляет ему силы. У каждой своей земли есть порядок. Земля в беспорядках даёт лишь половину золота, а на грани бунта, когда людей много, а гарнизон мал, поднимается на рассвете и уходит к вольным людям. Взяв землю, ты решаешь её судьбу: взять с миром, обложить данью или разграбить. Чем больше берёшь, тем ниже порядок. Войско надо кормить: каждый рассвет крестьянин стоит четверть монеты, рыцарь две. Не хватит золота, и неоплаченные разойдутся по домам, самые дешёвые первыми, из самых больших отрядов. Ушедшие в поход остаются при знамени.'],
   ['О мире', 'Воюющие Дома могут заключить мир письмом: в «Дипломатии» у врага есть кнопка «Предложить мир». К миру можно приложить золото или земли, чтобы враг согласился охотнее. С миром начинается перемирие на два дня, и кто нарушит его нападением, прослывёт клятвопреступником, как предавший союз. Во время перемирия войска на дорогах расходятся без боя.'],
   ['О реках и мостах', 'Иные дороги перерезаны реками, и там, где нет моста, не пройти. Мост ставят со своего берега за три монеты, строится он четверть дня, а стоит потом для всех. Свой мост можно и сжечь, чтобы запереть дорогу врагу или задержать Орду у брода. Тартары, встав у реки, ищут брод и теряют на том время.'],
+  ['О земле под ногами', 'Не всякая земля ровна. Горы и снега держат войско вдвое дольше, болота вязки, пески знойны. Всякое войско, что стоит в горах, в болотах, в песках или в снегах, тает и без битвы: слабейшие уходят первыми, но последнего человека дорога не берёт. Над таким войском на карте виден череп, а если навести на щит — сказано, отчего и скольких не станет к рассвету. Иные дороги завалены камнем навеки: там, где стоит хребет, не пройти ни пешему, ни конному, и мост тут не поможет — надо идти в обход. На зимних картах север лежит под снегом. В море есть рифы: ладьи, вставшие над ними, рвут днища.'],
   ['О Сердце земель', 'В новых веках вольные земли не пусты: их стерегут вольные люди. У самой столицы их горстка, а чем дальше к середине мира, тем их больше. Число стражи видно на сером щите и в грамоте земли. Бьются с ними без костей, как в любой битве, и павшие с обеих сторон не встают. Первому взявшему вольную землю достаётся слава по её удалённости: одна за ближнее кольцо, и больше за каждое следующее. Где Сердце земель, не знает никто. Сказано у пророков: на рассвете третьего дня посреди мира восстанут несколько Сердец за крепкими стенами, по одному на Дом без одного. Встают они подальше от тех, кто успел разрастись, и поближе к тем, кто сидел дома. Истинное лишь одно. Шпион, дошедший до Сердца или до соседней с ним земли, узнает правду. С каждым рассветом летописцы раскрывают всем ещё одно ложное. Прочие Сердца — печати, и под ними спит народ незнаемый: тартары, вышедшие из Тартара, о которых никто не ведает, кто они, откуда и какой они веры. Кто сорвёт ложную печать, на того падёт Орда. Она пойдёт на его столицу через его земли, в каждой взятой оставляя часть своих всадников, и дойдёт ослабевшей, если земель на пути много. Кто держит истинное Сердце, тот с каждым рассветом получает славу, и всё больше: три, четыре, пять. Кто первым наберёт нужную славу, тот и победил. Чем дольше истинное Сердце пустует, тем хуже всем. Будут знамения: хвостатая звезда, кровь в колодцах, вороньи стаи. И если до рассвета шестого дня никто в нём не воссядет, отворится кладезь бездны: печати падут разом, тартары поделят силы и пойдут на столицы всех Домов, а истинное Сердце откроется пред всеми. Свой мост можно сжечь: Орда встанет у реки искать брод. Если не наберёт никто, век кончится после восьмого дня. Вольная стража со временем подрастает, если её не тревожить.']
 ];
 
@@ -3378,6 +3394,7 @@ function ledgerText(l) {
   if (l.disorder) lines.push('Беспорядки в землях съели: −' + l.disorder + ' золота');
   if (l.deserted) lines.push('Не дождавшись жалованья, ушли: ' + l.deserted + ' ' + warriorWord(l.deserted));
   if (l.sea_lost) lines.push('Море забрало: ' + l.sea_lost + ' ' + warriorWord(l.sea_lost));
+  if (l.worn) lines.push('Дороги, горы и непогода унесли: ' + l.worn + ' ' + warriorWord(l.worn));
   if (l.revolts) lines.push('Бунтов: ' + l.revolts + ' — земли отпали к вольным людям');
   if (l.glory) lines.push('Слава: ' + sign(l.glory));
   const net = l.gold_after - l.gold_before;
@@ -4461,8 +4478,8 @@ function settlementFigure(kind, w, c, owner) {
 // An army on the map: the painted host in its House's colours with the number
 // of warriors on a small shield. A host on the march steps along and faces the
 // way it goes; one that stands shifts its weight now and then.
-function shieldToken(x, y, color, count, scale = 1, lens = '', who = null, moving = false, faceRight = false) {
-  if (pixiScene && !moving) pixiScene.tokens.push({ x: x + (pixiScene.dx || 0), y: y + (pixiScene.dy || 0), color, count, scale });
+function shieldToken(x, y, color, count, scale = 1, lens = '', who = null, moving = false, faceRight = false, wear = null) {
+  if (pixiScene && !moving) pixiScene.tokens.push({ x: x + (pixiScene.dx || 0), y: y + (pixiScene.dy || 0), color, count, scale, wear: Boolean(wear) });
   const slug = who && abandonedHouses()[who] ? 'abandoned' : HOUSE_SLUGS[who];
   // The map is redrawn often: the animation picks up where the clock is, not from its start.
   const figure = false
@@ -4474,7 +4491,16 @@ function shieldToken(x, y, color, count, scale = 1, lens = '', who = null, movin
     `<path class="shield" d="M-4.8 -5.4H4.8V.8Q4.8 4.9 0 6.4Q-4.8 4.9 -4.8 .8Z" fill="${color}"></path>` +
     '<path class="shield-shine" d="M-3.4 -4H3.4"></path>' +
     `<text y="2.3">${count}</text>` +
-    '</g></g>';
+    '</g>' + (wear ? skullMark() : '') + '</g>';
+}
+
+// The skull over a host taking losses without a battle.
+function skullMark() {
+  return '<g class="wear-skull" transform="translate(5.6 -4.4) scale(.92)">' +
+    '<ellipse cx="0" cy="-.6" rx="2.1" ry="2.2" fill="#f2e6c8" stroke="#2b1b12" stroke-width=".4"/>' +
+    '<path d="M-1.5 1.2h3l-.5 1.4h-2Z" fill="#f2e6c8" stroke="#2b1b12" stroke-width=".4" stroke-linejoin="round"/>' +
+    '<ellipse cx="-.9" cy="-.7" rx=".62" ry=".78" fill="#2b1b12"/><ellipse cx=".9" cy="-.7" rx=".62" ry=".78" fill="#2b1b12"/>' +
+    '</g>';
 }
 
 function nameRibbon(x, y, label, capital, heart = false) {
@@ -4746,6 +4772,27 @@ function leaderMark(pos, owner) {
   return lord.role === 'RULER' ? 'crown' : 'star';
 }
 
+// A host bleeding without a battle: a small skull to the right of its shield.
+function wearAtPos(pos, house) {
+  return snapshot?.game?.attrition?.[pos]?.[house] || null;
+}
+
+function skullBadge() {
+  const g = new PIXI.Graphics();
+  g.lineStyle({ width: 0.4, color: INK, join: PIXI.LINE_JOIN.ROUND });
+  g.beginFill(0xf2e6c8);
+  g.drawEllipse(0, -0.6, 2.1, 2.2);
+  g.drawPolygon([-1.5, 1.2, 1.5, 1.2, 1, 2.6, -1, 2.6]);
+  g.endFill();
+  g.beginFill(0x2b1b12);
+  g.drawEllipse(-0.9, -0.7, 0.62, 0.78);
+  g.drawEllipse(0.9, -0.7, 0.62, 0.78);
+  g.endFill();
+  g.position.set(5.6, -4.4);
+  g.scale.set(0.92);
+  return g;
+}
+
 function markOrder(order) {
   const st = snapshot?.game?.state;
   const id = order.commander_id || Object.values(st?.armies || {}).find(a => a.moving_order_id === order.id)?.commander_id;
@@ -4909,6 +4956,7 @@ function drawPixiMap(scene, key) {
   for (const tk of scene.tokens) {
     const s = shieldGraphic(tk.color, tk.count, tk.scale);
     if (tk.mark) s.addChild(leaderBadge(tk.mark));
+    if (tk.wear) s.addChild(skullBadge());
     s.position.set(tk.x, tk.y);
     tokens.addChild(s);
   }
@@ -5227,7 +5275,7 @@ function renderMap() {
         <circle class="selection-ring" r="8"></circle>
         <circle class="sea-waypoint${active}" r="2.6"></circle>
         ${fleets.map(([who, n], i) => {
-          const svg = shieldToken((i - (fleets.length - 1) / 2) * 9, -1, colors[who] || '#2c4a86', n, 0.9, `data-lens-at="${id}"`, who);
+          const svg = shieldToken((i - (fleets.length - 1) / 2) * 9, -1, colors[who] || '#2c4a86', n, 0.9, `data-lens-at="${id}"`, who, false, false, wearAtPos(id, who));
           if (scene && scene.tokens.length) scene.tokens[scene.tokens.length - 1].mark = leaderMark(id, who);
           return svg;
         }).join('')}
@@ -5293,7 +5341,7 @@ function renderMap() {
     if (total && owner) {
       const tx = capital ? c.x + 21 : t.type === 'Город' ? c.x + 14 : t.type === 'Деревня' ? c.x + 11 : c.x + 8.5;
       const ty = capital ? c.y - 1 : c.y - 5;
-      tokens.push(shieldToken(tx, ty, colors[owner] || '#8a7a5c', total, 1, `data-lens-at="${t.id}"`, owner));
+      tokens.push(shieldToken(tx, ty, colors[owner] || '#8a7a5c', total, 1, `data-lens-at="${t.id}"`, owner, false, false, wearAtPos(t.id, owner)));
       if (scene.tokens.length) scene.tokens[scene.tokens.length - 1].mark = leaderMark(t.id, owner);
     }
     // Guests camped here by right of passage stand beside the garrison.
@@ -5303,7 +5351,7 @@ function renderMap() {
       if (!here) continue;
       shift += 1;
       tokens.push(shieldToken(c.x - 10 - shift * 9, c.y + 4, colors[guest] || '#8a7a5c', here, 0.9,
-        `data-lens-at="${t.id}" data-lens-house="${escapeHtml(guest)}"`, guest));
+        `data-lens-at="${t.id}" data-lens-house="${escapeHtml(guest)}"`, guest, false, false, wearAtPos(t.id, guest)));
     }
   }
 

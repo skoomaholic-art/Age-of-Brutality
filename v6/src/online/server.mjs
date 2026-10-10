@@ -60,6 +60,8 @@ import {
   startRounds
 } from './rounds.mjs';
 import { applyFog, knownHouses, recordExploration, recordLandHistory } from './fog.mjs';
+import { attritionView } from './attrition.mjs';
+import { TERRAIN } from './terrain.mjs';
 import { generateMap, MAX_HOUSES, MIN_HOUSES, MAP_SHAPES, MAP_WARPS, pickMapShape } from './mapgen.mjs';
 import { processEncounters } from './encounters.mjs';
 import { expelGuests } from './guests.mjs';
@@ -693,6 +695,11 @@ function redactGameForPlayer(game, player) {
     clientGame.dev = game.dev?.house === ownHouse ? { reveal: Boolean(game.dev.reveal), instant: Boolean(game.dev.instant) } : null;
   }
 
+  // Which hosts are bleeding without a battle, read off what this player can
+  // actually see, so the skulls tell nothing the fog hides.
+  clientGame.attrition = attritionView(clientGame.state, map);
+  // What each kind of ground does to an army, so the charter can say it.
+  clientGame.terrain_kinds = TERRAIN;
   return clientGame;
 }
 
@@ -733,7 +740,12 @@ function publicBootstrap(ctx) {
       capitals: map.capitals,
       generated: Boolean(map.generated),
       seed: map.seed || null,
-      centre: map.art?.centre || null
+      centre: map.art?.centre || null,
+      // The lie of the land: rough ground, walls of rock, shallows, the season.
+      terrain: map.terrain || {},
+      ridges: map.ridges || [],
+      reefs: map.reefs || [],
+      season: map.season || null
     },
     houses: constants.houses,
     ruleset_version: constants.version,

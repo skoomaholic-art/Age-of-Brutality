@@ -878,6 +878,22 @@ export function journalEntryToAudit(entry, map, game) {
     };
   }
 
+  if (entry.kind === 'ATTRITION') {
+    const where = territoryName(map, entry.territory);
+    const words = {
+      'в горах': `В горах у земли ${where} войско Дома ${entry.house} сорвалось с троп и застыло на ветру: не стало ${entry.lost}.`,
+      'в болотах': `В болотах земли ${where} войско Дома ${entry.house} свалила трясинная лихорадка: не стало ${entry.lost}.`,
+      'в пустыне': `В песках земли ${where} войско Дома ${entry.house} осталось без воды: не стало ${entry.lost}.`,
+      'в снегах': `В снегах земли ${where} войско Дома ${entry.house} застудило морозом: не стало ${entry.lost}.`
+    };
+    return {
+      ...base,
+      visibility: 'PRIVATE',
+      message: words[entry.why] || `Войско Дома ${entry.house} у земли ${where} тает без битвы: не стало ${entry.lost}.`,
+      details: { house: entry.house, territory_id: entry.territory, lost: entry.lost, why: entry.why, at: entry.at || null }
+    };
+  }
+
   if (entry.kind === 'MARCH_RETURNED') {
     return {
       ...base,

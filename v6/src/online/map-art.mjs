@@ -171,8 +171,13 @@ export function buildMapArt(map, options = {}) {
   const masses = [...new Set(sites.map(site => site.mass))];
   const massIndex = new Map(masses.map((mass, index) => [mass, index]));
   const smallMass = new Set(sites.filter(site => site.small).map(site => massIndex.get(site.mass)));
-  const segments = map.land_edges.map(([a, b]) => ({ a: siteById.get(a), b: siteById.get(b) }));
-  const linked = new Set(map.land_edges.flat());
+  // A ridge is a road a mountain wall has closed: the ground is still there,
+  // so the land mask knows it, but no road is drawn along it and no army walks it.
+  const ridgeEdges = (map.ridges || []).filter(([a, b]) => siteById.has(a) && siteById.has(b));
+  const roadEdges = map.land_edges;
+  const segments = [...roadEdges, ...ridgeEdges].map(([a, b]) => ({ a: siteById.get(a), b: siteById.get(b) }));
+  const roadSegments = roadEdges.map(([a, b]) => ({ a: siteById.get(a), b: siteById.get(b) }));
+  const linked = new Set([...roadEdges.flat(), ...ridgeEdges.flat()]);
   const lonely = new Set(sites.filter(site => !site.small && !linked.has(site.id)).map(site => site.id));
 
   const landBox = {
@@ -346,7 +351,7 @@ export function buildMapArt(map, options = {}) {
     return `M${f1(p0[0])} ${f1(p0[1])}C${f1(p1[0])} ${f1(p1[1])} ${f1(p2[0])} ${f1(p2[1])} ${f1(p3[0])} ${f1(p3[1])}`;
   }
 
-  const roads = segments.map((segment, index) => roadPath(segment.a, segment.b, 700 + index));
+  const roads = roadSegments.map((segment, index) => roadPath(segment.a, segment.b, 700 + index));
 
   // Where a road meets a river: a bridge is needed there to cross.
   function crossPoint(p, q, r, s) {
@@ -358,7 +363,7 @@ export function buildMapArt(map, options = {}) {
     return [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t];
   }
   const crossings = [];
-  segments.forEach((segment, index) => {
+  roadSegments.forEach((segment, index) => {
     if (!segment.a || !segment.b) return;
     const [p0, p1, p2, p3] = roadCurve(segment.a, segment.b, 700 + index);
     const line = [];
@@ -473,6 +478,93 @@ export function buildMapArt(map, options = {}) {
       hills.push({ x, y, size: 0.8 + hillRandom() * 0.7 });
     }
   }
+
+  // ---------- the lie of the land: mountains, marshes, sand and snow ----------
+
+  const terrainKind = id => map.terrain?.[id] || null;
+  const provinceAt = (x, y) => {
+    const index = cellAt(x, y);
+    return index >= 0 ? province[index] : -1;
+  };
+  const TERRAIN_TINT = {
+    'горы': '#8d8468',
+    'болота': '#5c6f4a',
+    'пустыня': '#d9c383',
+    'снега': '#e8eef2'
+  };
+  // A blanket of colour over every rough province, under the glyphs.
+  const terrainFloor = sites.map((site, index) => {
+    const kind = terrainKind(site.id);
+    if (!kind || !provinces[site.id]?.d) return '';
+    void index;
+    return `<path d="${provinces[site.id].d}" fill="${TERRAIN_TINT[kind]}" opacity="${kind === 'снега' ? '.72' : '.55'}"/>`;
+  }).join('');
+
+  // Glyphs scattered inside each rough province: peaks, reeds, dunes, drifts.
+  const terrainRandom = seeded(5150 + SEED);
+  const peak = (x, y, size, snow = false) =>
+    `<path d="M${f1(x - 4.6 * size)} ${f1(y)}l${f1(4.6 * size)} ${f1(-6.4 * size)}l${f1(4.6 * size)} ${f1(6.4 * size)}Z" fill="${snow ? '#dfe7ec' : '#8a7c5c'}" stroke="#3f3524" stroke-width=".5" stroke-linejoin="round"/>` +
+    `<path d="M${f1(x - 1.7 * size)} ${f1(y - 2.4 * size)}l${f1(1.7 * size)} ${f1(-4 * size)}l${f1(1.7 * size)} ${f1(4 * size)}Z" fill="${snow ? '#ffffff' : '#cfc49f'}" stroke="none"/>`;
+  const reeds = (x, y, size) =>
+    `<path d="M${f1(x - 2.2 * size)} ${f1(y)}q${f1(1.1 * size)} ${f1(-3.2 * size)} ${f1(2.2 * size)} 0M${f1(x + 0.6 * size)} ${f1(y + 0.6 * size)}q${f1(1.1 * size)} ${f1(-3.2 * size)} ${f1(2.2 * size)} 0" fill="none" stroke="#3f5230" stroke-width=".5" stroke-linecap="round"/>` +
+    `<path d="M${f1(x - 1.2 * size)} ${f1(y + 1.4 * size)}h${f1(4.4 * size)}" stroke="#6d8a5e" stroke-width=".45" stroke-linecap="round" opacity=".8"/>`;
+  const dune = (x, y, size) =>
+    `<path d="M${f1(x - 4 * size)} ${f1(y)}q${f1(4 * size)} ${f1(-3 * size)} ${f1(8 * size)} 0" fill="none" stroke="#b79a51" stroke-width=".6" stroke-linecap="round"/>` +
+    `<path d="M${f1(x - 1.6 * size)} ${f1(y + 1.8 * size)}q${f1(2.6 * size)} ${f1(-2 * size)} ${f1(5.2 * size)} 0" fill="none" stroke="#c9ae68" stroke-width=".45" stroke-linecap="round" opacity=".8"/>`;
+  const drift = (x, y, size) =>
+    `<path d="M${f1(x)} ${f1(y - 2.4 * size)}v${f1(4.8 * size)}M${f1(x - 2.1 * size)} ${f1(y - 1.2 * size)}l${f1(4.2 * size)} ${f1(2.4 * size)}M${f1(x - 2.1 * size)} ${f1(y + 1.2 * size)}l${f1(4.2 * size)} ${f1(-2.4 * size)}" stroke="#ffffff" stroke-width=".55" stroke-linecap="round" opacity=".85"/>`;
+
+  const terrainGlyphs = [];
+  sites.forEach((site, index) => {
+    const kind = terrainKind(site.id);
+    if (!kind) return;
+    for (let attempt = 0; attempt < 90 && terrainGlyphs.length < 4000; attempt += 1) {
+      const angle = terrainRandom() * Math.PI * 2;
+      const radius = 4 + terrainRandom() * 26;
+      const x = site.x + Math.cos(angle) * radius;
+      const y = site.y + Math.sin(angle) * radius * 0.85;
+      if (provinceAt(x, y) !== index || depthAt(x, y) < 3) continue;
+      if (nearestSiteDistance(x, y) < 9 || nearRoad(x, y, 2.6) || nearRiver(x, y, 3)) continue;
+      const size = 0.75 + terrainRandom() * 0.5;
+      terrainGlyphs.push({ y,
+        markup: kind === 'горы' ? peak(x, y, size)
+          : kind === 'снега' ? (terrainRandom() < 0.45 ? peak(x, y, size, true) : drift(x, y, size))
+            : kind === 'болота' ? reeds(x, y, size)
+              : dune(x, y, size) });
+    }
+  });
+  terrainGlyphs.sort((a, b) => a.y - b.y);
+  const terrainMarkup = terrainGlyphs.map(item => item.markup).join('');
+
+  // A wall of rock across a closed road: peaks shoulder to shoulder.
+  const ridgeMarkup = ridgeEdges.map(([a, b]) => {
+    const from = siteById.get(a);
+    const to = siteById.get(b);
+    const steps = Math.max(3, Math.round(Math.hypot(to.x - from.x, to.y - from.y) / 7));
+    let out = '';
+    for (let i = 1; i < steps; i += 1) {
+      const t = i / steps;
+      const x = from.x + (to.x - from.x) * t + (terrainRandom() - 0.5) * 3;
+      const y = from.y + (to.y - from.y) * t + (terrainRandom() - 0.5) * 3;
+      if (depthAt(x, y) < 1) continue;
+      out += peak(x, y, 1.15 + terrainRandom() * 0.35, map.season === 'зима');
+    }
+    return out;
+  }).join('');
+
+  // Reefs: teeth of rock just under the water by a sea mark.
+  const reefMarkup = (map.reefs || []).map(id => {
+    const point = map.sea_waypoints?.[id];
+    if (!point) return '';
+    let out = '';
+    for (let i = 0; i < 5; i += 1) {
+      const x = point.x + (terrainRandom() - 0.5) * 26;
+      const y = point.y + (terrainRandom() - 0.5) * 20;
+      if (depthAt(x, y) > 0) continue;
+      out += `<path d="M${f1(x - 2.4)} ${f1(y)}l${f1(2.4)} ${f1(-3.2)}l${f1(2.4)} ${f1(3.2)}Z" fill="#5f7884" stroke="#2f4550" stroke-width=".4" opacity=".75"/>`;
+    }
+    return out;
+  }).join('');
 
   // ---------- settlements ----------
 
@@ -620,12 +712,16 @@ export function buildMapArt(map, options = {}) {
   <path d="${pasture}" fill="#9aa04a" opacity=".55"/>
   <path d="${heath}" fill="#c7b468" opacity=".5"/>
   <path d="${forestFloor}" fill="#6f7a36" opacity=".9"/>
+  ${terrainFloor}
   ${fieldMarkup}
   ${hillMarkup}
   ${riverMarkup}
   ${roadMarkup}
+  ${terrainMarkup}
+  ${ridgeMarkup}
   ${treeMarkup}
   </g>
+  ${reefMarkup}
   ${sites.map(settlement).join('')}
   ${compass}
   <rect ${box} filter="url(#grain)" opacity=".55"/>
@@ -640,6 +736,6 @@ export function buildMapArt(map, options = {}) {
     provinces,
     bounds: BOUNDS,
     crossings,
-    stats: { provinces: sites.length, trees: trees.length, fields: fields.length, rivers: rivers.length }
+    stats: { provinces: sites.length, trees: trees.length, fields: fields.length, rivers: rivers.length, terrain: terrainGlyphs.length, ridges: ridgeEdges.length }
   };
 }

@@ -1,6 +1,7 @@
 import { applyIncomePulse } from '../core/economy.mjs';
 import { applyCourtDawn } from './court.mjs';
 import { applySeaToll } from './sea-toll.mjs';
+import { attritionDawn } from './attrition.mjs';
 import { heartDawn } from './heart.mjs';
 import { populationDawn, upkeepDawn } from './units.mjs';
 import { orderDawn } from './order.mjs';
@@ -116,6 +117,8 @@ function beginRound(next, map, constants, number, nowMs, timing) {
   const afterIncome = purse(next.state);
   // Men long out at sea sicken and drown: the toll of the sea, every dawn.
   applySeaToll(next.state, nowMs);
+  // Rough ground takes its own: mountains, marshes, sands and snows.
+  if (number > 1) attritionDawn(next, map, nowMs);
   // A game of the Heart: the wild guard grows back, the Heart pays its holder.
   rounds.heart_reached = number > 1 ? heartDawn(next, map, constants, nowMs, number) : [];
   // Lands with fields or a fair gain people.
@@ -143,6 +146,7 @@ function beginRound(next, map, constants, number, nowMs, timing) {
       disorder: (afterUpkeep[house]?.gold ?? 0) - (after[house]?.gold ?? 0),
       deserted: fresh.filter(e => e.kind === 'DESERTION' && e.house === house).reduce((s, e) => s + Number(e.deserted || 0), 0),
       sea_lost: fresh.filter(e => e.kind === 'SEA_TOLL' && e.house === house).reduce((s, e) => s + Number(e.lost || 0), 0),
+      worn: fresh.filter(e => e.kind === 'ATTRITION' && e.house === house).reduce((s, e) => s + Number(e.lost || 0), 0),
       revolts: fresh.filter(e => e.kind === 'REVOLT' && e.house === house).length,
       glory: (after[house]?.glory ?? 0) - (afterIncome[house]?.glory ?? 0),
       gold_after: after[house]?.gold ?? 0,

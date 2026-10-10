@@ -1,4 +1,5 @@
 import { buildAdjacency } from '../core/map.mjs';
+import { roadSlow, isReef } from './terrain.mjs';
 
 export const ROUTE_MODE = Object.freeze({
   LAND:'LAND',
@@ -41,11 +42,14 @@ function graph(map, timing) {
     out.get(b).push({to:a,mode,duration_ms:durationMs});
   };
 
+  // Rough ground holds an army up: mountains and marshes cost the most.
   for (const [a,b] of map.land_edges || []) {
-    add(a,b,'LAND',Number(timing.landSegmentMs || 3000));
+    add(a,b,'LAND',Math.round(Number(timing.landSegmentMs || 3000) * roadSlow(map,a,b)));
   }
+  // Shallows are picked through slowly.
   for (const [a,b] of map.sea_lane_edges || []) {
-    add(a,b,'SEA',Number(timing.seaSegmentMs || 5000));
+    const reef = isReef(map,a) || isReef(map,b) ? 1.3 : 1;
+    add(a,b,'SEA',Math.round(Number(timing.seaSegmentMs || 5000) * reef));
   }
 
   for (const edges of out.values()) {

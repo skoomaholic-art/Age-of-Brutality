@@ -621,6 +621,16 @@ export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'whe
   // A river runs out of the heartland along every border and falls into the
   // sea; where the homes stand apart it runs out of every home instead.
   const rivers = [];
+  const spring = (from, angle) => {
+    let start = from;
+    let aim = angle;
+    if (bendRiver) {
+      const ahead = bendRiver(add(start, polar(10, aim)));
+      start = bendRiver(start);
+      aim = Math.atan2(ahead.y - start.y, ahead.x - start.x);
+    }
+    rivers.push({ ...shift(start), angle: aim, seed: Math.floor(random() * 1e6) });
+  };
   for (let i = 0; i < boundaries; i += 1) {
     let angle = boundaryAngle(i) + (random() - 0.5) * 0.5;
     let start = polar(count === 2 ? 24 : Math.max(26, R * 0.32), boundaryAngle(i) + (random() - 0.5) * 0.6);
@@ -628,13 +638,150 @@ export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'whe
       angle = angles[i] + Math.PI / 6;
       start = add(polar(R, angles[i]), polar(22, angle));
     }
-    if (bendRiver) {
-      const ahead = bendRiver(add(start, polar(10, angle)));
-      start = bendRiver(start);
-      angle = Math.atan2(ahead.y - start.y, ahead.x - start.x);
-    }
-    rivers.push({ ...shift(start), angle, seed: Math.floor(random() * 1e6) });
+    spring(start, angle);
+    // A second river between every pair of borders: more roads meet water,
+    // so more marches must go round or wait for a bridge.
+    const between = boundaryAngle(i) + Math.PI / Math.max(1, boundaries) + (random() - 0.5) * 0.4;
+    spring(polar(Math.max(30, R * (0.45 + random() * 0.25)), between), between + (random() - 0.5) * 0.7);
   }
+
+  // ---------- the lie of the land ----------
+  // A chain of mountains runs across the world, marshes gather in a low
+  // hollow, and the far edge is desert or, on a winter map, deep snow. The
+  // home lands and their neighbours are spared: a House is not walled in at
+  // its own gate.
+  const terrainRandom = seeded(((Number(seed) || 1) ^ 0x7ab31d) >>> 0);
+  const winter = terrainRandom() < 0.28;
+  const homeOf = new Set(Object.values(capitals));
+  const nextToHome = new Set();
+  for (const [a, b] of [...edges].map(key => key.split('|'))) {
+    if (homeOf.has(a)) nextToHome.add(b);
+    if (homeOf.has(b)) nextToHome.add(a);
+  }
+  const spanX = Math.max(1, maxX - minX);
+  const spanY = Math.max(1, maxY - minY);
+  const mid = { x: spanX / 2, y: spanY / 2 };
+  // The mountain chain: a line through the middle at a chance angle.
+  const chainAngle = terrainRandom() * Math.PI;
+  const chainN = { x: -Math.sin(chainAngle), y: Math.cos(chainAngle) };
+  const chainAt = { x: mid.x + (terrainRandom() - 0.5) * spanX * 0.3, y: mid.y + (terrainRandom() - 0.5) * spanY * 0.3 };
+  const chainWidth = Math.max(34, Math.min(spanX, spanY) * 0.14);
+  // The hollow where the marshes lie.
+  const bogAt = { x: mid.x + (terrainRandom() - 0.5) * spanX * 0.6, y: mid.y + (terrainRandom() - 0.5) * spanY * 0.6 };
+  const bogReach = Math.max(52, Math.min(spanX, spanY) * 0.24);
+  const terrain = {};
+  for (const t of territories) {
+    if (homeOf.has(t.id)) continue;
+    const here = coordinates[t.id];
+    const wild = t.type === 'Дикая земля';
+    // Home ground is kinder than the wild middle, and the gate of a capital kindest of all.
+    const soften = (wild ? 1 : 0.6) * (houses.includes(t.house_sector) ? 0.5 : 1) * (nextToHome.has(t.id) ? 0.4 : 1);
+    const toChain = Math.abs((here.x - chainAt.x) * chainN.x + (here.y - chainAt.y) * chainN.y);
+    const toBog = Math.hypot(here.x - bogAt.x, here.y - bogAt.y);
+    const band = here.y / spanY; // 0 at the north edge, 1 at the south
+    if (toChain < chainWidth && terrainRandom() < 0.85 * soften) { terrain[t.id] = 'горы'; continue; }
+    if (toBog < bogReach && terrainRandom() < 0.7 * soften) { terrain[t.id] = 'болота'; continue; }
+    if (winter && band < 0.3 && terrainRandom() < 0.8 * soften) { terrain[t.id] = 'снега'; continue; }
+    if (!winter && band > 0.7 && terrainRandom() < 0.7 * soften) { terrain[t.id] = 'пустыня'; continue; }
+    if (terrainRandom() < 0.22 * soften) terrain[t.id] = winter ? 'снега' : terrainRandom() < 0.5 ? 'горы' : 'болота';
+  }
+
+  // A wall of rock closes some roads for good. Only between two mountain
+  // lands, and never where it would cut a land off from the rest of the world.
+  const landEdges = [...edges].sort().map(key => key.split('|'));
+  const ridges = [];
+  const open = landEdges.map(([a, b]) => [a, b]);
+  const reachable = list => {
+    const near = new Map();
+    for (const [a, b] of list) {
+      (near.get(a) || near.set(a, []).get(a)).push(b);
+      (near.get(b) || near.set(b, []).get(b)).push(a);
+    }
+    const start = territories[0].id;
+    const seen = new Set([start]);
+    const queue = [start];
+    while (queue.length) for (const next of near.get(queue.shift()) || []) if (!seen.has(next)) { seen.add(next); queue.push(next); }
+    return seen;
+  };
+  const whole = reachable(open).size;
+  // How the world looks from every capital: the roads to the other capitals,
+  // the lands within two roads, the way to the free city. A wall that changes
+  // any of it for one House and not another would make the start unfair.
+  const outlook = list => {
+    const near = new Map();
+    for (const [a, b] of list) {
+      (near.get(a) || near.set(a, []).get(a)).push(b);
+      (near.get(b) || near.set(b, []).get(b)).push(a);
+    }
+    const from = start => {
+      const dist = new Map([[start, 0]]);
+      const queue = [start];
+      while (queue.length) {
+        const at = queue.shift();
+        for (const next of near.get(at) || []) if (!dist.has(next)) { dist.set(next, dist.get(at) + 1); queue.push(next); }
+      }
+      return dist;
+    };
+    return houses.map(house => {
+      const dist = from(capitals[house]);
+      return JSON.stringify({
+        rivals: houses.filter(other => other !== house).map(other => dist.get(capitals[other]) ?? -1).sort(),
+        close: [...dist.values()].filter(d => d <= 2).length,
+        hub: dist.get('X0') ?? -1
+      });
+    }).join('|');
+  };
+  const outlookBefore = outlook(open);
+  for (const [a, b] of landEdges) {
+    if (ridges.length >= Math.max(1, Math.round(territories.length / 12))) break;
+    // The wall lies against a mountain: at least one end must be mountain land.
+    if (terrain[a] !== 'горы' && terrain[b] !== 'горы') continue;
+    // Only in the no-man's land: a wall in a House's own sector would make
+    // one start harder than another.
+    const sectorOf = id => territories.find(t => t.id === id)?.house_sector;
+    if (houses.includes(sectorOf(a)) || houses.includes(sectorOf(b))) continue;
+    const without = open.filter(([x, y]) => !(x === a && y === b) && !(x === b && y === a));
+    // Every land that could be reached before must still be reachable, and
+    // neither end may be left with a single road.
+    const roads = id => without.filter(([x, y]) => x === id || y === id).length;
+    if (roads(a) < 2 || roads(b) < 2) continue;
+    if (reachable(without).size !== whole) continue;
+    if (outlook(without) !== outlookBefore) continue;
+    open.length = 0;
+    open.push(...without);
+    ridges.push([a, b]);
+  }
+
+  // The same wall in every House's own sector: what is barred for one is
+  // barred for all, so the start stays even. Half the maps get one.
+  if (terrainRandom() < 0.55) {
+    const sectorOf = id => territories.find(t => t.id === id)?.house_sector;
+    const local = open.filter(([a, b]) => sectorOf(a) === sectorOf(b) && houses.includes(sectorOf(a)) && !homeOf.has(a) && !homeOf.has(b));
+    const patterns = new Map();
+    for (const [a, b] of local) {
+      const key = [a.slice(1), b.slice(1)].sort().join('-');
+      (patterns.get(key) || patterns.set(key, []).get(key)).push([a, b]);
+    }
+    for (const [, group] of [...patterns].sort()) {
+      if (group.length !== houses.length) continue;
+      const without = open.filter(edge => !group.some(([a, b]) => (edge[0] === a && edge[1] === b) || (edge[0] === b && edge[1] === a)));
+      const roads = id => without.filter(([x, y]) => x === id || y === id).length;
+      if (group.some(([a, b]) => roads(a) < 2 || roads(b) < 2)) continue;
+      if (reachable(without).size !== whole) continue;
+      if (outlook(without) !== outlookBefore) continue;
+      open.length = 0;
+      open.push(...without);
+      for (const [a, b] of group) {
+        ridges.push([a, b]);
+        terrain[a] = 'горы';
+        terrain[b] = 'горы';
+      }
+      break;
+    }
+  }
+
+  // Shallows in the open sea: a fleet that stops over them is torn by rocks.
+  const reefs = Object.keys(seaWaypoints).filter(() => terrainRandom() < 0.12).sort();
 
   return {
     game: baseMap.game,
@@ -648,7 +795,11 @@ export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'whe
     plan,
     territories,
     coordinates,
-    land_edges: [...edges].sort().map(key => key.split('|')),
+    land_edges: open.map(([a, b]) => [a, b]),
+    terrain,
+    ridges,
+    reefs,
+    season: winter ? 'зима' : null,
     sea_edges: [],
     ports: [...ports].sort(),
     capitals,
