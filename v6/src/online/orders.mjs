@@ -38,6 +38,7 @@ import { processAmbushes } from './intercept.mjs';
 import { standDown } from './stance.mjs';
 import { planLosses, planOf, planStrength } from './plans.mjs';
 import { rememberDeed } from './opinion.mjs';
+import { giftOf } from './aspiration.mjs';
 
 export const ONLINE_TIMING = Object.freeze({
   landSegmentMs: 3_000,
@@ -723,8 +724,8 @@ function resolveOrder(state,map,constants,gameId,order,nowMs,recovery) {
       defenderCommander:commanderStats(defenderCommander),
       // Ranks add up as strength: a guardsman counts as five peasants.
       // Ranks add up as strength; a ruler leading in person adds one more.
-      attackerStrengthModifier:strengthOf(order.action.ranks,Number(action.warriors),{stars:order.action.stars})-Number(action.warriors)+rulerLeadBonus(attackerCommander)+planStrength(order.action),
-      defenderStrengthModifier:strengthOf(state.ranks?.[action.to]?.[defenderHouse],defenders,{defending:true,stars:starsAt(state,action.to,defenderHouse)})-defenders+rulerLeadBonus(defenderCommander),
+      attackerStrengthModifier:strengthOf(order.action.ranks,Number(action.warriors),{stars:order.action.stars})-Number(action.warriors)+rulerLeadBonus(attackerCommander)+planStrength(order.action)+giftOf(state,action.house,'attack'),
+      defenderStrengthModifier:strengthOf(state.ranks?.[action.to]?.[defenderHouse],defenders,{defending:true,stars:starsAt(state,action.to,defenderHouse)})-defenders+rulerLeadBonus(defenderCommander)+giftOf(state,defenderHouse,'attack'),
       // The plan the host was given tells on its own dead as well as on its blows.
       attackerLossesFor:damage=>Math.min(Number(action.warriors),planLosses(order.action,headsLost(order.action.ranks,Number(action.warriors),damage))),
       defenderLossesFor:damage=>headsLost(state.ranks?.[action.to]?.[defenderHouse],defenders,damage)

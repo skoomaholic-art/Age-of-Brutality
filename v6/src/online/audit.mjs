@@ -250,6 +250,32 @@ export function journalEntryToAudit(entry, map, game) {
     };
   }
 
+  if (entry.kind === 'NEW_NEIGHBOUR') {
+    return {
+      ...base,
+      message: `Дом ${entry.other} встал у твоих границ там, где его прежде не было. При дворе неспокойно.`,
+      details: { house: entry.house, other: entry.other, houses: entry.houses || [], at: entry.at || null }
+    };
+  }
+
+  if (entry.kind === 'ASPIRATION_NAMED') {
+    return {
+      ...base,
+      message: `Дом ${entry.house} назвал свой путь: ${entry.name}.`,
+      details: { house: entry.house, aspiration: entry.aspiration, name: entry.name, at: entry.at || null }
+    };
+  }
+
+  if (entry.kind === 'ASPIRATION_STEP') {
+    return {
+      ...base,
+      message: entry.last
+        ? `Дом ${entry.house} прошёл свой путь до конца: «${entry.step_name}». Слава Дома растёт на ${entry.glory}.`
+        : `Дом ${entry.house} сделал шаг по своему пути: «${entry.step_name}». Слава Дома растёт на ${entry.glory}.`,
+      details: { house: entry.house, aspiration: entry.aspiration, step: entry.step, step_name: entry.step_name, glory: entry.glory, last: Boolean(entry.last), at: entry.at || null }
+    };
+  }
+
   if (entry.kind === 'SUCCESSION') {
     return {
       ...base,

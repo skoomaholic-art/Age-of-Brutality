@@ -32,6 +32,7 @@ import { rulerLeadBonus } from './court.mjs';
 import { clearHoldAt, holdGuard } from './stance.mjs';
 import { planLosses, planStrength } from './plans.mjs';
 import { rememberDeed } from './opinion.mjs';
+import { giftOf } from './aspiration.mjs';
 import { terrainGuard } from './terrain.mjs';
 import { fateDice, recoveryMs, settleFate } from './fate.mjs';
 import { nearestOwnLand } from './guests.mjs';
@@ -180,6 +181,8 @@ export function fightOnLand(game, map, constants, land, aggressor, target, force
   const wallsWith = members => members.some(m => m.kind === 'GARRISON');
   const att = sideStrength(attackers);
   const def = sideStrength(defenders);
+  for (const m of attackers) att.strength += giftOf(state, m.house, 'attack');
+  for (const m of defenders) def.strength += giftOf(state, m.house, 'attack');
   for (const m of [...attackers, ...defenders]) {
     const plan = planFor(m);
     if (!plan) continue;

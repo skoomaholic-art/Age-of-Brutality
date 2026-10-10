@@ -1,3 +1,4 @@
+import { giftOf } from './aspiration.mjs';
 // What a lord gives and what he costs, at court or with an army.
 //
 // At court his gifts of peace work: stewardship fills the treasury, speech
@@ -85,6 +86,9 @@ export function houseCourtTotals(state, house, capitals = null) {
   const totals = { gold: 0, influence: 0, deals: 0, spy: 0 };
   // Nobody on the throne: the Houses watch, and the realm loses face every dawn.
   if (state?.interregnum?.[house]) totals.influence -= 1;
+  // What the House set out to do pays a little every dawn.
+  totals.gold += giftOf(state, house, 'gold');
+  totals.influence += giftOf(state, house, 'influence');
   for (const character of Object.values(state?.characters || {})) {
     if (character.house !== house) continue;
     const where = whereIs(character);

@@ -3924,7 +3924,12 @@ function setupBar() {
   $('diplomacy-slot').appendChild($('diplomacy'));
   $('talmud-now').appendChild($('map-guide'));
   $('talmud').innerHTML = TALMUD.map(([title, text]) => '<details><summary>' + title + '</summary><p>' + text + '</p></details>').join('');
-  $('sub-faction').append($('house-panel'), $('economy-panel'));
+  // What the House set out to do stands at the head of its own pane.
+  const aspire = document.createElement('div');
+  aspire.className = 'panel';
+  aspire.id = 'aspiration-panel';
+  aspire.innerHTML = '<h2>Устремление Дома</h2><div id="aspiration-body" class="muted">—</div>';
+  $('sub-faction').append(aspire, $('house-panel'), $('economy-panel'));
   document.querySelectorAll('.sub-tab').forEach(tab => {
     tab.addEventListener('click', () => {
       document.querySelectorAll('.sub-tab').forEach(node => node.classList.toggle('on', node === tab));
@@ -4341,6 +4346,10 @@ function newsFor(item) {
   if (item.type === 'REVOLT') return { rank: mine(d.house) ? 8 : 4, art: 'land-lost', title: mine(d.house) ? 'Земля поднялась против тебя' : 'Бунт в землях', text };
   if (item.type === 'DESERTION') return { rank: 6, art: 'order-failed', title: 'Войско разбегается', text };
 
+  if (item.type === 'ASPIRATION_STEP' && mine(d.house)) {
+    return { rank: 7, art: 'day-change', title: d.last ? 'Путь Дома пройден' : 'Шаг по пути Дома', text, ok: 'Так и идём' };
+  }
+
   if (item.type === 'SUCCESSION') {
     return { rank: 9, art: 'heir-born', title: mine(d.house) ? 'Венчание на престол' : 'В чужом Доме новый государь', text, ok: 'Долгих лет' };
   }
@@ -4732,6 +4741,32 @@ function opinionWord(value) {
   if (value < 30) return 'приязнь';
   if (value < 60) return 'дружба';
   return 'братство';
+}
+
+// What the House set out to do, and how far along it is.
+function renderAspiration() {
+  const box = $('aspiration-body');
+  if (!box) return;
+  const view = snapshot?.game?.aspiration;
+  if (!view || !house || isSpectator) { box.innerHTML = '<span class="muted">—</span>'; return; }
+  if (!view.chosen) {
+    box.innerHTML = '<div class="tiny">Назови, чем твой Дом хочет остаться в памяти. Названное не меняется: дар даётся сразу, а за каждый взятый шаг идёт слава.</div>' +
+      (view.choices || []).map(item =>
+        '<div class="rank-box"><div class="rank-head">' + escapeHtml(item.name) + '</div>' +
+        '<div class="tiny">' + escapeHtml(item.lore) + '</div>' +
+        '<div class="row"><span>Дар</span><b>' + escapeHtml(item.gift) + '</b></div>' +
+        item.steps.map((step, i) => '<div class="row"><span>' + (i + 1) + '. ' + escapeHtml(step.name) + '</span><b>' + escapeHtml(step.want) + ' · +' + step.glory + ' славы</b></div>').join('') +
+        '<button class="wide primary" data-aspire="' + escapeHtml(item.key) + '">Этот путь</button></div>'
+      ).join('');
+    return;
+  }
+  box.innerHTML = '<div class="rank-box"><div class="rank-head">' + escapeHtml(view.name) + '</div>' +
+    '<div class="tiny">' + escapeHtml(view.lore) + '</div>' +
+    '<div class="row"><span>Дар</span><b>' + escapeHtml(view.gift) + '</b></div>' +
+    (view.steps || []).map((step, i) =>
+      '<div class="row"><span>' + (step.done ? '✔ ' : (i + 1) + '. ') + escapeHtml(step.name) + '</span><b>' +
+      (step.done ? 'взято · +' + step.glory + ' славы' : escapeHtml(step.want) + ' · +' + step.glory) + '</b></div>').join('') +
+    '</div>';
 }
 
 function renderDiplomacy() {
@@ -7494,6 +7529,7 @@ async function refresh() {
   renderFinale();
   announceNews();
   renderDiplomacy();
+  renderAspiration();
   renderNews();
   renderFinders();
   renderFamily();
@@ -7640,6 +7676,20 @@ placeStatus(); phoneLayout.addEventListener('change', placeStatus);
 const homeWatch = setInterval(() => { if (homeShown || !phoneLayout.matches) return clearInterval(homeWatch); if (snapshot?.map?.capitals && $('map').dataset.ready) goHome(); }, 400);
 $('field-close').onclick = closeField;
 $('chase-close').onclick = closeChase;
+// Naming the aspiration of the House.
+document.addEventListener('click', async event => {
+  const pick = event.target.closest('[data-aspire]');
+  if (!pick) return;
+  if (!confirm('Назвать путь Дома? Это навсегда.')) return;
+  try {
+    await api('/api/aspiration', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ house, key: pick.dataset.aspire })
+    });
+    await refresh();
+    renderAspiration();
+  } catch (error) { alert(sayError(error)); }
+});
 // Sending men out to catch a column on the road.
 $('chase-body').addEventListener('click', async event => {
   const go = event.target.closest('[data-chase-go]');

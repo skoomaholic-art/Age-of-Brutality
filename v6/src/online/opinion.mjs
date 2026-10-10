@@ -27,7 +27,8 @@ export const OPINION = Object.freeze({
     GIFT: 4,              // per gold given in a bargain
     MARRIAGE: 30,         // married into our House
     ALLIANCE: 25,         // stood with us
-    HELPED: 20            // fought on our side
+    HELPED: 20,           // fought on our side
+    NEIGHBOUR: -12        // came up to our border where there was nobody before
   }
 });
 
@@ -92,4 +93,48 @@ export function opinionDawn(game) {
     if (next === 0) delete ledger[pair];
     else ledger[pair] = next;
   }
+}
+
+
+// Who stands on whose border. A House that was far away and is suddenly over
+// the fence is a worry, whatever it says: the first time it comes up to our
+// march, we think the worse of it. Afterwards the two are simply neighbours
+// and nothing more is held against them for it.
+export function watchBorders(game, map, { nowMs = Date.now() } = {}) {
+  const state = game.state;
+  if (!state?.territories) return false;
+  const near = {};
+  for (const [a, b] of map.land_edges || []) { (near[a] ||= []).push(b); (near[b] ||= []).push(a); }
+  const touching = {};
+  for (const house of Object.keys(state.houses || {})) touching[house] = new Set();
+  for (const [id, land] of Object.entries(state.territories)) {
+    const owner = land.owner;
+    if (!owner) continue;
+    for (const other of near[id] || []) {
+      const theirs = state.territories[other]?.owner;
+      if (!theirs || theirs === owner) continue;
+      (touching[owner] ||= new Set()).add(theirs);
+    }
+  }
+  // The borders a game begins with are nobody's doing: they are written down
+  // once, quietly, and only what changes afterwards is held against anyone.
+  const first = !state.borders_seen;
+  const known = state.borders_seen ||= {};
+  let changed = false;
+  for (const [house, others] of Object.entries(touching)) {
+    const before = new Set(known[house] || []);
+    if (!first) {
+      for (const other of others) {
+        if (before.has(other)) continue;
+        rememberDeed(game, { doer: other, about: house, deed: 'NEIGHBOUR' });
+        state.journal.push({
+          kind: 'NEW_NEIGHBOUR', house, houses: [house, other], other,
+          at: new Date(nowMs).toISOString()
+        });
+        changed = true;
+      }
+    }
+    known[house] = [...others].sort();
+  }
+  return changed;
 }

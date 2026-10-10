@@ -47,3 +47,31 @@ test('every dawn dulls an old grudge, and a forgotten one is struck off the book
   opinionDawn(game);
   assert.equal(opinionOf(game, 'B', 'A'), 0);
 });
+
+test('a House that comes up to our border where there was nobody is a worry', async () => {
+  const { watchBorders, OPINION } = await import('../src/online/opinion.mjs');
+  const map = { land_edges: [['L1', 'L2'], ['L2', 'L3'], ['L3', 'L4']] };
+  const game = {
+    diplomacy: {},
+    state: {
+      houses: { A: {}, B: {} },
+      journal: [],
+      territories: { L1: { owner: 'A' }, L2: { owner: null }, L3: { owner: null }, L4: { owner: 'B' } }
+    }
+  };
+
+  // Far apart: nothing to say.
+  assert.equal(watchBorders(game, map), false);
+  assert.equal(opinionOf(game, 'A', 'B'), 0);
+
+  // B takes the land next to ours: now it is over the fence.
+  game.state.territories.L2.owner = 'B';
+  assert.equal(watchBorders(game, map), true);
+  assert.equal(opinionOf(game, 'A', 'B'), OPINION.deeds.NEIGHBOUR);
+  assert.ok(game.state.journal.some(e => e.kind === 'NEW_NEIGHBOUR' && e.house === 'A' && e.other === 'B'));
+
+  // Standing there is not a fresh offence at every dawn.
+  const before = opinionOf(game, 'A', 'B');
+  assert.equal(watchBorders(game, map), false);
+  assert.equal(opinionOf(game, 'A', 'B'), before);
+});

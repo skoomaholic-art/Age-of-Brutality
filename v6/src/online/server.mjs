@@ -71,6 +71,7 @@ import { listInterceptions, orderIntercept } from './intercept.mjs';
 import { holdLine } from './stance.mjs';
 import { EMPTY_THRONE, isInterregnum, processSuccession } from './succession.mjs';
 import { seedLands } from './settlements.mjs';
+import { aspirationView, chooseAspiration } from './aspiration.mjs';
 import { generateMap, MAX_HOUSES, MIN_HOUSES, MAP_SEASON_KEYS, MAP_SHAPES, MAP_SIZE_KEYS, MAP_WARPS, pickMapShape, recommendedSize } from './mapgen.mjs';
 import { processEncounters } from './encounters.mjs';
 import { expelGuests } from './guests.mjs';
@@ -738,6 +739,8 @@ function redactGameForPlayer(game, player) {
   clientGame.season = { now: seasonNow(game, map), turns_on: seasonTurnsOn(game, map), born: map.season || null };
   // What each kind of ground does to an army, so the charter can say it.
   clientGame.terrain_kinds = TERRAIN;
+  // What this House set out to do, and how far along it is.
+  if (ownHouse) clientGame.aspiration = aspirationView(game, map, ownHouse);
   // The thresholds of order, so the charter counts a revolt exactly as the dawn does.
   clientGame.order_rules = ORDER;
   return clientGame;
@@ -1846,6 +1849,20 @@ async function handleGameApi(req, res, url, ctx, subpath) {
       status: 201,
       house: command.house,
       mutate: async game => executeCommand(game, map, constants, command)
+    }));
+    return json(res, result.status, result.response);
+  }
+
+  // What the House sets out to do: named once, and never changed after.
+  if (req.method === 'POST' && subpath === '/aspiration') {
+    const body = await readBody(req);
+    const house = String(body.house || '').trim();
+    await requireHouse(ctx, req, house);
+    const result = await serial(ctx, () => runGameCommand(ctx, req, {
+      kind: 'ASPIRATION',
+      status: 200,
+      house,
+      mutate: async game => ({ game: chooseAspiration(game, house, String(body.key || '').toUpperCase(), { nowMs: Date.now() }), response: { ok: true } })
     }));
     return json(res, result.status, result.response);
   }

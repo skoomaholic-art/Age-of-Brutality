@@ -1,4 +1,5 @@
 import { landKind, richesAt } from './settlements.mjs';
+import { giftOf } from './aspiration.mjs';
 // Troops and people (games of the Heart).
 //
 // Every land has its people. Troops are hired in a land for gold, and every
@@ -332,6 +333,16 @@ export function populationDawn(state, map) {
     const type = landType(map, id, state);
     const cap = (PEOPLE.start[type] ?? 6) * PEOPLE.capFactor;
     state.population[id] = Math.min(cap, peopleAt(state, id) + (PEOPLE.growth[type] ?? 1));
+  }
+  // A House on the path of the land draws people to its seat every dawn.
+  for (const house of Object.keys(state.houses || {})) {
+    const gift = giftOf(state, house, 'people');
+    if (!gift) continue;
+    const seat = map.capitals?.[house];
+    if (!seat || state.territories?.[seat]?.owner !== house) continue;
+    const type = landType(map, seat, state);
+    const cap = ((PEOPLE.start[type] ?? 6) * PEOPLE.capFactor) + 6;
+    state.population[seat] = Math.min(cap, peopleAt(state, seat) + gift);
   }
   // Salt pans and horse runs draw people of their own, fields or no fields.
   for (const id of Object.keys(state.riches || {})) {
