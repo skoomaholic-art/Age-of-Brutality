@@ -60,3 +60,25 @@ test('in a game of the Heart the old glory awards give nothing', () => {
   assert.equal(grantOnce(g.state, H, 'VP-W2', 1), false);
   assert.equal(g.state.houses[H].victory_points || 0, 0);
 });
+
+test('a marriage opens the whole map: allies see each other lands, hosts and marches', () => {
+  const g = game();
+  const other = R;
+  g.rounds = { ...g.rounds, mode: 'days' };
+  g.diplomacy = { relations: { [[H, other].sort().join('::')]: 'ALLIANCE' } };
+  // The ally holds a land far away, with men on it.
+  const far = map.capitals[other];
+  g.state.territories[far].owner = other;
+  g.state.territories[far].warriors = { [other]: 4 };
+  g.state.ranks = { [far]: { [other]: [0, 0, 0, 4, 0, 0] } };
+  const view = structuredClone({ ...g, visibility: null });
+  applyFog(view, map, H);
+  assert.equal(view.state.territories[far].owner, other, 'the ally\'s land is on our map');
+  assert.equal(view.state.territories[far].warriors[other], 4, 'and so is its host');
+  assert.deepEqual(view.state.ranks[far][other], [0, 0, 0, 4, 0, 0], 'with its kinds');
+  // Without the marriage the same land is under the clouds.
+  const alone = structuredClone({ ...g, diplomacy: { relations: {} }, visibility: null });
+  applyFog(alone, map, H);
+  assert.equal(alone.state.territories[far].owner, null);
+  assert.deepEqual(alone.state.territories[far].warriors, {});
+});

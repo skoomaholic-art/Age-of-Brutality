@@ -6,6 +6,20 @@
 // seen stays on its map (explored), but armies show only where it sees now.
 // Lands never seen are not sent at all: neither their owner nor their armies.
 
+// Allies see as one: a marriage opens the whole map of each to the other.
+export function alliesOf(game, house) {
+  const relations = game?.diplomacy?.relations || {};
+  const out = [];
+  for (const [key, relation] of Object.entries(relations)) {
+    if (relation !== 'ALLIANCE') continue;
+    const pair = String(key).split('::');
+    if (!pair.includes(house)) continue;
+    const other = pair.find(name => name !== house);
+    if (other) out.push(other);
+  }
+  return out;
+}
+
 function addNeighbours(seen, edges, own) {
   for (const [a, b] of edges || []) {
     if (own.has(a)) seen.add(b);
@@ -14,19 +28,20 @@ function addNeighbours(seen, edges, own) {
 }
 
 // Every territory and sea waypoint the House can see into.
-export function visiblePositions(state, map, house) {
+export function visiblePositions(state, map, house, allies = []) {
+  const eyes = [house, ...allies];
   const own = new Set();
   for (const [id, territory] of Object.entries(state.territories || {})) {
-    if (territory.owner === house) own.add(id);
+    if (eyes.includes(territory.owner)) own.add(id);
   }
   for (const [id, node] of Object.entries(state.sea_nodes || {})) {
-    if (Number(node.warriors?.[house] || 0) > 0) own.add(id);
+    if (eyes.some(name => Number(node.warriors?.[name] || 0) > 0)) own.add(id);
   }
   // A spy in place sees the land he watches and what lies around it.
-  for (const id of Object.keys(state.spy_sight?.[house] || {})) own.add(id);
+  for (const name of eyes) for (const id of Object.keys(state.spy_sight?.[name] || {})) own.add(id);
   // Where our warriors camp as guests, they see as far as at home.
   for (const [id, byHouse] of Object.entries(state.guests || {})) {
-    if (Number(byHouse?.[house] || 0) > 0) own.add(id);
+    if (eyes.some(name => Number(byHouse?.[name] || 0) > 0)) own.add(id);
   }
 
   const seen = new Set(own);
@@ -44,8 +59,10 @@ export function visiblePositions(state, map, house) {
 
 // Everything the House has ever seen: what it sees now and what it remembers.
 export function exploredPositions(game, map, house) {
-  const seen = visiblePositions(game.state, map, house);
-  for (const id of game.exploration?.[house] || []) seen.add(id);
+  const allies = alliesOf(game, house);
+  const seen = visiblePositions(game.state, map, house, allies);
+  // What an ally has walked is on our maps too.
+  for (const name of [house, ...allies]) for (const id of game.exploration?.[name] || []) seen.add(id);
   return seen;
 }
 
@@ -141,7 +158,9 @@ const PRIVATE_EVENTS = new Set([
 // House cannot see. Mutates and returns `clientGame`.
 export function applyFog(clientGame, map, house) {
   const state = clientGame.state;
-  const seen = visiblePositions(state, map, house);
+  const allies = alliesOf(clientGame, house);
+  const eyes = new Set([house, ...allies]);
+  const seen = visiblePositions(state, map, house, allies);
   const explored = exploredPositions(clientGame, map, house);
 
   for (const [id, territory] of Object.entries(state.territories || {})) {
@@ -167,7 +186,7 @@ export function applyFog(clientGame, map, house) {
     for (const key of Object.keys(state[field] || {})) {
       if (seen.has(positionKey(key))) continue;
       // Our own hosts are always known to us.
-      for (const owner of Object.keys(state[field][key])) if (owner !== house) delete state[field][key][owner];
+      for (const owner of Object.keys(state[field][key])) if (!eyes.has(owner)) delete state[field][key][owner];
       if (!Object.keys(state[field][key]).length) delete state[field][key];
     }
   }
@@ -222,7 +241,8 @@ export function applyFog(clientGame, map, house) {
   }
 
   clientGame.orders = (clientGame.orders || []).filter(order => {
-    if (order.action?.house === house) return true;
+    // An ally's marches are as open to us as our own.
+    if (eyes.has(order.action?.house)) return true;
     // A foreign army on the march shows only while its road touches what we see.
     return order.status === 'PENDING' &&
       (seen.has(order.action?.from) || seen.has(order.action?.to));

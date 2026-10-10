@@ -547,6 +547,11 @@
     .tree-bar { width: 86%; height: 1.5px; background: var(--ink); }
     .tree-label { margin-top: 8px; font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); }
     #talmud-now .map-guide { position: static; max-width: none; box-shadow: none; margin-bottom: 10px; pointer-events: auto; }
+    details.more { margin-top: 6px; border-top: 1px solid var(--rule); padding-top: 5px; }
+    details.more > summary { cursor: pointer; font-family: Kurale, serif; font-size: 14px; color: var(--ink-soft); list-style: none; padding: 2px 0; }
+    details.more > summary::-webkit-details-marker { display: none; }
+    details.more > summary::after { content: ' ▾'; }
+    details.more[open] > summary::after { content: ' ▴'; }
     .talmud details { border-top: 1px solid var(--rule); padding: 6px 2px; }
     .talmud summary { cursor: pointer; font-family: Kurale, serif; font-size: 16px; color: var(--vermilion-deep); }
     .talmud p { margin: 6px 0 2px; font-size: 14px; line-height: 1.4; }
@@ -2265,12 +2270,32 @@ function renderLand() {
   }
   const building = jobs.some(job => job.type === 'FORT');
   const fortNote = t.type === 'Столица' ? 'В столице крепость не строят' : st.fort ? 'Крепость уже стоит' : building ? 'Крепость строится' : '';
+  const fortRow = '<div class="with-hint">' + goldButton('data-land-fort', fortNote || 'Возвести крепость · 3 золота', 3, fortNote) + hint('Крепость прибавляет обороне земли 3: нападающему нужно больше силы, а гарнизон теряет меньше. В столице не строится — её стены и так крепки.') + '</div>';
+  // One thing worth doing here now stands first; the rest waits under a fold.
+  const rows = [
+    ['growth', growthButton(t.id), !snapshot.game.state.growth?.[t.id]],
+    ['fort', fortRow, !fortNote],
+    ['port', portButton(t, st), snapshot.map.buildable_ports && !hasPort(t.id) && (snapshot.map.ports || []).includes(t.id) && !st.port_ready_at],
+    ['yard', t.type === 'Столица' && !unitsMode() ? yardButton() : '', t.type === 'Столица' && !unitsMode() && !snapshot.game.ranks_view?.yard],
+    ['bridge', bridgeRows(t.id, true), false]
+  ].filter(([, html]) => html);
+  const first = rows.findIndex(([, , worth]) => worth);
+  const lead = first >= 0 ? rows[first] : null;
+  const rest = rows.filter(row => row !== lead);
   body.innerHTML = '<div class="built">Возведено: ' + (built || 'ничего') + '</div>' +
-    '<div class="with-hint">' + goldButton('data-land-fort', fortNote || 'Возвести крепость · 3 золота', 3, fortNote) + hint('Крепость прибавляет обороне земли 3: нападающему нужно больше силы, а гарнизон теряет меньше. В столице не строится — её стены и так крепки.') + '</div>' +
-    (t.type === 'Столица' && !unitsMode() ? yardButton() : '') + growthButton(t.id) +
-    '<button class="wide" disabled>Тайный приказ · мастера ещё не прибыли</button>' +
-    portButton(t, st) + bridgeRows(t.id, true);
+    (lead ? onlyPrimary(lead[1]) : '') +
+    (rest.length
+      ? (lead ? '<details class="more"' + (buildMoreOpen ? ' open' : '') + '><summary>Что ещё можно возвести</summary>' + rest.map(row => plainButtons(row[1])).join('') + '</details>'
+              : rest.map(row => plainButtons(row[1])).join(''))
+      : '');
 }
+
+// The fold remembers whether it was open: a dawn's refresh must not shut it.
+let buildMoreOpen = false;
+
+// Only one button on a pane may shout; the rest are quiet.
+function onlyPrimary(html) { return html; }
+function plainButtons(html) { return html.replace(/class="wide costly primary"/g, 'class="wide costly"'); }
 
 // Wayfarers resting in this land; with a free spy one of them can take him along.
 function guestsBlock(mine) {
@@ -2334,6 +2359,8 @@ function setupLand() {
   $('land-body').addEventListener('click', event => {
     const hire = event.target.closest('[data-land-hire]');
     if (hire) landCommand('/api/recruit', { warriors: Number(hire.dataset.landHire) });
+    const fold = event.target.closest('#land-body details.more > summary');
+    if (fold) buildMoreOpen = !fold.parentElement.open;
     if (event.target.closest('[data-land-fort]')) landCommand('/api/fort', {});
     const readCounts = name => [0, 1, 2, 3].map(rank => Number($('land-body').querySelector('[data-' + name + '="' + rank + '"]')?.value || 0));
     if (event.target.closest('[data-levy-go]')) landCommand('/api/levy', { counts: readCounts('levy') });
@@ -2999,6 +3026,23 @@ function togglePane(pane) {
   if (openPane === 'news') {
     newsSeenSeq = latestNewsSeq();
     renderNews();
+  }
+}
+
+// A tab with nothing behind it is not drawn: every extra one costs the eye a moment.
+function barTabsInUse() {
+  const tabs = {
+    agents: Boolean(characterData?.agents?.list?.length) || Boolean((snapshot?.game?.state?.agents || []).length),
+    armies: Object.values(snapshot?.game?.state?.armies || {}).some(army => army.house === house),
+    orders: Boolean((snapshot?.game?.orders || []).length),
+    news: Boolean((snapshot?.game?.audit_log || []).length)
+  };
+  for (const tab of document.querySelectorAll('.bar-tab')) {
+    const pane = tab.dataset.pane;
+    if (!(pane in tabs)) continue;
+    const show = tabs[pane] || openPane === pane;
+    tab.style.display = show ? '' : 'none';
+    if (!show && openPane === pane) togglePane(null);
   }
 }
 
@@ -5999,6 +6043,7 @@ async function refresh() {
   renderLand();
   offerMaker();
   renderBarStatus();
+  barTabsInUse();
   pumpWindows();
   renderDecisions();
   renderRounds();
