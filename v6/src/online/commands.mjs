@@ -32,6 +32,11 @@ export function normalizeCommand(input) {
       warriors: positiveInt(input.warriors, 'warriors')
     };
 
+    // Which kinds go, when the House has named them: the host is split by hand.
+    if (Array.isArray(input.ranks)) {
+      command.ranks = input.ranks.map(n => Math.max(0, Math.floor(Number(n) || 0)));
+    }
+
     if (input.commander_id) {
       command.commander_id = requiredString(
         input.commander_id,

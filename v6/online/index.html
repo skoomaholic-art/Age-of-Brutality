@@ -381,6 +381,21 @@
     }
     .guide-title { font-family: Kurale, Alegreya, serif; font-size: 19px; line-height: 1.15; color: var(--vermilion-deep); }
     .guide-sub { color: var(--ink-soft); font-size: 13px; margin-top: 2px; }
+    /* One switch for the whole voice of the century. */
+    .audio-box {
+      position: absolute; z-index: 12; top: 44px; right: 12px; width: min(300px, calc(100% - 24px));
+      padding: 10px 12px; background: rgba(242,230,200,.98); border: 1.5px solid var(--ink);
+      box-shadow: 3px 3px 0 rgba(43,27,18,.3); display: grid; gap: 8px;
+    }
+    .audio-box[hidden] { display: none; }
+    .audio-row { display: grid; grid-template-columns: 62px 1fr 44px; align-items: center; gap: 8px; font-size: 14px; }
+    .audio-row input[type=range] { width: 100%; accent-color: var(--vermilion, #8c2e1f); }
+    .audio-row b { text-align: right; font-variant-numeric: tabular-nums; }
+    @media (max-width: 760px), (pointer: coarse) and (max-width: 1000px) {
+      .audio-box { top: auto; bottom: 60px; left: 8px; right: 8px; width: auto; }
+      .audio-row { grid-template-columns: 70px 1fr 48px; }
+      .audio-row input[type=range] { height: 30px; }
+    }
     .route-card {
       position: absolute;
       z-index: 6;
@@ -403,6 +418,11 @@
     .via-row { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 13px; }
     .via-row button.on { background: var(--vermilion); color: var(--white-lead); }
     .via-text { flex: 1; font-style: italic; color: var(--ink-soft); }
+    .split-kinds { margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(43,27,18,.25); display: grid; gap: 4px; }
+    .split-kind { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 8px; font-size: 13.5px; }
+    .split-kind input { width: 64px; }
+    .split-kind .have { color: var(--ink-soft, #6b5340); font-size: 12.5px; }
+    .split-kinds .note { font-size: 12.5px; color: var(--ink-soft, #6b5340); }
     .split-row { display: flex; align-items: end; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(43,27,18,.25); }
     .split-row label { display: grid; gap: 2px; font-size: 12.5px; }
     .split-count input { width: 76px; }
@@ -474,6 +494,12 @@
     .field-card { z-index: 7; padding: 10px 12px; left: auto; right: 12px; }
     .map-card:has(#field-card.show) #land-card { display: none; }
     .field-card .land-head { display: flex; justify-content: space-between; align-items: center; font-family: Kurale, serif; font-size: 18px; }
+    .roll { margin: 8px 0 2px; border-top: 1px solid rgba(43,27,18,.25); }
+    .roll-row, .roll-sum { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 5px 0; border-bottom: 1px solid rgba(43,27,18,.14); align-items: baseline; }
+    .roll-row .tiny, .roll-sum .tiny { grid-column: 1 / -1; color: var(--ink-soft, #6b5340); }
+    .roll-sum { border-bottom: 0; }
+    .roll-sum b, .roll-row b { font-size: 16px; }
+    .roll-hurt { font-weight: 700; color: #9a2a1a; }
     .field-status { margin-top: 4px; font-size: 14px; color: var(--ink-soft); }
     .field-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
     .field-actions button.on { background: var(--vermilion); color: var(--white-lead); }
@@ -766,11 +792,7 @@
       <span class="muted">Дом</span>
       <select id="house"></select>
     </label>
-    <div style="display:flex; gap:6px">
-      <button id="ctl-sound" style="flex:1 1 0; min-width:0">🔊 Звуки</button>
-      <button id="ctl-music" style="flex:1 1 0; min-width:0">🎶 Музыка</button>
-      <button id="ctl-voice" style="flex:1 1 0; min-width:0">🗣 Речь</button>
-    </div>
+    <button id="ctl-audio">🔊 Звук</button>
     <button id="save-game">Занести в свиток</button>
     <button id="restore-game">Вернуть по свитку</button>
     <button id="reset">Начать век заново</button>
@@ -795,16 +817,13 @@
         <button class="bar-tab" data-pane="stats">Слава Домов</button>
         <button class="bar-tab" data-pane="journal">Летопись</button>
         <button class="bar-tab" data-pane="talmud">Талмуд знаний</button>
-        <button id="bar-sound" title="Звуки века" style="padding:4px 9px">🔊</button>
-        <button id="bar-music" title="Музыка века" style="padding:4px 9px">🎶</button>
-        <button id="bar-voice" title="Речь воеводы" style="padding:4px 9px">🗣</button>
+        <button id="bar-audio" title="Звук: звуки, музыка, речь" style="padding:4px 9px">🔊</button>
         <button id="bar-full" title="Развернуть игру во весь экран" style="padding:4px 9px">⛶</button>
         <button id="bar-dev" title="Режим разработчика" style="padding:4px 9px" hidden>⚙</button>
         <div class="bar-status">
           <span class="chip"><span>День</span><b id="bar-day">…</b></span>
           <span class="chip"><span>до рассвета</span><b id="bar-timer">…</b></span>
           <span class="chip"><span>Золото</span><b id="bar-gold">0</b></span>
-          <span class="chip"><span>Влияние</span><b id="bar-influence">0</b></span>
           <span class="chip"><span>Слава</span><b id="bar-vp">0</b></span>
         </div>
       </nav>
@@ -910,10 +929,16 @@
       <div id="field-card" class="land-card field-card">
         <div class="land-head"><b id="field-title">Войско</b><button id="field-close" title="Закрыть">×</button></div>
         <div id="field-status" class="field-status"></div>
+        <div id="field-roll"></div>
         <div id="field-actions" class="field-actions"></div>
         <label class="field-halt"><span class="muted">Новой цели — встать</span>
           <select id="field-ratio"><option value="">у цели</option><option value="0.75">на ¾ пути</option><option value="0.5">на полпути</option><option value="0.25">на ¼ пути</option></select></label>
         <div id="field-hint" class="field-hint"></div>
+      </div>
+      <div id="audio-box" class="audio-box" hidden>
+        <label class="audio-row"><span>Звуки</span><input id="bar-sound-range" type="range" min="0" max="100" step="5"><b id="bar-sound-value">0%</b></label>
+        <label class="audio-row"><span>Музыка</span><input id="bar-music-range" type="range" min="0" max="100" step="5"><b id="bar-music-value">0%</b></label>
+        <label class="audio-row"><span>Речь</span><input id="bar-voice-range" type="range" min="0" max="100" step="5"><b id="bar-voice-value">0%</b></label>
       </div>
       <div id="route-card" class="route-card">
         <div class="route-main">
@@ -939,6 +964,7 @@
             <option value="SEA">По морю</option>
           </select>
         </div>
+        <div id="split-kinds" class="split-kinds" style="display:none"></div>
         <div id="split-row" class="split-row" style="display:none">
           <label class="split-count">
             <span class="muted">Сколько мечей идёт</span>
@@ -1176,24 +1202,30 @@ function playSound(name, { volume = 1, gap = 120 } = {}) {
   } catch { /* the browser is not in the mood */ }
 }
 
-function renderSound() {
-  const mark = soundLevel ? (soundLevel > 0.2 ? '🔊' : '🔉') : '🔇';
-  const title = soundLevel ? 'Звуки века: ' + Math.round(soundLevel * 100) + '% — нажми, чтобы убавить' : 'Звуки века выключены';
-  const bar = $('bar-sound');
-  if (bar) { bar.textContent = mark; bar.title = title; }
-  // The same switch under the phone's ☰, where the map's bar is hard to reach.
-  const item = $('ctl-sound');
-  if (item) { item.textContent = mark + ' Звуки'; item.title = title; }
+// All three levels live behind one switch in the bar; this paints it.
+function renderAudio() {
+  const loudest = Math.max(soundLevel, musicLevel, voiceLevel);
+  const button = $('bar-audio');
+  if (button) {
+    button.textContent = loudest ? (loudest > 0.2 ? '🔊' : '🔉') : '🔇';
+    button.title = loudest
+      ? 'Звук: звуки ' + Math.round(soundLevel * 100) + '%, музыка ' + Math.round(musicLevel * 100) + '%, речь ' + Math.round(voiceLevel * 100) + '%'
+      : 'Век молчит';
+  }
+  const item = $('ctl-audio');
+  if (item) item.textContent = (loudest ? (loudest > 0.2 ? '🔊' : '🔉') : '🔇') + ' Звук';
+  const put = (id, value) => {
+    const range = $(id + '-range');
+    const label = $(id + '-value');
+    if (range && document.activeElement !== range) range.value = Math.round(value * 100);
+    if (label) label.textContent = Math.round(value * 100) + '%';
+  };
+  put('bar-sound', soundLevel);
+  put('bar-music', musicLevel);
+  put('bar-voice', voiceLevel);
 }
 
-// One press is one step quieter, and round again.
-function stepSound() {
-  soundLevel = soundLevel > 0.2 ? 0.12 : soundLevel > 0 ? 0 : 0.25;
-  try { localStorage.setItem(SOUND_STORE, String(soundLevel)); } catch { /* this browser forbids it */ }
-  renderSound();
-  soundUnlocked = true;
-  playSound('select', { volume: 0.6 });
-}
+function renderSound() { renderAudio(); }
 
 function setupSound() {
   const unlock = () => {
@@ -1205,8 +1237,44 @@ function setupSound() {
   };
   addEventListener('pointerdown', unlock, { once: true });
   addEventListener('keydown', unlock, { once: true });
-  for (const id of ['bar-sound', 'ctl-sound']) if ($(id)) $(id).onclick = stepSound;
-  renderSound();
+  const box = $('audio-box');
+  const toggle = () => { box.hidden = !box.hidden; soundUnlocked = true; renderAudio(); };
+  for (const id of ['bar-audio', 'ctl-audio']) if ($(id)) $(id).onclick = event => { event.stopPropagation(); toggle(); };
+  // The panel closes when the eye goes elsewhere.
+  document.addEventListener('pointerdown', event => {
+    if (box.hidden || event.target.closest('#audio-box, #bar-audio, #ctl-audio')) return;
+    box.hidden = true;
+  });
+  $('bar-sound-range').oninput = () => {
+    soundLevel = Number($('bar-sound-range').value) / 100;
+    try { localStorage.setItem(SOUND_STORE, String(soundLevel)); } catch { /* forbidden here */ }
+    soundUnlocked = true;
+    renderAudio();
+    playSound('select', { volume: 0.8, gap: 240 });
+  };
+  $('bar-music-range').oninput = () => {
+    musicLevel = Number($('bar-music-range').value) / 100;
+    try { localStorage.setItem(MUSIC_STORE, String(musicLevel)); } catch { /* forbidden here */ }
+    soundUnlocked = true;
+    renderAudio();
+    if (!musicLevel) {
+      musicTrack = null;
+      clearInterval(musicFader);
+      for (const deck of musicDecks) if (deck) { deck.volume = 0; try { deck.pause(); } catch { /* already still */ } }
+      return;
+    }
+    const want = musicWanted();
+    musicTrack = null;
+    setMusic(want);
+  };
+  $('bar-voice-range').oninput = () => {
+    voiceLevel = Number($('bar-voice-range').value) / 100;
+    try { localStorage.setItem(VOICE_STORE, String(voiceLevel)); } catch { /* forbidden here */ }
+    soundUnlocked = true;
+    renderAudio();
+    playVoice('hail-09', { gap: 500 });
+  };
+  renderAudio();
 }
 
 // What a piece of news sounds like.
@@ -1498,58 +1566,11 @@ function musicHeardNews(item) {
   }
 }
 
-function renderVoice() {
-  const mark = voiceLevel ? (voiceLevel > 0.4 ? '🗣' : '💬') : '🤐';
-  const title = voiceLevel ? 'Речь воеводы: ' + Math.round(voiceLevel * 100) + '% — нажми, чтобы убавить' : 'Речь молчит, отвечает рог';
-  const bar = $('bar-voice');
-  if (bar) { bar.textContent = mark; bar.title = title; }
-  const item = $('ctl-voice');
-  if (item) { item.textContent = mark + ' Речь'; item.title = title; }
-}
 
-function stepVoice() {
-  voiceLevel = voiceLevel > 0.4 ? 0.35 : voiceLevel > 0 ? 0 : 0.7;
-  try { localStorage.setItem(VOICE_STORE, String(voiceLevel)); } catch { /* this browser forbids it */ }
-  renderVoice();
-  soundUnlocked = true;
-  if (voiceLevel) playVoice('hail-09', { gap: 0 });
-  else playSound('hail', { volume: 0.85 });
-}
 
-function setupVoice() {
-  for (const id of ['bar-voice', 'ctl-voice']) if ($(id)) $(id).onclick = stepVoice;
-  renderVoice();
-}
 
-function renderMusic() {
-  const mark = musicLevel ? (musicLevel > 0.25 ? '🎶' : '🎵') : '🎼';
-  const title = musicLevel ? 'Музыка века: ' + Math.round(musicLevel * 100) + '% — нажми, чтобы убавить' : 'Музыка века умолкла';
-  const bar = $('bar-music');
-  if (bar) { bar.textContent = mark; bar.title = title; }
-  const item = $('ctl-music');
-  if (item) { item.textContent = mark + ' Музыка'; item.title = title; }
-}
 
-function stepMusic() {
-  musicLevel = musicLevel > 0.25 ? 0.18 : musicLevel > 0 ? 0 : 0.4;
-  try { localStorage.setItem(MUSIC_STORE, String(musicLevel)); } catch { /* this browser forbids it */ }
-  renderMusic();
-  soundUnlocked = true;
-  if (!musicLevel) {
-    musicTrack = null;
-    clearInterval(musicFader);
-    for (const deck of musicDecks) if (deck) { deck.volume = 0; try { deck.pause(); } catch { /* already still */ } }
-    return;
-  }
-  const want = musicWanted();
-  musicTrack = null;
-  setMusic(want);
-}
 
-function setupMusic() {
-  for (const id of ['bar-music', 'ctl-music']) if ($(id)) $(id).onclick = stepMusic;
-  renderMusic();
-}
 
 // ---------- developer mode (the author's own account, solo games) ----------
 // There is no key and no secret word: the server tells this page whether the
@@ -2446,6 +2467,56 @@ document.addEventListener('click', event => {
 function starsOf(pos, owner) {
   return Math.max(0, Math.min(3, Number(snapshot?.game?.state?.stars?.[pos]?.[owner] || 0)));
 }
+// The muster roll of a host: who stands in it, what each kind is worth, how
+// seasoned they are and what they weigh in attack and in defence. The sums
+// follow the same arithmetic as the server (ranks.mjs: strengthOf).
+function kindStats() {
+  return snapshot?.game?.units_view?.kinds || [];
+}
+
+function hostStrength(comp, heads, { defending = false, stars = 0 } = {}) {
+  const kinds = kindStats();
+  if (!kinds.length) return heads;
+  const c = kinds.map((_, i) => Math.max(0, Math.floor(Number(comp?.[i] || 0))));
+  const sum = c.reduce((a, b) => a + b, 0);
+  if (sum < heads) c[0] += heads - sum;
+  else if (sum > heads) {
+    let over = sum - heads;
+    for (let i = 0; i < c.length && over > 0; i += 1) { const take = Math.min(c[i], over); c[i] -= take; over -= take; }
+  }
+  let strength = c.reduce((a, n, i) => a + n * Number(kinds[i].power || 1), 0);
+  if (defending) strength += c.reduce((a, n, i) => a + n * Number(kinds[i].guard || 0), 0);
+  return Math.round(strength * (1 + 0.1 * Math.max(0, Math.min(3, Number(stars) || 0))));
+}
+
+// Rows of the roll, plus the two sums and the experience under them.
+function hostRoster(comp, heads, stars, { commander = null, full = null } = {}) {
+  const kinds = kindStats();
+  if (!kinds.length) return '';
+  const rows = kinds.map((kind, i) => {
+    const n = Math.max(0, Math.floor(Number(comp?.[i] || 0)));
+    if (!n) return '';
+    const whole = full ? Math.max(n, Math.floor(Number(full[i] || 0))) : n;
+    const hurt = whole > n ? '<span class="roll-hurt">' + n + ' из ' + whole + '</span>' : '<b>' + n + '</b>';
+    return '<div class="roll-row"><span>' + escapeHtml(kind.name) + '</span>' + hurt +
+      '<span class="tiny">сила ' + kind.power + (kind.guard ? ' · +' + kind.guard + ' в обороне' : '') +
+      ' · ' + kind.upkeep + ' с рассветом</span></div>';
+  }).join('');
+  if (!rows) return '';
+  const attack = hostStrength(comp, heads, { stars });
+  const guard = hostStrength(comp, heads, { defending: true, stars });
+  const lost = full ? Math.max(0, full.reduce((a, b) => a + Math.floor(Number(b || 0)), 0) - heads) : 0;
+  return '<div class="roll">' + rows +
+    '<div class="roll-sum"><span>В бою</span><b>' + attack + '</b><span class="tiny">в обороне ' + guard + '</span></div>' +
+    '<div class="roll-sum"><span>Опыт</span><b>' + starText(Number(stars) || 0) + '</b><span class="tiny">' +
+      (stars ? 'каждая звезда прибавляет десятую часть силы' : 'звёзды даёт пережитый бой') + '</span></div>' +
+    (lost ? '<div class="roll-sum"><span>Недостаёт</span><b>' + lost + ' ' + warriorWord(lost) + '</b><span class="tiny">раненые и павшие: можно восполнить в своей земле</span></div>' : '') +
+    (commander ? '<div class="roll-sum"><span>Ведёт</span><b>' + escapeHtml(commander.name) + '</b><span class="tiny">' +
+      (commander.health === 'WEAKENED' ? 'ослаблен после плена или раны' :
+        'натиск ' + Number(commander.stats?.attack || 0) + ', стойкость ' + Number(commander.stats?.defense || 0)) + '</span></div>' : '') +
+    '</div>';
+}
+
 function starText(n) {
   return n ? '★'.repeat(n) + '☆'.repeat(3 - n) : 'без опыта';
 }
@@ -2741,8 +2812,17 @@ function renderLand() {
       (st.owner || !snapshot.game.state.wild_guards
         ? '<div class="row"><span>Стража</span><b>' + (seen ? garrison + ' ' + warriorWord(garrison) : 'неизвестно') + '</b></div>'
         : wildRows(landId)) +
-      (seen && garrison ? '<div class="row"><span>Из них</span><b>' + escapeHtml(describeRanks(rankComp(landId, st.owner))) + '</b></div>' : '') +
-      (seen && garrison && unitsMode() ? '<div class="row"><span>Опыт</span><b>' + starText(starsOf(landId, st.owner)) + '</b></div>' : '') +
+      // The muster roll of whoever stands here: kinds, experience, weight, losses.
+      (seen && garrison && unitsMode()
+        ? hostRoster(rankComp(landId, st.owner), garrison, starsOf(landId, st.owner), {
+          full: st.owner === house ? (snapshot.game.state.peak?.[landId]?.[house] || null) : null,
+          commander: Object.values(snapshot.game.state.characters || {}).find(character => {
+            if (character.house !== st.owner || character.mode !== 'ARMY' || !character.alive) return false;
+            const army = snapshot.game.state.armies?.[character.army_id];
+            return army?.territory === landId && !army?.moving_order_id;
+          }) || null
+        })
+        : seen && garrison ? '<div class="row"><span>Из них</span><b>' + escapeHtml(describeRanks(rankComp(landId, st.owner))) + '</b></div>' : '') +
       (unitsMode() && st.owner && (seen || mine) ? orderRow(landId, st.owner) : '') +
       (unitsMode() && (seen || mine) ? '<div class="row"><span>Население</span><b>' + Number(snapshot.game.state.population?.[landId] || 0) + (snapshot.game.state.growth?.[landId] ? ' · растёт' : '') + '</b></div>' : '') +
       terrainRow(landId) +
@@ -2761,7 +2841,8 @@ function renderLand() {
     const spyRow = spies ? '<div class="with-hint">' + goldButton('data-hire-spy', 'Шпион · ' + spies.cost + ' золота (' + spies.list.length + ' из ' + spies.max + ')', spies.cost, spies.list.length >= spies.max ? 'шпионов уже ' + spies.max : '') +
       hint('Шпион прячется среди путников и идёт с ними. Дойдя до земли, он на время открывает её и соседей. Шпион у Сердца или рядом с ним узнаёт, истинное ли оно.') + '</div>' : '';
     if (unitsMode()) {
-      body.innerHTML = '<div class="row"><span>Стоит здесь</span><b>' + here + ' ' + warriorWord(here) + (here ? ' · ' + starText(starsOf(landId, house)) : '') + '</b></div>' +
+      body.innerHTML = '<div class="row"><span>Стоит здесь</span><b>' + here + ' ' + warriorWord(here) +
+        (here ? ' · ' + starText(starsOf(landId, house)) : '') + '</b></div>' +
         (here ? '<div class="row"><span>Из них</span><b>' + escapeHtml(describeRanks(rankComp(landId, house))) + '</b></div>' : '') +
         replenishBlock(landId) + hireBlock(landId) +
         (spyRow ? '<details class="more"' + (spyMoreOpen ? ' open' : '') + ' data-spy-more><summary>Тайные дела</summary>' + plainButtons(spyRow) + '</details>' : '');
@@ -3575,8 +3656,6 @@ function setupBar() {
     if (event.key === 'Escape') togglePane(null);
   });
   setupSound();
-  setupMusic();
-  setupVoice();
   setInterval(renderBarStatus, 1000);
   // The season under the map, and the war drums ebbing back into it.
   setInterval(updateMusic, 4000);
@@ -3616,7 +3695,6 @@ function renderBarStatus() {
   copy('bar-day', 'game-round');
   copy('bar-timer', 'round-timer');
   copy('bar-gold', 'gold');
-  copy('bar-influence', 'influence');
   copy('bar-vp', 'vp');
 }
 
@@ -6277,6 +6355,57 @@ function renderCommanderChoice() {
 let splitOpen = false;
 let lastSelectionKey = '';
 
+// Choosing who marches, kind by kind, the way a captain tells off his men.
+// Empty boxes mean "the strongest first", as before.
+function freeCompAt(id, who) {
+  const comp = rankComp(id, who).slice();
+  for (const order of snapshot?.game?.orders || []) {
+    if (order.status !== 'PENDING' || order.action.house !== who || order.action.from !== id) continue;
+    (order.action.ranks || []).forEach((n, i) => { comp[i] = Math.max(0, comp[i] - Number(n || 0)); });
+  }
+  return comp;
+}
+
+function renderSplitKinds(originId, max) {
+  const box = $('split-kinds');
+  if (!box) return;
+  const kinds = kindStats();
+  const comp = originId ? freeCompAt(originId, house) : [];
+  const present = kinds.map((kind, i) => ({ kind, i, have: Math.max(0, Math.floor(Number(comp[i] || 0))) })).filter(row => row.have > 0);
+  if (!splitOpen || !unitsMode() || present.length < 2) { box.style.display = 'none'; box.innerHTML = ''; box.dataset.key = ''; return; }
+  box.style.display = '';
+  const key = originId + ':' + present.map(r => r.i + 'x' + r.have).join(',');
+  if (box.dataset.key !== key) {
+    box.dataset.key = key;
+    box.innerHTML = '<div class="note">Кого взять. Оставь пустым — пойдут сильнейшие.</div>' + present.map(row =>
+      '<label class="split-kind"><span>' + escapeHtml(row.kind.name) + '</span>' +
+      '<span class="have">из ' + row.have + '</span>' +
+      '<input type="number" min="0" max="' + row.have + '" value="0" data-march-kind="' + row.i + '"></label>').join('') +
+      '<div class="note" data-split-sum></div>';
+  }
+  const picked = chosenRanks();
+  const note = box.querySelector('[data-split-sum]');
+  if (note) {
+    note.textContent = picked
+      ? 'Выбрано ' + picked.sum + ' ' + warriorWord(picked.sum) + (picked.sum > max ? ' — больше, чем может выйти' : '')
+      : 'Никого не выбрано: пойдут сильнейшие.';
+  }
+}
+
+// What the boxes add up to, or null when the player left them empty.
+function chosenRanks() {
+  const inputs = [...document.querySelectorAll('#split-kinds [data-march-kind]')];
+  if (!inputs.length) return null;
+  const out = kindStats().map(() => 0);
+  let sum = 0;
+  for (const input of inputs) {
+    const n = Math.max(0, Math.floor(Number(input.value) || 0));
+    out[Number(input.dataset.marchKind)] = n;
+    sum += n;
+  }
+  return sum ? { ranks: out, sum } : null;
+}
+
 function renderSelection() {
   const card = $('route-card');
   $('via-toggle').classList.toggle('on', viaPick);
@@ -6336,6 +6465,9 @@ function renderSelection() {
   $('warriors').max = max;
   $('warriors').value = Math.min(Math.max(current, 1), max);
   $('split-row').style.display = splitOpen ? '' : 'none';
+  renderSplitKinds(origin, max);
+  const picked = chosenRanks();
+  if (picked) $('warriors').value = Math.min(picked.sum, max);
   $('split-toggle').classList.toggle('on', splitOpen);
   $('split-toggle').style.display = max > 1 || $('commander-row').style.display !== 'none' ? '' : 'none';
   $('from-name').textContent = o.name;
@@ -6359,7 +6491,7 @@ function renderSelection() {
 
   const going = Number($('warriors').value);
   $('route-meta').innerHTML =
-    (going >= max ? 'Вся рать: ' + max : 'Отряд: ' + going + ' из ' + max) +
+    (picked ? 'Отобраны: ' + describeRanks(picked.ranks) : going >= max ? 'Вся рать: ' + max : 'Отряд: ' + going + ' из ' + max) +
     ' · ' + escapeHtml(modeName) +
     (hops > 1 ? ' · ' + hops + ' перех.' : '') +
     ' · ' + formatSpan(seconds * 1000);
@@ -6422,6 +6554,18 @@ function renderField() {
     : order.halt_at_progress_ms != null
       ? 'Идёт к ' + goal + ', встанет лагерем на полдороге через ' + left + ' сек.'
       : 'Идёт ' + (order.return_home ? 'домой, в ' + homeName : 'к ' + goal) + ', ещё ' + left + ' сек.';
+  // The muster roll of the marching host: who goes, how seasoned, what they weigh.
+  const rollBox = $('field-roll');
+  if (rollBox) {
+    const commander = Object.values(snapshot.game.state.characters || {}).find(character => {
+      if (character.house !== a.house || character.mode !== 'ARMY' || !character.alive) return false;
+      const army = snapshot.game.state.armies?.[character.army_id];
+      return army?.moving_order_id === order.id || order.commander_id === character.id;
+    }) || null;
+    rollBox.innerHTML = a.house === house
+      ? hostRoster(a.ranks || [], Number(a.warriors || 0), Number(a.stars || 0), { commander })
+      : '';
+  }
   const box = $('field-actions');
   box.innerHTML = '';
   const add = (label, run, on = false) => {
@@ -6538,6 +6682,7 @@ async function sendOrder(confirmed = false) {
   }
 
   const action = choices[0];
+  const picked = chosenRanks();
   const commanderId = $('commander').value || null;
   playSound('march');
   playVoice('march');
@@ -6546,6 +6691,7 @@ async function sendOrder(confirmed = false) {
     headers: {'content-type':'application/json'},
     body: JSON.stringify({
       ...action,
+      ...(picked && picked.sum === warriors ? { ranks: picked.ranks } : {}),
       commander_id: commanderId,
       halt_ratio: Number($('halt-ratio').value) || null,
       via: viaPoints
@@ -6982,6 +7128,18 @@ $('send').addEventListener('click', sendOrder);
 $('max-warriors').addEventListener('click', () => {
   const max = Number($('warriors').max || 1);
   $('warriors').value = max;
+  // Taking everyone cancels a hand-picked company.
+  for (const input of document.querySelectorAll('#split-kinds [data-march-kind]')) input.value = 0;
+  renderSelection();
+});
+
+// Telling off men by kind keeps the total in step; typing a total clears the picks.
+$('split-kinds').addEventListener('input', event => {
+  if (!event.target.closest('[data-march-kind]')) return;
+  renderSelection();
+});
+$('warriors').addEventListener('input', () => {
+  for (const input of document.querySelectorAll('#split-kinds [data-march-kind]')) input.value = 0;
   renderSelection();
 });
 
