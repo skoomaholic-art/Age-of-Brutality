@@ -1567,15 +1567,43 @@ for (const prefix of ['solo', 'public', 'private']) {
   const pace = $(prefix + '-pace');
   if (!pace) continue;
   const label = document.createElement('label');
-  label.textContent = 'Карта и число Домов';
+  label.textContent = 'Сколько Домов за столом';
   const select = document.createElement('select');
   select.id = prefix + '-map';
   select.className = pace.className;
-  const sizes = { 2: 'малая', 3: 'небольшая', 4: 'средняя', 5: 'большая', 6: 'огромная' };
-  select.innerHTML = Object.entries(sizes).map(([count, size]) =>
-    '<option value="' + count + '"' + (count === '4' ? ' selected' : '') + '>Случайная, ' + count +
-    (count < 5 ? ' Дома' : ' Домов') + ' · ' + size + '</option>').join('') +
-    '<option value="classic">Классическая, 6 Домов · для тестов</option>';
+  const houseWord = count => (count < 5 ? ' Дома' : ' Домов');
+  select.innerHTML = [2, 3, 4, 5, 6].map(count =>
+    '<option value="' + count + '"' + (count === 4 ? ' selected' : '') + '>' + count + houseWord(count) + '</option>').join('') +
+    '<option value="classic">Классическая карта, 6 Домов · для тестов</option>';
+  // The size of the world: any of them, with the one that fits the table marked.
+  const sizeLabel = document.createElement('label');
+  sizeLabel.textContent = 'Размер карты';
+  const size = document.createElement('select');
+  size.id = prefix + '-size';
+  size.className = pace.className;
+  const SIZES = [['small', 'Малая'], ['medium', 'Средняя'], ['large', 'Большая'], ['huge', 'Огромная']];
+  const fits = count => (count <= 2 ? 'small' : count <= 4 ? 'medium' : count === 5 ? 'large' : 'huge');
+  const SIZE_NOTE = {
+    small: 'Дома рядом, дорог много, война начинается сразу',
+    medium: 'Ровный простор: есть куда расти и за что драться',
+    large: 'Дальние походы, больше дикой середины',
+    huge: 'Огромный мир: долгие дороги, много вольных земель'
+  };
+  const sizeNote = document.createElement('div');
+  sizeNote.className = 'tiny';
+  // Until the creator picks a size themselves, it follows the recommendation.
+  let sizeChosen = false;
+  const syncSizes = () => {
+    const count = Number(select.value);
+    const best = Number.isInteger(count) ? fits(count) : null;
+    const keep = size.value;
+    size.innerHTML = SIZES.map(([value, name]) =>
+      '<option value="' + value + '">' + name + (value === best ? ' · рекомендуется' : '') + '</option>').join('');
+    size.value = sizeChosen && SIZES.some(([value]) => value === keep) ? keep : (best || 'medium');
+    size.disabled = select.value === 'classic';
+    sizeNote.textContent = size.disabled ? 'У классической карты свой размер.' : (SIZE_NOTE[size.value] || '');
+  };
+  size.addEventListener('change', () => { sizeChosen = true; syncSizes(); });
   // The lie of the land: chosen or left to chance.
   const shapeLabel = document.createElement('label');
   shapeLabel.textContent = 'Ландшафт';
@@ -1595,15 +1623,19 @@ for (const prefix of ['solo', 'public', 'private']) {
     }
     if (shape.selectedOptions[0]?.disabled) shape.value = forTwo[shape.value] || '';
   };
-  select.addEventListener('change', syncShapes);
+  select.addEventListener('change', () => { syncShapes(); syncSizes(); });
   syncShapes();
-  pace.after(label, select, shapeLabel, shape);
+  syncSizes();
+  pace.after(label, select, sizeLabel, size, sizeNote, shapeLabel, shape);
 }
 
 function mapChoice(prefix) {
   const value = $(prefix + '-map')?.value || '4';
   const shape = $(prefix + '-shape')?.value || '';
-  return value === 'classic' ? { map: 'classic' } : { map: 'random', houses_count: Number(value), ...(shape ? { shape } : {}) };
+  const size = $(prefix + '-size')?.value || '';
+  return value === 'classic'
+    ? { map: 'classic' }
+    : { map: 'random', houses_count: Number(value), ...(shape ? { shape } : {}), ...(size ? { size } : {}) };
 }
 
 async function createMultiplayer(visibility, button, errorId, roomInputId, houseSelectId, paceSelectId) {

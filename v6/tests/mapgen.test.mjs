@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadJson, buildAdjacency } from '../src/core/map.mjs';
-import { generateMap, mapPlan, MAP_SHAPES, MAP_WARPS } from '../src/online/mapgen.mjs';
+import { generateMap, mapPlan, MAP_SHAPES, MAP_SIZE_KEYS, MAP_WARPS, recommendedSize } from '../src/online/mapgen.mjs';
 import { createOnlineGame } from '../src/online/store.mjs';
 import { validateState } from '../src/core/state.mjs';
 import { listQueueableMarches } from '../src/online/orders.mjs';
@@ -107,4 +107,28 @@ test('the same seed gives the same map, another seed another one', () => {
 test('maps grow with the number of Houses', () => {
   const sizes = [2, 3, 4, 5, 6].map(count => mapPlan(count).lands);
   for (let i = 1; i < sizes.length; i += 1) assert.ok(sizes[i] > sizes[i - 1], sizes.join(','));
+});
+
+test('the size of the world is chosen apart from the number of Houses', () => {
+  const houses = constants.houses.slice(0, 4);
+  const made = {};
+  for (const size of MAP_SIZE_KEYS) {
+    const map = generateMap(base, constants, { houses, seed: 77, shape: 'wheel', size });
+    assert.equal(map.size, size);
+    assert.equal(map.territories.length, mapPlan(4, 'wheel', size).lands);
+    const b = map.art.bounds;
+    made[size] = { span: b.x1 - b.x0, lands: map.territories.length };
+    // Every House still has its own seven lands, whatever the size.
+    for (const house of houses) {
+      assert.equal(map.territories.filter(t => t.house_sector === house).length, 7);
+    }
+  }
+  assert.ok(made.small.span < made.medium.span, 'малая теснее средней');
+  assert.ok(made.medium.span < made.large.span, 'большая просторнее средней');
+  assert.ok(made.large.span < made.huge.span, 'огромная просторнее большой');
+  assert.ok(made.huge.lands >= made.small.lands, 'на просторе земель не меньше');
+  // An unknown size is simply the middling one.
+  assert.equal(generateMap(base, constants, { houses, seed: 77, shape: 'wheel', size: 'гигантская' }).size, 'medium');
+  assert.equal(recommendedSize(2), 'small');
+  assert.equal(recommendedSize(6), 'huge');
 });

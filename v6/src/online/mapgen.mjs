@@ -94,6 +94,24 @@ const SHAPE = {
   fjords: { r: 1.2, apart: true, neck: true },
   shattered: { r: 1.9, apart: true, straits: true }
 };
+// How wide the world is laid out. The Houses keep their own seven lands
+// whatever the size; what grows is the space between them — longer roads, more
+// open sea, and on the widest maps a ring of wild land in the middle.
+export const MAP_SIZES = Object.freeze({
+  small: { name: 'малая', spread: 0.78 },
+  medium: { name: 'средняя', spread: 1 },
+  large: { name: 'большая', spread: 1.25 },
+  huge: { name: 'огромная', spread: 1.5 }
+});
+export const MAP_SIZE_KEYS = Object.freeze(Object.keys(MAP_SIZES));
+// What fits a table of this many Houses best, as the lobby suggests it.
+export function recommendedSize(count) {
+  return count <= 2 ? 'small' : count <= 4 ? 'medium' : count === 5 ? 'large' : 'huge';
+}
+function spreadOf(size) {
+  return MAP_SIZES[size]?.spread ?? 1;
+}
+
 // Shapes that need at least three Houses fall back to a kin shape for two.
 const FOR_TWO = { peninsulas: 'wheel', fjords: 'wheel', shattered: 'archipelago' };
 
@@ -106,19 +124,22 @@ export function pickMapShape(count, seed) {
 }
 
 // How many lands a game of `count` Houses gets, by kind.
-export function mapPlan(count, shape = 'wheel') {
+export function mapPlan(count, shape = 'wheel', size = 'medium') {
   if (count === 2 && FOR_TWO[shape]) shape = FOR_TWO[shape];
-  const ringRadius = count === 2 ? 2 * STEP : HOME_SPAN / (2 * Math.sin(Math.PI / count));
+  const ringRadius = (count === 2 ? 2 * STEP : HOME_SPAN / (2 * Math.sin(Math.PI / count))) * spreadOf(size);
   const apart = Boolean(SHAPE[shape]?.apart);
   const innerRing = count >= 3 && (apart || (shape === 'wheel' && ringRadius - STEP > DIRECT_HUB));
-  const islandPairs = count === 2 ? 1 : count % 2 === 0 ? count / 2 : count;
+  // On a wide world every border gets its pair of islands; on a narrow one only every other.
+  const everyBorder = spreadOf(size) > 1;
+  const islandPairs = count === 2 ? 1 : everyBorder || count % 2 !== 0 ? count : count / 2;
   const borderlands = count === 2 ? 2 : count;
   const hub = SHAPE[shape]?.noHub ? 0 : 1;
   const lands = count * 7 + borderlands + hub + (innerRing ? count : 0) + islandPairs * 2;
-  return { houses: count, shape, ringRadius, innerRing, islandPairs, borderlands, lands };
+  return { houses: count, shape, size: MAP_SIZES[size] ? size : 'medium', ringRadius, innerRing, islandPairs, borderlands, lands };
 }
 
-export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'wheel', warp = 'none', seaMesh = false, homePorts = true } = {}) {
+export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'wheel', warp = 'none', seaMesh = false, homePorts = true, size = 'medium' } = {}) {
+  if (!MAP_SIZES[size]) size = 'medium';
   if (!MAP_SHAPES.includes(shape)) shape = 'wheel';
   if (!MAP_WARPS.includes(warp)) warp = 'none';
   if (houses.length === 2 && FOR_TWO[shape]) shape = FOR_TWO[shape];
@@ -132,7 +153,7 @@ export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'whe
   }
 
   const random = seeded(Number(seed) || 1);
-  const plan = mapPlan(count, shape);
+  const plan = mapPlan(count, shape, size);
   const apart = Boolean(form.apart);
   // Peninsulas and islands stand farther out, so the sea can run between them.
   const R = plan.ringRadius * form.r;
@@ -309,7 +330,8 @@ export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'whe
 
   const boundaries = count === 2 ? 2 : count;
   const boundaryAngle = i => angles[i] + Math.PI / count;
-  const hasIsland = i => (count === 2 ? i === 0 : count % 2 === 0 ? i % 2 === 0 : true);
+  const wideWorld = (MAP_SIZES[size]?.spread ?? 1) > 1;
+  const hasIsland = i => (count === 2 ? i === 0 : wideWorld || count % 2 !== 0 ? true : i % 2 === 0);
   let islandIndex = 0;
 
   // Sea waypoints stand in open water all around the land, so no lane ever
@@ -790,6 +812,7 @@ export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'whe
     seed: Number(seed) || 1,
     shape,
     warp,
+    size,
     ...(seaMesh ? { buildable_ports: true, starting_ports: startingPorts } : {}),
     houses: [...houses],
     plan,

@@ -63,7 +63,7 @@ import { applyFog, knownHouses, recordExploration, recordLandHistory } from './f
 import { attritionView } from './attrition.mjs';
 import { processStorms } from './storms.mjs';
 import { TERRAIN } from './terrain.mjs';
-import { generateMap, MAX_HOUSES, MIN_HOUSES, MAP_SHAPES, MAP_WARPS, pickMapShape } from './mapgen.mjs';
+import { generateMap, MAX_HOUSES, MIN_HOUSES, MAP_SHAPES, MAP_SIZE_KEYS, MAP_WARPS, pickMapShape, recommendedSize } from './mapgen.mjs';
 import { processEncounters } from './encounters.mjs';
 import { expelGuests } from './guests.mjs';
 import { processCampFights } from './melee.mjs';
@@ -158,12 +158,12 @@ const scopeCache = new Map();
 function scopeForSpec(spec) {
   if (!spec || spec.kind !== 'generated') return {};
   // Games made before shapes existed keep their wheel (no shape in the key).
-  const key = JSON.stringify(spec.shape ? [spec.seed, spec.houses, spec.shape, spec.warp, spec.sea || null, spec.heart || null] : [spec.seed, spec.houses]);
+  const key = JSON.stringify(spec.shape ? [spec.seed, spec.houses, spec.shape, spec.warp, spec.sea || null, spec.heart || null, spec.size || null] : [spec.seed, spec.houses]);
   if (!scopeCache.has(key)) {
     if (scopeCache.size > 200) scopeCache.delete(scopeCache.keys().next().value);
     scopeCache.set(key, {
       key,
-      map: generateMap(classicMap, baseConstants, { houses: spec.houses, seed: spec.seed, shape: spec.shape || 'wheel', warp: spec.warp || 'none', seaMesh: spec.sea === 'mesh' || spec.sea === 'mesh-free', homePorts: spec.sea !== 'mesh-free' }),
+      map: generateMap(classicMap, baseConstants, { houses: spec.houses, seed: spec.seed, shape: spec.shape || 'wheel', warp: spec.warp || 'none', seaMesh: spec.sea === 'mesh' || spec.sea === 'mesh-free', homePorts: spec.sea !== 'mesh-free', size: spec.size || 'medium' }),
       // A game of the Heart lets a House keep a bigger host.
       // A game of the Heart has no limits on troops: gold and people are the limit.
       constants: { ...baseConstants, houses: [...spec.houses], ...(spec.heart ? { house_warrior_cap: NO_LIMIT, territory_warrior_cap: NO_LIMIT, rounds: HEART.days } : {}) }
@@ -198,8 +198,10 @@ function mapSpecFrom(body, { defaultHouses }) {
   const chance = pickMapShape(houses.length, seed);
   const shape = MAP_SHAPES.includes(body.shape) ? body.shape : chance.shape;
   const warp = MAP_WARPS.includes(body.warp) ? body.warp : chance.warp;
+  // How wide the world is laid out: the creator's choice, or what fits the table.
+  const size = MAP_SIZE_KEYS.includes(body.size) ? body.size : recommendedSize(houses.length);
   // New games: a net of sea points over all the water, and ports to be built.
-  return { kind: 'generated', seed, houses, shape, warp, sea: 'mesh-free', heart: true };
+  return { kind: 'generated', seed, houses, shape, warp, size, sea: 'mesh-free', heart: true };
 }
 
 const mapArtCache = new Map();
@@ -739,6 +741,7 @@ function publicBootstrap(ctx) {
       starting_ports: map.starting_ports || [],
       shape: map.shape || null,
       warp: map.warp || null,
+      size: map.size || null,
       capitals: map.capitals,
       generated: Boolean(map.generated),
       seed: map.seed || null,
