@@ -150,18 +150,31 @@ export function pickMapShape(count, seed) {
 // How many lands a game of `count` Houses gets, by kind.
 export function mapPlan(count, shape = 'wheel', size = 'medium') {
   if (count === 2 && FOR_TWO[shape]) shape = FOR_TWO[shape];
-  const ringRadius = (count === 2 ? 2 * STEP : HOME_SPAN / (2 * Math.sin(Math.PI / count))) * spreadOf(size);
   const apart = Boolean(SHAPE[shape]?.apart);
-  const innerRing = count >= 3 && (apart || (shape === 'wheel' && ringRadius - STEP > DIRECT_HUB));
+  // The realms stand farther apart than their own lands would need: the room
+  // between them is the country the game is played for.
+  const room = count >= 3 && !SHAPE[shape]?.noHub && shape !== 'lake-isle' && shape !== 'atoll' ? 1.22 : 1;
+  const ringRadius = (count === 2 ? 2 * STEP : HOME_SPAN / (2 * Math.sin(Math.PI / count))) * spreadOf(size) * room;
+  // The middle of the world is not a line but a country of its own: an inner
+  // ring facing every House, a belt of marches between them, and the free city
+  // at the heart of it. Three Houses and more always get it — the lands between
+  // realms are what the game is played for.
+  // Shapes whose middle is water have no country there to take.
+  const noMiddle = Boolean(SHAPE[shape]?.noHub) || shape === 'lake-isle' || shape === 'atoll';
+  const innerRing = count >= 3 && !noMiddle;
+  // A world broken into islets has no heartland to thicken: every march there
+  // would be one more island nobody can walk to.
+  const marches = noMiddle || shape === 'shattered' ? 0 : count >= 3 ? count : 2;
   // On a wide world every border gets its pair of islands; on a narrow one only every other.
   const everyBorder = spreadOf(size) > 1;
   const islandPairs = count === 2 ? 1 : everyBorder || count % 2 !== 0 ? count : count / 2;
   const borderlands = count === 2 ? 2 : count;
   const hub = SHAPE[shape]?.noHub ? 0 : 1;
   // A world without a sea has no islands in it.
-  if (SHAPE[shape]?.dry) return { houses: count, shape, size: MAP_SIZES[size] ? size : 'medium', ringRadius, innerRing, islandPairs: 0, borderlands, lands: count * 7 + borderlands + hub + (innerRing ? count : 0) };
-  const lands = count * 7 + borderlands + hub + (innerRing ? count : 0) + islandPairs * 2;
-  return { houses: count, shape, size: MAP_SIZES[size] ? size : 'medium', ringRadius, innerRing, islandPairs, borderlands, lands };
+  const middle = borderlands + hub + (innerRing ? count : 0) + marches;
+  if (SHAPE[shape]?.dry) return { houses: count, shape, size: MAP_SIZES[size] ? size : 'medium', ringRadius, innerRing, marches, islandPairs: 0, borderlands, lands: count * 7 + middle };
+  const lands = count * 7 + middle + islandPairs * 2;
+  return { houses: count, shape, size: MAP_SIZES[size] ? size : 'medium', ringRadius, innerRing, marches, islandPairs, borderlands, lands };
 }
 
 export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'wheel', warp = 'none', seaMesh = false, homePorts = true, size = 'medium', season = null } = {}) {
@@ -281,6 +294,9 @@ export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'whe
     for (const [n, side] of [[1, 1], [2, -1]]) {
       const id = site(`P${n}`, polar(STEP + 2, angles[0] + (side * Math.PI) / 2), 'Дикая земля', 'Пограничье', takeName());
       link(id, hub);
+      // An islet behind the pass: the flank is a road of its own, not a step.
+      const far = site(`Q${n}`, polar((STEP + 2) * 1.85, angles[0] + (side * Math.PI) / 2), 'Деревня', 'Срединные земли', takeName());
+      link(far, id);
     }
   } else if (apart) {
     // The heartland: the free city, an inner ring, and a borderland between
@@ -302,6 +318,15 @@ export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'whe
       // Fjords: the borderland also touches both homes, so the bays stay bays.
       if (shape === 'fjords') { linkNearest(id, i, 1); linkNearest(id, (i + 1) % count, 1); }
     }
+    // A second row of marches, nearer the free city: the heartland is a country
+    // to be taken, not a single land to be walked across.
+    if (!islets) {
+      for (let i = 0; i < count; i += 1) {
+        const id = site(`Q${i + 1}`, polar(inner * 0.58, angles[i] + Math.PI / count), 'Дикая земля', 'Срединные земли', takeName());
+        link(id, hub);
+        link(id, `P${i + 1}`);
+      }
+    }
   } else if (count === 2) {
     // Two Houses face each other across the free city, with a pass on each flank.
     link(hub, petal(0, 3));
@@ -311,6 +336,12 @@ export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'whe
       link(id, hub);
       link(id, petal(0, side === 1 ? 2 : 4));
       link(id, petal(1, side === 1 ? 4 : 2));
+      // The far flank: a village of its own behind the pass, so the way round
+      // is a road with something on it and not a single step.
+      const far = site(`Q${n}`, polar((STEP + 2) * 1.9, angles[0] + (side * Math.PI) / 2), 'Деревня', 'Срединные земли', takeName());
+      link(far, id);
+      linkNearest(far, 0, 1);
+      linkNearest(far, 1, 1);
     }
   } else {
     for (let i = 0; i < count; i += 1) {
@@ -322,13 +353,21 @@ export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'whe
     if (!hub) {
       // An inland sea in the middle: the homes and borderlands make a ring around it.
     } else if (plan.innerRing) {
-      const inner = (R - STEP) / 2;
+      // The middle country: a village facing every House, a march between every
+      // two of them, and the free city behind. Whoever wants the middle has to
+      // take it land by land, and whoever holds it is seen by everyone.
+      const inner = Math.max((R - STEP) / 2, STEP * 1.15);
       for (let i = 0; i < count; i += 1) {
         const id = site(`X${i + 1}`, polar(inner, angles[i]), 'Деревня', 'Срединные земли', takeName());
         link(id, hub);
         link(id, petal(i, 3));
       }
-      for (let i = 0; i < count; i += 1) link(`X${i + 1}`, `X${((i + 1) % count) + 1}`);
+      for (let i = 0; i < count; i += 1) {
+        const id = site(`Q${i + 1}`, polar(inner * 1.12, angles[i] + Math.PI / count), 'Дикая земля', 'Срединные земли', takeName());
+        link(id, `X${i + 1}`);
+        link(id, `X${((i + 1) % count) + 1}`);
+        link(id, `P${i + 1}`);
+      }
     } else {
       for (let i = 0; i < count; i += 1) link(hub, petal(i, 3));
     }
@@ -725,15 +764,57 @@ export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'whe
     startingPorts = null;
   }
 
-  // Shift everything into positive coordinates with open sea around.
-  const all = [...sites.map(s => s.pos), ...Object.values(waypoints)];
-  // On a dry world there is no sea to leave room for: the country runs to the
-  // edge of the picture, and the realms fill it.
-  const margin = form.dry ? 45 : 150;
-  const minX = Math.min(...all.map(p => p.x)) - margin;
-  const minY = Math.min(...all.map(p => p.y)) - margin;
-  const maxX = Math.max(...all.map(p => p.x)) + margin;
-  const maxY = Math.max(...all.map(p => p.y)) + margin;
+  // The window a map is shown in is wider than it is tall. A world shaped
+  // nothing like it is shown either tiny, with empty water down both sides, or
+  // cropped. So the picture is drawn out towards the shape of the window before
+  // the frame is cut. Nothing in the rules knows about distance — roads are
+  // counted in steps — so no march gets longer or shorter for it.
+  const WINDOW_RATIO = 760 / 490;
+  {
+    const xs = sites.map(s => s.pos.x);
+    const ys = sites.map(s => s.pos.y);
+    const wide = (Math.max(...xs) - Math.min(...xs)) || 1;
+    const tall = (Math.max(...ys) - Math.min(...ys)) || 1;
+    const want = WINDOW_RATIO / (wide / tall);
+    const sx = want > 1 ? Math.min(want, 2.2) : 1;
+    const sy = want < 1 ? Math.min(1 / want, 2.2) : 1;
+    if (sx !== 1 || sy !== 1) {
+      const cx = (Math.max(...xs) + Math.min(...xs)) / 2;
+      const cy = (Math.max(...ys) + Math.min(...ys)) / 2;
+      const pull = p => { p.x = cx + (p.x - cx) * sx; p.y = cy + (p.y - cy) * sy; };
+      for (const s of sites) pull(s.pos);
+      for (const point of Object.values(waypoints)) pull(point);
+    }
+  }
+
+  // Shift everything into positive coordinates. The picture is cut to the
+  // lands, not to the sea: a world that fills its frame is a world a player
+  // can see at a glance, instead of a handful of realms lost in open water.
+  // The sea marks are pulled inside that frame, so no ship sails off the edge.
+  const landPts = sites.map(s => s.pos);
+  const span = Math.max(
+    Math.max(...landPts.map(p => p.x)) - Math.min(...landPts.map(p => p.x)),
+    Math.max(...landPts.map(p => p.y)) - Math.min(...landPts.map(p => p.y))
+  );
+  const margin = form.dry ? 40 : Math.round(Math.min(90, Math.max(30, span * 0.05)));
+  let minX = Math.min(...landPts.map(p => p.x)) - margin;
+  let minY = Math.min(...landPts.map(p => p.y)) - margin;
+  let maxX = Math.max(...landPts.map(p => p.x)) + margin;
+  let maxY = Math.max(...landPts.map(p => p.y)) + margin;
+  // What the stretch could not even out, the frame takes on itself, so the
+  // whole world is seen at once and nothing of it is cut off.
+  if ((maxX - minX) / (maxY - minY) < WINDOW_RATIO) {
+    const add = ((maxY - minY) * WINDOW_RATIO - (maxX - minX)) / 2;
+    minX -= add; maxX += add;
+  } else {
+    const add = ((maxX - minX) / WINDOW_RATIO - (maxY - minY)) / 2;
+    minY -= add; maxY += add;
+  }
+  const inside = (value, low, high) => Math.max(low, Math.min(high, value));
+  for (const point of Object.values(waypoints)) {
+    point.x = inside(point.x, minX + 12, maxX - 12);
+    point.y = inside(point.y, minY + 12, maxY - 12);
+  }
   const shift = p => ({ x: round1(p.x - minX), y: round1(p.y - minY) });
 
   const coordinates = {};

@@ -148,8 +148,8 @@
     .province.legal { fill: rgba(44,74,134,.34); stroke: #172c5c; stroke-width: 1.5; stroke-dasharray: 4 2; }
     .province.legal:hover { fill: rgba(44,74,134,.5); }
     .province.target { fill: rgba(179,49,31,.36); stroke: var(--vermilion); stroke-width: 2.8; }
-    .province.fogged { fill: rgba(16,17,20,.6); }
-    .province.fogged:hover { fill: rgba(16,17,20,.46); }
+    .province.fogged { fill: rgba(16,17,20,.45); }
+    .province.fogged:hover { fill: rgba(16,17,20,.33); }
     #pixi-layer { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
     /* With the WebGL map the SVG is only an invisible sheet for clicks and the glass. */
     #map.pixi-on > image, #map.pixi-on #map-clouds { display: none; }
@@ -5388,11 +5388,16 @@ function updatePixiFog(explored, art, coords) {
   for (const cloud of pixiFog.clouds) {
     let on = Boolean(explored);
     if (on && !cloud.far) {
+      // The lie of the land is known to everyone from the first day: where the
+      // hills and rivers are is no secret, and a player who sees nothing but
+      // cloud sees no world at all. What stays hidden is who holds a land and
+      // what stands on it — the dark fill over an unknown province says that.
+      // Only open water nobody has sailed is still closed by cloud.
       if (known.some(rings => inRings(rings, cloud.x, cloud.y))) on = false;
+      else if (hidden.some(rings => inRings(rings, cloud.x, cloud.y))) on = false;
       else {
         // Clouds lie on every unknown land right up to its border. Over water
         // they part only where the known shore is nearer than any unknown one.
-        const overHidden = hidden.some(rings => inRings(rings, cloud.x, cloud.y));
         let near = Infinity;
         for (const p of edge) {
           const dx = p[0] - cloud.x, dy = p[1] - cloud.y, d = dx * dx + dy * dy;
@@ -5400,7 +5405,6 @@ function updatePixiFog(explored, art, coords) {
           if (d < near) near = d;
         }
         if (near === 0) on = false;
-        else if (overHidden) on = near >= 5 * 5;
         else if (near < 40 * 40) {
           let far = Infinity;
           for (const p of hiddenEdge) { const dx = p[0] - cloud.x, dy = p[1] - cloud.y, d = dx * dx + dy * dy; if (d < far) far = d; }
@@ -7444,11 +7448,14 @@ async function refresh() {
     mapArt = await fetch(mapArtBase + 'provinces.json').then(res => res.json());
     if (bootstrap.map.generated) {
       // Home view: the whole land, in the proportions of the map window.
+      // Home view: the whole world, centred, with only a hair of margin — the
+      // picture is already cut to the lands, so there is nothing to crop away.
       const b = mapArt.bounds;
-      const inset = 60;
+      const inset = Math.min(30, (b.x1 - b.x0) * 0.03);
       const h = b.y1 - b.y0 - inset * 2;
       const w = Math.max(b.x1 - b.x0 - inset * 2, h * (760 / 490));
-      MAP_HOME = { x: (b.x0 + b.x1 - w) / 2, y: b.y0 + inset, w, h: w * (490 / 760) };
+      const view = { w, h: w * (490 / 760) };
+      MAP_HOME = { x: (b.x0 + b.x1 - view.w) / 2, y: (b.y0 + b.y1 - view.h) / 2, ...view };
       mapView = { ...MAP_HOME };
     }
     const build = bootstrap.build || {};

@@ -105,7 +105,8 @@ test('the skull tells the host why it bleeds: rough ground, the open sea, a reef
   assert.equal(terrainOf(rough, capital), 'равнина');
   assert.equal(attritionView(g.state, { ...map, terrain: {} })[neighbour], undefined);
   // At sea: the days out of sight of land, and the rocks underneath.
-  const seaId = Object.keys(map.sea_waypoints)[0];
+  // Open water, not a reef: the rocks have a word of their own, below.
+  const seaId = Object.keys(map.sea_waypoints).find(id => !(map.reefs || []).includes(id));
   g.state.sea_nodes[seaId].warriors = { [H]: 5 };
   g.state.sea_nodes[seaId].days_at_sea = { [H]: 2 };
   assert.equal(wearAt(map, g.state, seaId, H).why, 'в море');

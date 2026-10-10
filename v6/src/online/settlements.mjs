@@ -211,12 +211,24 @@ export function seedLands(game, map) {
   }
 
   // Everything else — the marches between realms, the free city, the inner
-  // ring — is laid out land by land.
+  // ring — is laid out land by land. The middle of the world is not barren:
+  // it holds more of the good ground than anybody's own sector, because it is
+  // what the Houses are meant to fight over.
+  const middle = [];
   for (const t of [...map.territories].sort((a, b) => a.id.localeCompare(b.id))) {
     if (capitals.has(t.id) || petal.test(t.id)) continue;
+    middle.push(t.id);
     const free = !state.territories?.[t.id]?.owner;
-    if (free && t.type === 'Дикая земля' && random() < 0.45) makeEmpty(t.id);
-    if (random() < 0.3) state.riches[t.id] = keys[Math.floor(random() * keys.length)];
+    if (free && t.type === 'Дикая земля' && random() < 0.25) makeEmpty(t.id);
+    if (random() < 0.5) state.riches[t.id] = keys[Math.floor(random() * keys.length)];
+  }
+
+  // And at least two seams of iron lie out there, wherever the lot fell, so a
+  // House that wants gold always has something to march for.
+  const ore = middle.filter(id => state.riches[id] === 'рудник');
+  for (let i = ore.length; i < 2 && middle.length; i += 1) {
+    const pick = middle[Math.floor(random() * middle.length)];
+    state.riches[pick] = 'рудник';
   }
   return game;
 }

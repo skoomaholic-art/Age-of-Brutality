@@ -175,3 +175,44 @@ test('the lot falls on dry land as often as on water', () => {
     assert.ok(share > 0.4 && share < 0.6, `${count} houses: dry land came up ${(share * 100).toFixed(0)}% of the time`);
   }
 });
+
+test('the middle of the world is a country of its own, not a line between realms', () => {
+  for (const shape of ['wheel', 'mainland', 'peninsulas']) {
+    for (const count of [4, 6]) {
+      const houses = constants.houses.slice(0, count);
+      const world = generateMap(base, { ...constants, houses }, { houses, seed: 9 + count, shape });
+      const free = world.territories.filter(t => !houses.includes(t.house_sector));
+      assert.ok(free.length >= count * 3,
+        `${shape}/${count}: ${free.length} free lands between the realms, wanted at least ${count * 3}`);
+      // And something stands on it: the free city and the inner ring are settled.
+      const settled = free.filter(t => t.type !== 'Дикая земля').length;
+      assert.ok(settled >= 2, `${shape}/${count}: the middle holds ${settled} settled lands`);
+      // Every free land can be walked to from somewhere.
+      const degree = {};
+      for (const [a, b] of world.land_edges) { degree[a] = (degree[a] || 0) + 1; degree[b] = (degree[b] || 0) + 1; }
+      for (const t of free) assert.ok(degree[t.id] > 0 || (world.ports || []).includes(t.id), `${t.id} can be reached`);
+    }
+  }
+});
+
+test('the picture is cut to the lands: the world fills its own frame', () => {
+  for (const shape of MAP_SHAPES) {
+    for (const count of [2, 4, 6]) {
+      const houses = constants.houses.slice(0, count);
+      const world = generateMap(base, { ...constants, houses }, { houses, seed: 4 + count, shape, seaMesh: true });
+      const b = world.art.bounds;
+      const points = Object.values(world.coordinates);
+      const near = 30; // half a land: what the painter draws around a settlement
+      const wide = Math.max(...points.map(p => p.x)) - Math.min(...points.map(p => p.x)) + near * 2;
+      const tall = Math.max(...points.map(p => p.y)) - Math.min(...points.map(p => p.y)) + near * 2;
+      const share = (wide * tall) / ((b.x1 - b.x0) * (b.y1 - b.y0));
+      // And the frame itself has the shape of the window it is shown in.
+      assert.ok(Math.abs((b.x1 - b.x0) / (b.y1 - b.y0) - 760 / 490) < 0.02, `${shape}/${count}: the frame is the shape of the map window`);
+      assert.ok(share > 0.7, `${shape}/${count}: the lands take ${(share * 100).toFixed(0)}% of the frame`);
+      // And no sea mark lies outside the picture.
+      for (const [id, point] of Object.entries(world.sea_waypoints || {})) {
+        assert.ok(point.x >= b.x0 && point.x <= b.x1 && point.y >= b.y0 && point.y <= b.y1, `${id} is inside the frame`);
+      }
+    }
+  }
+});
