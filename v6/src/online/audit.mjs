@@ -897,7 +897,7 @@ export function journalEntryToAudit(entry, map, game) {
     const where = territoryName(map, entry.territory);
     const messages = {
       HORDE_AWAKENED: `Горе Дому ${entry.house}! Сорвал он ложную печать в земле ${where}, и из бездны вышел народ незнаемый: ${entry.men} всадников на низких мохнатых конях. Идут они на столицу${entry.toward ? ` ${territoryName(map, entry.toward)}` : ''}, и людям кажется, что нет им числа.`,
-      HORDE_TOOK: `Тартары взяли землю ${where} у Дома ${entry.house}: жгут, секут и угоняют людей. ${entry.stayed} из них остались там, остальные ${entry.men} идут дальше.`,
+      HORDE_TOOK: `Тартары взяли землю ${where} у Дома ${entry.house} и стёрли её с земли: ни дворов, ни людей, одно пепелище. ${entry.men} из них идут дальше.`,
       HORDE_BROKEN: `Чудо! У земли ${where} воинство Дома ${entry.house} разбило тартар. Звонят колокола, в храмах служат благодарственный молебен.`,
       HORDE_FORDING: `Тартары встали у реки близ земли ${where}: моста нет, кони их ищут брод. Молитесь, чтобы река была глубока.`,
       HORDE_SACKED: `Тартары ворвались в столицу ${where}! Дружина Дома ${entry.house} полегла вся, числом ${entry.defenders}, казна разграблена: ${entry.gold} золота ушло в сёдлах. Но стены устояли, и народ незнаемый, насытившись, ушёл.`,

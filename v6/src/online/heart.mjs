@@ -25,6 +25,7 @@ import { commanderStats } from '../core/characters.mjs';
 import { compAt, headsLost, moveRanks, reconcileRanks, starsAt, strengthOf } from './ranks.mjs';
 import { rulerLeadBonus } from './court.mjs';
 import { leadArmiesAway } from './guests.mjs';
+import { setKind, WASTE } from './settlements.mjs';
 
 export const HEART = Object.freeze({
   days: 8,
@@ -563,13 +564,23 @@ function hordeStrikes(game, map, constants, horde, land, nowMs) {
   t.owner = null;
   if (state.order) delete state.order[land];
   if (state.capture_choices) delete state.capture_choices[land];
-  // A part of the Horde stays behind in every land it takes.
-  const stay = Math.max(1, Math.ceil(horde.men / 4));
-  state.wild_guards[land] = Number(state.wild_guards[land] || 0) + stay;
-  horde.men -= stay;
+  // The Horde holds nothing. What it takes it burns to the ground, and goes on:
+  // the people are gone, the walls are down, the land is ashes behind it.
+  const people = Math.floor(Number(state.population?.[land] || 0));
+  setKind(state, land, WASTE);
+  state.population ||= {};
+  state.population[land] = 0;
+  if (state.growth) delete state.growth[land];
+  delete t.fort;
+  delete t.port;
+  state.wild_guards[land] = 0;
+  // The sacking costs it men all the same: some stay behind in the ruins.
+  const spent = Math.max(1, Math.ceil(horde.men / 8));
+  horde.men -= spent;
   state.journal.push({
     kind: 'HORDE_TOOK', house, houses: [house], territory: land, defenders, losses: defenderLosses,
-    horde_losses: hordeLosses, stayed: stay, men: horde.men, retreat_to: retreatTo, at: iso(nowMs)
+    horde_losses: hordeLosses, razed: true, people_lost: people, stayed: 0, spent,
+    men: horde.men, retreat_to: retreatTo, at: iso(nowMs)
   });
 }
 

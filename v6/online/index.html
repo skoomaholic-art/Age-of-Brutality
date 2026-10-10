@@ -4367,7 +4367,7 @@ function newsFor(item) {
   if (item.type === 'HORDE_COUNTDOWN') return { rank: 9, art: 'war-declared', title: 'Знамения над миром', text };
   if (item.type === 'HORDE_UNLEASHED') return { rank: 10, art: 'war-declared', title: 'Печати пали', text };
   if (item.type === 'HORDE_AWAKENED') return { rank: mine(d.house) ? 10 : 6, art: 'war-declared', title: mine(d.house) ? 'Орда идёт на тебя' : 'Орда пробудилась', text };
-  if (item.type === 'HORDE_TOOK') return { rank: mine(d.house) ? 9 : 5, art: 'land-lost', title: mine(d.house) ? 'Тартары взяли твою землю' : 'Тартары жгут земли', text };
+  if (item.type === 'HORDE_TOOK') return { rank: mine(d.house) ? 9 : 5, art: 'land-lost', title: mine(d.house) ? 'Тартары сожгли твою землю' : 'Тартары жгут земли', text };
   if (item.type === 'HORDE_SACKED') return { rank: mine(d.house) ? 10 : 6, art: 'capital-lost', title: mine(d.house) ? 'Тартары разорили твою столицу' : 'Столица разорена', text };
   if (item.type === 'HORDE_BROKEN') return { rank: mine(d.house) ? 9 : 5, art: 'battle-won', title: mine(d.house) ? 'Тартары разбиты' : 'Тартары разбиты', text };
   if (item.type === 'HORDE_SPENT') return { rank: mine(d.house) ? 7 : 4, art: 'battle-seen', title: 'Орда выдохлась', text };

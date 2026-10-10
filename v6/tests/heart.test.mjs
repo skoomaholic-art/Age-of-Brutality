@@ -11,6 +11,7 @@ import { startRounds, advanceRound } from '../src/online/rounds.mjs';
 import { seedHeart, heartLayout, heartDawn, menToTakeWild, chooseHearts, spyLearns, heartOnCapture, processHordes, HEART, SCOURGE } from '../src/online/heart.mjs';
 import { applyFog } from '../src/online/fog.mjs';
 import { validateState } from '../src/core/state.mjs';
+import { isWaste } from '../src/online/settlements.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..');
@@ -247,5 +248,38 @@ test('the Horde sacks a capital it reaches but does not keep it: the House stand
   assert.equal(game.state.houses[H].gold, 4, 'half the purse burnt');
   assert.ok(game.state.journal.some(e => e.kind === 'HORDE_SACKED'));
   assert.equal(game.state.hordes.length, 0);
+  assert.deepEqual(validateState(game.state, map, constants), []);
+});
+
+test('the Horde holds nothing: a land it takes is burnt to the ground and it walks on', () => {
+  let game = withHearts();
+  const { candidates, truth } = game.state.heart;
+  const decoy = candidates.find(id => id !== truth);
+  game.state.territories[decoy].owner = H;
+  game.state.territories[decoy].warriors = { [H]: 1 };
+  delete game.state.wild_guards[decoy];
+  startHorde(game, decoy, H);
+  const horde = game.state.hordes[0];
+  // Our lands stand peopled and walled on whatever road it takes.
+  for (const [id, t] of Object.entries(game.state.territories)) {
+    if (t.owner !== H || id === capital) continue;
+    t.warriors = {};
+    delete game.state.wild_guards[id];
+    (game.state.population ||= {})[id] = 12;
+    t.fort = { level: 1 };
+  }
+  const menBefore = horde.men;
+
+  game = processHordes(game, map, constants, 10_000_000);
+  const took = game.state.journal.find(e => e.kind === 'HORDE_TOOK');
+  assert.ok(took, 'the Horde took a land on its way');
+  const land = took.territory;
+  assert.equal(took.razed, true);
+  assert.equal(game.state.territories[land].owner, null, 'nobody holds the ashes');
+  assert.equal(isWaste(game.state, land), true, 'it is a waste now');
+  assert.equal(game.state.population[land], 0, 'the people are gone');
+  assert.equal(game.state.territories[land].fort, undefined, 'the walls are down');
+  assert.equal(Number(game.state.wild_guards[land] || 0), 0, 'nobody stays behind');
+  assert.ok(took.men < menBefore, 'the sacking costs it men all the same');
   assert.deepEqual(validateState(game.state, map, constants), []);
 });
