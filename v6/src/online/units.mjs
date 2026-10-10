@@ -144,6 +144,54 @@ export function hireUnits(game, map, house, territory, counts, { nowMs = Date.no
   return next;
 }
 
+// ---------- the levy of the fyrd ----------
+// A House with an empty purse is not a House with empty hands: it can call up
+// its own people. They come as peasants, cost no gold, and the land likes it
+// the less the more of them are taken. Once a dawn in one land.
+export const MILITIA = Object.freeze({ share: 1 / 3, orderBase: 3, orderEach: 2 });
+
+export function militiaOffer(state, map, territory, day) {
+  const people = peopleAt(state, territory);
+  const taken = Number(state.militia?.[territory] || 0) === Number(day || 0) && day !== null;
+  const most = Math.max(0, Math.floor(people * MILITIA.share));
+  return { people, most: taken ? 0 : most, called: taken };
+}
+
+export function raiseMilitia(game, map, house, territory, count, { nowMs = Date.now(), day = null } = {}) {
+  assertNewRules(game);
+  const land = game.state.territories[territory];
+  if (!land || land.owner !== house) throw new Error('ополчение собирают только в своей земле');
+  const want = Math.max(0, Math.floor(Number(count) || 0));
+  if (want < 1) throw new Error('сколько людей созвать?');
+  const offer = militiaOffer(game.state, map, territory, day);
+  if (offer.called) throw new Error('здесь уже собирали ополчение этим днём');
+  if (want > offer.most) throw new Error(`здесь можно созвать не больше ${offer.most}: больше трети людей земля не отдаст`);
+
+  const next = structuredClone(game);
+  const state = next.state;
+  reconcileRanks(state, map);
+  const oldHeads = Number(land.warriors?.[house] || 0);
+  const comp = compAt(state, map, territory, house);
+  comp[0] += want;
+  state.population[territory] = offer.people - want;
+  state.territories[territory].warriors[house] = oldHeads + want;
+  state.ranks ||= {};
+  (state.ranks[territory] ||= {})[house] = comp;
+  state.peak ||= {};
+  (state.peak[territory] ||= {})[house] = peakAt(game.state, map, territory, house).map((n, i) => n + (i === 0 ? want : 0));
+  setStars(state, territory, house, mergeStars(starsAt(game.state, territory, house), oldHeads, 0, want));
+  // Taking men from the fields is not forgotten by those left behind.
+  if (state.order) {
+    const before = Number(state.order[territory] ?? 70);
+    state.order[territory] = Math.max(0, before - MILITIA.orderBase - MILITIA.orderEach * want);
+  }
+  state.militia ||= {};
+  state.militia[territory] = Number(day || 0);
+  state.journal.push({ kind: 'MILITIA_RAISED', house, houses: [house], territory, count: want, order: state.order?.[territory] ?? null, at: iso(nowMs) });
+  next.updated_at = iso(nowMs);
+  return next;
+}
+
 // ---------- making good the losses ----------
 // A host that has fought is short of men: the wounded and fallen. Making them
 // good brings it back to full strength and keeps its experience; it costs the

@@ -35,7 +35,7 @@ import { raiseLevy, startDrill, buildYard, buildPort, processRanks, ranksView } 
 import { buildBridge, burnBridge, seedCrossings, BRIDGE } from './bridges.mjs';
 import { processHordes, seedHeart, HEART } from './heart.mjs';
 import { devAction, devAllowed, devFastForward, isDevOwner } from './dev.mjs';
-import { NO_LIMIT, buildGrowth, hireUnits, replenishUnits, seedPopulation, unitsView, upkeepOf, REPLENISH_STAR_SHARE } from './units.mjs';
+import { NO_LIMIT, buildGrowth, hireUnits, militiaOffer, raiseMilitia, replenishUnits, seedPopulation, unitsView, upkeepOf, REPLENISH_STAR_SHARE } from './units.mjs';
 import { applyCaptureChoice, choiceOutcomes, seedOrder, ORDER } from './order.mjs';
 import { startRide, processRiders, ridersOf } from './riders.mjs';
 import { courtEffects } from './court.mjs';
@@ -1732,7 +1732,7 @@ async function handleGameApi(req, res, url, ctx, subpath) {
     return json(res, result.status, result.response);
   }
 
-  if (req.method === 'POST' && ['/levy', '/drill', '/yard', '/port', '/bridge', '/hire', '/retrain', '/growth', '/capture-choice', '/bridge-burn', '/replenish'].includes(subpath)) {
+  if (req.method === 'POST' && ['/levy', '/drill', '/yard', '/port', '/bridge', '/hire', '/retrain', '/growth', '/capture-choice', '/bridge-burn', '/replenish', '/militia'].includes(subpath)) {
     const body = await readBody(req);
     const house = String(body.house || '').trim();
     await requireHouse(ctx, req, house);
@@ -1748,6 +1748,7 @@ async function handleGameApi(req, res, url, ctx, subpath) {
               : subpath === '/bridge' ? buildBridge(game, map, house, String(body.key || ''), { nowMs })
               : subpath === '/bridge-burn' ? burnBridge(game, map, house, String(body.key || ''), { nowMs })
                 : subpath === '/hire' ? hireUnits(game, map, house, String(body.territory || ''), body.counts, { nowMs })
+                  : subpath === '/militia' ? raiseMilitia(game, map, house, String(body.territory || ''), body.count, { nowMs, day: Number(game.rounds?.number || 0) })
                   : subpath === '/retrain' ? queueRetrainJob(game, map, house, { territory: String(body.territory || ''), from: body.from, to: body.to, count: body.count }, { nowMs }).game
                   : subpath === '/replenish' ? replenishUnits(game, map, house, String(body.territory || ''), { nowMs })
                     : subpath === '/growth' ? buildGrowth(game, map, house, String(body.territory || ''), { nowMs })

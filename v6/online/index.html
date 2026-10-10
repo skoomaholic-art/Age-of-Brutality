@@ -490,6 +490,8 @@
     .fx .good { color: #2e5a35; }
     .fx .bad { color: var(--vermilion-deep); }
     .land-card { max-height: calc(100% - 64px); overflow: auto; }
+    .militia { margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(43,27,18,.25); }
+    .militia .acts { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
     .rank-box { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--rule); }
     .rank-box .acts { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
     .rank-box .acts select { max-width: 46%; min-width: 0; }
@@ -530,6 +532,8 @@
     .portrait img { position: absolute; display: block; }
     .portrait-frame { border: 2px solid var(--ink); outline: 3px solid var(--gold); outline-offset: -6px; background: radial-gradient(circle at 50% 35%, #e7c65a, #b98a24 85%); overflow: hidden; }
     .character-face { float: left; width: 74px; margin: 0 10px 6px 0; cursor: pointer; }
+    .character-face.gone { filter: grayscale(1) contrast(.92) brightness(.95); }
+    .character-face.gone::after { content: ''; position: absolute; inset: 0; background: rgba(43,27,18,.14); pointer-events: none; }
     .maker { position: fixed; inset: 0; z-index: 40; display: none; place-items: center; padding: 14px; background: rgba(43,27,18,.6); }
     .maker.show { display: grid; }
     .maker-card { width: min(760px, 100%); max-height: 100%; overflow: auto; display: grid; grid-template-columns: 250px 1fr; gap: 16px; padding: 16px;
@@ -1601,6 +1605,7 @@ const DEV_HELP = [
   'gold <число>    — добавить золота',
   'panel           — показать панель с кнопками',
   'horde           — где Орда и что о ней писала летопись',
+  'свиток          — выписка о партии для разбора (копируется в буфер)',
   'storm           — бури на море',
   'clear           — очистить консоль'
 ].join('\n');
@@ -1624,11 +1629,62 @@ async function runConsole(text) {
     else if (cmd === 'panel' && need()) { $('dev-panel').hidden = false; }
     else if (cmd === 'horde') devLog(hordeReport());
     else if (cmd === 'storm') devLog(stormReport());
-    else if (!['map', 'fast', 'gold', 'panel'].includes(cmd)) devLog('Нет такой команды. help — список.');
+    else if (cmd === 'свиток' || cmd === 'dump') {
+      const text = stateReport();
+      devLog(text);
+      try { await navigator.clipboard.writeText(text); devLog('— выписка скопирована, можно вставить в беседу.'); }
+      catch { devLog('— буфер недоступен: выдели текст выше и скопируй руками.'); }
+    }
+    else if (!['map', 'fast', 'gold', 'panel', 'свиток', 'dump'].includes(cmd)) devLog('Нет такой команды. help — список.');
   } catch (error) {
     devLog('Ошибка: ' + sayError(error));
   }
 }
+// A short account of the game as it stands, to be pasted into a conversation
+// when something looks wrong. Read-only, and it carries no secrets of others.
+function stateReport() {
+  const game = snapshot?.game;
+  if (!game) return 'Игра ещё не загружена.';
+  const state = game.state;
+  const lines = [];
+  const name = id => mapNodeById(id)?.name || id;
+  lines.push('СВИТОК ПАРТИИ ' + (game.id || '—'));
+  lines.push('день ' + (game.rounds?.number ?? '—') + '/' + (game.rounds?.max ?? '—') +
+    ', ход ' + (game.lifecycle?.status || '—') + ', темп ' + (game.pace || '—') +
+    ', карта ' + (snapshot.map?.shape || '—') + '/' + (snapshot.map?.size || '—') + '/' + (snapshot.map?.season || 'лето'));
+  lines.push('сборка ' + (snapshot.build?.commit || '—').slice(0, 7) + ' ' + (snapshot.build?.revision || ''));
+  for (const [who, purse] of Object.entries(state.houses || {})) {
+    const lands = Object.values(state.territories).filter(t => t.owner === who).length;
+    const men = Object.values(state.territories).reduce((sum, t) => sum + Number(t.warriors?.[who] || 0), 0);
+    lines.push(`  ${who}: золото ${purse.gold}, слава ${purse.victory_points || 0}, земель ${lands}, мечей ${men}` +
+      (who === house ? '  ← ты' : ''));
+  }
+  const heart = state.heart;
+  if (heart) {
+    lines.push('Сердце: найдено ' + (heart.territory ? name(heart.territory) : 'нет') +
+      ', кандидатов ' + (heart.candidates || []).length + ', раскрыто ' + (heart.revealed || []).length +
+      (heart.scourge ? ', нашествие было ' + heart.scourge.at : ', нашествия не было'));
+  }
+  for (const horde of state.hordes || []) {
+    lines.push('  пришлые ' + horde.id + ': ' + horde.men + ' у ' + name(horde.at) + ' на Дом ' + horde.against);
+  }
+  const mine = (game.orders || []).filter(o => o.status === 'PENDING' && o.action.house === house);
+  lines.push('Твои приказы в пути: ' + (mine.length || 'нет'));
+  for (const order of mine.slice(0, 8)) {
+    lines.push('  ' + name(order.action.from) + ' → ' + name(order.travel_to || order.action.to) +
+      ', мечей ' + order.action.warriors + (order.halted ? ', стоит лагерем' : ', ещё ' + timeLeft(order.due_at)));
+  }
+  const jobs = (game.economy?.jobs || []).filter(j => j.status === 'PENDING');
+  if (jobs.length) lines.push('Работы: ' + jobs.map(j => j.type + ' в ' + name(j.territory) + ' (' + timeLeft(j.due_at) + ')').join('; '));
+  const agents = characterData?.agents?.list || [];
+  if (agents.length) lines.push('Шпионы: ' + agents.map(a => a.name + ' ' + a.status + (a.target ? ' → ' + name(a.target) : '')).join('; '));
+  lines.push('Последние вести:');
+  for (const item of (game.audit_log || []).slice(-14)) {
+    lines.push('  ' + (item.at ? new Date(item.at).toLocaleTimeString('ru-RU') + ' ' : '') + item.type + ': ' + String(item.message || '').slice(0, 160));
+  }
+  return lines.join('\n');
+}
+
 // What became of the Horde: where it stands now and every line the chronicle
 // has about it. Read-only, so it needs no key.
 function hordeReport() {
@@ -1967,8 +2023,10 @@ function renderCharacters() {
         '<br><span class="tiny">Дар этот ещё дремлет.</span></div>'
       : '';
 
+    // A dead man's likeness loses its colours: the court sees at a glance who is gone.
     const face = FACE
-      ? '<div class="character-face portrait-frame" data-face="' + escapeHtml(character.id) + '" title="Облачить и наречь"><div class="portrait">' +
+      ? '<div class="character-face portrait-frame' + (character.alive === false || character.mode === 'DEAD' ? ' gone' : '') +
+        '" data-face="' + escapeHtml(character.id) + '" title="Облачить и наречь"><div class="portrait">' +
         portraitHtml(lookOf(character)) + '</div></div>'
       : '';
     return '<div class="character-card">' + face +
@@ -2555,8 +2613,26 @@ function hireBlock(id) {
   return '<div class="rank-box"><div class="rank-head with-hint">Нанять войска' + hint('Войска нанимают в любой своей земле. Деревня даёт крестьян, копейщиков и лучников, город ещё ратников и конных сержантов, столица и рыцарей. Людей берут сперва из самой земли, а если не хватает — из соседних своих земель, но ни одна не отдаёт больше половины своих. Войско каждый рассвет просит содержания; не заплатишь — неоплаченные разойдутся.') + '</div>' +
     '<div class="tiny">Людей под рукой: <b>' + pool + '</b> — в самой земле ' + people + (around ? ', из соседних твоих земель ещё ' + around : '') + '. Каждый нанятый — один из них, и берут сперва здешних. Соседнее поселение отдаёт не больше половины своих людей. Новые люди прибывают, только если здесь есть ' + (level ? 'ярмарка' : 'поля') + '.' +
     (snapshot.game.upkeep ? ' Всё войско сейчас стоит <b>' + snapshot.game.upkeep.gold + '</b> золота с рассветом; не заплатишь — неоплаченные разойдутся.' : '') + '</div>' +
-    rows + '<div class="acts"><span class="tiny" data-hire-total>0 золота</span><button class="primary costly" data-hire-go disabled>Нанять</button></div></div>';
+    rows + '<div class="acts"><span class="tiny" data-hire-total>0 золота</span><button class="primary costly" data-hire-go disabled>Нанять</button></div>' +
+    militiaBlock(id) + '</div>';
 }
+// The fyrd: men called from the fields for nothing but the land's goodwill.
+function militiaBlock(id) {
+  if (!unitsMode()) return '';
+  const day = Number(snapshot.game.rounds?.number || 0);
+  const people = Number(snapshot.game.state.population?.[id] || 0);
+  const called = Number(snapshot.game.state.militia?.[id] || 0) === day && day > 0;
+  const most = called ? 0 : Math.max(0, Math.floor(people / 3));
+  const order = Number(snapshot.game.state.order?.[id] ?? 70);
+  if (called) return '<div class="militia tiny">Ополчение в этой земле уже созывали этим днём.</div>';
+  if (most < 1) return '<div class="militia tiny">Людей слишком мало, чтобы созывать ополчение.</div>';
+  return '<div class="militia"><div class="rank-head with-hint">Созвать ополчение' +
+    hint('Люди идут с поля сами, без золота: они встают крестьянами в твою рать. Больше трети здешних людей земля не отдаст, и за каждого взятого порядок падает. Раз в день на землю.') + '</div>' +
+    '<div class="tiny">Без золота. Можно созвать до <b>' + most + '</b>; порядок (сейчас ' + order + ') упадёт на 3 и ещё на 2 за каждого.</div>' +
+    '<div class="acts"><input type="number" min="1" max="' + most + '" value="' + Math.min(most, 2) + '" data-militia-count style="width:72px">' +
+    '<button class="wide" data-militia-go>Созвать</button></div></div>';
+}
+
 // Making good the losses of the host standing here (same count as the server).
 function replenishBlock(id) {
   const view = snapshot.game.units_view;
@@ -2998,6 +3074,10 @@ function setupLand() {
     }
     if (event.target.closest('[data-replenish]')) landCommand('/api/replenish', {});
     if (event.target.closest('[data-growth]')) landCommand('/api/growth', {});
+    if (event.target.closest('[data-militia-go]')) {
+      const box = $('land-body').querySelector('[data-militia-count]');
+      landCommand('/api/militia', { count: Number(box?.value || 1) });
+    }
     const fateOpen = event.target.closest('[data-fate-open]');
     if (fateOpen) { $('fate').dataset.key = ''; renderFate(); }
     const burn = event.target.closest('[data-bridge-burn]');

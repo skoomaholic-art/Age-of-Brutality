@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { loadJson } from '../src/core/map.mjs';
 import { generateMap } from '../src/online/mapgen.mjs';
 import { createOnlineGame } from '../src/online/store.mjs';
-import { hireUnits, planRetrain, applyRetrain, buildGrowth, populationDawn, populationOnCapture, seedPopulation, kindsRaisedIn, PEOPLE, NO_LIMIT } from '../src/online/units.mjs';
+import { hireUnits, planRetrain, applyRetrain, raiseMilitia, buildGrowth, populationDawn, populationOnCapture, seedPopulation, kindsRaisedIn, PEOPLE, NO_LIMIT } from '../src/online/units.mjs';
 import { compAt, starsAt, setStars } from '../src/online/ranks.mjs';
 import { validateState } from '../src/core/state.mjs';
 
@@ -111,4 +111,23 @@ test('a host that lost men can be made good to full strength, dearer the more se
   assert.equal(g.state.territories[capital].warriors[H], full);
   assert.equal(starsAt(g.state, capital, H), 2, 'the experience stays');
   assert.throws(() => replenishUnits(g, map, H, capital), /полной силе/);
+});
+
+test('the fyrd comes for nothing but goodwill: no gold, a third of the people at most, once a dawn', () => {
+  let g = game();
+  const gold = g.state.houses[H].gold;
+  const people = g.state.population[capital];
+  g.state.order = { ...(g.state.order || {}), [capital]: 70 };
+  const most = Math.floor(people / 3);
+  const before0 = compAt(g.state, map, capital, H)[0];
+  assert.throws(() => raiseMilitia(g, map, H, capital, most + 1, { day: 2 }), /не больше/);
+  g = raiseMilitia(g, map, H, capital, 3, { day: 2 });
+  assert.equal(g.state.houses[H].gold, gold, 'not a coin spent');
+  assert.equal(g.state.population[capital], people - 3, 'three left the fields');
+  assert.equal(compAt(g.state, map, capital, H)[0], before0 + 3, 'they stand as peasants');
+  assert.equal(g.state.order[capital], 70 - 3 - 2 * 3, 'the land likes it less');
+  assert.throws(() => raiseMilitia(g, map, H, capital, 1, { day: 2 }), /этим днём/);
+  const later = raiseMilitia(g, map, H, capital, 1, { day: 3 });
+  assert.equal(later.state.territories[capital].warriors[H], g.state.territories[capital].warriors[H] + 1);
+  assert.deepEqual(validateState(g.state, map, constants), []);
 });

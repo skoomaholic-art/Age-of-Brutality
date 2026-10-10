@@ -8,7 +8,7 @@ import { createOnlineGame } from '../src/online/store.mjs';
 import { executeCommand } from '../src/online/commands.mjs';
 import { processDueOrders } from '../src/online/orders.mjs';
 import { startRounds, advanceRound } from '../src/online/rounds.mjs';
-import { seedHeart, heartLayout, heartDawn, menToTakeWild, chooseHearts, spyLearns, heartOnCapture, processHordes, HEART } from '../src/online/heart.mjs';
+import { seedHeart, heartLayout, heartDawn, menToTakeWild, chooseHearts, spyLearns, heartOnCapture, processHordes, HEART, SCOURGE } from '../src/online/heart.mjs';
 import { applyFog } from '../src/online/fog.mjs';
 import { validateState } from '../src/core/state.mjs';
 
@@ -31,6 +31,19 @@ function heartGame() {
 }
 
 // Hearts appear as on their dawn.
+// A host of the scourge, set on the board by hand for the tests that follow it.
+function startHorde(game, from, house) {
+  heartDawn(game, map, constants, 100, SCOURGE.day);
+  const mine = game.state.hordes.find(h => h.against === house);
+  mine.at = from;
+  mine.path = [from];
+  mine.started = false;
+  mine.men = HEART.hordeMen;
+  for (const other of game.state.hordes) if (other !== mine) other.men = 0;
+  game.state.hordes = game.state.hordes.filter(h => h.men > 0);
+  return mine;
+}
+
 function withHearts() {
   const game = heartGame();
   heartDawn(game, map, constants, 10, HEART.appearDay);
@@ -88,29 +101,20 @@ test('which Heart is true stays secret, save for a spy next to it and the daily 
   assert.ok(decoys.includes(game.state.heart.revealed[0]));
 });
 
-test('taking a decoy wakes the Horde: it marches on the capital, leaving men in every land it takes, and weakens', () => {
-  let game = withHearts();
+test('taking a decoy costs the purse and the land\'s trust, and wakes nothing', () => {
+  const game = withHearts();
   const { candidates, truth } = game.state.heart;
   const decoy = candidates.find(id => id !== truth);
   game.state.territories[decoy].owner = H;
   game.state.territories[decoy].warriors = { [H]: 2 };
   delete game.state.wild_guards[decoy];
+  game.state.houses[H].gold = 9;
+  game.state.order = { ...(game.state.order || {}), [decoy]: 70 };
   heartOnCapture(game, map, decoy, H, 100);
-  assert.equal(game.state.hordes.length, 1);
-  const horde = game.state.hordes[0];
-  assert.equal(horde.path.at(-1), capital);
-  // Give the House every land on the road with a small garrison.
-  for (const id of horde.path.slice(1)) { game.state.territories[id].owner = H; game.state.territories[id].warriors = { [H]: 1 }; delete game.state.wild_guards[id]; }
-  game.state.territories[capital].warriors = { [H]: 30 };
-  game = processHordes(game, map, constants, 100);
-  assert.equal(game.state.territories[decoy].owner, null, 'the decoy falls first');
-  const after = game.state.hordes[0]?.men ?? 0;
-  assert.ok(after < HEART.hordeMen, 'it left men behind');
-  game = processHordes(game, map, constants, 10_000_000);
-  assert.equal(game.state.territories[capital].owner, H, 'the capital held');
-  assert.ok(game.state.journal.some(e => e.kind === 'HORDE_TOOK'));
-  assert.ok(game.state.journal.some(e => e.kind === 'HORDE_BROKEN' || e.kind === 'HORDE_SPENT'));
-  assert.equal(game.state.hordes.length, 0);
+  assert.equal((game.state.hordes || []).length, 0, 'no Horde comes of it');
+  assert.equal(game.state.houses[H].gold, 4, 'half the purse went on nothing');
+  assert.ok(game.state.order[decoy] <= 15, 'the land trusts him least of all');
+  assert.ok(game.state.journal.some(e => e.kind === 'FALSE_HEART'));
   assert.deepEqual(validateState(game.state, map, constants), []);
 });
 
@@ -164,17 +168,36 @@ test('chooseHearts never puts two Hearts side by side', () => {
   for (const a of picked) for (const b of picked) if (a !== b) assert.ok(!adjacency.get(a).has(b));
 });
 
-test('if nobody takes the true Heart, the Horde breaks out of every decoy on all the capitals and the Heart is shown', () => {
-  const game = withHearts();
-  const day = HEART.appearDay + HEART.countdownDays + 1;
-  heartDawn(game, map, constants, 20, day - 1);
-  assert.ok(game.state.journal.some(e => e.kind === 'HORDE_COUNTDOWN'));
-  assert.equal(game.state.hordes.length, 0);
-  heartDawn(game, map, constants, 30, day);
-  assert.equal(game.state.heart.territory, game.state.heart.truth, 'the true Heart is shown to all');
+test('on the scourge\'s dawn a host comes for every House at once, and the first to break it is seen by all', () => {
+  let game = withHearts();
+  for (const house of houses) {
+    const seat = map.capitals[house];
+    game.state.territories[seat].owner = house;
+    game.state.territories[seat].warriors = { [house]: 4 };
+  }
+  heartDawn(game, map, constants, 20, SCOURGE.day - 1);
+  assert.ok(game.state.journal.some(e => e.kind === 'SCOURGE_COMING'));
+  assert.equal((game.state.hordes || []).length, 0, 'not yet');
+  heartDawn(game, map, constants, 30, SCOURGE.day);
   const targets = game.state.hordes.map(h => h.against).sort();
-  assert.deepEqual(targets, [...houses].sort(), 'one part on every capital');
-  assert.ok(game.state.journal.some(e => e.kind === 'HORDE_UNLEASHED'));
+  assert.deepEqual(targets, [...houses].sort(), 'one host for every House');
+  assert.ok(game.state.hordes.every(h => h.scourge && h.men >= SCOURGE.floor));
+  assert.ok(game.state.journal.some(e => e.kind === 'SCOURGE_LANDED'));
+  // It comes only once in a century.
+  const before = game.state.hordes.length;
+  heartDawn(game, map, constants, 40, SCOURGE.day + 1);
+  assert.equal(game.state.hordes.length, before);
+
+  // One House cuts its own down: the realm is told, and the first gets glory.
+  const mine = game.state.hordes.find(h => h.against === H);
+  const vp = Number(game.state.houses[H].victory_points || 0);
+  mine.men = 1;
+  mine.next_at = new Date(50).toISOString();
+  game = processHordes(game, map, constants, 10_000_000);
+  const broke = game.state.journal.find(e => e.kind === 'SCOURGE_BROKEN' && e.house === H);
+  assert.ok(broke, 'the chronicle says who stood');
+  assert.equal(broke.first, true);
+  assert.equal(game.state.houses[H].victory_points, vp + HEART.heartGlory);
 });
 
 test('a river with no bridge holds the Horde up at the ford', () => {
@@ -184,7 +207,7 @@ test('a river with no bridge holds the Horde up at the ford', () => {
   game.state.territories[decoy].owner = H;
   game.state.territories[decoy].warriors = { [H]: 1 };
   delete game.state.wild_guards[decoy];
-  heartOnCapture(game, map, decoy, H, 100);
+  startHorde(game, decoy, H);
   // Every road out of the decoy crosses a river with no bridge.
   game.state.river_crossings = {};
   for (const [a, b] of map.land_edges.filter(e => e.includes(decoy))) game.state.river_crossings[[a, b].sort().join('|')] = { a, b, x: 0, y: 0 };
@@ -213,7 +236,7 @@ test('the Horde sacks a capital it reaches but does not keep it: the House stand
   game.state.territories[decoy].owner = H;
   game.state.territories[decoy].warriors = { [H]: 1 };
   delete game.state.wild_guards[decoy];
-  heartOnCapture(game, map, decoy, H, 100);
+  startHorde(game, decoy, H);
   const horde = game.state.hordes[0];
   for (const id of horde.path.slice(1, -1)) { game.state.territories[id].owner = null; game.state.wild_guards[id] = 1; }
   game.state.territories[capital].warriors = { [H]: 2 };

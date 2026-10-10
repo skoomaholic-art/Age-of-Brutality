@@ -44,6 +44,17 @@ export const HEART = Object.freeze({
   hordeStepShare: 1 / 8
 });
 
+// The scourge of the century. On one dawn it comes for every House at once:
+// from the sea where the world is islands, from the wild lands where it is
+// not. Each House gets its own host, measured against its own strength, and
+// the first to break the one sent for it is seen by all to be the strongest.
+export const SCOURGE = Object.freeze({
+  day: 4,
+  share: 0.6,       // of the House's own men
+  floor: 5,
+  cap: 24
+});
+
 const SEA_STEP = 0.5;
 const RINGS = 4;
 
@@ -244,7 +255,16 @@ export function heartOnCapture(game, map, territory, house, nowMs = Date.now()) 
   if (!heart.revealed.includes(territory)) heart.revealed.push(territory);
   if (heart.woken.includes(territory)) return;
   heart.woken.push(territory);
-  spawnHorde(game, map, territory, house, nowMs);
+  // A false Heart is no prize: the treasury is spent on nothing and the land
+  // it stands on trusts its new master least of all.
+  const purse = Number(state.houses[house]?.gold || 0);
+  const burnt = Math.ceil(purse / 2);
+  state.houses[house].gold = purse - burnt;
+  if (state.order) state.order[territory] = Math.min(Number(state.order[territory] ?? 60), 15);
+  state.journal.push({
+    kind: 'FALSE_HEART', house, houses: [house], territory, gold: burnt,
+    at: iso(nowMs)
+  });
 }
 
 export function heartMode(state) {
@@ -353,11 +373,12 @@ export function heartDawn(game, map, constants, nowMs = Date.now(), day = null) 
     }
   }
 
-  // Nobody has taken the true Heart: the longer it stands empty, the worse for all.
-  if (day !== null && heart.candidates.length && !heart.territory) {
-    const breakDay = heart.appear_day + HEART.countdownDays + 1;
-    if (day === breakDay - 1) state.journal.push({ kind: 'HORDE_COUNTDOWN', day: breakDay, at: iso(nowMs) });
-    if (day >= breakDay) unleash(game, map, nowMs);
+  // The scourge of the century: it comes for every House on the same dawn.
+  if (day !== null) {
+    if (day === SCOURGE.day - 1 && !heart.scourge) {
+      state.journal.push({ kind: 'SCOURGE_COMING', day: SCOURGE.day, sea: seaborne(map), at: iso(nowMs) });
+    }
+    if (day >= SCOURGE.day && !heart.scourge) scourge(game, map, nowMs);
   }
 
   const holder = heart.truth ? state.territories[heart.truth]?.owner || null : null;
@@ -380,31 +401,68 @@ export function heartDawn(game, map, constants, nowMs = Date.now(), day = null) 
     .filter(house => !abandoned[house] && Number(state.houses[house].victory_points || 0) >= heart.target);
 }
 
-// ---------- the Horde ----------
+// ---------- the scourge of the century ----------
 
-// The Hearts stood untaken too long: the Horde breaks out of every decoy at
-// once and shares itself out among all the Houses, each part marching on a
-// capital. The true Heart is shown to all.
-function unleash(game, map, nowMs) {
+// A world of islands is one where the Houses are cut off from one another:
+// then the scourge comes by sea, and it is raiders. Otherwise it walks in
+// from the wild lands.
+function seaborne(map) {
+  return ['archipelago', 'atoll', 'shattered', 'lake-isle'].includes(map.shape || '');
+}
+
+// Where the host sent for this House comes from: an unowned land on the far
+// edge of its realm — the shore when the world is islands, the wilds when not.
+function scourgeEntry(state, map, house) {
+  const capital = map.capitals?.[house];
+  const own = Object.keys(state.territories).filter(id => state.territories[id].owner === house);
+  if (!capital && !own.length) return null;
+  const near = neighbours(map, { sea: false });
+  const from = new Set(own.length ? own : [capital]);
+  const edge = new Set();
+  for (const id of from) for (const [next] of near.get(id) || []) if (!state.territories[next]?.owner) edge.add(next);
+  const free = [...edge];
+  if (!free.length) {
+    // Nothing free next door: it lands in the realm's own quietest corner.
+    return own.sort((a, b) => Number(state.territories[a].warriors?.[house] || 0) - Number(state.territories[b].warriors?.[house] || 0))[0] || capital;
+  }
+  const coastal = id => (map.sea_lane_edges || []).some(([a, b]) => a === id || b === id)
+    || (map.ports || []).includes?.(id);
+  const want = seaborne(map) ? free.filter(coastal) : free;
+  const pick = (want.length ? want : free).sort((a, b) =>
+    Number(state.wild_guards?.[b] || 0) - Number(state.wild_guards?.[a] || 0) || (a < b ? -1 : 1))[0];
+  return pick || capital;
+}
+
+// How strong the host sent for a House is: measured against its own, so the
+// weak are not crushed and the strong are not tickled.
+function scourgeMen(state, house) {
+  const own = Object.values(state.territories)
+    .reduce((sum, land) => sum + Number(land.warriors?.[house] || 0), 0);
+  return Math.max(SCOURGE.floor, Math.min(SCOURGE.cap, Math.round(own * SCOURGE.share) + 3));
+}
+
+function scourge(game, map, nowMs) {
   const state = game.state;
   const heart = state.heart;
   const abandoned = game.lifecycle?.abandoned_houses || {};
-  const houses = Object.keys(state.houses || {}).filter(h => !abandoned[h] && map.capitals?.[h] && state.territories[map.capitals[h]]?.owner === h);
-  const decoys = heart.candidates.filter(id => id !== heart.truth && !heart.woken.includes(id));
-  heart.territory = heart.truth;
-  heart.revealed = heart.candidates.filter(id => id !== heart.truth);
-  if (!decoys.length || !houses.length) return;
-  const total = HEART.hordeMen * decoys.length;
-  const share = Math.max(3, Math.floor(total / houses.length));
-  // Which part goes where is up to the Horde: the order is shuffled by the game.
-  const order = [...houses].sort((a, b) => hash(`${game.id}:${a}`) - hash(`${game.id}:${b}`));
-  order.forEach((house, i) => {
-    const horde = spawnHorde(game, map, decoys[i % decoys.length], house, nowMs, share);
+  const houses = Object.keys(state.houses || {}).filter(h => !abandoned[h]
+    && Object.values(state.territories).some(land => land.owner === h));
+  if (!houses.length) return;
+  heart.scourge = { at: iso(nowMs), sea: seaborne(map), broken: [] };
+  for (const house of houses) {
+    const from = scourgeEntry(state, map, house);
+    if (!from) continue;
+    const horde = spawnHorde(game, map, from, house, nowMs, scourgeMen(state, house));
     horde.started = true;
+    horde.scourge = true;
+  }
+  state.journal.push({
+    kind: 'SCOURGE_LANDED', houses, sea: heart.scourge.sea,
+    men: houses.map(house => scourgeMen(state, house)), at: iso(nowMs)
   });
-  heart.woken.push(...decoys);
-  state.journal.push({ kind: 'HORDE_UNLEASHED', territory: heart.truth, decoys, houses: order, men: share, at: iso(nowMs) });
 }
+
+// ---------- the Horde ----------
 
 function dayMs(game) {
   return Number(game.rounds?.round_duration_ms) > 0 ? Number(game.rounds.round_duration_ms) : 24 * 3600_000;
@@ -584,6 +642,7 @@ export function processHordes(game, map, constants, nowMs = Date.now()) {
   const next = structuredClone(game);
   const state = next.state;
   for (const horde of state.hordes) {
+    const wasMen = horde.men;
     while (horde.men > 0 && Date.parse(horde.next_at) <= nowMs) {
       const at = Date.parse(horde.next_at);
       hordeStep(next, map, constants, horde, at);
@@ -594,6 +653,19 @@ export function processHordes(game, map, constants, nowMs = Date.now()) {
         horde.men = 0;
       }
       horde.next_at = iso(at + Math.round(dayMs(next) * HEART.hordeStepShare));
+    }
+    // The scourge sent for this House is broken: the realm sees who stood first.
+    if (horde.scourge && wasMen > 0 && horde.men <= 0 && state.heart?.scourge) {
+      const broken = state.heart.scourge.broken ||= [];
+      const first = broken.length === 0;
+      if (!broken.includes(horde.against)) {
+        broken.push(horde.against);
+        if (first) state.houses[horde.against].victory_points = Number(state.houses[horde.against].victory_points || 0) + HEART.heartGlory;
+        state.journal.push({
+          kind: 'SCOURGE_BROKEN', house: horde.against, houses: [horde.against],
+          first, glory: first ? HEART.heartGlory : 0, at: iso(nowMs)
+        });
+      }
     }
   }
   state.hordes = state.hordes.filter(h => h.men > 0);
