@@ -1981,7 +1981,7 @@ const server = http.createServer(async (req, res) => {
 
     // Static assets: self-hosted fonts, the painted map and miniatures. Flat file
     // names in three known folders only, so no path can escape them.
-    const asset = url.pathname.match(/^\/assets\/(fonts|map|img|lib|sfx)\/([a-z0-9][a-z0-9._-]*\.(woff2|svg|json|jpg|png|js|ogg))$/);
+    const asset = url.pathname.match(/^\/assets\/(fonts|map|img|lib|sfx|sfx\/voice)\/([a-z0-9][a-z0-9._-]*\.(woff2|svg|json|jpg|png|js|ogg))$/);
     if (req.method === 'GET' && asset) {
       const file = path.join(v6Root, 'online/assets', asset[1], asset[2]);
       if (!fs.existsSync(file)) return json(res, 404, { error: 'not found' });
@@ -1999,7 +1999,7 @@ const server = http.createServer(async (req, res) => {
       // Fonts never change; the map is rebuilt from the map data, so it is revalidated.
       res.setHeader(
         'cache-control',
-        fonts || asset[1] === 'sfx'
+        fonts || asset[1].startsWith('sfx')
           ? 'public, max-age=31536000, immutable'
           : asset[1] === 'img' ? 'public, max-age=86400' : 'public, max-age=300'
       );

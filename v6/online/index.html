@@ -1253,6 +1253,126 @@ function soundForNews(item) {
   return pick ? pick(item) : null;
 }
 
+// A tiding our own House should hear spoken aloud. Other Houses' business is
+// none of our captain's, and he does not talk over himself: see playVoice.
+function voiceForNews(item) {
+  const kind = String(item?.type || '');
+  const about = item.details || {};
+  const mine = about.house === house || (about.houses || []).includes?.(house)
+    || about.attacker === house || about.defender === house || about.against === house;
+  if (kind === 'ROUND_STARTED') return 'dawn-01';
+  if (kind === 'GAME_FINISHED') return (about.winners || []).includes(house) ? 'victory-01' : null;
+  if (!mine) return null;
+  if (kind === 'BATTLE' || kind === 'FIELD_BATTLE' || kind === 'MELEE' || kind === 'WILD_BATTLE') {
+    return about.winner === house ? 'won' : 'lost';
+  }
+  if (kind === 'MARCH' || kind === 'NEUTRAL_CAPTURE' || kind === 'EMPTY_ENEMY_OCCUPATION') return 'arrive';
+  if (kind === 'REVOLT') return 'revolt-01';
+  if (kind === 'HORDE_AWAKENED' || kind === 'HORDE_UNLEASHED' || kind === 'HORDE_TOOK' || kind === 'HORDE_SACKED') return 'horde-01';
+  if (kind === 'STORM_HIT' || kind === 'STORM_ROSE') return 'storm-01';
+  return null;
+}
+
+// ---------- the voices ----------
+// Recorded by the author: a captain at your side, a rider from the field, a
+// herald in the hall. Ten of the lines were read twice, for a lord and for a
+// lady, and the House's own ruler decides which is heard.
+const VOICE_TAKES = {
+  'hail-01': 1, 'hail-02': 1, 'hail-03': 1, 'hail-04': 1, 'hail-05': 1, 'hail-06': 1,
+  'hail-07': 1, 'hail-08': 1, 'hail-09': 1, 'hail-10': 1,
+  'march-01': 1, 'march-02': 1, 'march-03': 1, 'march-04': 1, 'march-05': 1, 'march-06': 1,
+  'deny-01': 1, 'deny-02': 1, 'deny-03': 1, 'deny-04': 1,
+  'arrive-01': 1, 'arrive-02': 1, 'arrive-03': 1,
+  'won-01': 4, 'won-02': 1, 'lost-01': 1, 'lost-02': 1,
+  'revolt-01': 2, 'horde-01': 1, 'storm-01': 1, 'dawn-01': 1, 'victory-01': 1
+};
+// Which of them were also read with «миледи» and «госпожа».
+const VOICE_LADY = new Set(['hail-01', 'hail-02', 'hail-04', 'hail-08', 'march-05',
+  'deny-01', 'lost-01', 'revolt-01', 'dawn-01', 'victory-01']);
+const VOICE_GROUPS = {
+  hail: ['hail-01', 'hail-02', 'hail-03', 'hail-04', 'hail-05', 'hail-06', 'hail-07', 'hail-08', 'hail-09', 'hail-10'],
+  march: ['march-01', 'march-02', 'march-03', 'march-04', 'march-05', 'march-06'],
+  arrive: ['arrive-01', 'arrive-02', 'arrive-03'],
+  won: ['won-01', 'won-02'],
+  lost: ['lost-01', 'lost-02']
+};
+let voiceAt = 0;
+let voiceNow = null;
+let voiceGuard = null;
+let voiceSaid = null;        // the words just spoken, for the banner over the host
+// What the captain actually says, so the word on the map matches the voice.
+const VOICE_WORDS = {
+  'hail-01': ['Милорд?', 'Миледи?'],
+  'hail-02': ['Да, господин?', 'Да, госпожа?'],
+  'hail-03': ['Жду приказа.'],
+  'hail-04': ['Мы здесь, милорд.', 'Мы здесь, миледи.'],
+  'hail-05': ['Войско готово.'],
+  'hail-06': ['Твоё слово?'],
+  'hail-07': ['Клинки наточены.'],
+  'hail-08': ['Куда вести, господин?', 'Куда вести, госпожа?'],
+  'hail-09': ['Слушаю.'],
+  'hail-10': ['Веди нас.']
+};
+
+// A woman rules when her name ends as a woman's does in this tongue.
+function ladyRules() {
+  const ruler = (characterData?.characters || []).find(item => item.role === 'RULER' && item.alive);
+  const name = String(ruler?.name || '').trim();
+  return /[аяАЯ]$/.test(name);
+}
+
+// While a voice speaks the music steps back, then returns.
+function duckMusic(on) {
+  const deck = musicDecks[0];
+  if (!deck || !musicLevel) return;
+  const loud = musicTrack === 'music_victory' ? 1 : musicTrack === 'music_battle' ? 0.85 : 0.7;
+  deck.volume = Math.max(0, Math.min(1, musicLevel * loud * (on ? 0.35 : 1)));
+}
+
+function playVoice(name, { gap = 2200 } = {}) {
+  if (!soundLevel || !soundUnlocked) return false;
+  const now = Date.now();
+  if (now - voiceAt < gap) return false;
+  const group = VOICE_GROUPS[name];
+  const pick = group ? group[Math.floor(Math.random() * group.length)] : name;
+  if (!VOICE_TAKES[pick]) return false;
+  const takes = VOICE_TAKES[pick];
+  const nth = takes > 1 ? Math.floor(Math.random() * takes) : 0;
+  const lady = VOICE_LADY.has(pick) && ladyRules();
+  const file = pick + (lady ? '-f' : '') + (nth ? '-' + (nth + 1) : '');
+  voiceSaid = VOICE_WORDS[pick] ? VOICE_WORDS[pick][lady ? 1 : 0] || VOICE_WORDS[pick][0] : null;
+  voiceAt = now;
+  try {
+    if (voiceNow) { voiceNow.pause(); duckMusic(false); }
+    const audio = new Audio('/assets/sfx/voice/' + file + '.ogg');
+    audio.volume = Math.max(0, Math.min(1, soundLevel));
+    voiceNow = audio;
+    const done = () => {
+      if (voiceNow !== audio) return;
+      voiceNow = null;
+      clearTimeout(voiceGuard);
+      duckMusic(false);
+    };
+    audio.addEventListener('ended', done);
+    audio.addEventListener('error', done);
+    // A browser that never says the sound ended must not leave the music hushed.
+    clearTimeout(voiceGuard);
+    voiceGuard = setTimeout(done, 6000);
+    duckMusic(true);
+    audio.play().catch(done);
+    return true;
+  } catch { duckMusic(false); return false; }
+}
+
+// A refusal is answered by the nearest truth the captain has for it.
+function voiceForRefusal(text) {
+  const words = String(text || '').toLowerCase();
+  if (/золот|казн|монет|дорог для казны|не по карману/.test(words)) return 'deny-04';
+  if (/пройти|дорог|мост|река|море|порт|путь|лане|корабл/.test(words)) return 'deny-02';
+  if (/воин|людей|войск|мало|некому|гарнизон/.test(words)) return 'deny-03';
+  return 'deny-01';
+}
+
 // ---------- the host answers ----------
 // Touch your own host and a horn answers you, with a word over the banner.
 const HOST_WORDS = ['Милорд?', 'Да, господин?', 'Жду приказа.', 'Мы здесь, милорд.',
@@ -1260,7 +1380,7 @@ const HOST_WORDS = ['Милорд?', 'Да, господин?', 'Жду прик
   'Слушаю.', 'Веди нас.'];
 let hostWordAt = 0;
 
-function hostAnswers(event) {
+function hostAnswers(event, said) {
   const card = document.querySelector('.map-card');
   if (!card) return;
   const now = Date.now();
@@ -1269,7 +1389,7 @@ function hostAnswers(event) {
   const box = card.getBoundingClientRect();
   const say = document.createElement('div');
   say.className = 'host-say';
-  say.textContent = HOST_WORDS[Math.floor(Math.random() * HOST_WORDS.length)];
+  say.textContent = said || HOST_WORDS[Math.floor(Math.random() * HOST_WORDS.length)];
   say.style.left = Math.max(8, Math.min(box.width - 8, event.clientX - box.left)) + 'px';
   say.style.top = Math.max(18, event.clientY - box.top - 44) + 'px';
   card.appendChild(say);
@@ -3293,8 +3413,13 @@ function setupLens() {
       event.stopPropagation();
       // Our own host answers the call; another House's only clinks.
       const ours = nodeOwner(node.dataset.lensAt) === house || node.dataset.lensHouse === house;
-      playSound(ours ? (Date.now() % 2 ? 'hail' : 'hail2') : 'select', { volume: 0.85 });
-      if (ours) hostAnswers(event);
+      // Our own host answers in its own voice; a horn stands in when no voice may sound.
+      if (!ours) playSound('select', { volume: 0.85 });
+      else {
+        voiceSaid = null;
+        if (!playVoice('hail')) playSound(Date.now() % 2 ? 'hail' : 'hail2', { volume: 0.85 });
+        hostAnswers(event, voiceSaid);
+      }
       selectArmy(node.dataset.lensAt);
       return;
     }
@@ -3355,6 +3480,7 @@ const ERROR_WORDS = [
 function sayError(error) {
   playSound('deny', { volume: 0.7 });
   const text = String(error?.message || error || '');
+  playVoice(voiceForRefusal(text), { gap: 3500 });
   if (/[а-яё]/i.test(text)) return text;
   const found = ERROR_WORDS.find(([pattern]) => pattern.test(text));
   return found ? found[1] : 'Писарь разводит руками: ' + text;
@@ -3886,6 +4012,8 @@ function announceNews() {
   for (const item of fresh.slice(-6)) {
     const name = soundForNews(item);
     if (name) playSound(name, { volume: item.details?.house === house || (item.details?.houses || []).includes(house) ? 1 : 0.55, gap: 400 });
+    const spoken = voiceForNews(item);
+    if (spoken) playVoice(spoken);
     musicHeardNews(item);
   }
   const found = fresh
@@ -6345,6 +6473,7 @@ async function sendOrder(confirmed = false) {
   const action = choices[0];
   const commanderId = $('commander').value || null;
   playSound('march');
+  playVoice('march');
   await api('/api/orders', {
     method: 'POST',
     headers: {'content-type':'application/json'},
