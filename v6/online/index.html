@@ -306,6 +306,12 @@
     .dip-sub button { padding: 1px 7px; font-size: 12px; font-style: normal; }
     /* The chronicler's glass: a closer look at an army under the cursor. */
     .army-token { cursor: help; pointer-events: auto; }
+    /* The name of a realm, written across its own lands. */
+    .realm-name {
+      font-family: 'Vek Gothic', Kurale, Alegreya, serif; text-anchor: middle;
+      opacity: .17; letter-spacing: .14em; pointer-events: none; paint-order: stroke;
+      stroke: rgba(255,248,230,.5); stroke-width: .8;
+    }
     /* Until the first march is ordered, the player's own hosts breathe a little,
        so a newcomer sees at once what to press. */
     @keyframes first-move { 0%, 100% { opacity: .15; r: 8; } 50% { opacity: .5; r: 10.5; } }
@@ -4990,11 +4996,22 @@ function focusOnHome() {
   applyMapView();
 }
 
+let lastLod = null;
+
+// The map is redrawn when the eye crosses into a nearer view, not on every nudge.
+function checkLod() {
+  const lod = (showFigures() ? 1 : 0) + (showHostBars() ? 1 : 0);
+  if (lod === lastLod) return;
+  lastLod = lod;
+  renderMap();
+}
+
 function applyMapView() {
   $('map').setAttribute(
     'viewBox',
     [mapView.x, mapView.y, mapView.w, mapView.h].map(n => n.toFixed(2)).join(' ')
   );
+  checkLod();
 }
 
 // Home view: the whole map on a wide screen, the player's own capital on a phone.
@@ -5213,23 +5230,99 @@ function awaitingFirstMove() {
   return !(snapshot.game.orders || []).some(order => order.action?.house === house);
 }
 
+// How near the eye is to the ground, from 0 (the whole world) to 1 (one land).
+// The nearer it comes, the more the map shows: figures instead of shields, then
+// the state of each host over its banner.
+let mapStepCache = null;
+// How far apart two neighbouring lands lie: the measure of everything on the map.
+function mapStep() {
+  if (mapStepCache && mapStepCache.key === snapshot?.map?.seed) return mapStepCache.value;
+  const coords = snapshot?.map?.coordinates || {};
+  const lengths = [];
+  for (const [a, b] of snapshot?.map?.land_edges || []) {
+    const p = coords[a]; const q = coords[b];
+    if (p && q) lengths.push(Math.hypot(p.x - q.x, p.y - q.y));
+  }
+  lengths.sort((x, y) => x - y);
+  const value = lengths.length ? lengths[Math.floor(lengths.length / 2)] : 60;
+  mapStepCache = { key: snapshot?.map?.seed, value };
+  return value;
+}
+
+// How many lands fit across the view: ten and more is the whole country, three
+// is standing over one of them.
+function landsAcross() { return (mapView.w || 760) / mapStep(); }
+function showFigures() { return landsAcross() < 9; }
+function showHostBars() { return landsAcross() < 5.5; }
+
+// What is left of a host, from 0 to 1, by the full strength it once had.
+function hostWhole(id, who) {
+  const peak = snapshot?.game?.state?.peak?.[id]?.[who];
+  if (!Array.isArray(peak)) return 1;
+  const full = peak.reduce((a, b) => a + Math.max(0, Math.floor(Number(b || 0))), 0);
+  if (!full) return 1;
+  return Math.max(0, Math.min(1, warriorsAt(id, who) / full));
+}
+
+// The name of a House written large and faint over the middle of its realm,
+// so the eye finds whose country it is looking at without reading the ribbons.
+function realmNames() {
+  const state = snapshot?.game?.state;
+  const coords = snapshot?.map?.coordinates || {};
+  if (!state) return '';
+  const seen = exploredNow;
+  const mine = {};
+  for (const [id, land] of Object.entries(state.territories || {})) {
+    if (!land.owner || !coords[id]) continue;
+    if (seen && !seen.has(id)) continue;
+    (mine[land.owner] ||= []).push(coords[id]);
+  }
+  // The name is sized to the view, so it reads the same at any distance.
+  const size = Math.max(9, Math.min(30, mapView.w / 26));
+  return Object.entries(mine).map(([who, points]) => {
+    if (points.length < 2) return '';
+    const x = points.reduce((a, p) => a + p.x, 0) / points.length;
+    const y = points.reduce((a, p) => a + p.y, 0) / points.length;
+    const colour = abandonedHouses()[who] ? ABANDONED_COLOR : (colors[who] || '#2b1b12');
+    return `<text class="realm-name" x="${x.toFixed(1)}" y="${y.toFixed(1)}" fill="${colour}" font-size="${size.toFixed(1)}">${escapeHtml(who.toUpperCase())}</text>`;
+  }).join('');
+}
+
 function shieldToken(x, y, color, count, scale = 1, lens = '', who = null, moving = false, faceRight = false, wear = null) {
   const ours = who && who === house && !moving;
-  if (pixiScene && !moving) pixiScene.tokens.push({ x: x + (pixiScene.dx || 0), y: y + (pixiScene.dy || 0), color, count, scale, wear: Boolean(wear), halo: Boolean(ours && awaitingFirstMove()) });
+  if (pixiScene && !moving) {
+    const at = lens.includes('data-lens-at') ? lens.replace(/.*data-lens-at="([^"]+)".*/, '$1') : null;
+    pixiScene.tokens.push({
+      x: x + (pixiScene.dx || 0), y: y + (pixiScene.dy || 0), color, count, scale,
+      wear: Boolean(wear), halo: Boolean(ours && awaitingFirstMove()),
+      figure: showFigures() && who && HOUSE_SLUGS[who] ? 'army-' + (abandonedHouses()[who] ? 'abandoned' : HOUSE_SLUGS[who]) : null,
+      whole: showHostBars() && at && who ? hostWhole(at, who) : null
+    });
+  }
   const slug = who && abandonedHouses()[who] ? 'abandoned' : HOUSE_SLUGS[who];
   // The map is redrawn often: the animation picks up where the clock is, not from its start.
-  const figure = false
-    ? `<g transform="scale(${faceRight ? -1 : 1} 1)"><image class="army-figure${moving ? ' marching' : ''}" style="animation-delay:-${Date.now() % (moving ? 700 : 4500)}ms" href="/assets/img/army-${slug}.png" x="-9" y="-13.5" width="18" height="18"></image></g>`
+  const near = showFigures();
+  const figure = near && slug
+    ? `<g transform="scale(${faceRight ? -1 : 1} 1)"><image class="army-figure${moving ? ' marching' : ''}" style="animation-delay:-${Date.now() % (moving ? 700 : 4500)}ms" href="/assets/img/army-${slug}.png" x="-11" y="-17" width="22" height="22"></image></g>`
     : '';
-  const badge = '';
+  // Standing on the ground, the host carries its banner at its shoulder.
+  const badge = near && slug ? 'translate(7.5 -4) scale(.78)' : '';
   const halo = ours && awaitingFirstMove()
     ? '<circle class="first-move-halo" cx="0" cy="0" r="9"></circle>' : '';
+  const whole = showHostBars() && who && !moving && lens.includes('data-lens-at')
+    ? Math.max(0, Math.min(1, hostWhole(lens.replace(/.*data-lens-at="([^"]+)".*/, '$1'), who)))
+    : null;
+  const bar = whole === null ? '' :
+    `<g class="host-bar" transform="translate(0 ${near ? -19 : -8})">` +
+    '<rect x="-6" y="0" width="12" height="2.1" fill="rgba(43,27,18,.55)"></rect>' +
+    `<rect x="-5.6" y=".35" width="${(11.2 * whole).toFixed(2)}" height="1.4" fill="${whole > 0.66 ? '#4e7a3a' : whole > 0.33 ? '#c9a24a' : '#9a2a1a'}"></rect>` +
+    '</g>';
   return `<g class="army-token" ${lens} transform="translate(${x} ${y}) scale(${scale})">` + halo + figure +
     `<g transform="${badge}">` +
     `<path class="shield" d="M-4.8 -5.4H4.8V.8Q4.8 4.9 0 6.4Q-4.8 4.9 -4.8 .8Z" fill="${color}"></path>` +
     '<path class="shield-shine" d="M-3.4 -4H3.4"></path>' +
     `<text y="2.3">${count}</text>` +
-    '</g>' + (wear ? skullMark() : '') + '</g>';
+    '</g>' + (wear ? skullMark() : '') + bar + '</g>';
 }
 
 // The skull over a host taking losses without a battle.
@@ -5703,6 +5796,25 @@ function drawPixiMap(scene, key) {
   }
   for (const tk of scene.tokens) {
     const s = shieldGraphic(tk.color, tk.count, tk.scale);
+    // Near to the ground the host itself stands there, the banner at its shoulder.
+    if (tk.figure) {
+      const figure = new PIXI.Sprite(pixiTexture(tk.figure));
+      figure.width = 22; figure.height = 22;
+      figure.position.set(-11, -17);
+      s.addChildAt(figure, 0);
+      s.children[s.children.length - 1].position?.set?.(0, 0);
+      s.scale.set(1);
+      s.pivot.set(0, 0);
+      for (const child of s.children) if (child !== figure && child.position) { child.x += 7.5; child.y -= 4; child.scale?.set?.(0.78); }
+    }
+    if (tk.whole !== null && tk.whole !== undefined) {
+      const bar = new PIXI.Graphics();
+      const y = tk.figure ? -19 : -8;
+      bar.beginFill(0x2b1b12, 0.55); bar.drawRect(-6, y, 12, 2.1); bar.endFill();
+      bar.beginFill(tk.whole > 0.66 ? 0x4e7a3a : tk.whole > 0.33 ? 0xc9a24a : 0x9a2a1a);
+      bar.drawRect(-5.6, y + 0.35, 11.2 * tk.whole, 1.4); bar.endFill();
+      s.addChild(bar);
+    }
     if (tk.halo) {
       const halo = new PIXI.Graphics();
       halo.beginFill(0xe2b53e, 0.32); halo.drawCircle(0, 0, 9.6); halo.endFill();
@@ -6177,6 +6289,7 @@ function renderMap() {
     `<g class="map-castles">${castles.join('')}</g>` +
     lines.join('') +
     waypointNodes.join('') +
+    `<g class="map-realm-names">${realmNames()}</g>` +
     `<g class="map-ribbons">${ribbons.join('')}</g>` +
     `<g class="map-tokens">${tokens.join('')}</g>` +
     movingArmies.join('') + bridgeSpots.join('');
