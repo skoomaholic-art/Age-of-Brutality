@@ -65,6 +65,7 @@ import { attritionView } from './attrition.mjs';
 import { processStorms } from './storms.mjs';
 import { TERRAIN } from './terrain.mjs';
 import { seasonNow, seasonTurnsOn } from './seasons.mjs';
+import { listInterceptions, orderIntercept } from './intercept.mjs';
 import { generateMap, MAX_HOUSES, MIN_HOUSES, MAP_SEASON_KEYS, MAP_SHAPES, MAP_SIZE_KEYS, MAP_WARPS, pickMapShape, recommendedSize } from './mapgen.mjs';
 import { processEncounters } from './encounters.mjs';
 import { expelGuests } from './guests.mjs';
@@ -707,6 +708,10 @@ function redactGameForPlayer(game, player) {
     ) {
       applyFog(clientGame, map, ownHouse);
     }
+    // Enemy columns this House could ride out and catch on the road.
+    clientGame.interceptions = ownHouse && game.lifecycle?.status === GAME_STATUS.RUNNING
+      ? listInterceptions(game, map, ownHouse, { nowMs: Date.now() })
+      : [];
     // Only the author's own account is told that developer mode exists at all.
     clientGame.dev = player?.dev_owner && game.lifecycle?.game_mode === 'SOLO'
       ? { allowed: true, reveal: Boolean(game.dev?.reveal && game.dev.house === ownHouse), instant: Boolean(game.dev?.instant && game.dev.house === ownHouse) }
@@ -1738,7 +1743,7 @@ async function handleGameApi(req, res, url, ctx, subpath) {
     return json(res, result.status, result.response);
   }
 
-  if (req.method === 'POST' && ['/levy', '/drill', '/yard', '/port', '/bridge', '/hire', '/retrain', '/growth', '/capture-choice', '/bridge-burn', '/replenish', '/militia'].includes(subpath)) {
+  if (req.method === 'POST' && ['/levy', '/drill', '/yard', '/port', '/bridge', '/hire', '/retrain', '/growth', '/capture-choice', '/bridge-burn', '/replenish', '/militia', '/intercept'].includes(subpath)) {
     const body = await readBody(req);
     const house = String(body.house || '').trim();
     await requireHouse(ctx, req, house);
@@ -1754,6 +1759,7 @@ async function handleGameApi(req, res, url, ctx, subpath) {
               : subpath === '/bridge' ? buildBridge(game, map, house, String(body.key || ''), { nowMs })
               : subpath === '/bridge-burn' ? burnBridge(game, map, house, String(body.key || ''), { nowMs })
                 : subpath === '/hire' ? hireUnits(game, map, house, String(body.territory || ''), body.counts, { nowMs })
+                  : subpath === '/intercept' ? orderIntercept(game, map, constants, house, { orderId: String(body.order_id || ''), from: String(body.from || ''), warriors: body.warriors, nowMs })
                   : subpath === '/militia' ? raiseMilitia(game, map, house, String(body.territory || ''), body.count, { nowMs, day: Number(game.rounds?.number || 0) })
                   : subpath === '/retrain' ? queueRetrainJob(game, map, house, { territory: String(body.territory || ''), from: body.from, to: body.to, count: body.count }, { nowMs }).game
                   : subpath === '/replenish' ? replenishUnits(game, map, house, String(body.territory || ''), { nowMs })

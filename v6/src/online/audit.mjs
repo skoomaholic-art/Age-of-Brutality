@@ -250,6 +250,30 @@ export function journalEntryToAudit(entry, map, game) {
     };
   }
 
+  if (entry.kind === 'AMBUSH_LAID') {
+    return {
+      ...base,
+      message: `Застава на дороге: ${entry.warriors} ${entry.warriors === 1 ? 'воин вышел' : 'воинов вышли'} из ${territoryName(map, entry.territory)} ждать рать Дома ${entry.against} у ${territoryName(map, entry.road)}.`,
+      details: { house: entry.house, territory_id: entry.territory, road_id: entry.road, warriors: entry.warriors, against: entry.against, at: entry.at || null }
+    };
+  }
+
+  if (entry.kind === 'AMBUSH') {
+    const where = territoryName(map, entry.road);
+    return {
+      ...base,
+      message: entry.won
+        ? `Сеча на дороге у ${where}: рать Дома ${entry.against} перехвачена и повернула назад. Их полегло ${entry.their_lost}, наших ${entry.our_lost}.`
+        : `Сеча на дороге у ${where}: заставу смяли, рать Дома ${entry.against} идёт дальше. Наших полегло ${entry.our_lost}, их ${entry.their_lost}.`,
+      details: {
+        house: entry.house, houses: entry.houses || [], against: entry.against,
+        territory_id: entry.territory, road_id: entry.road, won: Boolean(entry.won),
+        ours: entry.ours, our_lost: entry.our_lost, theirs: entry.theirs, their_lost: entry.their_lost,
+        at: entry.at || null
+      }
+    };
+  }
+
   if (entry.kind === 'SEASON_TURNED') {
     const winter = entry.season === 'зима';
     return {

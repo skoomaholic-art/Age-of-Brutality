@@ -34,6 +34,7 @@ import {
 } from './route-planner.mjs';
 
 import { COLD, isWinter } from './seasons.mjs';
+import { processAmbushes } from './intercept.mjs';
 
 export const ONLINE_TIMING = Object.freeze({
   landSegmentMs: 3_000,
@@ -858,6 +859,8 @@ function reconcilePendingOrders(next, map, nowMs) {
 export function processDueOrders(game, map, constants, nowMs = Date.now()) {
   const next = structuredClone(game);
   reconcilePendingOrders(next, map, nowMs);
+  // Hosts caught on the road fight before anyone arrives anywhere.
+  processAmbushes(next, map, constants, nowMs);
   const due = next.orders
     .filter(order => order.status === 'PENDING' && Date.parse(order.due_at) <= nowMs)
     .sort((a, b) => {

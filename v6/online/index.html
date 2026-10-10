@@ -946,6 +946,12 @@
           <select id="field-ratio"><option value="">у цели</option><option value="0.75">на ¾ пути</option><option value="0.5">на полпути</option><option value="0.25">на ¼ пути</option></select></label>
         <div id="field-hint" class="field-hint"></div>
       </div>
+      <div id="chase-card" class="land-card field-card">
+        <div class="land-head"><b id="chase-title">Чужая рать</b><button id="chase-close" title="Закрыть">×</button></div>
+        <div id="chase-status" class="field-status"></div>
+        <div id="chase-body"></div>
+        <div id="chase-hint" class="field-hint"></div>
+      </div>
       <div id="audio-box" class="audio-box" hidden>
         <label class="audio-row"><span>Звуки</span><input id="bar-sound-range" type="range" min="0" max="100" step="5"><b id="bar-sound-value">0%</b></label>
         <label class="audio-row"><span>Музыка</span><input id="bar-music-range" type="range" min="0" max="100" step="5"><b id="bar-music-value">0%</b></label>
@@ -1969,6 +1975,15 @@ function renderCharacters() {
             character.health === 'HEALTHY'
           );
 
+    // What stands between a lord with the host and his own hall.
+    const returnBlock = host => {
+      const seat = territoryById(snapshot.map?.capitals?.[house])?.name || 'столице';
+      if (!host) return 'Рать его не видна. Отозвать можно, когда она вернётся.';
+      if (host.moving_order_id) return 'Рать в походе. Отозвать можно, когда она встанет в ' + seat + '.';
+      const where = territoryById(host.territory)?.name || '';
+      return 'Рать стоит в ' + where + '. Приведи её в ' + seat + ' — тогда и отзовёшь ко двору.';
+    };
+
     const canReturn =
       character.mode === 'ARMY' &&
       character.status === 'ACTIVE' &&
@@ -2016,7 +2031,13 @@ function renderCharacters() {
           : canReturn
             ? '<div class="character-actions"><button data-char-court="' +
               escapeHtml(character.id) + '">Отозвать ко двору</button></div>'
-            : '';
+            // He is with the host: say plainly what it takes to call him home,
+            // instead of simply offering nothing.
+            : character.mode === 'ARMY' && character.status === 'ACTIVE'
+              ? '<div class="character-actions"><button disabled title="' +
+                escapeHtml(returnBlock(army)) + '">Отозвать ко двору</button></div>' +
+                '<div class="tiny">' + escapeHtml(returnBlock(army)) + '</div>'
+              : '';
 
     const special = character.special_rule && character.special_rule !== '—'
       ? '<div class="character-rule">Особый дар: ' +
@@ -4163,6 +4184,16 @@ function newsFor(item) {
   if (item.type === 'MARCH_THINNED') return { rank: 5, art: 'order-failed', title: 'Рать поредела', text, quiet: true };
   if (item.type === 'REVOLT') return { rank: mine(d.house) ? 8 : 4, art: 'land-lost', title: mine(d.house) ? 'Земля поднялась против тебя' : 'Бунт в землях', text };
   if (item.type === 'DESERTION') return { rank: 6, art: 'order-failed', title: 'Войско разбегается', text };
+
+  if (item.type === 'AMBUSH') {
+    const ours = mine(d.house);
+    const won = Boolean(d.won) === ours;
+    return {
+      rank: 8, art: won ? 'battle-won' : 'battle-lost',
+      title: ours ? (d.won ? 'Рать перехвачена' : 'Заставу смяли') : (d.won ? 'Наша рать перехвачена' : 'Засада отбита'),
+      text, ok: won ? 'Доброе дело' : 'Горе нам'
+    };
+  }
 
   if (item.type === 'SEASON_TURNED') {
     const winter = d.season === 'зима';
@@ -6767,12 +6798,66 @@ function fieldOrder() {
 
 function openField(orderId) {
   const order = (snapshot?.game?.orders || []).find(o => o.id === orderId);
+  // Another House's column: what we may do is ride out and catch it on the road.
+  if (order && order.action?.house !== house && !isSpectator) { openChase(orderId); return; }
   if (!order || order.action?.house !== house || isSpectator) return;
   fieldOrderId = orderId;
   fieldRedirect = null;
   $('land-card')?.classList.remove('show');
   renderField();
   $('field-card').classList.add('show');
+}
+
+// ---------- catching a column on the road ----------
+
+let chaseOrderId = null;
+
+function interceptionsFor(orderId) {
+  return (snapshot?.game?.interceptions || []).filter(item => item.order_id === orderId);
+}
+
+function openChase(orderId) {
+  chaseOrderId = orderId;
+  $('land-card')?.classList.remove('show');
+  renderChase();
+  $('chase-card').classList.add('show');
+}
+
+function closeChase() {
+  chaseOrderId = null;
+  $('chase-hint').textContent = '';
+  $('chase-card').classList.remove('show');
+}
+
+function renderChase() {
+  if (!chaseOrderId) return;
+  const order = (snapshot?.game?.orders || []).find(o => o.id === chaseOrderId);
+  if (!order || order.status !== 'PENDING') { closeChase(); return; }
+  const offers = interceptionsFor(chaseOrderId);
+  const goal = mapNodeById(order.travel_to || order.action.to)?.name || order.action.to;
+  $('chase-title').textContent = 'Рать Дома ' + order.action.house;
+  $('chase-status').textContent = order.action.warriors + ' воин. идут к ' + goal + '.';
+  const laid = (order.ambush || []).filter(item => !item.done);
+  if (laid.length) {
+    $('chase-body').innerHTML = '<div class="tiny">Застава уже выставлена: ' + laid.reduce((a, b) => a + Number(b.warriors || 0), 0) + ' воин. ждут их на дороге.</div>';
+    return;
+  }
+  if (!offers.length) {
+    $('chase-body').innerHTML = '<div class="tiny">Перехватить неоткуда: нужна своя земля у их дороги и воины в ней сверх сторожи.</div>';
+    return;
+  }
+  $('chase-body').innerHTML =
+    '<div class="tiny">Вышли воинов наперехват: они встретят рать в поле, без стен и валов. Разобьёшь — повернёт назад; не разобьёшь — пойдёт дальше, а твои полягут.</div>' +
+    offers.map(item => {
+      const where = mapNodeById(item.from)?.name || item.from;
+      const road = mapNodeById(item.land)?.name || item.land;
+      const secs = Math.max(0, Math.round((item.at - Date.now()) / 1000));
+      return '<div class="split-kind">' +
+        '<span>Из ' + escapeHtml(where) + ' · у ' + escapeHtml(road) + ' через ' + secs + ' с <span class="have">до ' + item.max + '</span></span>' +
+        '<input type="number" min="1" max="' + item.max + '" value="' + item.max + '" data-chase-count="' + escapeHtml(item.from) + '">' +
+        '<button data-chase-go="' + escapeHtml(item.from) + '">Наперехват</button>' +
+        '</div>';
+    }).join('');
 }
 
 function closeField() {
@@ -7323,12 +7408,30 @@ placeStatus(); phoneLayout.addEventListener('change', placeStatus);
 // A phone opens on the player's own capital as soon as the map is known.
 const homeWatch = setInterval(() => { if (homeShown || !phoneLayout.matches) return clearInterval(homeWatch); if (snapshot?.map?.capitals && $('map').dataset.ready) goHome(); }, 400);
 $('field-close').onclick = closeField;
+$('chase-close').onclick = closeChase;
+// Sending men out to catch a column on the road.
+$('chase-body').addEventListener('click', async event => {
+  const go = event.target.closest('[data-chase-go]');
+  if (!go) return;
+  const from = go.dataset.chaseGo;
+  const count = Number(document.querySelector('[data-chase-count="' + from + '"]')?.value || 0);
+  $('chase-hint').textContent = '';
+  try {
+    await api('/api/intercept', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ house, order_id: chaseOrderId, from, warriors: count })
+    });
+    playSound('march', { volume: 0.8 });
+    await refresh();
+    renderChase();
+  } catch (error) { $('chase-hint').textContent = sayError(error); }
+});
 // Esc or the right button lets go of the chosen army.
 addEventListener('keydown', event => { if (event.key === 'Escape' && (origin || fieldRedirect)) clearChoice(); });
 $('map').addEventListener('contextmenu', event => { if (origin || fieldRedirect) { event.preventDefault(); clearChoice(); } });
 $('via-toggle').onclick = () => { viaPick = !viaPick; renderSelection(); };
 $('via-clear').onclick = () => { viaPoints = []; viaPick = false; renderSelection(); };
-setInterval(() => { if (fieldOrderId) renderField(); }, 1000);
+setInterval(() => { if (fieldOrderId) renderField(); if (chaseOrderId) renderChase(); }, 1000);
 setupLens();
 setupLand();
 setupDev();

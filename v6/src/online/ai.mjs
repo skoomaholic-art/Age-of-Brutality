@@ -1,4 +1,5 @@
 import { areAllies, inTruce } from './diplomacy.mjs';
+import { alliesOf, visiblePositions } from './fog.mjs';
 import { neutralResistance } from '../core/neutral.mjs';
 import { buildAdjacency } from '../core/map.mjs';
 import { aiBridgeChoice, buildBridge } from './bridges.mjs';
@@ -93,12 +94,39 @@ function battleOutlook(attackers, defenders) {
   };
 }
 
+// A land on the march of the realm — one with a stranger's land next door —
+// keeps a watch of its own. A House that pools every man into one fist leaves
+// its own country open, and that is not how a realm is held.
+function onBorder(state, map, house, id) {
+  for (const [a, b] of map.land_edges || []) {
+    if (a !== id && b !== id) continue;
+    const other = a === id ? b : a;
+    if ((state.territories[other]?.owner ?? null) !== house) return true;
+  }
+  return false;
+}
+
 function garrisonNeeded(state, map, house, from) {
   const commanders = commandersAt(state, house, from).length;
-  if (state.heart) return Math.max(garrisonToKeep(state, map, house, from), commanders);
   const meta = territoryMeta(map, from);
-  const base = meta?.type === 'Столица' ? 2 : 1;
-  return Math.max(base, commanders);
+  const base = state.heart
+    ? garrisonToKeep(state, map, house, from)
+    : (meta?.type === 'Столица' ? 2 : 1);
+  // A third of the men of a border land stay to hold it, up to a watch of six:
+  // enough that a realm is not stripped bare, never so much that it cannot march.
+  const here = Number(state.territories?.[from]?.warriors?.[house] || 0);
+  const watch = onBorder(state, map, house, from)
+    ? Math.min(6, Math.max(meta?.type === 'Столица' ? 2 : 1, Math.floor(here / 3)))
+    : 0;
+  return Math.max(base, watch, commanders);
+}
+
+// The most men a House will gather in one place. Beyond this the host is not
+// an army but a hoard: the rest stay in the lands they were raised in.
+function hostCap(state, house) {
+  let all = 0;
+  for (const land of Object.values(state.territories || {})) all += Number(land.warriors?.[house] || 0);
+  return Math.max(8, Math.round(all * 0.45));
 }
 
 // A game of the Heart: one plan, three kinds of move. Strength, not heads.
@@ -108,8 +136,11 @@ function heartCandidates(game, map, constants, house) {
   const legal = listQueueableMarches(game, map, constants, house);
   const pairs = new Map();
   const reach = new Map();
+  // The fog binds the AI too: it marches on what its own lands and spies see.
+  const seen = visiblePositions(state, map, house, alliesOf(game, house));
   for (const action of legal) {
     if (!state.territories[action.to] || !state.territories[action.from]) continue;
+    if (!seen.has(action.to)) continue;
     const key = `${action.from}>${action.to}`;
     pairs.set(key, Math.max(pairs.get(key) || 0, action.warriors));
     (reach.get(action.from) || reach.set(action.from, new Set()).get(action.from)).add(action.to);
@@ -121,6 +152,7 @@ function heartCandidates(game, map, constants, house) {
   // Ground that eats men without a battle: worth stepping off, not worth camping on.
   const wearOf = id => (atHome(map, id, house) ? null : wearAt(map, state, id, house));
   const wearCost = id => Number(wearOf(id)?.rate || 0) * 6;
+  const cap = hostCap(state, house);
 
   // 1. Strike: from the stage onto the next land, with the fewest men that win.
   if (plan.target) {
@@ -141,7 +173,7 @@ function heartCandidates(game, map, constants, house) {
   for (const [key, max] of pairs) {
     const [from, to] = key.split('>');
     if (to !== plan.stage || from === plan.stage) continue;
-    const spare = Math.min(spareAt(from), max);
+    const spare = Math.min(spareAt(from), max, Math.max(0, cap - warriorsOf(state, to, house)));
     if (spare < 1) continue;
     // Mustering out of ground that bleeds is worth more; mustering into it, less.
     out.push({
@@ -191,8 +223,12 @@ function isBorder(state, adjacency, house, id) {
 function marchCandidates(game, map, constants, house, adjacency) {
   const state = game.state;
   const options = new Map();
+  // A House marches on what it can see. The fog binds the lords of the AI as
+  // it binds a player: a land nobody of theirs has eyes on is no target.
+  const seen = visiblePositions(state, map, house, alliesOf(game, house));
   for (const action of listQueueableMarches(game, map, constants, house)) {
     if (!state.territories[action.to] || !state.territories[action.from]) continue;
+    if (!seen.has(action.to)) continue;
     const key = `${action.from}>${action.to}`;
     if (!options.has(key)) options.set(key, []);
     options.get(key).push(action.warriors);
@@ -262,14 +298,17 @@ function marchCandidates(game, map, constants, house, adjacency) {
         });
         continue;
       }
-      const outlook = battleOutlook(warriors, defenders);
+      // Enough to win and no more: the rest hold the lands they stand in.
+      const enough = sizes.find(count => battleOutlook(count, defenders).wins && count >= defenders + 2);
+      const warriorsSent = Math.min(enough || warriors, hostCap(state, house));
+      const outlook = battleOutlook(warriorsSent || warriors, defenders);
       if (!outlook.wins) continue;
       const capital = territoryMeta(map, to)?.type === 'Столица' ? 4 : state.heart?.territory === to ? 6 : 0;
       const firstBattle = hasAchievement(state, house, 'VP-W2') ? 0 : 4;
       out.push({
         kind: 'ATTACK',
         value: worth + capital + firstBattle - outlook.losses * 0.7,
-        command: command(warriors)
+        command: command(warriorsSent || warriors)
       });
       continue;
     }
@@ -450,7 +489,12 @@ export function runAiHouses(game, map, constants, {
   if (!roundsEnabled(game) || game.rounds.finished) return game;
   if (game.lifecycle?.status !== 'RUNNING') return game;
 
-  const aiHouses = game.rounds.ai_houses || [];
+  // A House whose player has left the table is not left standing: its lords
+  // carry on under the House AI, as every unplayed House does.
+  const aiHouses = [...new Set([
+    ...(game.rounds.ai_houses || []),
+    ...Object.keys(game.lifecycle?.abandoned_houses || {})
+  ])].filter(house => (game.rounds.houses || []).includes(house));
   if (!aiHouses.length) return game;
 
   // The first House to act rotates each round, as the first player does at the table.

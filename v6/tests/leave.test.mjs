@@ -102,3 +102,34 @@ test('the chronicle tells the other players about the abandoned realm', () => {
   assert.match(item.message, /Мира/);
   assert.match(item.message, /разбойники и варвары/);
 });
+
+test('an abandoned House is played on by the House AI', async () => {
+  const { runAiHouses } = await import('../src/online/ai.mjs');
+  const { createOnlineGame } = await import('../src/online/store.mjs');
+  const { startRounds } = await import('../src/online/rounds.mjs');
+  const { normalizeOnlineEconomy } = await import('../src/online/economy.mjs');
+  const { normalizeAudit } = await import('../src/online/audit.mjs');
+  const { loadJson } = await import('../src/core/map.mjs');
+  const path = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const map = loadJson(path.join(root, 'src/data/map.v6.json'));
+  const constants = loadJson(path.join(root, 'src/data/constants.v6.json'));
+  const T0 = 1_700_000_000_000;
+
+  const left = constants.houses[0];
+  let game = createOnlineGame(map, constants, { id: 'left-behind', nowMs: T0, accessMode: 'PLAYER_BOUND', inviteCode: null });
+  game = normalizeAudit(normalizeOnlineEconomy(game, T0));
+  game.lifecycle.status = 'RUNNING';
+  // Every House is taken by a player, so none of them is an AI House to begin with.
+  game.lifecycle.house_claims = Object.fromEntries(constants.houses.map((house, i) => [house, `P${i}`]));
+  game = startRounds(game, map, constants, { nowMs: T0, mode: 'days', dayMs: 600_000 });
+  assert.deepEqual(game.rounds.ai_houses, []);
+
+  // The player walks away: the House is abandoned, and the AI picks it up.
+  game.lifecycle.abandoned_houses = { [left]: { display_name: 'Мира', at: new Date(T0).toISOString() } };
+  game.rounds.ai_next_at = {};
+  const after = runAiHouses(game, map, constants, { nowMs: T0 + 60_000 });
+  assert.notEqual(after, game, 'the abandoned House took its turn');
+  assert.ok(after.rounds.ai_next_at[left], 'and is now on the AI clock');
+});
