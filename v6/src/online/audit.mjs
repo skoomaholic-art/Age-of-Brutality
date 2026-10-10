@@ -298,6 +298,14 @@ export function journalEntryToAudit(entry, map, game) {
     };
   }
 
+  if (entry.kind === 'LAST_DAY') {
+    return {
+      ...base,
+      message: 'Последний день века. Что возьмёшь нынче — с тем и останешься, а Сердце земель стоит сегодня вдвое.',
+      details: { day: entry.day, at: entry.at || null }
+    };
+  }
+
   if (entry.kind === 'DEED_DONE') {
     const paid = entry.gold ? `Казна прибывает на ${entry.gold} золота.` : `Слава Дома растёт на ${entry.glory}.`;
     return {

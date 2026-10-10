@@ -283,3 +283,29 @@ test('the Horde holds nothing: a land it takes is burnt to the ground and it wal
   assert.ok(took.men < menBefore, 'the sacking costs it men all the same');
   assert.deepEqual(validateState(game.state, map, constants), []);
 });
+
+test('the last day of the age is announced, and the Heart pays double at its dawn', () => {
+  let game = withHearts();
+  const { truth } = game.state.heart;
+  game.state.territories[truth].owner = H;
+  delete game.state.wild_guards[truth];
+  game.state.heart.holder = H;
+  game.state.heart.streak = 1;
+
+  // An ordinary dawn.
+  const before = Number(game.state.houses[H].victory_points || 0);
+  heartDawn(game, map, constants, 1000, HEART.days - 1);
+  const plain = game.state.journal.filter(e => e.kind === 'HEART_HELD').pop();
+  assert.equal(game.state.houses[H].victory_points, before + plain.glory);
+  assert.equal(plain.last_day, false);
+  assert.ok(!game.state.journal.some(e => e.kind === 'LAST_DAY'), 'not yet');
+
+  // And the dawn of the last day.
+  const middle = Number(game.state.houses[H].victory_points || 0);
+  heartDawn(game, map, constants, 2000, HEART.days);
+  const final = game.state.journal.filter(e => e.kind === 'HEART_HELD').pop();
+  assert.equal(final.last_day, true);
+  assert.equal(final.glory, (HEART.holdBase + game.state.heart.streak) * 2);
+  assert.equal(game.state.houses[H].victory_points, middle + final.glory);
+  assert.ok(game.state.journal.some(e => e.kind === 'LAST_DAY'), 'and everyone is told');
+});

@@ -4403,6 +4403,8 @@ function newsFor(item) {
   if (item.type === 'REVOLT') return { rank: mine(d.house) ? 8 : 4, art: 'land-lost', title: mine(d.house) ? 'Земля поднялась против тебя' : 'Бунт в землях', text };
   if (item.type === 'DESERTION') return { rank: 6, art: 'order-failed', title: 'Войско разбегается', text };
 
+  if (item.type === 'LAST_DAY') return { rank: 10, art: 'day-change', title: 'Последний день века', text, ok: 'До конца' };
+
   if (item.type === 'DEED_DONE' && mine(d.house)) {
     return { rank: 7, art: 'deal-made', title: d.last ? 'Наказ исполнен' : 'Дело сделано', text, ok: 'Дальше' };
   }

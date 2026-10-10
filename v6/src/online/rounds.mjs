@@ -218,7 +218,11 @@ function beginRound(next, map, constants, number, nowMs, timing) {
 
 // How often an AI House issues an order in a game played in days.
 export function aiOrderIntervalMs(rounds) {
-  return Number(rounds.round_duration_ms) / 5;
+  // Nine turns of thought in a day. A House that moves five times a day sits
+  // at home all game and the world stands still around the player; nine is
+  // enough for a neighbour to be seen taking ground, which is what makes the
+  // map feel alive.
+  return Number(rounds.round_duration_ms) / 9;
 }
 
 export function startRounds(game, map, constants, {

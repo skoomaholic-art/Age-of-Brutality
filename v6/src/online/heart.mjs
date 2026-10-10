@@ -389,12 +389,18 @@ export function heartDawn(game, map, constants, nowMs = Date.now(), day = null) 
     state.journal.push({ kind: 'HEART_TAKEN', house: holder, houses: [holder], previous: heart.holder, territory: heart.truth, at: iso(nowMs) });
   }
   heart.holder = holder;
+  // The last day of the age: everything is decided on it, and the Heart is
+  // worth twice as much to whoever holds it at that dawn.
+  const last = day !== null && Number(day) >= Number(heart.days || HEART.days);
+  if (last && !state.journal.some(e => e.kind === 'LAST_DAY')) {
+    state.journal.push({ kind: 'LAST_DAY', houses: Object.keys(state.houses || {}), day: Number(day), at: iso(nowMs) });
+  }
   if (holder) {
-    const glory = HEART.holdBase + heart.streak;
+    const glory = (HEART.holdBase + heart.streak) * (last ? 2 : 1);
     state.houses[holder].victory_points = Number(state.houses[holder].victory_points || 0) + glory;
     state.journal.push({
       kind: 'HEART_HELD', house: holder, houses: [holder], territory: heart.truth,
-      streak: heart.streak, glory, total: state.houses[holder].victory_points, target: heart.target, at: iso(nowMs)
+      streak: heart.streak, glory, last_day: last, total: state.houses[holder].victory_points, target: heart.target, at: iso(nowMs)
     });
   }
   const abandoned = game.lifecycle?.abandoned_houses || {};
