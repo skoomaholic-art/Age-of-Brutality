@@ -9,6 +9,7 @@
 // nearest fort (if the captor has one), or the block.
 
 import { buildAdjacency } from '../core/map.mjs';
+import { nearestOwnLand } from './guests.mjs';
 import { CHARACTER_HEALTH, CHARACTER_MODE, CHARACTER_STATUS } from '../core/characters.mjs';
 
 const WEAKENED_PENALTY = 2;
@@ -197,6 +198,53 @@ export function captiveAction(game, map, constants, { house, characterId, action
 // Housekeeping on every tick: recoveries, stuck Fate records from older
 // builds, prisoners whose dungeon changed hands, and the choices of Houses
 // nobody plays.
+/**
+ * A lord whose fleet is gone cannot be left standing on the open water: he
+ * comes ashore in the nearest land of his House, and if his House holds none
+ * within reach, the sea keeps him. Returns the same game when nobody is adrift.
+ */
+export function rescueStrandedCommanders(game, map, nowMs = Date.now()) {
+  const state = game.state;
+  const adrift = [];
+  for (const army of Object.values(state?.armies || {})) {
+    const at = army.territory;
+    if (!at || army.moving_order_id) continue;
+    if (!state.sea_nodes?.[at]) continue;
+    if (Number(state.sea_nodes[at].warriors?.[army.house] || 0) > 0) continue;
+    adrift.push(army);
+  }
+  if (!adrift.length) return game;
+  const next = structuredClone(game);
+  for (const stranded of adrift) {
+    const army = next.state.armies[stranded.id] || Object.values(next.state.armies).find(a => a.commander_id === stranded.commander_id);
+    if (!army) continue;
+    const home = nearestOwnLand(next.state, map, army.house, army.territory);
+    const commander = next.state.characters?.[army.commander_id];
+    if (home) {
+      army.territory = home;
+      if (commander) commander.location = { kind: 'TERRITORY', territory: home };
+      next.state.journal.push({
+        kind: 'COMMANDER_ASHORE', house: army.house, houses: [army.house], character_id: army.commander_id || null,
+        character_name: commander?.name || '', territory: home, at: new Date(nowMs).toISOString()
+      });
+      continue;
+    }
+    // No shore of his own anywhere: the lord goes down with his ships.
+    if (commander) {
+      commander.alive = false;
+      commander.mode = 'DEAD';
+      commander.location = null;
+      next.state.journal.push({
+        kind: 'COMMANDER_DROWNED', house: army.house, houses: [army.house], character_id: army.commander_id || null,
+        character_name: commander.name || '', position: army.territory, at: new Date(nowMs).toISOString()
+      });
+    }
+    delete next.state.armies[army.id];
+  }
+  next.updated_at = new Date(nowMs).toISOString();
+  return next;
+}
+
 export function processCharacters(game, map, constants, { nowMs = Date.now() } = {}) {
   if (game.lifecycle?.status && game.lifecycle.status !== 'RUNNING') return game;
   const characters = Object.values(game.state?.characters || {});

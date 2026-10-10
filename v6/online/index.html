@@ -3443,7 +3443,11 @@ function newsFor(item) {
   if (item.type === 'STORM_HIT') return { rank: mine(d.house) ? 7 : 3, art: 'battle-lost', title: 'Буря потрепала ладьи', text };
   if (item.type === 'STORM_PASSED') return { rank: mine(d.house) ? 5 : 2, art: 'battle-seen', title: 'Буря прошла стороной', text };
   if (item.type === 'ATTRITION') return { rank: 4, art: 'battle-lost', title: 'Потери без битвы', text };
-  if (item.type === 'SEA_TOLL') return { rank: 5, art: 'battle-lost', title: 'Море берёт своё', text };
+  if (item.type === 'SEA_TOLL') return { rank: mine(d.house) ? (Number(d.days || 0) >= 4 ? 8 : 6) : 3, art: 'battle-lost', title: 'Проклятье Одиссея', text, ok: 'К берегу!' };
+  if (item.type === 'COMMANDER_ASHORE') return { rank: 6, art: 'commander-returned', title: 'Воевода сошёл на берег', text };
+  if (item.type === 'COMMANDER_DROWNED') return { rank: 9, art: 'commander-dead', title: 'Воевода утонул', text };
+  if (item.type === 'MARCH_LOST') return { rank: 7, art: 'order-failed', title: 'Рать не дошла', text };
+  if (item.type === 'MARCH_THINNED') return { rank: 5, art: 'order-failed', title: 'Рать поредела', text };
   if (item.type === 'REVOLT') return { rank: mine(d.house) ? 8 : 4, art: 'land-lost', title: mine(d.house) ? 'Земля поднялась против тебя' : 'Бунт в землях', text };
   if (item.type === 'DESERTION') return { rank: 6, art: 'order-failed', title: 'Войско разбегается', text };
 
@@ -5462,7 +5466,10 @@ function renderMap() {
     .filter(order =>
       order.status === 'PENDING' &&
       Array.isArray(order.action?.path) &&
-      order.action.path.length > 1
+      order.action.path.length > 1 &&
+      // The men are counted at the land they set out from until they arrive:
+      // with that land lost, there is no host on the road to draw.
+      !(order.action.house === house && warriorsAt(order.action.from, house) <= 0 && !state.sea_nodes?.[order.action.from])
     )
     .map(order => {
       const pos = movingOrderPosition(order);

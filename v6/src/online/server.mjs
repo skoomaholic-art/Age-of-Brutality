@@ -68,7 +68,7 @@ import { processEncounters } from './encounters.mjs';
 import { expelGuests } from './guests.mjs';
 import { processCampFights } from './melee.mjs';
 import { agentsView, attachSpy, hireSpy, processAgents, wayfarersView } from './agents.mjs';
-import { captiveAction, captivesView, processCharacters } from './fate.mjs';
+import { captiveAction, captivesView, processCharacters, rescueStrandedCommanders } from './fate.mjs';
 import {
   acceptAlliance,
   answerAiOffers,
@@ -575,6 +575,8 @@ async function tickUnlocked(ctx) {
   processed = processStorms(processed, map, nowMs);
   processed = processRounds(processed, map, constants, { nowMs });
   processed = processCharacters(processed, map, constants, { nowMs });
+  // A lord left alone on the open water is brought ashore (or drowns).
+  processed = rescueStrandedCommanders(processed, map, nowMs);
   processed = processRiders(processed, map, constants, nowMs);
   // Houses camped side by side that are now at war fight it out before anyone is led home.
   processed = processCampFights(processed, map, constants, nowMs);

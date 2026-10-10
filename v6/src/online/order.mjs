@@ -17,6 +17,7 @@
 // A choice not made by the next dawn is MERCY.
 import { legalDefenderRetreats } from '../core/combat.mjs';
 import { moveRanks } from './ranks.mjs';
+import { peopleAt } from './units.mjs';
 import { leadArmiesAway } from './guests.mjs';
 
 export const ORDER = Object.freeze({
@@ -78,7 +79,7 @@ export function aiCaptureChoice(state, territory, house) {
 
 // What each choice would give, for the dialog.
 export function choiceOutcomes(state, territory) {
-  const people = Number(state.population?.[territory] || 0);
+  const people = peopleAt(state, territory);
   const order = Number(state.order?.[territory] ?? ORDER.fromWild);
   const land = state.territories?.[territory];
   const garrison = Number(land?.warriors?.[land?.owner] || 0);
@@ -104,7 +105,7 @@ export function applyCaptureChoice(state, territory, house, choice, { nowMs = Da
   if (!pending) throw new Error('судьба этой земли уже решена');
   if (pending.house !== house) throw new Error('решение не за тобой');
   const outcome = choiceOutcomes(state, territory)[choice];
-  state.population[territory] = Number(state.population?.[territory] || 0) - outcome.people_lost;
+  state.population[territory] = Math.max(0, peopleAt(state, territory) - outcome.people_lost);
   state.houses[house].gold = Number(state.houses[house].gold || 0) + outcome.gold;
   state.order[territory] = outcome.order_after;
   if (state.capture_choices) delete state.capture_choices[territory];
@@ -155,7 +156,7 @@ export function orderDawn(state, map, constants, nowMs = Date.now()) {
       state.houses[owner].gold = Math.max(0, Number(state.houses[owner].gold || 0) - lost);
     }
     const garrison = Number(land.warriors?.[owner] || 0);
-    const people = Number(state.population?.[id] || 0);
+    const people = peopleAt(state, id);
     if (type !== 'Столица' && revoltRisk(order, people, garrison) === 'HIGH') {
       risen.push(id);
       rise(state, map, constants, id, owner, people, garrison, nowMs);

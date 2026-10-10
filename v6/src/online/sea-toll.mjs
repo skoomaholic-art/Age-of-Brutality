@@ -1,3 +1,5 @@
+import { moveRanks } from './ranks.mjs';
+
 // Nobody fights at sea, but the sea takes its toll. Every dawn a fleet still
 // out on the open water counts one more day there; from the second dawn on it
 // loses a fifth of its men (at least one, never the last) to sickness, hunger and storms.
@@ -12,8 +14,9 @@ export function seaTollLoss(men, days) {
   return Math.min(men - 1, Math.max(1, Math.floor(men * SEA_TOLL.share)));
 }
 
-// Mutates `state`. Returns the list of losses.
-export function applySeaToll(state, nowMs = Date.now()) {
+// Mutates `state`. Returns the list of losses. `map` lets the kinds and the
+// experience of a thinned fleet follow its men; without it only heads change.
+export function applySeaToll(state, nowMs = Date.now(), map = null) {
   const losses = [];
   for (const [id, node] of Object.entries(state.sea_nodes || {})) {
     for (const [house, count] of Object.entries(node.warriors || {})) {
@@ -25,6 +28,8 @@ export function applySeaToll(state, nowMs = Date.now()) {
       const lost = seaTollLoss(men, days);
       if (!lost) continue;
       const left = men - lost;
+      // The weakest go first, and the books of the fleet follow them.
+      if (map) moveRanks(state, map, id, null, house, 0, { losses: lost });
       node.warriors[house] = left;
       losses.push({ house, node: id, lost, left });
       state.journal.push({

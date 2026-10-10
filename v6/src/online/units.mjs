@@ -79,7 +79,7 @@ export function hireUnits(game, map, house, territory, counts, { nowMs = Date.no
   if (!heads) throw new Error('кого нанять?');
   const allowed = new Set(kindsRaisedIn(map, territory));
   want.forEach((n, i) => { if (n && !allowed.has(i)) throw new Error(`${RANKS[i].name} здесь не набираются: нужна ${RANKS[i].where === 2 ? 'столица' : 'земля с городом'}`); });
-  const people = Number(game.state.population?.[territory] || 0);
+  const people = peopleAt(game.state, territory);
   if (heads > people) throw new Error(`в этой земле осталось людей: ${people}`);
   const gold = want.reduce((sum, n, i) => sum + n * RANKS[i].gold, 0);
   if (Number(game.state.houses[house].gold || 0) < gold) throw new Error(`нужно ${gold} золота`);
@@ -125,7 +125,7 @@ export function replenishQuote(state, map, house, territory) {
   return {
     missing, men, gold, stars,
     health: full ? Math.round((heads / full) * 100) : 100,
-    people: Number(state.population?.[territory] || 0),
+    people: peopleAt(state, territory),
     own: land?.owner === house
   };
 }
@@ -215,14 +215,23 @@ export function growthName(map, territory) {
   return (LEVEL[landType(map, territory)] ?? 0) >= 1 ? 'Ярмарка' : 'Поля';
 }
 
+// A land's people, as a whole number that can be counted on: an old save or a
+// broken write never leaves a NaN to spread through the rules.
+export function peopleAt(state, id) {
+  const people = Math.floor(Number(state?.population?.[id]));
+  return Number.isFinite(people) && people > 0 ? people : 0;
+}
+
 // At dawn: lands with fields or a fair gain people, up to twice their start.
 export function populationDawn(state, map) {
   if (!state.population) return;
+  // Whatever an old save holds, the count is a whole number again.
+  for (const id of Object.keys(state.population)) state.population[id] = peopleAt(state, id);
   for (const id of Object.keys(state.growth || {})) {
     if (!state.growth[id]) continue;
     const type = landType(map, id);
     const cap = (PEOPLE.start[type] ?? 6) * PEOPLE.capFactor;
-    state.population[id] = Math.min(cap, Number(state.population[id] || 0) + (PEOPLE.growth[type] ?? 1));
+    state.population[id] = Math.min(cap, peopleAt(state, id) + (PEOPLE.growth[type] ?? 1));
   }
 }
 
@@ -241,7 +250,7 @@ export function onLandTaken(game, map, territory, previousOwner, nowMs = Date.no
 export function populationOnCapture(state, territory, previousOwner) {
   if (!state.population) return 0;
   const share = previousOwner ? PEOPLE.takenFromHouse : PEOPLE.takenFromWild;
-  const people = Number(state.population[territory] || 0);
+  const people = peopleAt(state, territory);
   const lost = Math.ceil(people * share);
   state.population[territory] = people - lost;
   // The fields of the old owner are trampled when a House takes it by force.
@@ -344,12 +353,12 @@ export function aiHireChoice(game, map, house, prefer = null) {
   // Keep enough for a dawn of upkeep, of the old men and the new.
   const upkeep = upkeepOf(state, map, house).gold;
   const lands = Object.entries(state.territories)
-    .filter(([id, t]) => t.owner === house && Number(state.population[id] || 0) > 0)
+    .filter(([id, t]) => t.owner === house && peopleAt(state, id) > 0)
     .map(([id]) => id)
-    .sort((a, b) => (b === prefer) - (a === prefer) || (kindsRaisedIn(map, b).length - kindsRaisedIn(map, a).length) || (Number(state.population[b]) - Number(state.population[a])) || (a < b ? -1 : 1));
+    .sort((a, b) => (b === prefer) - (a === prefer) || (kindsRaisedIn(map, b).length - kindsRaisedIn(map, a).length) || (peopleAt(state, b) - peopleAt(state, a)) || (a < b ? -1 : 1));
   let best = null;
   for (const id of lands) {
-    const people = Number(state.population[id] || 0);
+    const people = peopleAt(state, id);
     // The kind that buys the most strength here; among equals the stronger men.
     for (const k of kindsRaisedIn(map, id)) {
       let n = Math.min(people, Math.floor(gold / RANKS[k].gold));

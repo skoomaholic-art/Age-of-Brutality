@@ -14,7 +14,7 @@ import {
   settleCommander
 } from '../core/characters.mjs';
 import { declareWarInPlace, hasPassage } from './diplomacy.mjs';
-import { headsLost, ranksForMarch, settleMarchRanks, starsAt, starsForMarch, strengthOf } from './ranks.mjs';
+import { headsLost, ranksForMarch, settleMarchRanks, starsAt, starsForMarch, strengthOf, takeStrongest } from './ranks.mjs';
 import { rulerLeadBonus } from './court.mjs';
 import { fightOnLand, joinersAgainst } from './melee.mjs';
 import { heartMode, ringGlory, wildBattle } from './heart.mjs';
@@ -811,8 +811,49 @@ function meleeArrival(game, map, constants, order, nowMs) {
   return { game: g, state: g.state, result: { ...result, kind: 'MELEE', route_path: [...(action.path || [])], commander_id: order.commander_id || null } };
 }
 
+/**
+ * Marching men are still counted at the land they set out from until they
+ * arrive, so a host whose home falls while it is on the road falls with it.
+ * Before anything resolves, every pending march is matched against the men
+ * actually left at its origin: a march with nobody behind it is given up, and
+ * one with fewer men than ordered marches with those it has. Mutates `next`.
+ */
+function reconcilePendingOrders(next, map, nowMs) {
+  const taken = new Map();
+  for (const order of next.orders || []) {
+    if (order.status !== 'PENDING' || order.return_home) continue;
+    const { house, from } = order.action;
+    const key = `${house}@${from}`;
+    const here = onlinePositionWarriors(next.state, from, house);
+    const already = Number(taken.get(key) || 0);
+    const free = Math.max(0, here - already);
+    const asked = Number(order.action.warriors || 0);
+    if (free >= asked) { taken.set(key, already + asked); continue; }
+    const where = map.territories?.some(t => t.id === from) ? from : null;
+    if (free <= 0) {
+      order.status = 'FAILED';
+      order.resolved_at = new Date(nowMs).toISOString();
+      order.failure_reason = 'рати больше нет: она осталась в земле, откуда выступила';
+      next.state.journal.push({
+        kind: 'MARCH_LOST', order_id: order.id, house, from, to: order.action.to,
+        warriors: asked, territory: where, at: order.resolved_at
+      });
+      continue;
+    }
+    taken.set(key, already + free);
+    next.state.journal.push({
+      kind: 'MARCH_THINNED', order_id: order.id, house, from, to: order.action.to,
+      warriors: free, was: asked, territory: where, at: new Date(nowMs).toISOString()
+    });
+    order.action.warriors = free;
+    // Those who march on are the strongest of the host that was to go.
+    if (Array.isArray(order.action.ranks)) order.action.ranks = takeStrongest([...order.action.ranks], free);
+  }
+}
+
 export function processDueOrders(game, map, constants, nowMs = Date.now()) {
   const next = structuredClone(game);
+  reconcilePendingOrders(next, map, nowMs);
   const due = next.orders
     .filter(order => order.status === 'PENDING' && Date.parse(order.due_at) <= nowMs)
     .sort((a, b) => {

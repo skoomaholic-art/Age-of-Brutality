@@ -374,8 +374,11 @@ export function journalEntryToAudit(entry, map, game) {
     return {
       ...base,
       visibility: 'PRIVATE',
-      message: `Море берёт своё: флот Дома ${entry.house} в открытом море уже ${entry.days}-й рассвет, ${entry.lost} человек сгинули от хвори, голода и бурь. Осталось ${entry.left}. Причаль к берегу, чтобы потери прекратились.`,
-      details: { house: entry.house, position: entry.position, lost: entry.lost, left: entry.left, at: entry.at || null }
+      // The longer a fleet wanders out of sight of land, the heavier the curse.
+      message: entry.days >= 4
+        ? `Проклятье Одиссея на ладьях Дома ${entry.house}: ${entry.days}-й рассвет без берега. Вода протухла, люди видят на волнах то, чего нет, и бросаются за борт. Не стало ${entry.lost}, осталось ${entry.left}. Пристань к земле, пока есть кому грести.`
+        : `Проклятье Одиссея: ладьи Дома ${entry.house} в открытом море ${entry.days}-й рассвет. Хворь, голод и шторма унесли ${entry.lost}, осталось ${entry.left}. Причаль к берегу — и небоевые потери прекратятся.`,
+      details: { house: entry.house, position: entry.position, lost: entry.lost, left: entry.left, days: entry.days ?? null, at: entry.at || null }
     };
   }
 
@@ -907,6 +910,30 @@ export function journalEntryToAudit(entry, map, game) {
       visibility: 'PRIVATE',
       message: words[entry.why] || `Войско Дома ${entry.house} у земли ${where} тает без битвы: не стало ${entry.lost}.`,
       details: { house: entry.house, territory_id: entry.territory, lost: entry.lost, why: entry.why, at: entry.at || null }
+    };
+  }
+
+  if (entry.kind === 'COMMANDER_ASHORE' || entry.kind === 'COMMANDER_DROWNED') {
+    return {
+      ...base,
+      visibility: 'PRIVATE',
+      message: entry.kind === 'COMMANDER_ASHORE'
+        ? `${entry.character_name} из Дома ${entry.house} остался в море без ладей и сошёл на берег в земле ${territoryName(map, entry.territory)}.`
+        : `${entry.character_name} из Дома ${entry.house} пошёл ко дну вместе с последними ладьями: своего берега поблизости не нашлось.`,
+      details: { house: entry.house, character_id: entry.character_id || null, territory_id: entry.territory || null, at: entry.at || null }
+    };
+  }
+
+  if (entry.kind === 'MARCH_LOST' || entry.kind === 'MARCH_THINNED') {
+    const from = territoryName(map, entry.from);
+    const to = territoryName(map, entry.to);
+    return {
+      ...base,
+      visibility: 'PRIVATE',
+      message: entry.kind === 'MARCH_LOST'
+        ? `Поход Дома ${entry.house} из земли ${from} на ${to} оборвался: земля, откуда выступала рать, пала, и воины разделили её судьбу.`
+        : `Рать Дома ${entry.house}, что шла из земли ${from} на ${to}, поредела ещё до дороги: вместо ${entry.was} идут ${entry.warriors}.`,
+      details: { house: entry.house, from_id: entry.from, to_id: entry.to, territory_id: entry.territory || null, warriors: entry.warriors, order_id: entry.order_id || null, at: entry.at || null }
     };
   }
 

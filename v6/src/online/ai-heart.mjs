@@ -9,6 +9,7 @@ import { buildAdjacency } from '../core/map.mjs';
 import { compAt, headsLost, starsAt, strengthOf, takeStrongest } from './ranks.mjs';
 import { HEART, menToTakeWild } from './heart.mjs';
 import { garrisonToHold, revoltRisk } from './order.mjs';
+import { peopleAt } from './units.mjs';
 import { inTruce, relationOf, RELATION } from './diplomacy.mjs';
 import { baseDefense } from '../core/combat.mjs';
 
@@ -79,7 +80,7 @@ export function garrisonToKeep(state, map, house, id) {
   if (state.heart?.territory === id && state.territories[id]?.owner === house) return Number(state.territories[id].warriors?.[house] || 0);
   let keep = meta?.type === 'Столица' ? 2 : 1;
   if (state.order) {
-    const people = Number(state.population?.[id] || 0);
+    const people = peopleAt(state, id);
     const order = Number(state.order[id] ?? 70);
     if (revoltRisk(order, people, 0) !== 'NONE') keep = Math.max(keep, garrisonToHold(people));
   }

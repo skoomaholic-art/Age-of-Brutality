@@ -117,7 +117,7 @@ function beginRound(next, map, constants, number, nowMs, timing) {
   next.state = income.state;
   const afterIncome = purse(next.state);
   // Men long out at sea sicken and drown: the toll of the sea, every dawn.
-  applySeaToll(next.state, nowMs);
+  applySeaToll(next.state, nowMs, map);
   // A squall may rise over the water where somebody's fleet is out.
   if (number > 1) stormsDawn(next, map, nowMs);
   // Rough ground takes its own: mountains, marshes, sands and snows.
