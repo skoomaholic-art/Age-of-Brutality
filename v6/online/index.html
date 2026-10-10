@@ -3171,6 +3171,11 @@ function renderLand() {
   const fortNote = t.type === 'Столица' ? 'В столице крепость не строят' : st.fort ? 'Крепость уже стоит' : building ? 'Крепость строится' : '';
   const fortRow = '<div class="with-hint">' + goldButton('data-land-fort', fortNote || 'Возвести крепость · 3 золота', 3, fortNote) + hint('Крепость прибавляет обороне земли 3: нападающему нужно больше силы, а гарнизон теряет меньше. В столице не строится — её стены и так крепки.') + '</div>';
   // One thing worth doing here now stands first; the rest waits under a fold.
+  // On ashes there is nothing to build until a village stands there again.
+  if (isWasteLand(t.id)) {
+    body.innerHTML = rebuildBlock(t.id) + '<div class="rank-box">' + fortRow + '</div>';
+    return;
+  }
   const rows = [
     ['grow', growButton(t.id), canGrowNow(t.id)],
     ['growth', growthButton(t.id), !snapshot.game.state.growth?.[t.id]],
