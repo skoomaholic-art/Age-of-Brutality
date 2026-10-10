@@ -3,7 +3,7 @@
 // At any time a House may name its aspiration: the way it means to be
 // remembered. Each one is three steps, and each step is something the House
 // has to actually do — win battles, fill the treasury, make peace, settle the
-// land. A step taken pays glory once and for good, and the aspiration itself
+// land. A step taken pays влияние once and for good, and the aspiration itself
 // gives one standing gift from the moment it is named.
 //
 // Nothing here is luck: every step says plainly what it wants, and the House
@@ -13,6 +13,7 @@
 
 import { landKind } from './settlements.mjs';
 import { opinionOf } from './opinion.mjs';
+import { addInfluence } from './influence.mjs';
 
 export const ASPIRATIONS = Object.freeze({
   SWORD: {
@@ -20,9 +21,9 @@ export const ASPIRATIONS = Object.freeze({
     lore: 'Дом, о котором говорят через страх.',
     gift: { kind: 'attack', value: 1, text: '+1 к силе всякой твоей рати в бою' },
     steps: [
-      { name: 'Пролить первую кровь', want: 'выиграть сечу', glory: 2 },
-      { name: 'Отнять землю', want: 'взять землю у другого Дома', glory: 3 },
-      { name: 'Взять престол', want: 'взять чужую столицу', glory: 6 }
+      { name: 'Пролить первую кровь', want: 'выиграть сечу', influence: 2 },
+      { name: 'Отнять землю', want: 'взять землю у другого Дома', influence: 3 },
+      { name: 'Взять престол', want: 'взять чужую столицу', influence: 6 }
     ]
   },
   GOLD: {
@@ -30,19 +31,19 @@ export const ASPIRATIONS = Object.freeze({
     lore: 'Дом, который покупает то, что другие берут силой.',
     gift: { kind: 'gold', value: 1, text: '+1 золота с каждым рассветом' },
     steps: [
-      { name: 'Полная казна', want: 'скопить 40 золота', glory: 2 },
-      { name: 'Богатая земля', want: 'держать рудник, солеварню или каменоломню', glory: 3 },
-      { name: 'Три города', want: 'поднять три поселения выше деревни', glory: 5 }
+      { name: 'Полная казна', want: 'скопить 40 золота', influence: 2 },
+      { name: 'Богатая земля', want: 'держать рудник, солеварню или каменоломню', influence: 3 },
+      { name: 'Три города', want: 'поднять три поселения выше деревни', influence: 5 }
     ]
   },
   WORD: {
     name: 'Путь слова',
     lore: 'Дом, чьё слово стоит дороже меча.',
-    gift: { kind: 'influence', value: 1, text: '+1 влияния с каждым рассветом' },
+    gift: { kind: 'gold', value: 1, text: '+1 золота с каждым рассветом' },
     steps: [
-      { name: 'Рука об руку', want: 'заключить союз', glory: 2 },
-      { name: 'Замирить вражду', want: 'заключить мир после войны', glory: 3 },
-      { name: 'Добрая слава', want: 'два Дома держат тебя в приязни', glory: 5 }
+      { name: 'Рука об руку', want: 'заключить союз', influence: 2 },
+      { name: 'Замирить вражду', want: 'заключить мир после войны', influence: 3 },
+      { name: 'Добрая слава', want: 'два Дома держат тебя в приязни', influence: 5 }
     ]
   },
   LAND: {
@@ -50,9 +51,9 @@ export const ASPIRATIONS = Object.freeze({
     lore: 'Дом, который кормит и растит, а не жжёт.',
     gift: { kind: 'people', value: 1, text: '+1 душа с каждым рассветом в столице' },
     steps: [
-      { name: 'Десять земель', want: 'держать десять земель', glory: 2 },
-      { name: 'Своей рукой', want: 'поставить деревню на пустой земле или на пепелище', glory: 3 },
-      { name: 'Многолюдье', want: 'шестьдесят душ в своих землях', glory: 5 }
+      { name: 'Десять земель', want: 'держать десять земель', influence: 2 },
+      { name: 'Своей рукой', want: 'поставить деревню на пустой земле или на пепелище', influence: 3 },
+      { name: 'Многолюдье', want: 'шестьдесят душ в своих землях', influence: 5 }
     ]
   }
 });
@@ -149,10 +150,10 @@ export function checkAspirations(game, map, constants, { nowMs = Date.now() } = 
       if (!stepDone(game, map, house, mine.key, index)) continue;
       mine.taken.push(index);
       const step = plan.steps[index];
-      state.houses[house].victory_points = Number(state.houses[house].victory_points || 0) + step.glory;
+      addInfluence(state, house, step.influence, 'ASPIRATION', { nowMs });
       state.journal.push({
         kind: 'ASPIRATION_STEP', house, houses: [house], aspiration: mine.key,
-        step: index, step_name: step.name, glory: step.glory,
+        step: index, step_name: step.name, influence: step.influence,
         last: mine.taken.length === plan.steps.length, at: new Date(nowMs).toISOString()
       });
       changed = true;

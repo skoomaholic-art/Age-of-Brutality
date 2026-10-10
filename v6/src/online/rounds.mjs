@@ -3,7 +3,7 @@ import { applyCourtDawn } from './court.mjs';
 import { applySeaToll } from './sea-toll.mjs';
 import { attritionDawn } from './attrition.mjs';
 import { stormsDawn } from './storms.mjs';
-import { heartDawn } from './heart.mjs';
+import { wildDawn } from './wild.mjs';
 import { populationDawn, upkeepDawn } from './units.mjs';
 import { orderDawn } from './order.mjs';
 import { seasonOfDay } from './seasons.mjs';
@@ -126,7 +126,7 @@ function beginRound(next, map, constants, number, nowMs, timing) {
   // Rough ground takes its own: mountains, marshes, sands and snows.
   if (number > 1) attritionDawn(next, map, nowMs, seasonOfDay(map, number));
   // A game of the Heart: the wild guard grows back, the Heart pays its holder.
-  rounds.heart_reached = number > 1 ? heartDawn(next, map, constants, nowMs, number) : [];
+  if (number > 1) wildDawn(next, map, constants, nowMs, number);
   // Lands with fields or a fair gain people.
   if (number > 1) populationDawn(next.state, map);
   // The troops are paid; the unpaid desert.
@@ -413,8 +413,6 @@ export function advanceRound(game, map, constants, {
     finishByRoundLimit(next, map, constants, nowMs);
   } else {
     beginRound(next, map, constants, rounds.number + 1, nowMs, timing);
-    // Someone has gathered the glory needed: the age ends at this dawn.
-    if (next.rounds.heart_reached?.length) finishByRoundLimit(next, map, constants, nowMs, 'HEART');
   }
   return next;
 }

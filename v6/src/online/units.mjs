@@ -14,7 +14,6 @@ import { giftOf } from './aspiration.mjs';
 // is raised, for the difference in price.
 import { buildAdjacency } from '../core/map.mjs';
 import { orderOnCapture } from './order.mjs';
-import { heartOnCapture } from './heart.mjs';
 import { addPeak, peakAt, RANKS, compAt, emptyComp, mergeStars, reconcileRanks, setStars, starsAt } from './ranks.mjs';
 
 export const PEOPLE = Object.freeze({
@@ -360,7 +359,6 @@ export function onLandTaken(game, map, territory, previousOwner, nowMs = Date.no
   const state = game.state;
   const house = state.territories[territory]?.owner;
   // A Heart taken: the true one shows itself, a decoy wakes the Horde.
-  heartOnCapture(game, map, territory, house, nowMs);
   if (!state.population) return;
   populationOnCapture(state, territory, previousOwner);
   if (house) orderOnCapture(state, territory, house, previousOwner, { nowMs, map, ai: (game.rounds?.ai_houses || []).includes(house) });

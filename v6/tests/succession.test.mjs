@@ -60,7 +60,7 @@ test('with the heir in chains the throne stands empty and the House pays for it'
   assert.equal(rulerOf(game.state, HOUSE), null);
   assert.ok(isInterregnum(game.state, HOUSE));
   assert.ok(game.state.journal.some(e => e.kind === 'THRONE_EMPTY' && e.why === 'HEIR_HELD'));
-  assert.equal(houseCourtTotals(game.state, HOUSE, map.capitals).influence < 0, true);
+  assert.equal(houseCourtTotals(game.state, HOUSE, map.capitals).gold < 0, true);
 
   // He is ransomed back: the crown is his at the next settling.
   heir.mode = 'COURT';

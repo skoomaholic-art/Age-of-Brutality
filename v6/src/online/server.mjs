@@ -33,7 +33,7 @@ import {
 import { normalizeOnlineSeaState } from './sea-navigation.mjs';
 import { raiseLevy, startDrill, buildYard, buildPort, processRanks, ranksView } from './levy.mjs';
 import { buildBridge, burnBridge, seedCrossings, BRIDGE } from './bridges.mjs';
-import { processHordes, seedHeart, HEART } from './heart.mjs';
+import { seedWild, WILD } from './wild.mjs';
 import { devAction, devAllowed, devFastForward, isDevOwner } from './dev.mjs';
 import { NO_LIMIT, buildGrowth, hireUnits, militiaOffer, raiseMilitia, replenishUnits, seedPopulation, unitsView, upkeepOf, REPLENISH_STAR_SHARE } from './units.mjs';
 import { applyCaptureChoice, choiceOutcomes, seedOrder, ORDER } from './order.mjs';
@@ -172,7 +172,7 @@ const scopeCache = new Map();
 function scopeForSpec(spec) {
   if (!spec || spec.kind !== 'generated') return {};
   // Games made before shapes existed keep their wheel (no shape in the key).
-  const key = JSON.stringify(spec.shape ? [spec.seed, spec.houses, spec.shape, spec.warp, spec.sea || null, spec.heart || null, spec.size || null, spec.season || null] : [spec.seed, spec.houses]);
+  const key = JSON.stringify(spec.shape ? [spec.seed, spec.houses, spec.shape, spec.warp, spec.sea || null, spec.wild || spec.heart || null, spec.size || null, spec.season || null] : [spec.seed, spec.houses]);
   if (!scopeCache.has(key)) {
     if (scopeCache.size > 200) scopeCache.delete(scopeCache.keys().next().value);
     scopeCache.set(key, {
@@ -180,7 +180,7 @@ function scopeForSpec(spec) {
       map: generateMap(classicMap, baseConstants, { houses: spec.houses, seed: spec.seed, shape: spec.shape || 'wheel', warp: spec.warp || 'none', seaMesh: spec.sea === 'mesh' || spec.sea === 'mesh-free', homePorts: spec.sea !== 'mesh-free', size: spec.size || 'medium', season: spec.season || null }),
       // A game of the Heart lets a House keep a bigger host.
       // A game of the Heart has no limits on troops: gold and people are the limit.
-      constants: { ...baseConstants, houses: [...spec.houses], ...(spec.heart ? { house_warrior_cap: NO_LIMIT, territory_warrior_cap: NO_LIMIT, rounds: HEART.days } : {}) }
+      constants: { ...baseConstants, houses: [...spec.houses], ...((spec.wild || spec.heart) ? { house_warrior_cap: NO_LIMIT, territory_warrior_cap: NO_LIMIT, rounds: WILD.days } : {}) }
     });
   }
   return scopeCache.get(key);
@@ -217,7 +217,7 @@ function mapSpecFrom(body, { defaultHouses }) {
   // Summer or winter: the creator's choice, or left to chance.
   const season = MAP_SEASON_KEYS.includes(body.season) ? body.season : null;
   // New games: a net of sea points over all the water, and ports to be built.
-  return { kind: 'generated', seed, houses, shape, warp, size, season, sea: 'mesh-free', heart: true };
+  return { kind: 'generated', seed, houses, shape, warp, size, season, sea: 'mesh-free', wild: true };
 }
 
 const mapArtCache = new Map();
@@ -588,8 +588,6 @@ async function tickUnlocked(ctx) {
   processed = processDueOrders(processed, map, constants, nowMs);
   processed = processEconomy(processed, map, constants, nowMs);
   processed = processRanks(processed, map, nowMs);
-  // The Horde woken by a false Heart marches on.
-  processed = processHordes(processed, map, constants, nowMs);
   processed = processStorms(processed, map, nowMs);
   processed = processRounds(processed, map, constants, { nowMs });
   processed = processCharacters(processed, map, constants, { nowMs });
@@ -982,7 +980,7 @@ async function createMultiplayerGame(body, profile = null) {
     // Where roads meet rivers: no crossing there until a bridge is built.
     seedCrossings(game.state, map, (await mapArtFor(scopeForSpec(mapSpec))).crossings);
     // The Heart of the Lands: the wild guard on free lands, the centre to hold.
-    if (mapSpec.heart) { seedHeart(game, map); seedPopulation(game, map); seedOrder(game, map); seedLands(game, map); }
+    if (mapSpec.wild || mapSpec.heart) { seedWild(game, map); seedPopulation(game, map); seedOrder(game, map); seedLands(game, map); }
   }
 
   const ctx = {
@@ -1048,7 +1046,7 @@ async function createSoloGame(body, profile = null) {
     // Where roads meet rivers: no crossing there until a bridge is built.
     seedCrossings(game.state, map, (await mapArtFor(scopeForSpec(mapSpec))).crossings);
     // The Heart of the Lands: the wild guard on free lands, the centre to hold.
-    if (mapSpec.heart) { seedHeart(game, map); seedPopulation(game, map); seedOrder(game, map); seedLands(game, map); }
+    if (mapSpec.wild || mapSpec.heart) { seedWild(game, map); seedPopulation(game, map); seedOrder(game, map); seedLands(game, map); }
   }
 
   const ctx = {

@@ -14,10 +14,10 @@ test('a steward at court fills the treasury; away with an army he costs his keep
   assert.equal(houseCourtTotals(state, 'H', { H: 'CAP' }).gold, 0, 'at home nothing to pay');
 });
 
-test('the ruler on the throne gives influence, the empty throne costs it', () => {
+test('влияние is not given at court: the throne pays in gold and in the field', () => {
   const state = { characters: { c: lord({ role: 'RULER', stats: {} }) }, houses: { H: { gold: 5, influence: 3 } }, armies: {} };
   applyCourtDawn(state, ['H']);
-  assert.equal(state.houses.H.influence, 4);
+  assert.equal(state.houses.H.influence, 3, 'the dawn adds no влияние');
   state.characters.c.mode = 'ARMY'; state.characters.c.army_id = 'a'; state.armies.a = { territory: 'X' };
   applyCourtDawn(state, ['H'], { H: 'CAP' });
   assert.equal(state.houses.H.influence, 3);

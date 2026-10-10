@@ -216,19 +216,8 @@ export function applyFog(clientGame, map, house) {
   for (const [id, territory] of Object.entries(state.territories || {})) {
     if (territory.owner !== house && !seen.has(id)) { delete territory.port_ready_at; delete territory.port_builder; }
   }
-  // The Horde is seen where it stands; its road and goal are known only to the House it hunts.
-  state.hordes = (state.hordes || []).map(h => h.against === house ? h : { id: h.id, against: h.against, men: h.men, at: h.at, started: h.started, path: seen.has(h.at) || explored.has(h.at) ? [h.at] : [], next_at: h.next_at }).filter(h => h.against === house || seen.has(h.at) || explored.has(h.at));
-  // Which Heart is true is a secret, save what this House's spies learnt.
-  if (state.heart) {
-    const known = state.heart.known?.[house] || {};
-    state.heart.known = { [house]: known };
-    if (!state.heart.territory) delete state.heart.truth;
-    delete state.heart.salt;
-  }
   // The wild guard of lands never seen is not known.
   for (const id of Object.keys(state.wild_guards || {})) {
-    // The Hearts are known to all: their guard is no secret.
-    if (state.heart?.candidates?.includes(id)) continue;
     if (!explored.has(id) && !seen.has(id)) delete state.wild_guards[id];
   }
 

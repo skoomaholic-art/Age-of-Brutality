@@ -45,7 +45,7 @@ test('taking a land pays for that deed once and no more', () => {
   assert.equal(game.state.houses[HOUSE].gold, gold + deed.gold);
 });
 
-test('a fort pays in glory, and the last deed is marked as the last', () => {
+test('a fort pays in влияние, and the last deed is marked as the last', () => {
   const game = freshGame();
   const capital = map.capitals[HOUSE];
   game.state.territories[capital].fort = { level: 1 };
@@ -53,11 +53,11 @@ test('a fort pays in glory, and the last deed is marked as the last', () => {
   game.state.journal.push({ kind: 'DEAL_MADE', houses: [HOUSE, constants.houses[1]], at: new Date(T0).toISOString() });
   game.state.territories[map.territories.find(t => t.house_sector === HOUSE && t.id !== capital).id].owner = HOUSE;
 
-  const glory = Number(game.state.houses[HOUSE].victory_points || 0);
+  const before = Number(game.state.houses[HOUSE].influence || 0);
   assert.equal(checkDeeds(game, map, constants, { nowMs: T0 }), true);
   const fort = DEEDS.find(item => item.key === 'FORT');
   const envoy = DEEDS.find(item => item.key === 'ENVOY');
-  assert.equal(game.state.houses[HOUSE].victory_points, glory + fort.glory + envoy.glory);
+  assert.equal(game.state.houses[HOUSE].influence, before + fort.influence + envoy.influence);
   const done = game.state.journal.filter(e => e.kind === 'DEED_DONE' && e.house === HOUSE);
   assert.equal(done.length, DEEDS.length, 'all four were paid for');
   assert.equal(done[done.length - 1].last, true, 'and the last one says so');

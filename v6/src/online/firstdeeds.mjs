@@ -8,6 +8,8 @@
 //
 // state.deeds[house] = [key...] — the deeds already paid for.
 
+import { addInfluence } from './influence.mjs';
+
 export const DEEDS = Object.freeze([
   {
     key: 'LAND',
@@ -28,14 +30,14 @@ export const DEEDS = Object.freeze([
     name: 'Поставить крепость',
     want: 'возвести крепость в своей земле',
     lore: 'Стены держат землю, когда рать ушла.',
-    glory: 2
+    influence: 2
   },
   {
     key: 'ENVOY',
     name: 'Послать гонца',
     want: 'заключить сделку с другим Домом',
     lore: 'Слово дешевле меча, а берёт порой больше.',
-    glory: 2
+    influence: 2
   }
 ]);
 
@@ -74,7 +76,7 @@ export function deedsView(game, map, house) {
     want: deed.want,
     lore: deed.lore,
     gold: deed.gold || 0,
-    glory: deed.glory || 0,
+    influence: deed.influence || 0,
     done: taken.has(deed.key) || hasDone(game, map, house, deed.key)
   }));
 }
@@ -95,10 +97,10 @@ export function checkDeeds(game, map, constants, { nowMs = Date.now() } = {}) {
       if (!hasDone(game, map, house, deed.key)) continue;
       taken.push(deed.key);
       if (deed.gold) state.houses[house].gold = Number(state.houses[house].gold || 0) + deed.gold;
-      if (deed.glory) state.houses[house].victory_points = Number(state.houses[house].victory_points || 0) + deed.glory;
+      if (deed.influence) addInfluence(state, house, deed.influence, 'DEED', { nowMs });
       state.journal.push({
         kind: 'DEED_DONE', house, houses: [house], deed: deed.key, name: deed.name,
-        gold: deed.gold || 0, glory: deed.glory || 0,
+        gold: deed.gold || 0, influence: deed.influence || 0,
         last: taken.length === DEEDS.length, at: new Date(nowMs).toISOString()
       });
       changed = true;

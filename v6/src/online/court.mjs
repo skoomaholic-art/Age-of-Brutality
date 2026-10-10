@@ -6,8 +6,8 @@ import { giftOf } from './aspiration.mjs';
 // court frets and stirs up the court. With an army his gifts of war work
 // (attack, defence and survival in battle, as before), his gifts of peace
 // sleep, and his retinue must be fed. The ruler weighs more: on the throne he
-// is worth influence, with an army his men fight harder, but the empty throne
-// costs influence.
+// is worth gold, and with an army his men fight harder; влияние is not given
+// at court — it is taken in the field.
 
 // The cast of a lord's mind, read from his gifts. It is not another set of
 // numbers: it is a name for what he already is, and it carries one thing of
@@ -46,7 +46,6 @@ export function courtEffects(character) {
   if (Number(s.stewardship) > 0) court.push({ kind: 'gold', value: Number(s.stewardship), text: `+${s.stewardship} золота с рассветом (хозяйственность)` });
   if (Number(s.diplomacy) > 0) court.push({ kind: 'deals', value: Number(s.diplomacy), text: `Дома под ИИ уступают в договорах ${s.diplomacy * 2} золота (речи)` });
   if (Number(s.intrigue) > 0) court.push({ kind: 'spy', value: Number(s.intrigue), text: `шпион дешевле на ${s.intrigue} золота (козни)` });
-  if (ruler) court.push({ kind: 'influence', value: 1, text: '+1 влияния с рассветом (государь на троне)' });
   // What his temper is worth, over and above his gifts.
   if (ruler) {
     const temper = temperOf(character);
@@ -54,13 +53,11 @@ export function courtEffects(character) {
     if (temper === 'SPEAKER') court.push({ kind: 'deals', value: 1, text: 'уступки от Домов под ИИ больше на 2 золота (нрав: краснослов)' });
     if (temper === 'SLY') court.push({ kind: 'spy', value: 0, text: 'догляд дешевле на 1 золото (нрав: лукавый)' });
   }
-  if (Number(s.attack) >= 2) court.push({ kind: 'influence', value: -1, text: '−1 влияния с рассветом (рвётся в бой и мутит двор)', bad: true });
 
   army.push({ kind: 'attack', value: Number(s.attack || 0), text: `+${Number(s.attack || 0)} к силе в бою (натиск)` });
   army.push({ kind: 'defense', value: Number(s.defense || 0), text: `+${Number(s.defense || 0)} к защите в бою (стойкость)` });
   if (ruler) army.push({ kind: 'attack', value: 1, text: '+1 к силе: государь ведёт сам' });
   army.push({ kind: 'gold', value: -1, text: '−1 золота с рассветом (содержание свиты)', bad: true });
-  if (ruler) army.push({ kind: 'influence', value: -1, text: '−1 влияния с рассветом (трон пустует)', bad: true });
   army.push({ kind: 'none', value: 0, text: 'в своей столице свиту кормить не надо и трон не пустует' });
   if (Number(s.stewardship) > 0 || Number(s.diplomacy) > 0 || Number(s.intrigue) > 0) {
     army.push({ kind: 'none', value: 0, text: 'дары мира (хозяйство, речи, козни) дремлют, пока он в походе', bad: true });
@@ -84,8 +81,9 @@ function atHome(state, character, capitals) {
 
 export function houseCourtTotals(state, house, capitals = null) {
   const totals = { gold: 0, influence: 0, deals: 0, spy: 0 };
+  // An empty throne is costly: the court spends and nobody holds the purse.
+  if (state?.interregnum?.[house]) totals.gold -= 1;
   // Nobody on the throne: the Houses watch, and the realm loses face every dawn.
-  if (state?.interregnum?.[house]) totals.influence -= 1;
   // What the House set out to do pays a little every dawn.
   totals.gold += giftOf(state, house, 'gold');
   totals.influence += giftOf(state, house, 'influence');

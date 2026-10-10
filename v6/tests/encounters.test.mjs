@@ -213,6 +213,8 @@ test('an alliance is a marriage, and breaking it has a price', async () => {
   const wedding = game.state.journal.find(e => e.kind === 'ALLIANCE_FORMED');
   assert.equal(wedding.bride_house, RIVAL);
 
+  // Влияние is earned in the field; the oathbreaker is made to give some back.
+  game.state.houses[HOUSE].influence = 5;
   const before = { ...game.state.houses[HOUSE] };
   const rivalGold = game.state.houses[RIVAL].gold;
   game = breakAlliance(game, HOUSE, RIVAL, { nowMs: T0 });

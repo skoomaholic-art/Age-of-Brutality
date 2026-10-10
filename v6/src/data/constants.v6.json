@@ -11,7 +11,7 @@
   "rounds": 6,
   "actions_per_round": 3,
   "start_gold": 14,
-  "start_influence": 3,
+  "start_influence": 0,
   "start_warriors": 8,
   "intrigue_start_hand": 0,
   "house_warrior_cap": 24,

@@ -7,7 +7,7 @@ import { generateMap } from '../src/online/mapgen.mjs';
 import { createOnlineGame } from '../src/online/store.mjs';
 import { seedPopulation, onLandTaken, NO_LIMIT } from '../src/online/units.mjs';
 import { seedOrder, orderDawn, applyCaptureChoice, choiceOutcomes, garrisonToHold, revoltRisk, ORDER } from '../src/online/order.mjs';
-import { seedHeart } from '../src/online/heart.mjs';
+import { seedWild } from '../src/online/wild.mjs';
 import { validateState } from '../src/core/state.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -23,7 +23,7 @@ const village = map.territories.find(t => t.type === 'Деревня').id;
 
 function game() {
   const g = createOnlineGame(map, constants, { id: 'order', nowMs: 1, characterCatalog });
-  seedHeart(g, map); seedPopulation(g, map); seedOrder(g, map);
+  seedWild(g, map); seedPopulation(g, map); seedOrder(g, map);
   g.rounds = { ai_houses: [R] };
   return g;
 }

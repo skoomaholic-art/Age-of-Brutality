@@ -4,10 +4,10 @@ import { opinionOf } from './opinion.mjs';
 import { neutralResistance } from '../core/neutral.mjs';
 import { buildAdjacency } from '../core/map.mjs';
 import { aiBridgeChoice, buildBridge } from './bridges.mjs';
-import { menToTakeWild, ringGlory } from './heart.mjs';
+import { menToTakeWild, ringGlory } from './wild.mjs';
 import { aiHireChoice, hireUnits } from './units.mjs';
 import { buildPort } from './levy.mjs';
-import { canTake, garrisonToKeep, heartPlan, menToTake, wantsPeace } from './ai-heart.mjs';
+import { canTake, garrisonToKeep, housePlan, menToTake, wantsPeace } from './ai-goals.mjs';
 import { atHome } from './attrition.mjs';
 import { wearAt } from './terrain.mjs';
 import { proposeDeal } from './diplomacy.mjs';
@@ -110,7 +110,7 @@ function onBorder(state, map, house, id) {
 function garrisonNeeded(state, map, house, from) {
   const commanders = commandersAt(state, house, from).length;
   const meta = territoryMeta(map, from);
-  const base = state.heart
+  const base = state.wild_guards
     ? garrisonToKeep(state, map, house, from)
     : (meta?.type === 'Столица' ? 2 : 1);
   // A third of the men of a border land stay to hold it, up to a watch of six:
@@ -130,8 +130,8 @@ function hostCap(state, house) {
   return Math.max(8, Math.round(all * 0.45));
 }
 
-// A game of the Heart: one plan, three kinds of move. Strength, not heads.
-function heartCandidates(game, map, constants, house) {
+// The new rules: one plan, three kinds of move. Strength, not heads.
+function planCandidates(game, map, constants, house) {
   const state = game.state;
   const out = [];
   const legal = listQueueableMarches(game, map, constants, house);
@@ -146,7 +146,7 @@ function heartCandidates(game, map, constants, house) {
     pairs.set(key, Math.max(pairs.get(key) || 0, action.warriors));
     (reach.get(action.from) || reach.set(action.from, new Set()).get(action.from)).add(action.to);
   }
-  const plan = heartPlan(game, map, constants, house, from => [...(reach.get(from) || [])]);
+  const plan = housePlan(game, map, constants, house, from => [...(reach.get(from) || [])]);
   if (!plan) return [];
   const spareAt = id => warriorsOf(state, id, house) - garrisonNeeded(state, map, house, id);
   const command = (from, to, warriors) => ({ type: 'MARCH', house, from, to, warriors });
@@ -163,10 +163,9 @@ function heartCandidates(game, map, constants, house) {
       const owner = state.territories[plan.target].owner;
       // Spend a little more than the least so the host survives in strength.
       const warriors = Math.min(max, need + 1);
-      const heart = plan.goal.kind === 'HEART' && plan.target === plan.goal.target ? 8 : 0;
       const war = owner && owner !== house && !areAllies(game, house, owner) && !inTruce(game, house, owner) ? -1 : 0;
       if (!(owner && (areAllies(game, house, owner) || inTruce(game, house, owner)))) {
-        out.push({ kind: 'STRIKE', value: 6 + heart + war - wearCost(plan.target) * 0.3, command: command(plan.stage, plan.target, warriors) });
+        out.push({ kind: 'STRIKE', value: 6 + war - wearCost(plan.target) * 0.3, command: command(plan.stage, plan.target, warriors) });
       }
     }
   }
@@ -179,7 +178,7 @@ function heartCandidates(game, map, constants, house) {
     // Mustering out of ground that bleeds is worth more; mustering into it, less.
     out.push({
       kind: 'MUSTER',
-      value: (plan.goal.kind === 'DEFEND' ? 7 : plan.goal.kind === 'HOLD' ? 5 : 4) + Math.min(2, spare * 0.3) + wearCost(from) - wearCost(to),
+      value: (plan.goal.kind === 'TAKE' ? 5 : 4) + Math.min(2, spare * 0.3) + wearCost(from) - wearCost(to),
       command: command(from, to, spare)
     });
   }
@@ -191,10 +190,6 @@ function heartCandidates(game, map, constants, house) {
     const spare = Math.min(spareAt(from), max);
     const need = spare > 0 ? menToTake(state, map, constants, house, from, to, spare) : null;
     if (!need) continue;
-    const decoy = (state.heart?.revealed || []).includes(to) || state.heart?.known?.[house]?.[to] === 'FALSE';
-    if (decoy) continue;
-    const unknownHeart = state.heart?.candidates?.includes(to) && to !== plan.goal.target;
-    if (unknownHeart) continue;
     const glory = state.wild_taken?.[to] ? 0 : ringGlory(state, to);
     out.push({ kind: 'CAPTURE_NEUTRAL', value: 2 + glory * 0.8 + territoryValue(map, constants, house, to) * 0.3 - wearCost(to) * 0.4, command: command(from, to, Math.min(spare, need + 1)) });
   }
@@ -257,13 +252,9 @@ function marchCandidates(game, map, constants, house, adjacency) {
       const warriors = sizes.find(count => count >= need);
       if (!warriors) continue;
       const glory = state.wild_taken?.[to] ? 0 : ringGlory(state, to);
-      // A Heart: the true one once known is worth most; a decoy exposed is avoided.
-      const heart = state.heart?.territory === to ? 6
-        : state.heart?.revealed?.includes(to) ? -20
-          : state.heart?.candidates?.includes(to) ? 3 : 0;
       out.push({
         kind: 'CAPTURE_NEUTRAL',
-        value: worth + glory * 1.2 + heart - Math.ceil(guards / 2) * 0.5 - warriors * 0.1,
+        value: worth + glory * 1.2 - Math.ceil(guards / 2) * 0.5 - warriors * 0.1,
         command: command(warriors)
       });
       continue;
@@ -304,7 +295,7 @@ function marchCandidates(game, map, constants, house, adjacency) {
       const warriorsSent = Math.min(enough || warriors, hostCap(state, house));
       const outlook = battleOutlook(warriorsSent || warriors, defenders);
       if (!outlook.wins) continue;
-      const capital = territoryMeta(map, to)?.type === 'Столица' ? 4 : state.heart?.territory === to ? 6 : 0;
+      const capital = territoryMeta(map, to)?.type === 'Столица' ? 4 : 0;
       // A House strikes first at the one it likes least.
       const grudge = Math.max(0, -opinionOf(game, house, owner)) / 25;
       const firstBattle = hasAchievement(state, house, 'VP-W2') ? 0 : 4;
@@ -391,7 +382,7 @@ export function rankAiCommands(game, map, constants, house, { random = null } = 
   );
   const adjacency = buildAdjacency(map.land_edges);
   const candidates = [
-    ...(game.state.heart ? heartCandidates(game, map, constants, house) : marchCandidates(game, map, constants, house, adjacency)),
+    ...(game.state.wild_guards ? planCandidates(game, map, constants, house) : marchCandidates(game, map, constants, house, adjacency)),
     ...recruitCandidates(game, map, constants, house, adjacency),
     ...fortCandidates(game, map, constants, house, adjacency)
   ];
@@ -414,7 +405,7 @@ export function takeAiAction(game, map, constants, house, { nowMs = Date.now() }
     : rankAiCommands(game, map, constants, house);
 
   // Losing a war: ask for peace (once a day per foe).
-  const foe = game.state.heart ? wantsPeace(game, map, house) : null;
+  const foe = game.state.wild_guards ? wantsPeace(game, map, house) : null;
   if (foe) {
     try {
       const next = proposeDeal(game, constants, map, house, foe, { give: [{ type: 'PEACE' }] }, { nowMs });
@@ -427,7 +418,7 @@ export function takeAiAction(game, map, constants, house, { nowMs = Date.now() }
   }
 
   // A game with troop kinds: the House hires when it has a stage to hire at and gold to spare.
-  const plan = game.state.heart ? heartPlan(game, map, constants, house) : null;
+  const plan = game.state.wild_guards ? housePlan(game, map, constants, house) : null;
   const hire = aiHireChoice(game, map, house, plan?.stage || null);
   const bestMarch = ranked.find(c => c.kind === 'STRIKE' || c.kind === 'MUSTER');
   if (hire && !(bestMarch && bestMarch.kind === 'STRIKE')) {

@@ -117,13 +117,13 @@ test('a land burnt to the ground is nobody’s, pays nothing, and can be raised 
 test('open country and the riches of the ground are laid out evenly round every House', async () => {
   const { generateMap } = await import('../src/online/mapgen.mjs');
   const { seedLands, isWaste, richesAt, wasNeverSettled } = await import('../src/online/settlements.mjs');
-  const { seedHeart } = await import('../src/online/heart.mjs');
+  const { seedWild } = await import('../src/online/wild.mjs');
   const houses = constants.houses.slice(0, 4);
   const world = generateMap(map, { ...constants, houses }, { houses, seed: 21, shape: 'mainland', seaMesh: true, homePorts: false });
 
   let game = createOnlineGame(world, { ...constants, houses }, { id: 'lands', nowMs: T0 });
   game = normalizeAudit(normalizeOnlineEconomy(game, T0));
-  seedHeart(game, world);
+  seedWild(game, world);
   seedPopulation(game, world);
   seedOrder(game, world);
   seedLands(game, world);

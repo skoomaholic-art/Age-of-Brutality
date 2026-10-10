@@ -16,10 +16,11 @@ function standing(state, house) {
   };
 }
 
+// Влияние decides the age. Lands, then the purse, break a level standing.
 export function compareStandings(a, b) {
   return (
-    Number(b.victory_points || 0) - Number(a.victory_points || 0) ||
     Number(b.influence || 0) - Number(a.influence || 0) ||
+    Number(b.victory_points || 0) - Number(a.victory_points || 0) ||
     Number(b.territories || 0) - Number(a.territories || 0) ||
     Number(b.gold || 0) - Number(a.gold || 0) ||
     String(a.house).localeCompare(String(b.house), 'ru')
@@ -28,8 +29,8 @@ export function compareStandings(a, b) {
 
 function sameCanonicalResult(a, b) {
   return (
-    Number(a.victory_points || 0) === Number(b.victory_points || 0) &&
     Number(a.influence || 0) === Number(b.influence || 0) &&
+    Number(a.victory_points || 0) === Number(b.victory_points || 0) &&
     Number(a.territories || 0) === Number(b.territories || 0) &&
     Number(a.gold || 0) === Number(b.gold || 0)
   );

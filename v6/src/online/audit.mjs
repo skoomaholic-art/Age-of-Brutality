@@ -94,9 +94,7 @@ export function journalEntryToAudit(entry, map, game) {
         : '';
     return {
       ...base,
-      message: entry.reason === 'HEART'
-        ? `Век окончен: Дом ${winners[0] || '—'} набрал славу, держа Сердце земель.${outcome}`
-        : `Век окончен.${outcome}`,
+      message: `Век окончен.${outcome}`,
       details: {
         game_id: entry.game_id || game.id,
         reason: entry.reason || null,
@@ -850,93 +848,19 @@ export function journalEntryToAudit(entry, map, game) {
     };
   }
 
-  if (['HEARTS_APPEARED', 'HEART_RUMOUR', 'HEART_FOUND', 'HEART_SPIED'].includes(entry.kind)) {
-    const where = entry.territory ? territoryName(map, entry.territory) : '';
-    const messages = {
-      HEARTS_APPEARED: `Знамение! Посреди мира восстали Сердца земель, числом ${entry.count}, и свет их видно сквозь тучи: ${(entry.candidates || []).map(id => territoryName(map, id)).join(', ')}. Монахи пишут, что лишь одно из них истинное. Прочие же — печати, и под ними спит народ незнаемый. На того, кто сорвёт ложную печать, падёт гнев.`,
-      HEART_RUMOUR: `Старец-схимник поведал летописцу: Сердце в земле ${where} ложное. Под ним спит орда языков незнаемых, не ходите туда, дабы не отворить бездну. Неразгаданных Сердец осталось: ${entry.left}.`,
-      HEART_FOUND: `Возрадуйтесь! Истинное Сердце земель — ${where}, и воссел в нём Дом ${entry.house}. Прочие Сердца — ложные печати, и горе тому, кто их сорвёт.`,
-      HEART_SPIED: entry.truth
-        ? `Наш соглядатай вернулся с вестью: Сердце в земле ${where} истинное, и благодать на нём.`
-        : `Наш соглядатай вернулся бледен: Сердце в земле ${where} ложное. Под ним он слышал топот бессчётных коней из-под земли.`
-    };
+  if (entry.kind === 'INFLUENCE') {
+    const where = entry.territory ? territoryName(map, entry.territory) : null;
+    const why = {
+      WILD_LAND: `взял вольную землю ${where}`,
+      RIVAL_LAND: `отнял землю ${where} у Дома ${entry.against || '—'}`,
+      BATTLE: `выиграл сечу${where ? ` у земли ${where}` : ''}${entry.against ? ` с Домом ${entry.against}` : ''}`,
+      ASPIRATION: 'сделал шаг по пути своего Дома',
+      DEED: 'исполнил наказ'
+    }[entry.why] || entry.reason || 'взял своё';
     return {
       ...base,
-      ...(entry.kind === 'HEART_SPIED' ? { visibility: 'PRIVATE' } : {}),
-      message: messages[entry.kind],
-      details: { house: entry.house || null, territory_id: entry.territory || null, at: entry.at || null }
-    };
-  }
-
-  if (entry.kind === 'SCOURGE_COMING' || entry.kind === 'SCOURGE_LANDED' || entry.kind === 'SCOURGE_BROKEN') {
-    if (entry.kind === 'SCOURGE_COMING') {
-      return {
-        ...base,
-        message: entry.sea
-          ? `Недобрые знамения по всем землям. Хвостатая звезда стоит над морем, рыбаки находят вёсла чужой работы, вороны летят к берегу. Сказано: «и отворился кладезь бездны». К рассвету дня ${entry.day} с моря придут люди севера — придут не к одному Дому, а ко всем разом. Кайтесь и точите мечи.`
-          : `Недобрые знамения по всем землям. В колодцах вода обратилась в кровь, скот бежит с выпасов на закат, пастухи говорят о пыли на окоёме. Сказано: «и отворился кладезь бездны». К рассвету дня ${entry.day} из незнаемых земель выйдут языцы — выйдут не на один Дом, а на все разом. Кайтесь и точите мечи.`,
-        details: { day: entry.day || null, sea: Boolean(entry.sea), at: entry.at || null }
-      };
-    }
-    if (entry.kind === 'SCOURGE_LANDED') {
-      return {
-        ...base,
-        message: entry.sea
-          ? `Паруса на окоёме! Люди севера сошли на берег у каждого Дома разом: ${(entry.houses || []).join(', ')}. Кто первым изгонит своих, тому и слава перед всем веком.`
-          : `Пыль на окоёме! Из незнаемых земель вышли языцы и идут на каждый Дом разом: ${(entry.houses || []).join(', ')}. Кто первым перебьёт своих, тому и слава перед всем веком.`,
-        details: { houses: entry.houses || [], sea: Boolean(entry.sea), at: entry.at || null }
-      };
-    }
-    return {
-      ...base,
-      message: entry.first
-        ? `Дом ${entry.house} первым выбил пришлых со своей земли. Весь век видит, чьи мечи острее.`
-        : `Дом ${entry.house} выбил пришлых со своей земли.`,
-      details: { house: entry.house, first: Boolean(entry.first), at: entry.at || null }
-    };
-  }
-
-  if (entry.kind === 'MILITIA_RAISED') {
-    return {
-      ...base,
-      message: `В земле ${territoryName(map, entry.territory)} Дом ${entry.house} созвал ополчение: ${entry.count} человек встали под знамя прямо с поля. Порядок здесь теперь ${entry.order ?? '—'}.`,
-      details: { house: entry.house, territory_id: entry.territory, count: entry.count, order: entry.order ?? null, at: entry.at || null }
-    };
-  }
-
-  if (entry.kind === 'FALSE_HEART') {
-    return {
-      ...base,
-      message: `Дом ${entry.house} воссел в ${territoryName(map, entry.territory)} — и Сердце оказалось ложным. Казна ушла на пустое: ${entry.gold} золота как не бывало, а здешние люди своему новому хозяину не верят вовсе.`,
-      details: { house: entry.house, territory_id: entry.territory, gold: entry.gold || 0, at: entry.at || null }
-    };
-  }
-
-  if (entry.kind.startsWith('HORDE_')) {
-    const where = territoryName(map, entry.territory);
-    const messages = {
-      HORDE_AWAKENED: `Горе Дому ${entry.house}! Сорвал он ложную печать в земле ${where}, и из бездны вышел народ незнаемый: ${entry.men} всадников на низких мохнатых конях. Идут они на столицу${entry.toward ? ` ${territoryName(map, entry.toward)}` : ''}, и людям кажется, что нет им числа.`,
-      HORDE_TOOK: `Тартары взяли землю ${where} у Дома ${entry.house} и стёрли её с земли: ни дворов, ни людей, одно пепелище. ${entry.men} из них идут дальше.`,
-      HORDE_BROKEN: `Чудо! У земли ${where} воинство Дома ${entry.house} разбило тартар. Звонят колокола, в храмах служат благодарственный молебен.`,
-      HORDE_FORDING: `Тартары встали у реки близ земли ${where}: моста нет, кони их ищут брод. Молитесь, чтобы река была глубока.`,
-      HORDE_SACKED: `Тартары ворвались в столицу ${where}! Дружина Дома ${entry.house} полегла вся, числом ${entry.defenders}, казна разграблена: ${entry.gold} золота ушло в сёдлах. Но стены устояли, и народ незнаемый, насытившись, ушёл.`,
-      HORDE_SPENT: `Тартары выдохлись у земли ${where}. Остатки их ушли в леса и стали там разбойниками.`
-    };
-    return {
-      ...base,
-      message: messages[entry.kind] || `Орда: ${where}.`,
-      details: { house: entry.house, territory_id: entry.territory, men: entry.men ?? null, at: entry.at || null }
-    };
-  }
-
-  if (entry.kind === 'HEART_TAKEN' || entry.kind === 'HEART_HELD') {
-    const where = territoryName(map, entry.territory);
-    return {
-      ...base,
-      message: entry.kind === 'HEART_TAKEN'
-        ? `Сердце земель, ${where}, в руках Дома ${entry.house}${entry.previous ? ` (прежде держал Дом ${entry.previous})` : ''}. Каждый рассвет, что он его держит, приносит ему всё больше славы.`
-        : `Дом ${entry.house} держит Сердце земель ${entry.streak}-й рассвет: слава +${entry.glory}, всего ${entry.total} из ${entry.target}.`,
-      details: { house: entry.house, territory_id: entry.territory, streak: entry.streak || null, glory: entry.glory || null, total: entry.total || null, target: entry.target || null, at: entry.at || null }
+      message: `Дом ${entry.house} ${why}: влияния +${entry.influence}, всего ${entry.total}.`,
+      details: { house: entry.house, influence: entry.influence, why: entry.why, territory_id: entry.territory || null, against: entry.against || null, total: entry.total, at: entry.at || null }
     };
   }
 

@@ -3,6 +3,7 @@ import { terrainGuard } from '../online/terrain.mjs';
 import { clearHoldAt, holdGuard } from '../online/stance.mjs';
 import { buildAdjacency } from './map.mjs';
 import { validateMarch, classifyDestination } from './movement.mjs';
+import { INFLUENCE, addInfluence } from '../online/influence.mjs';
 import { warriorsAt } from './state.mjs';
 import { grantOnce, registerForeignCapitalCapture } from './scoring.mjs';
 
@@ -131,11 +132,16 @@ export function resolveBattle(state, map, constants, action, options = {}) {
     }
     if (grantOnce(next, action.house, 'VP-W2', constants.victory['VP-W2'])) battleVpHouse = action.house;
     capitalVp = registerForeignCapitalCapture(next,map,constants,action.house,action.to,defenderHouse).immediateVp;
+    // The word of a House reaches as far as its arms: a sech won and a land
+    // taken from another Дом are both counted in влияние.
+    addInfluence(next, action.house, INFLUENCE.battle, 'BATTLE', { territory: action.to, against: defenderHouse });
+    addInfluence(next, action.house, INFLUENCE.rivalLand, 'RIVAL_LAND', { territory: action.to, against: defenderHouse });
   } else {
     if (attackerSurvivors > 0) origin.warriors[action.house] = (origin.warriors[action.house] || 0) + attackerSurvivors;
     if (defenderSurvivors > 0) target.warriors[defenderHouse] = defenderSurvivors;
     target.owner = defenderHouse;
     if (grantOnce(next, defenderHouse, 'VP-W2', constants.victory['VP-W2'])) battleVpHouse = defenderHouse;
+    addInfluence(next, defenderHouse, INFLUENCE.battle, 'BATTLE', { territory: action.to, against: action.house });
   }
 
   if (attackerSurvivors === 0 && defenderSurvivors === 0) target.owner = defenderHouse;

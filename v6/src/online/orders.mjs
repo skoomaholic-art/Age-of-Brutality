@@ -17,7 +17,7 @@ import { declareWarInPlace, hasPassage } from './diplomacy.mjs';
 import { headsLost, ranksForMarch, settleMarchRanks, starsAt, starsForMarch, strengthOf, takeStrongest } from './ranks.mjs';
 import { rulerLeadBonus } from './court.mjs';
 import { fightOnLand, joinersAgainst } from './melee.mjs';
-import { heartMode, ringGlory, wildBattle } from './heart.mjs';
+import { wildMode, ringGlory, wildBattle } from './wild.mjs';
 import { onLandTaken } from './units.mjs';
 import { fateDice, recoveryMs, settleFate } from './fate.mjs';
 import {
@@ -642,7 +642,7 @@ function resolveOrder(state,map,constants,gameId,order,nowMs,recovery) {
   }
 
   // A game of the Heart: free lands are held by the wild guard and must be fought for.
-  if(destination==='NEUTRAL' && heartMode(state)) {
+  if(destination==='NEUTRAL' && wildMode(state)) {
     const commander=order.commander_id ? state.characters?.[order.commander_id] || null : null;
     const resolved=wildBattle(resolutionState,resolutionMap,constants,resolutionAction,{
       ranks:order.action.ranks,

@@ -1,6 +1,6 @@
 export function grantOnce(state, house, achievementId, points) {
-  // A game of the Heart counts glory by the Heart alone.
-  if (state.heart) return false;
+  // Under the new rules a House is weighed in влияние, not in old glory.
+  if (state.wild_guards) return false;
   if (!state.houses[house].achievements) state.houses[house].achievements = {};
   if (state.houses[house].achievements[achievementId]) return false;
   state.houses[house].achievements[achievementId] = true;
@@ -9,7 +9,7 @@ export function grantOnce(state, house, achievementId, points) {
 }
 
 export function registerForeignCapitalCapture(state, map, constants, attackerHouse, territoryId, formerOwner) {
-  if (state.heart) return {immediateVp:0, pending:false};
+  if (state.wild_guards) return {immediateVp:0, pending:false};
   if (map.capitals[formerOwner] !== territoryId) return {immediateVp:0, pending:false};
   const immediateVp = grantOnce(state,attackerHouse,'VP-W3A',constants.victory['VP-W3A']) ? constants.victory['VP-W3A'] : 0;
   if (immediateVp > 0) {

@@ -23,7 +23,7 @@ test('online income pulse accrues while game is persistent', () => {
   game = normalizeOnlineEconomy(game, 1000, timing);
   game = processEconomy(game, map, c, 1101, timing);
   assert.equal(game.state.houses['Варкайр'].gold, c.start_gold + calculateHouseIncome(game.state, map, c, 'Варкайр').gold);
-  assert.equal(game.state.houses['Варкайр'].influence, 4);
+  assert.equal(game.state.houses['Варкайр'].influence, c.start_influence + calculateHouseIncome(game.state, map, c, 'Варкайр').influence);
 });
 
 test('timed recruitment reserves gold and completes later', () => {

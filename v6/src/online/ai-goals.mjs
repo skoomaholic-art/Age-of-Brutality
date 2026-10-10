@@ -1,13 +1,11 @@
-// The House AI in a game of the Heart. It thinks in strength, not heads, and
-// it has one aim: the Heart. It picks a goal (the true Heart once known, else
-// the nearest Heart not yet exposed as a decoy, else the deepest free land it
-// can reach), musters its spare men in the own land nearest the goal, and
-// strikes the next land on the road when the muster is strong enough. When
-// the Horde comes for its capital it musters there instead. Losing a war, it
-// asks for peace.
+// What the House AI is trying to do. It thinks in strength, not heads: it
+// picks a goal — the deepest free land it can reach, or, when there is no free
+// ground left near it, the weakest land of a House it is at war with — musters
+// its spare men in the own land nearest that goal, and strikes the next land on
+// the road when the muster is strong enough. Losing a war, it asks for peace.
 import { buildAdjacency } from '../core/map.mjs';
 import { compAt, headsLost, starsAt, strengthOf, takeStrongest } from './ranks.mjs';
-import { HEART, menToTakeWild } from './heart.mjs';
+import { WILD, menToTakeWild } from './wild.mjs';
 import { TERRAIN } from './terrain.mjs';
 import { garrisonToHold, revoltRisk } from './order.mjs';
 import { peopleAt } from './units.mjs';
@@ -46,10 +44,10 @@ export function ownLands(state, house) {
 function attackStrength(state, map, from, house, n) {
   const comp = compAt(state, map, from, house);
   const picked = takeStrongest([...comp], n);
-  return { comp: picked, strength: strengthOf(picked, n, { stars: starsAt(state, from, house) }) + HEART.fortune };
+  return { comp: picked, strength: strengthOf(picked, n, { stars: starsAt(state, from, house) }) + WILD.fortune };
 }
 
-// Can `n` men from `from` take `to`? Mirrors heart.wildBattle and the melee counts.
+// Can `n` men from `from` take `to`? Mirrors wildBattle and the melee counts.
 export function canTake(state, map, constants, house, from, to, n) {
   if (n <= 0) return false;
   const land = state.territories[to];
@@ -62,7 +60,7 @@ export function canTake(state, map, constants, house, from, to, n) {
   }
   const defenders = Number(land.warriors?.[land.owner] || 0);
   if (!defenders) return true;
-  const defStrength = strengthOf(compAt(state, map, to, land.owner), defenders, { defending: true, stars: starsAt(state, to, land.owner) }) + HEART.fortune;
+  const defStrength = strengthOf(compAt(state, map, to, land.owner), defenders, { defending: true, stars: starsAt(state, to, land.owner) }) + WILD.fortune;
   const walls = baseDefense(map, state, constants, to);
   const losses = headsLost(comp, n, Math.max(0, Math.ceil(defStrength / 2)));
   return strength > defStrength + walls && n - losses > 0;
@@ -77,8 +75,6 @@ export function menToTake(state, map, constants, house, from, to, available) {
 // Men a land must keep: one (two in the capital), more where the people would rise.
 export function garrisonToKeep(state, map, house, id) {
   const meta = map.territories.find(t => t.id === id);
-  // The true Heart, once ours, is never stripped: whoever holds it wins.
-  if (state.heart?.territory === id && state.territories[id]?.owner === house) return Number(state.territories[id].warriors?.[house] || 0);
   let keep = meta?.type === 'Столица' ? 2 : 1;
   if (state.order) {
     const people = peopleAt(state, id);
@@ -91,47 +87,51 @@ export function garrisonToKeep(state, map, house, id) {
 // What the House is after right now.
 export function chooseGoal(game, map, house) {
   const state = game.state;
-  const heart = state.heart;
   const capital = map.capitals?.[house];
-  // The Horde is coming: hold the capital.
-  if ((state.hordes || []).some(h => h.against === house && h.men > 0) && state.territories[capital]?.owner === house) {
-    return { kind: 'DEFEND', target: capital };
-  }
   const adjacency = ways(map);
   const own = ownLands(state, house);
+  if (!own.length) return null;
   const fromCapital = distances(map, adjacency, capital || own[0]);
   const near = id => fromCapital.get(id) ?? 99;
-  const known = heart?.known?.[house] || {};
-  const trueKnown = heart?.territory || Object.keys(known).find(id => known[id] === 'TRUE') || null;
-  // The Heart is ours: every spare man goes to hold it.
-  if (trueKnown && state.territories[trueKnown]?.owner === house) return { kind: 'HOLD', target: trueKnown };
-  if (trueKnown) return { kind: 'HEART', target: trueKnown };
-  const open = (heart?.candidates || []).filter(id => !(heart.revealed || []).includes(id) && known[id] !== 'FALSE' && state.territories[id]?.owner !== house);
-  if (open.length) return { kind: 'HEART', target: open.sort((a, b) => near(a) - near(b) || (a < b ? -1 : 1))[0] };
-  // No Hearts yet: the deepest free land within reach, to earn glory and ground. Never a decoy: it wakes the Horde.
-  const candidates = new Set(heart?.candidates || []);
-  const free = Object.keys(state.wild_guards || {}).filter(id => !state.territories[id]?.owner && !candidates.has(id) && near(id) < 99);
-  if (!free.length) return null;
-  const rings = heart?.rings || {};
-  free.sort((a, b) => (rings[b] || 1) - (rings[a] || 1) || near(a) - near(b) || (a < b ? -1 : 1));
-  // Not too deep too soon: the deepest land no more than two roads from our own.
   const ownSet = new Set(own);
   const byRoad = roads(map);
-  const reachable = free.filter(id => [...(byRoad.get(id) || [])].some(n => ownSet.has(n)));
-  return { kind: 'EXPAND', target: reachable[0] || free[0] };
+
+  // Free ground first: the deepest land it can actually walk to from its own,
+  // because the chroniclers pay by the ring.
+  const free = Object.keys(state.wild_guards || {}).filter(id => !state.territories[id]?.owner && near(id) < 99);
+  const rings = state.wild?.rings || {};
+  if (free.length) {
+    free.sort((a, b) => (rings[b] || 1) - (rings[a] || 1) || near(a) - near(b) || (a < b ? -1 : 1));
+    const reachable = free.filter(id => [...(byRoad.get(id) || [])].some(n => ownSet.has(n)));
+    return { kind: 'EXPAND', target: reachable[0] || free[0] };
+  }
+
+  // Nothing free is left within reach: take from whoever it is already fighting,
+  // and failing that from the nearest neighbour's weakest land.
+  const foes = Object.keys(state.houses || {}).filter(other => other !== house && relationOf(game, house, other) === RELATION.WAR);
+  const theirs = Object.entries(state.territories || {})
+    .filter(([id, land]) => land.owner && land.owner !== house && near(id) < 99
+      && [...(byRoad.get(id) || [])].some(n => ownSet.has(n))
+      && !inTruce(game, house, land.owner));
+  if (!theirs.length) return null;
+  const heads = id => Object.values(state.territories[id].warriors || {}).reduce((sum, n) => sum + Number(n || 0), 0);
+  theirs.sort((a, b) => {
+    const war = Number(foes.includes(b[1].owner)) - Number(foes.includes(a[1].owner));
+    return war || heads(a[0]) - heads(b[0]) || near(a[0]) - near(b[0]) || (a[0] < b[0] ? -1 : 1);
+  });
+  return { kind: 'TAKE', target: theirs[0][0] };
 }
 
 // The plan: muster at the own land nearest the goal, strike the next land on
 // the way. `destinations(stage)` lists the lands a march from the stage may
 // reach (by road or by sea); without it the next land by road is taken.
-export function heartPlan(game, map, constants, house, destinations = null) {
+export function housePlan(game, map, constants, house, destinations = null) {
   const state = game.state;
   const goal = chooseGoal(game, map, house);
   if (!goal) return null;
   const own = ownLands(state, house);
   if (!own.length) return null;
   const toGoal = distances(map, ways(map), goal.target);
-  if (goal.kind === 'DEFEND' || goal.kind === 'HOLD') return { goal, stage: goal.target, target: null };
   const wears = id => (map.territories?.find(t => t.id === id)?.house_sector === house ? 0 : Number(TERRAIN[map.terrain?.[id]]?.wear || 0));
   const stage = [...own].sort((a, b) =>
     (toGoal.get(a) ?? 99) - (toGoal.get(b) ?? 99) || wears(a) - wears(b) || (a < b ? -1 : 1))[0];
