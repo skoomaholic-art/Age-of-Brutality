@@ -4032,7 +4032,10 @@ function renderBarStatus() {
     const turns = Number(snapshot?.game?.season?.turns_on || 0);
     const day = Number(snapshot?.game?.rounds?.number || 0);
     const left = turns && day ? Math.max(0, turns - day) : 0;
-    chip.textContent = seasonNow() + (left ? ' · ' + left + (left === 1 ? ' день' : ' дня') : '');
+    // Not «summer · 1 day», which reads as though summer lasted a day, but
+    // plainly: what season it is, and when the next one comes.
+    const next = seasonNow() === 'зима' ? 'лето' : 'зима';
+    chip.textContent = seasonNow() + (left ? ' · ' + next + ' через ' + left + (left === 1 ? ' день' : ' дня') : '');
   }
   copy('bar-timer', 'round-timer');
   copy('bar-gold', 'gold');
