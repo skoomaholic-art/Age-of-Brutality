@@ -1,5 +1,5 @@
 import { spyLearns } from './heart.mjs';
-import { houseCourtTotals } from './court.mjs';
+import { houseCourtTotals, houseTemper } from './court.mjs';
 // Spies. A House hires a spy and hides him in a band of wayfarers resting in
 // one of its lands. He walks with the band along its own round, so nothing
 // marks him out, and when the band reaches the land he was sent to he watches
@@ -40,6 +40,11 @@ export function hireSpy(game, constants, house, { nowMs = Date.now() } = {}) {
 
 // A watch over one of our own lands: gate-keepers, questions asked of every
 // traveller. It lasts a day and takes whatever spy comes looking in that time.
+// What gate-keepers cost this House: a sly lord on the throne keeps them cheap.
+export function watchCost(state, house) {
+  return Math.max(1, WATCH.gold - (houseTemper(state, house) === 'SLY' ? 1 : 0));
+}
+
 export function setWatch(game, map, house, territory, { nowMs = Date.now() } = {}) {
   const land = game.state.territories?.[territory];
   if (!land) throw new Error('такой земли нет');
@@ -47,10 +52,11 @@ export function setWatch(game, map, house, territory, { nowMs = Date.now() } = {
   const standing = game.state.watchmen?.[territory];
   if (standing && Date.parse(standing.until) > nowMs) throw new Error('догляд здесь уже стоит');
   const purse = game.state.houses[house];
-  if (Number(purse.gold || 0) < WATCH.gold) throw new Error(`нужно ${WATCH.gold} золота`);
+  const cost = watchCost(game.state, house);
+  if (Number(purse.gold || 0) < cost) throw new Error(`нужно ${cost} золота`);
   const next = structuredClone(game);
   const day = Number(next.rounds?.round_duration_ms || 600000);
-  next.state.houses[house].gold -= WATCH.gold;
+  next.state.houses[house].gold -= cost;
   next.state.watchmen ||= {};
   next.state.watchmen[territory] = {
     house,

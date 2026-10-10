@@ -446,8 +446,33 @@ export function buildMapArt(map, options = {}) {
     if (!found && nearest.point && nearest.d < BANK) found = nearest.point;
     if (found) crossings.push({ a: segment.a.id, b: segment.b.id, x: f1(found[0]), y: f1(found[1]) });
   });
-  const nearRoad = (x, y, reach) =>
-    segments.some(segment => distToSegment(x, y, segment.a, segment.b) < reach);
+  // A road is painted as a curve, not as a straight line, so what must keep
+  // clear of a road — trees, hills, fields — is measured against the curve
+  // itself. Measuring against the straight line planted woods across the road.
+  const roadLines = roadSegments.map((segment, index) => {
+    const [p0, p1, p2, p3] = roadCurve(segment.a, segment.b, 700 + index);
+    const steps = Math.max(6, Math.round(Math.hypot(p3[0] - p0[0], p3[1] - p0[1]) / 6));
+    const points = [];
+    for (let i = 0; i <= steps; i += 1) {
+      const t = i / steps;
+      const u = 1 - t;
+      points.push({
+        x: u * u * u * p0[0] + 3 * u * u * t * p1[0] + 3 * u * t * t * p2[0] + t * t * t * p3[0],
+        y: u * u * u * p0[1] + 3 * u * u * t * p1[1] + 3 * u * t * t * p2[1] + t * t * t * p3[1]
+      });
+    }
+    return points;
+  });
+  const nearRoad = (x, y, reach) => {
+    for (const line of roadLines) {
+      for (let i = 0; i < line.length - 1; i += 1) {
+        if (distToSegment(x, y, line[i], line[i + 1]) < reach) return true;
+      }
+    }
+    // A ridge is a road that was closed: nothing is painted along it, but the
+    // ground beside it is still open country.
+    return ridgeEdges.some(([a, b]) => distToSegment(x, y, siteById.get(a), siteById.get(b)) < reach);
+  };
   const nearestSiteDistance = (x, y) =>
     sites.reduce((min, site) => Math.min(min, Math.hypot(x - site.x, y - site.y)), Infinity);
 

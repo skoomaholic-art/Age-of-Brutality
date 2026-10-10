@@ -226,6 +226,9 @@ export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'whe
   );
 
   const capitals = {};
+  // Realms are not laid out with a compass: every House sits a little off the
+  // ring and its lands lie where the ground allowed, not in a drawn hexagon.
+  // None of this touches the roads between them, so the start stays even.
   const angles = houses.map((_, i) => turn + (i * 2 * Math.PI) / count);
   const letter = i => String.fromCharCode(65 + i);
   const petal = (i, k) => `${letter(i)}${k + 1}`;
@@ -586,6 +589,48 @@ export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'whe
     startingPorts = homePorts ? houses.map((_, i) => petal(i, 0)).filter(id => ports.has(id)) : [];
   }
 
+  // Realms are not laid out with a compass. Once every road, port and sea mark
+  // is settled on the drawn-out plan, the lands themselves are nudged off it,
+  // so a capital sits a little aside and its villages lie where the ground
+  // allowed rather than on a hexagon. Nothing of the rules moves with them:
+  // the roads, the ports and the sea marks were all decided already.
+  {
+    const nudge = seeded(((Number(seed) || 1) ^ 0x6c1f55) >>> 0);
+    const sway = (p, far) => ({
+      x: p.x + (nudge() - 0.5) * far,
+      y: p.y + (nudge() - 0.5) * far
+    });
+    for (const s of sites) {
+      if (s.small) continue;
+      const far = s.type === 'Столица' ? STEP * 0.26 : s.id === 'X0' ? STEP * 0.45 : STEP * 0.5;
+      s.pos = sway(s.pos, far);
+    }
+    // No two lands may end up sitting on top of one another: whoever came too
+    // close is pushed apart again, a few times over, until there is room.
+    const ROOM = STEP * 0.62;
+    for (let pass = 0; pass < 6; pass += 1) {
+      let tight = false;
+      for (let i = 0; i < sites.length; i += 1) {
+        for (let j = i + 1; j < sites.length; j += 1) {
+          const a = sites[i];
+          const b = sites[j];
+          if (a.small || b.small) continue;
+          const dx = b.pos.x - a.pos.x;
+          const dy = b.pos.y - a.pos.y;
+          const d = Math.hypot(dx, dy) || 0.001;
+          if (d >= ROOM) continue;
+          tight = true;
+          const push = (ROOM - d) / 2;
+          const ux = dx / d;
+          const uy = dy / d;
+          a.pos = { x: a.pos.x - ux * push, y: a.pos.y - uy * push };
+          b.pos = { x: b.pos.x + ux * push, y: b.pos.y + uy * push };
+        }
+      }
+      if (!tight) break;
+    }
+  }
+
   // Bend the whole picture; the roads stay as they are.
   if (warp !== 'none') {
     const shaper = seeded(((Number(seed) || 1) ^ 0x2f3a9d) >>> 0);
@@ -640,9 +685,21 @@ export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'whe
     bendRiver = p => { const q = bend(p); return { x: q.x * grow, y: q.y * grow }; };
   }
 
+  // A world of dry land has no water to sail: no sea marks, no ship roads, no
+  // harbours. The ring of waypoints is struck off before the picture is even
+  // measured out, so the land is not drawn around a sea that is not there.
+  if (form.dry) {
+    for (const id of Object.keys(waypoints)) delete waypoints[id];
+    lanes.length = 0;
+    ports.clear();
+    startingPorts = null;
+  }
+
   // Shift everything into positive coordinates with open sea around.
   const all = [...sites.map(s => s.pos), ...Object.values(waypoints)];
-  const margin = 150;
+  // On a dry world there is no sea to leave room for: the country runs to the
+  // edge of the picture, and the realms fill it.
+  const margin = form.dry ? 90 : 150;
   const minX = Math.min(...all.map(p => p.x)) - margin;
   const minY = Math.min(...all.map(p => p.y)) - margin;
   const maxX = Math.max(...all.map(p => p.x)) + margin;

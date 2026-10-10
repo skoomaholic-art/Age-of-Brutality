@@ -8,6 +8,35 @@
 // is worth influence, with an army his men fight harder, but the empty throne
 // costs influence.
 
+// The cast of a lord's mind, read from his gifts. It is not another set of
+// numbers: it is a name for what he already is, and it carries one thing of
+// its own, so that two lords of the same strength are not the same man.
+export const TEMPERS = Object.freeze({
+  WARRIOR: { name: 'Воитель', text: 'рати под его рукой дерутся злее (+1 к силе, когда ведёт сам)' },
+  SPEAKER: { name: 'Краснослов', text: 'его слово в договорах весит больше (+2 золота уступки от Домов под ИИ)' },
+  SLY: { name: 'Лукавый', text: 'его люди умеют смотреть и прятаться (догляд дешевле на 1 золото)' },
+  KEEPER: { name: 'Рачительный', text: 'при нём казна полнее (+1 золота с рассветом)' },
+  EVEN: { name: 'Ровного нрава', text: 'ни в чём не выдаётся: ни особой выгоды, ни особой беды' }
+});
+
+export function temperOf(character) {
+  const s = character?.stats || {};
+  const best = [
+    ['WARRIOR', Number(s.attack || 0)],
+    ['SPEAKER', Number(s.diplomacy || 0)],
+    ['SLY', Number(s.intrigue || 0)],
+    ['KEEPER', Number(s.stewardship || 0)]
+  ].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0];
+  return best[1] >= 2 ? best[0] : 'EVEN';
+}
+
+// The temper of the lord on the throne, if anybody sits on it.
+export function houseTemper(state, house) {
+  const ruler = Object.values(state?.characters || {}).find(character =>
+    character.house === house && character.role === 'RULER' && character.alive && character.mode !== 'DEAD');
+  return ruler ? temperOf(ruler) : null;
+}
+
 export function courtEffects(character) {
   const s = character?.stats || {};
   const ruler = character?.role === 'RULER';
@@ -17,6 +46,13 @@ export function courtEffects(character) {
   if (Number(s.diplomacy) > 0) court.push({ kind: 'deals', value: Number(s.diplomacy), text: `Дома под ИИ уступают в договорах ${s.diplomacy * 2} золота (речи)` });
   if (Number(s.intrigue) > 0) court.push({ kind: 'spy', value: Number(s.intrigue), text: `шпион дешевле на ${s.intrigue} золота (козни)` });
   if (ruler) court.push({ kind: 'influence', value: 1, text: '+1 влияния с рассветом (государь на троне)' });
+  // What his temper is worth, over and above his gifts.
+  if (ruler) {
+    const temper = temperOf(character);
+    if (temper === 'KEEPER') court.push({ kind: 'gold', value: 1, text: '+1 золота с рассветом (нрав: рачительный)' });
+    if (temper === 'SPEAKER') court.push({ kind: 'deals', value: 1, text: 'уступки от Домов под ИИ больше на 2 золота (нрав: краснослов)' });
+    if (temper === 'SLY') court.push({ kind: 'spy', value: 0, text: 'догляд дешевле на 1 золото (нрав: лукавый)' });
+  }
   if (Number(s.attack) >= 2) court.push({ kind: 'influence', value: -1, text: '−1 влияния с рассветом (рвётся в бой и мутит двор)', bad: true });
 
   army.push({ kind: 'attack', value: Number(s.attack || 0), text: `+${Number(s.attack || 0)} к силе в бою (натиск)` });
@@ -64,6 +100,8 @@ export function houseCourtTotals(state, house, capitals = null) {
 
 // A ruler leading his army in person adds to its strength.
 export function rulerLeadBonus(character) {
+  // A born warrior on the throne is worth one more sword than any other ruler.
+  if (character?.role === 'RULER' && character?.mode === 'ARMY' && temperOf(character) === 'WARRIOR') return 2;
   return character?.role === 'RULER' && character?.mode === 'ARMY' ? 1 : 0;
 }
 

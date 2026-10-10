@@ -127,3 +127,76 @@ export function growLand(state, map, id, house, into, { nowMs = Date.now() } = {
     kind: 'LAND_GREW', house, houses: [house], territory: id, into, at: new Date(nowMs).toISOString()
   });
 }
+
+// ---------- what the land itself holds ----------
+//
+// Not every land is a village. Some are empty country with nothing on them but
+// grass and stones — no people, no gold, nothing to take. Whoever walks in
+// holds them, and whoever cares to may found a village there. And some lands,
+// settled or not, hold something worth having: a seam of iron, a salt pan, a
+// herd of horses on the open grass, a quarry of good stone.
+
+export const RICHES = Object.freeze({
+  'рудник': { name: 'Рудник', gold: 2, people: 0, lore: 'Железная жила: кузни работают, казна прибывает на 2 золота с рассветом.' },
+  'солеварня': { name: 'Солеварня', gold: 1, people: 1, lore: 'Соляные варницы: золото и люди идут сюда сами — +1 золота и +1 душа с рассветом.' },
+  'табун': { name: 'Табун', gold: 0, people: 1, lore: 'Вольные кони на лугах: +1 душа с рассветом, и всадников здесь растят, а не покупают.' },
+  'каменоломня': { name: 'Каменоломня', gold: 1, people: 0, lore: 'Добрый камень: +1 золота с рассветом, и стены здесь кладут из своего.' }
+});
+
+export function richesAt(state, id) {
+  const key = state?.riches?.[id];
+  return RICHES[key] ? { key, ...RICHES[key] } : null;
+}
+
+// Lays out the empty country and what the land holds. Done once, when the
+// game is made, from the map's own seed, so every player sees the same world.
+export function seedLands(game, map) {
+  const state = game.state;
+  state.tier ||= {};
+  state.riches ||= {};
+  let seed = (Number(map.seed) || 7) ^ 0x3f21ab;
+  const random = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+  const keys = Object.keys(RICHES);
+  const capitals = new Set(Object.values(map.capitals || {}));
+
+  const makeEmpty = id => {
+    state.tier[id] = WASTE;
+    if (state.population) state.population[id] = 0;
+    if (state.order) delete state.order[id];
+    state.empty ||= {};
+    state.empty[id] = true;
+    // Nobody lives there, so nobody holds it against a comer.
+    if (state.wild_guards) state.wild_guards[id] = 0;
+  };
+
+  // The lands around a capital are the same for every House, so whatever is
+  // decided for one House's k-th land is decided for all of them: open country
+  // and good ground fall evenly, and no House starts richer than another.
+  const petal = /^([A-F])([1-6])$/;
+  for (let k = 1; k <= 6; k += 1) {
+    const mine = map.territories.filter(t => petal.test(t.id) && t.id.endsWith(String(k)));
+    if (!mine.length) continue;
+    const wild = mine.every(t => t.type === 'Дикая земля');
+    const bare = wild && random() < 0.5;
+    const rich = random() < 0.3 ? keys[Math.floor(random() * keys.length)] : null;
+    for (const t of mine) {
+      if (bare) makeEmpty(t.id);
+      if (rich) state.riches[t.id] = rich;
+    }
+  }
+
+  // Everything else — the marches between realms, the free city, the inner
+  // ring — is laid out land by land.
+  for (const t of [...map.territories].sort((a, b) => a.id.localeCompare(b.id))) {
+    if (capitals.has(t.id) || petal.test(t.id)) continue;
+    const free = !state.territories?.[t.id]?.owner;
+    if (free && t.type === 'Дикая земля' && random() < 0.45) makeEmpty(t.id);
+    if (random() < 0.3) state.riches[t.id] = keys[Math.floor(random() * keys.length)];
+  }
+  return game;
+}
+
+// Empty country that was never settled, as against a land burnt to the ground.
+export function wasNeverSettled(state, id) {
+  return Boolean(state?.empty?.[id]);
+}

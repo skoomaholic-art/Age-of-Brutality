@@ -103,3 +103,48 @@ test('a land burnt to the ground is nobody’s, pays nothing, and can be raised 
   assert.equal(done.state.population[id], REBUILD.people);
   assert.ok(done.state.journal.some(e => e.kind === 'LAND_REBUILT'));
 });
+
+test('open country and the riches of the ground are laid out evenly round every House', async () => {
+  const { generateMap } = await import('../src/online/mapgen.mjs');
+  const { seedLands, isWaste, richesAt, wasNeverSettled } = await import('../src/online/settlements.mjs');
+  const { seedHeart } = await import('../src/online/heart.mjs');
+  const houses = constants.houses.slice(0, 4);
+  const world = generateMap(map, { ...constants, houses }, { houses, seed: 21, shape: 'mainland', seaMesh: true, homePorts: false });
+
+  let game = createOnlineGame(world, { ...constants, houses }, { id: 'lands', nowMs: T0 });
+  game = normalizeAudit(normalizeOnlineEconomy(game, T0));
+  seedHeart(game, world);
+  seedPopulation(game, world);
+  seedOrder(game, world);
+  seedLands(game, world);
+
+  // Whatever one House's k-th land is, every other House's k-th land is too.
+  for (let k = 1; k <= 6; k += 1) {
+    const mine = world.territories.filter(t => /^[A-F][1-6]$/.test(t.id) && t.id.endsWith(String(k)));
+    const bare = new Set(mine.map(t => isWaste(game.state, t.id)));
+    const rich = new Set(mine.map(t => game.state.riches?.[t.id] || ''));
+    assert.equal(bare.size, 1, `the ${k}-th land is the same kind of ground for everyone`);
+    assert.equal(rich.size, 1, `the ${k}-th land holds the same for everyone`);
+  }
+
+  // Open country is empty of people and of guards, and reads as never settled.
+  const empty = Object.keys(game.state.empty || {});
+  assert.ok(empty.length > 0, 'there is open country somewhere');
+  for (const id of empty) {
+    assert.ok(isWaste(game.state, id));
+    assert.ok(wasNeverSettled(game.state, id));
+    assert.equal(game.state.population[id], 0);
+    assert.equal(Number(game.state.wild_guards?.[id] || 0), 0, 'nobody holds it');
+  }
+
+  // And a seam of iron pays its holder at every dawn.
+  const ore = Object.entries(game.state.riches || {}).find(([, kind]) => kind === 'рудник');
+  if (ore) {
+    const [id] = ore;
+    game.state.territories[id].owner = houses[0];
+    const withOre = calculateHouseIncome(game.state, world, { ...constants, houses }, houses[0]);
+    game.state.riches = {};
+    const without = calculateHouseIncome(game.state, world, { ...constants, houses }, houses[0]);
+    assert.equal(withOre.gold - without.gold, richesAt({ riches: { [id]: 'рудник' } }, id).gold);
+  }
+});

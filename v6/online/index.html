@@ -2744,8 +2744,11 @@ function rebuildBlock(id) {
   const working = (snapshot.game.jobs || []).some(job => job.status === 'PENDING' && job.territory === id && job.type === 'REBUILD');
   if (working) return '<div class="rank-box"><div class="rank-head">Пепелище</div><div class="tiny">Деревню поднимают заново…</div></div>';
   const why = men < 1 ? 'Нужно стоять здесь с воинами' : '';
-  return '<div class="rank-box"><div class="rank-head">Пепелище</div>' +
-    '<div class="tiny">Здесь не живут: ни дохода, ни людей, ни войска. Через эту землю ходят, и только. Приведи воинов — и подними деревню заново.</div>' +
+  const never = Boolean(snapshot.game.state.empty?.[id]);
+  return '<div class="rank-box"><div class="rank-head">' + (never ? 'Пустая земля' : 'Пепелище') + '</div>' +
+    '<div class="tiny">' + (never
+      ? 'Голая земля: ни села, ни людей, ни дохода. Через неё ходят, и только. Приведи воинов — и поставь здесь деревню, своей рукой.'
+      : 'Здесь не живут: ни дохода, ни людей, ни войска. Через эту землю ходят, и только. Приведи воинов — и подними деревню заново.') + '</div>' +
     '<div class="with-hint">' + goldButton('data-rebuild', why || 'Поднять деревню · 8 золота', 8, why) +
     hint('На пепелище можно поставить деревню: 4 души, порядок 55. Дальше она растёт как любая другая.') + '</div></div>';
 }
@@ -2960,6 +2963,21 @@ function renderFate() {
 }
 
 // What the ground here does to an army: how it slows a march and what it costs.
+// What the ground itself holds: a seam of iron, a salt pan, horses, stone.
+const RICHES_WORDS = {
+  'рудник': ['Рудник', 'Железная жила: +2 золота с рассветом тому, кто держит землю.'],
+  'солеварня': ['Солеварня', 'Соляные варницы: +1 золота и +1 душа с рассветом.'],
+  'табун': ['Табун', 'Вольные кони на лугах: +1 душа с рассветом.'],
+  'каменоломня': ['Каменоломня', 'Добрый камень: +1 золота с рассветом.']
+};
+
+function richesRow(id) {
+  const key = snapshot?.game?.state?.riches?.[id];
+  const word = RICHES_WORDS[key];
+  if (!word) return '';
+  return '<div class="row"><span class="with-hint">Богатство' + hint(word[1]) + '</span><b>' + escapeHtml(word[0]) + '</b></div>';
+}
+
 function terrainRow(id) {
   const kind = snapshot?.map?.terrain?.[id];
   const info = kind && snapshot?.game?.terrain_kinds?.[kind];
@@ -3071,7 +3089,7 @@ function renderLand() {
         : seen && garrison ? '<div class="row"><span>Из них</span><b>' + escapeHtml(describeRanks(rankComp(landId, st.owner))) + '</b></div>' : '') +
       (unitsMode() && st.owner && (seen || mine) ? orderRow(landId, st.owner) : '') +
       (unitsMode() && (seen || mine) ? '<div class="row"><span>Население</span><b>' + Number(snapshot.game.state.population?.[landId] || 0) + (snapshot.game.state.growth?.[landId] ? ' · растёт' : '') + '</b></div>' : '') +
-      terrainRow(landId) +
+      terrainRow(landId) + richesRow(landId) +
       '<div class="row"><span>Возведено</span><b>' + ([st.fort ? 'крепость' : '', hasPort(landId) ? 'порт' : ''].filter(Boolean).join(', ') || 'нет') + '</b></div>' +
       '<div class="row"><span>Исконно</span><b>' + escapeHtml(t.house_sector && colors[t.house_sector] ? 'земля Дома ' + t.house_sector : t.house_sector || 'вольная земля') + '</b></div>' +
       '<div class="row"><span>Прежде владели</span><b>' + escapeHtml(past.length ? past.join(', ') : 'никто') + '</b></div>' +

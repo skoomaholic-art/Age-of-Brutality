@@ -70,6 +70,7 @@ import { seasonNow, seasonTurnsOn } from './seasons.mjs';
 import { listInterceptions, orderIntercept } from './intercept.mjs';
 import { holdLine } from './stance.mjs';
 import { EMPTY_THRONE, isInterregnum, processSuccession } from './succession.mjs';
+import { seedLands } from './settlements.mjs';
 import { generateMap, MAX_HOUSES, MIN_HOUSES, MAP_SEASON_KEYS, MAP_SHAPES, MAP_SIZE_KEYS, MAP_WARPS, pickMapShape, recommendedSize } from './mapgen.mjs';
 import { processEncounters } from './encounters.mjs';
 import { expelGuests } from './guests.mjs';
@@ -967,7 +968,7 @@ async function createMultiplayerGame(body, profile = null) {
     // Where roads meet rivers: no crossing there until a bridge is built.
     seedCrossings(game.state, map, (await mapArtFor(scopeForSpec(mapSpec))).crossings);
     // The Heart of the Lands: the wild guard on free lands, the centre to hold.
-    if (mapSpec.heart) { seedHeart(game, map); seedPopulation(game, map); seedOrder(game, map); }
+    if (mapSpec.heart) { seedHeart(game, map); seedPopulation(game, map); seedOrder(game, map); seedLands(game, map); }
   }
 
   const ctx = {
@@ -1033,7 +1034,7 @@ async function createSoloGame(body, profile = null) {
     // Where roads meet rivers: no crossing there until a bridge is built.
     seedCrossings(game.state, map, (await mapArtFor(scopeForSpec(mapSpec))).crossings);
     // The Heart of the Lands: the wild guard on free lands, the centre to hold.
-    if (mapSpec.heart) { seedHeart(game, map); seedPopulation(game, map); seedOrder(game, map); }
+    if (mapSpec.heart) { seedHeart(game, map); seedPopulation(game, map); seedOrder(game, map); seedLands(game, map); }
   }
 
   const ctx = {

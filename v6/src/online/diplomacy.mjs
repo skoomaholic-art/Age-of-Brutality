@@ -185,6 +185,30 @@ function formAlliance(game, a, b, nowMs, bride = a) {
   const daughter = dynastyOf(game, bride).daughters.find(item => !item.married_to);
   daughter.married_to = groom;
   daughter.married_at = new Date(nowMs).toISOString();
+  // She does not vanish into the other House: she sits at its court, and a
+  // steady hand there is worth gold and a word in council.
+  if (game.state?.characters) {
+    const id = `SPS-${bride}-${groom}`;
+    game.state.characters[id] ||= {
+      id,
+      name: daughter.name,
+      type: 'Супруга',
+      house: groom,
+      role: 'SPOUSE',
+      age: 'ADULT',
+      alive: true,
+      health: 'HEALTHY',
+      status: 'ACTIVE',
+      mode: 'COURT',
+      stats: { attack: 0, defense: 0, survival: 1, diplomacy: 1, intrigue: 0, stewardship: 1 },
+      special_rule: `Супруга из Дома ${bride}: союз держится, пока она при дворе.`,
+      army_id: null,
+      court_exhausted: false,
+      fate_pending: null,
+      location: { kind: 'COURT', territory: null },
+      married_from: bride
+    };
+  }
   for (const key of Object.keys(diplomacy.offers)) {
     const [from, to] = key.split('>');
     if ([a, b].includes(from) || [a, b].includes(to)) delete diplomacy.offers[key];
