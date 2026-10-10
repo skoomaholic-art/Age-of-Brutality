@@ -250,6 +250,27 @@ export function journalEntryToAudit(entry, map, game) {
     };
   }
 
+  if (entry.kind === 'SUCCESSION') {
+    return {
+      ...base,
+      message: entry.heir_name
+        ? `${entry.character_name} венчан на престол Дома ${entry.house}. Новым наследником при дворе объявлен ${entry.heir_name}.`
+        : `${entry.character_name} венчан на престол Дома ${entry.house}. Наследника у Дома больше нет.`,
+      details: { house: entry.house, character_id: entry.character_id, character_name: entry.character_name, heir_name: entry.heir_name || null, at: entry.at || null }
+    };
+  }
+
+  if (entry.kind === 'THRONE_EMPTY') {
+    const why = entry.why === 'CAPTIVE' ? 'государь в оковах'
+      : entry.why === 'HEIR_HELD' ? 'наследник в чужих руках'
+        : 'наследников не осталось';
+    return {
+      ...base,
+      message: `Трон Дома ${entry.house} пустует: ${why}. Пока на нём никто не сидит, Дом теряет влияние с каждым рассветом.`,
+      details: { house: entry.house, why: entry.why || null, at: entry.at || null }
+    };
+  }
+
   if (entry.kind === 'WATCH_SET') {
     return {
       ...base,

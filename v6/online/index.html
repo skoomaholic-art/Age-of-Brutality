@@ -4315,6 +4315,13 @@ function newsFor(item) {
   if (item.type === 'REVOLT') return { rank: mine(d.house) ? 8 : 4, art: 'land-lost', title: mine(d.house) ? 'Земля поднялась против тебя' : 'Бунт в землях', text };
   if (item.type === 'DESERTION') return { rank: 6, art: 'order-failed', title: 'Войско разбегается', text };
 
+  if (item.type === 'SUCCESSION') {
+    return { rank: 9, art: 'heir-born', title: mine(d.house) ? 'Венчание на престол' : 'В чужом Доме новый государь', text, ok: 'Долгих лет' };
+  }
+  if (item.type === 'THRONE_EMPTY') {
+    return { rank: 9, art: 'house-abandoned', title: mine(d.house) ? 'Трон пустует' : 'Чужой трон пустует', text, ok: 'Беда' };
+  }
+
   if (item.type === 'SPY_CAUGHT') {
     const ours = mine(d.house);
     return {

@@ -69,6 +69,7 @@ import { TERRAIN } from './terrain.mjs';
 import { seasonNow, seasonTurnsOn } from './seasons.mjs';
 import { listInterceptions, orderIntercept } from './intercept.mjs';
 import { holdLine } from './stance.mjs';
+import { EMPTY_THRONE, isInterregnum, processSuccession } from './succession.mjs';
 import { generateMap, MAX_HOUSES, MIN_HOUSES, MAP_SEASON_KEYS, MAP_SHAPES, MAP_SIZE_KEYS, MAP_WARPS, pickMapShape, recommendedSize } from './mapgen.mjs';
 import { processEncounters } from './encounters.mjs';
 import { expelGuests } from './guests.mjs';
@@ -585,6 +586,14 @@ async function tickUnlocked(ctx) {
   processed = processStorms(processed, map, nowMs);
   processed = processRounds(processed, map, constants, { nowMs });
   processed = processCharacters(processed, map, constants, { nowMs });
+  // The throne of a fallen ruler passes to his heir.
+  {
+    const crowned = structuredClone(processed);
+    if (processSuccession(crowned, map, characterCatalog, { nowMs })) {
+      crowned.updated_at = new Date(nowMs).toISOString();
+      processed = crowned;
+    }
+  }
   // A lord left alone on the open water is brought ashore (or drowns).
   processed = rescueStrandedCommanders(processed, map, nowMs);
   processed = processRiders(processed, map, constants, nowMs);

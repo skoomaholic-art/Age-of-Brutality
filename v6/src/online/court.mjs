@@ -47,6 +47,8 @@ function atHome(state, character, capitals) {
 
 export function houseCourtTotals(state, house, capitals = null) {
   const totals = { gold: 0, influence: 0, deals: 0, spy: 0 };
+  // Nobody on the throne: the Houses watch, and the realm loses face every dawn.
+  if (state?.interregnum?.[house]) totals.influence -= 1;
   for (const character of Object.values(state?.characters || {})) {
     if (character.house !== house) continue;
     const where = whereIs(character);
