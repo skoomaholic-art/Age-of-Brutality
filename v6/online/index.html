@@ -2742,6 +2742,20 @@ function rebuildBlock(id) {
     hint('На пепелище можно поставить деревню: 4 души, порядок 55. Дальше она растёт как любая другая.') + '</div></div>';
 }
 
+// Standing to arms where we stand: ditches and stakes for +2 to defence, and
+// no marching out of this land until the men stand down.
+function holdBlock(id) {
+  const st = snapshot.game.state.territories?.[id];
+  if (!st || st.owner !== house) return '';
+  const men = Number(st.warriors?.[house] || 0);
+  if (men < 1) return '';
+  const on = Boolean(snapshot.game.state.holding?.[id]?.[house]);
+  return '<div class="with-hint">' +
+    '<button class="wide' + (on ? '' : ' primary') + '" data-hold>' + (on ? 'Снять с обороны' : 'Держать оборону') + '</button>' +
+    hint('Рать окапывается: рвы, колья, дозоры. +2 к обороне этой земли в любом бою. Пока держит — стоит на месте; как только пошлёшь её в поход, оборона снимается сама.') +
+    '</div>' + (on ? '<div class="tiny">Рать стоит насмерть: +2 к обороне.</div>' : '');
+}
+
 function levyBlock() {
   const view = snapshot.game.ranks_view;
   if (!view) return '';
@@ -2935,7 +2949,8 @@ function terrainRow(id) {
   const mine = territoryById(id)?.house_sector === house;
   return '<div class="row"><span class="with-hint">Земля' + hint(info.lore) + '</span><b>' + escapeHtml(info.name) + '</b></div>' +
     '<div class="tiny bad-note">Поход сюда и отсюда дольше на ' + slow + '%' +
-    (wear ? (mine ? '. Земля исконно твоя: войско здесь кормят и укрывают, небоевых потерь нет' : '; это не исконно твоя земля, и войско теряет здесь около ' + wear + '% людей каждый рассвет') : '') + '.</div>';
+    (wear ? (mine ? '. Земля исконно твоя: войско здесь кормят и укрывают, небоевых потерь нет' : '; это не исконно твоя земля, и войско теряет здесь около ' + wear + '% людей каждый рассвет') : '') + '.</div>' +
+    (Number(info.guard) > 0 ? '<div class="tiny">Кто стоит здесь, тому +' + info.guard + ' к обороне: такую землю держат малой силой.</div>' : '');
 }
 
 // Order of a land of one's own, and how close it is to rising.
@@ -3019,7 +3034,7 @@ function renderLand() {
       body.innerHTML = '<div class="row"><span>Стоит здесь</span><b>' + here + ' ' + warriorWord(here) +
         (here ? ' · ' + starText(starsOf(landId, house)) : '') + '</b></div>' +
         (here ? '<div class="row"><span>Из них</span><b>' + escapeHtml(describeRanks(rankComp(landId, house))) + '</b></div>' : '') +
-        replenishBlock(landId) + hireBlock(landId) +
+        holdBlock(landId) + replenishBlock(landId) + hireBlock(landId) +
         (spyRow ? '<details class="more"' + (spyMoreOpen ? ' open' : '') + ' data-spy-more><summary>Тайные дела</summary>' + plainButtons(spyRow) + '</details>' : '');
       return;
     }
@@ -3169,6 +3184,7 @@ function setupLand() {
     if (event.target.closest('[data-replenish]')) landCommand('/api/replenish', {});
     if (event.target.closest('[data-growth]')) landCommand('/api/growth', {});
     if (event.target.closest('[data-grow]')) landCommand('/api/grow', {});
+    if (event.target.closest('[data-hold]')) landCommand('/api/hold', {});
     if (event.target.closest('[data-rebuild]')) landCommand('/api/rebuild', {});
     if (event.target.closest('[data-militia-go]')) {
       const box = $('land-body').querySelector('[data-militia-count]');

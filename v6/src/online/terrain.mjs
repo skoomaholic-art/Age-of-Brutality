@@ -16,22 +16,22 @@ import { COLD, WINTER } from './seasons.mjs';
 export const PLAIN = 'равнина';
 
 export const TERRAIN = Object.freeze({
-  [PLAIN]: { name: 'равнина', slow: 1, wear: 0, why: '', lore: 'Ровная земля: идти по ней легко.' },
+  [PLAIN]: { name: 'равнина', slow: 1, wear: 0, guard: 0, why: '', lore: 'Ровная земля: идти по ней легко.' },
   'горы': {
-    name: 'горы', slow: 1.8, wear: 0.1, why: 'в горах',
-    lore: 'Горы: тропы круты, войско идёт вдвое медленнее. В чужих и вольных горах оно теряет людей на кручах; в исконных землях своего Дома воинов кормят и укрывают.'
+    name: 'горы', slow: 1.8, wear: 0.1, guard: 2, why: 'в горах',
+    lore: 'Горы: тропы круты, войско идёт вдвое медленнее. В чужих и вольных горах оно теряет людей на кручах; в исконных землях своего Дома воинов кормят и укрывают. Кто стоит в горах, тому +2 к обороне.'
   },
   'болота': {
-    name: 'болота', slow: 1.6, wear: 0.07, why: 'в болотах',
-    lore: 'Болота: гати вязки, войско идёт медленно. В чужих и вольных болотах его косит лихорадка; в исконных землях своего Дома стоят гати и жильё.'
+    name: 'болота', slow: 1.6, wear: 0.07, guard: 1, why: 'в болотах',
+    lore: 'Болота: гати вязки, войско идёт медленно. В чужих и вольных болотах его косит лихорадка; в исконных землях своего Дома стоят гати и жильё. Кто стоит в болотах, тому +1 к обороне.'
   },
   'пустыня': {
-    name: 'пустыня', slow: 1.25, wear: 0.13, why: 'в пустыне',
+    name: 'пустыня', slow: 1.25, wear: 0.13, guard: 0, why: 'в пустыне',
     lore: 'Пустыня: зной и песок изматывают войско в чужих и вольных землях; в исконных землях своего Дома есть колодцы.'
   },
   'снега': {
-    name: 'снега', slow: 1.45, wear: 0.13, why: 'в снегах',
-    lore: 'Снега: мороз и сугробы держат войско, а в чужих и вольных землях уносят отставших; в исконных землях своего Дома есть тёплый кров.'
+    name: 'снега', slow: 1.45, wear: 0.13, guard: 1, why: 'в снегах',
+    lore: 'Снега: мороз и сугробы держат войско, а в чужих и вольных землях уносят отставших; в исконных землях своего Дома есть тёплый кров. Кто стоит в снегах, тому +1 к обороне.'
   }
 });
 
@@ -54,6 +54,12 @@ export function roadSlow(map, a, b, season = null) {
   const slowB = TERRAIN[terrainOf(map, b)]?.slow ?? 1;
   // Winter lies on every road alike: snow, mud and short days.
   return ((slowA + slowB) / 2) * (season === WINTER ? COLD.slow : 1);
+}
+
+// What the lie of the land is worth to whoever stands on it in a fight: a pass
+// in the mountains is held by few against many, a marsh breaks a charge.
+export function terrainGuard(map, id) {
+  return Number(TERRAIN[terrainOf(map, id)]?.guard || 0);
 }
 
 export function isReef(map, id) {

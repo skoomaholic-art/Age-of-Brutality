@@ -35,6 +35,7 @@ import {
 
 import { COLD, isWinter } from './seasons.mjs';
 import { processAmbushes } from './intercept.mjs';
+import { standDown } from './stance.mjs';
 
 export const ONLINE_TIMING = Object.freeze({
   landSegmentMs: 3_000,
@@ -355,6 +356,8 @@ function setGuests(state,id,house,count) {
 }
 
 function removeFromOnlineOrigin(next,action) {
+  // Men who set out are no longer standing to arms where they stood.
+  standDown(next, action.from, action.house);
   if(isGuestOrigin(next,action)) {
     setGuests(
       next,action.from,action.house,

@@ -68,6 +68,7 @@ import { processStorms } from './storms.mjs';
 import { TERRAIN } from './terrain.mjs';
 import { seasonNow, seasonTurnsOn } from './seasons.mjs';
 import { listInterceptions, orderIntercept } from './intercept.mjs';
+import { holdLine } from './stance.mjs';
 import { generateMap, MAX_HOUSES, MIN_HOUSES, MAP_SEASON_KEYS, MAP_SHAPES, MAP_SIZE_KEYS, MAP_WARPS, pickMapShape, recommendedSize } from './mapgen.mjs';
 import { processEncounters } from './encounters.mjs';
 import { expelGuests } from './guests.mjs';
@@ -1745,7 +1746,7 @@ async function handleGameApi(req, res, url, ctx, subpath) {
     return json(res, result.status, result.response);
   }
 
-  if (req.method === 'POST' && ['/levy', '/drill', '/yard', '/port', '/bridge', '/hire', '/retrain', '/growth', '/capture-choice', '/bridge-burn', '/replenish', '/militia', '/intercept', '/grow', '/rebuild'].includes(subpath)) {
+  if (req.method === 'POST' && ['/levy', '/drill', '/yard', '/port', '/bridge', '/hire', '/retrain', '/growth', '/capture-choice', '/bridge-burn', '/replenish', '/militia', '/intercept', '/grow', '/rebuild', '/hold'].includes(subpath)) {
     const body = await readBody(req);
     const house = String(body.house || '').trim();
     await requireHouse(ctx, req, house);
@@ -1761,6 +1762,7 @@ async function handleGameApi(req, res, url, ctx, subpath) {
               : subpath === '/bridge' ? buildBridge(game, map, house, String(body.key || ''), { nowMs })
               : subpath === '/bridge-burn' ? burnBridge(game, map, house, String(body.key || ''), { nowMs })
                 : subpath === '/hire' ? hireUnits(game, map, house, String(body.territory || ''), body.counts, { nowMs })
+                  : subpath === '/hold' ? holdLine(game, map, house, String(body.territory || ''), { nowMs })
                   : subpath === '/grow' ? queueGrowJob(game, map, house, String(body.territory || ''), { nowMs })
                   : subpath === '/rebuild' ? queueRebuildJob(game, map, house, String(body.territory || ''), { nowMs })
                   : subpath === '/intercept' ? orderIntercept(game, map, constants, house, { orderId: String(body.order_id || ''), from: String(body.from || ''), warriors: body.warriors, nowMs })

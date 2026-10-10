@@ -250,6 +250,17 @@ export function journalEntryToAudit(entry, map, game) {
     };
   }
 
+  if (entry.kind === 'HOLDING_LINE' || entry.kind === 'STOOD_DOWN') {
+    const where = territoryName(map, entry.territory);
+    return {
+      ...base,
+      message: entry.kind === 'HOLDING_LINE'
+        ? `Рать в ${where} встала насмерть: рвы, колья, ночные дозоры. +2 к обороне, но с места она не сойдёт, пока держит.`
+        : `Рать в ${where} снялась с обороны.`,
+      details: { house: entry.house, territory_id: entry.territory, at: entry.at || null }
+    };
+  }
+
   if (entry.kind === 'LAND_RAZED') {
     return {
       ...base,

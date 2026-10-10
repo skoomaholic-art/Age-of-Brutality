@@ -1,4 +1,6 @@
 import { landKind } from '../online/settlements.mjs';
+import { terrainGuard } from '../online/terrain.mjs';
+import { clearHoldAt, holdGuard } from '../online/stance.mjs';
 import { buildAdjacency } from './map.mjs';
 import { validateMarch, classifyDestination } from './movement.mjs';
 import { warriorsAt } from './state.mjs';
@@ -24,7 +26,12 @@ function temporary(x, label) {
 export function baseDefense(map, state, constants, territoryId) {
   const t = map.territories.find(x => x.id === territoryId);
   if (!t) throw new Error(`unknown territory ${territoryId}`);
-  return Math.max(constants.combat.base_defense[landKind(state, map, territoryId) ?? t.type] ?? constants.combat.base_defense[t.type] ?? 0, state.territories[territoryId]?.fort ? constants.combat.fort_defense : 0);
+  const walls = Math.max(
+    constants.combat.base_defense[landKind(state, map, territoryId) ?? t.type] ?? constants.combat.base_defense[t.type] ?? 0,
+    state.territories[territoryId]?.fort ? constants.combat.fort_defense : 0
+  );
+  // The lie of the land counts on top of walls: a pass or a marsh is held hard.
+  return walls + terrainGuard(map, territoryId);
 }
 
 export function validateSupport(state, map, sideHouse, supportFrom, battleTerritory, attackerOrigin = null) {
@@ -76,7 +83,8 @@ export function resolveBattle(state, map, constants, action, options = {}) {
 
   const attackerStrength = action.warriors + attackerDie + attackerAttack + attackerSupport + attackerTempStrength;
   const defenderStrength = defenderWarriors + defenderDie + defenderAttack + defenderSupport + defenderTempStrength;
-  const defenderDefense = baseDefense(map,state,constants,action.to) + defenderCommanderDefense + defenderTempDefense;
+  const defenderDefense = baseDefense(map,state,constants,action.to) + defenderCommanderDefense + defenderTempDefense
+    + holdGuard(state, action.to, defenderHouse);
   const attackerDefenseValue = attackerDefense + attackerTempDefense;
   const damageToDefender = Math.max(0, Math.ceil(attackerStrength/2) - defenderDefense);
   const damageToAttacker = Math.max(0, Math.ceil(defenderStrength/2) - attackerDefenseValue);
@@ -102,6 +110,7 @@ export function resolveBattle(state, map, constants, action, options = {}) {
 
   if (attackerWins && attackerSurvivors > 0) {
     captured = true;
+    clearHoldAt(next, action.to);
     target.owner = action.house;
     target.warriors[action.house] = attackerSurvivors;
     if (defenderSurvivors > 0) {
