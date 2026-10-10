@@ -75,6 +75,7 @@ import { seedLands } from './settlements.mjs';
 import { aspirationView, chooseAspiration } from './aspiration.mjs';
 import { generateMap, MAX_HOUSES, MIN_HOUSES, MAP_SEASON_KEYS, MAP_SHAPES, MAP_SIZE_KEYS, MAP_WARPS, pickMapShape, recommendedSize } from './mapgen.mjs';
 import { processEncounters } from './encounters.mjs';
+import { checkDeeds, deedsView } from './firstdeeds.mjs';
 import { expelGuests } from './guests.mjs';
 import { processCampFights } from './melee.mjs';
 import { agentsView, hireSpy, orderSpy, processAgents, setWatch, wayfarersView } from './agents.mjs';
@@ -607,6 +608,10 @@ async function tickUnlocked(ctx) {
   processed = processCampFights(processed, map, constants, nowMs);
   processed = expelGuests(processed, map, constants, nowMs);
   processed = processAgents(processed, map, { nowMs });
+  // The first deeds of a new House are paid for the moment they are done, not
+  // at the next dawn: a newcomer should see the reward while he still remembers
+  // what he did for it.
+  if (checkDeeds(processed, map, constants, { nowMs })) processed.updated_at = new Date(nowMs).toISOString();
   processed = recordExploration(processed, map, constants.houses, nowMs);
   processed = recordLandHistory(processed, nowMs);
   if (
@@ -745,6 +750,8 @@ function redactGameForPlayer(game, player) {
   clientGame.terrain_kinds = TERRAIN;
   // What this House set out to do, and how far along it is.
   if (player?.house) clientGame.aspiration = aspirationView(game, map, player.house);
+  // The first deeds: what a new House is told to do, and what it has done.
+  if (player?.house) clientGame.deeds = deedsView(game, map, player.house);
   // The thresholds of order, so the charter counts a revolt exactly as the dawn does.
   clientGame.order_rules = ORDER;
   return clientGame;

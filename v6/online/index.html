@@ -530,6 +530,9 @@
     .work-row .when { margin-left: auto; color: var(--ink-soft); white-space: nowrap; }
     .work-row button { padding: 1px 7px; font-size: 11.5px; }
     .land-body .row { display: flex; justify-content: space-between; gap: 10px; padding: 2px 0; border-bottom: 1px dotted var(--rule); }
+    /* The same two-column row inside a side panel: name on the left, what it costs or gives on the right. */
+    .panel .row { display: flex; justify-content: space-between; gap: 10px; padding: 2px 0; border-bottom: 1px dotted var(--rule); }
+    .panel .row b { text-align: right; }
     .land-body .lore { margin-top: 7px; font-style: italic; }
     .land-body .acts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 6px; }
     .land-body .built { margin: 6px 0; }
@@ -3975,7 +3978,12 @@ function setupBar() {
   aspire.className = 'panel';
   aspire.id = 'aspiration-panel';
   aspire.innerHTML = '<h2>Устремление Дома</h2><div id="aspiration-body" class="muted">—</div>';
-  $('sub-faction').append(aspire, $('house-panel'), $('economy-panel'));
+  // The first deeds stand above everything else while any of them is undone.
+  const deeds = document.createElement('div');
+  deeds.className = 'panel';
+  deeds.id = 'deeds-panel';
+  deeds.innerHTML = '<h2>Наказ</h2><div id="deeds-body" class="muted">—</div>';
+  $('sub-faction').append(deeds, aspire, $('house-panel'), $('economy-panel'));
   document.querySelectorAll('.sub-tab').forEach(tab => {
     tab.addEventListener('click', () => {
       document.querySelectorAll('.sub-tab').forEach(node => node.classList.toggle('on', node === tab));
@@ -4395,6 +4403,10 @@ function newsFor(item) {
   if (item.type === 'REVOLT') return { rank: mine(d.house) ? 8 : 4, art: 'land-lost', title: mine(d.house) ? 'Земля поднялась против тебя' : 'Бунт в землях', text };
   if (item.type === 'DESERTION') return { rank: 6, art: 'order-failed', title: 'Войско разбегается', text };
 
+  if (item.type === 'DEED_DONE' && mine(d.house)) {
+    return { rank: 7, art: 'deal-made', title: d.last ? 'Наказ исполнен' : 'Дело сделано', text, ok: 'Дальше' };
+  }
+
   if (item.type === 'ASPIRATION_STEP' && mine(d.house)) {
     return { rank: 7, art: 'day-change', title: d.last ? 'Путь Дома пройден' : 'Шаг по пути Дома', text, ok: 'Так и идём' };
   }
@@ -4804,6 +4816,27 @@ function opinionWord(value) {
 }
 
 // What the House set out to do, and how far along it is.
+// The first deeds of a new House: plain things to do, each paid for once.
+// Once all four are done the whole panel goes away and never comes back.
+function renderDeeds() {
+  const panel = $('deeds-panel');
+  const box = $('deeds-body');
+  if (!panel || !box) return;
+  const view = snapshot?.game?.deeds;
+  const running = snapshot?.game?.lifecycle?.status === 'RUNNING';
+  if (!view || !house || isSpectator || !running || view.every(item => item.done)) {
+    panel.style.display = 'none';
+    return;
+  }
+  panel.style.display = '';
+  const left = view.filter(item => !item.done).length;
+  box.innerHTML = '<div class="tiny">Четыре дела, с которых начинается всякое правление. За каждое платят один раз. Осталось: ' + left + '.</div>' +
+    view.map(item =>
+      '<div class="row"><span>' + (item.done ? '✔ ' : '') + escapeHtml(item.name) + '</span><b>' +
+      (item.done ? 'сделано' : escapeHtml(item.want) + ' · +' + (item.gold ? item.gold + ' золота' : item.glory + ' славы')) +
+      '</b></div>' + (item.done ? '' : '<div class="tiny">' + escapeHtml(item.lore) + '</div>')).join('');
+}
+
 function renderAspiration() {
   const box = $('aspiration-body');
   if (!box) return;
@@ -7604,6 +7637,7 @@ async function refresh() {
   announceNews();
   renderDiplomacy();
   renderAspiration();
+  renderDeeds();
   renderNews();
   renderFinders();
   renderFamily();
@@ -7782,6 +7816,7 @@ document.addEventListener('click', async event => {
     });
     await refresh();
     renderAspiration();
+    renderDeeds();
   } catch (error) { alert(sayError(error)); }
 });
 // Sending men out to catch a column on the road.

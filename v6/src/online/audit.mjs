@@ -298,6 +298,17 @@ export function journalEntryToAudit(entry, map, game) {
     };
   }
 
+  if (entry.kind === 'DEED_DONE') {
+    const paid = entry.gold ? `Казна прибывает на ${entry.gold} золота.` : `Слава Дома растёт на ${entry.glory}.`;
+    return {
+      ...base,
+      message: entry.last
+        ? `Дом ${entry.house} исполнил наказ до конца: «${entry.name}». ${paid}`
+        : `Дом ${entry.house} исполнил наказ: «${entry.name}». ${paid}`,
+      details: { house: entry.house, deed: entry.deed, name: entry.name, gold: entry.gold || 0, glory: entry.glory || 0, last: Boolean(entry.last), at: entry.at || null }
+    };
+  }
+
   if (entry.kind === 'ASPIRATION_STEP') {
     return {
       ...base,
