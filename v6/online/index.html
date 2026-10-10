@@ -4549,10 +4549,21 @@ function announceNews() {
   if (newest <= lastNewsSeq) return;
   const fresh = log.filter(item => Number(item.seq || 0) > lastNewsSeq);
   lastNewsSeq = newest;
-  // The century speaks: fresh tidings ring, whether or not they make a card.
+  // The century speaks, but only of our own doings: what another House does in
+  // its own lands is read in the tidings, not rung in our hall. The turning of
+  // the day and the end of the game belong to everyone.
+  const EVERYONE = new Set(['ROUND_STARTED', 'GAME_FINISHED', 'SEASON_TURNED']);
+  const ourOwn = item => {
+    const d = item.details || {};
+    return d.house === house
+      || (d.houses || []).includes(house)
+      || d.attacker === house || d.defender === house || d.against === house
+      || d.taker === house || d.captor === house || d.winner === house
+      || (d.winners || []).includes?.(house);
+  };
   for (const item of fresh.slice(-6)) {
-    const name = soundForNews(item);
-    if (name) playSound(name, { volume: item.details?.house === house || (item.details?.houses || []).includes(house) ? 1 : 0.55, gap: 400 });
+    const name = EVERYONE.has(item.type) || ourOwn(item) ? soundForNews(item) : null;
+    if (name) playSound(name, { volume: 1, gap: 400 });
     const spoken = voiceForNews(item);
     if (spoken) playVoice(spoken);
     musicHeardNews(item);

@@ -699,7 +699,7 @@ export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'whe
   const all = [...sites.map(s => s.pos), ...Object.values(waypoints)];
   // On a dry world there is no sea to leave room for: the country runs to the
   // edge of the picture, and the realms fill it.
-  const margin = form.dry ? 90 : 150;
+  const margin = form.dry ? 45 : 150;
   const minX = Math.min(...all.map(p => p.x)) - margin;
   const minY = Math.min(...all.map(p => p.y)) - margin;
   const maxX = Math.max(...all.map(p => p.x)) + margin;

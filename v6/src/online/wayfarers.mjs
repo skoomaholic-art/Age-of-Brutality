@@ -13,9 +13,10 @@ const cache = new Map();
 
 export function wayfarerLegMs(game) {
   const day = Number(game?.rounds?.round_duration_ms || 600000);
-  // A road between two lands takes a band about a twentieth of a game day, so
-  // the map is alive to the eye and a long journey still costs real time.
-  return Math.max(12000, Math.round(day / 20));
+  // A host walks a road in a sixth of a game day. A band of wayfarers carries
+  // no baggage and keeps no order, so it goes a quarter faster than that — and
+  // no faster: folk on the roads should not flicker past the armies.
+  return Math.max(12000, Math.round(day / 7.5));
 }
 
 function roadsOf(map) {
