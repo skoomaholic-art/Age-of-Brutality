@@ -1,10 +1,20 @@
-// Non-battle losses. A host that stands on rough ground bleeds every dawn:
-// men fall sick in the marshes, founder on the mountain tracks, die of thirst
-// in the sands and of cold in the snows. The weakest go first, as they do in a
-// retreat. The sea has a toll of its own (sea-toll.mjs); this is the land.
+// Non-battle losses. A host that stands on rough ground outside its own realm
+// bleeds every dawn: men fall sick in the marshes, founder on the mountain
+// tracks, die of thirst in the sands and of cold in the snows. In the lands of
+// its own House an army is fed and quartered, and the weather spares it. The
+// weakest go first, as they do in a retreat. The sea has a toll of its own
+// (sea-toll.mjs); this is the land.
 
 import { moveRanks, guestKey } from './ranks.mjs';
 import { wearAt, TERRAIN } from './terrain.mjs';
+
+// A House's own realm: the lands that have always been its own. There its men
+// are fed, quartered and doctored, so the weather and the road take nobody.
+// Everything else — a neighbour's land, a land just taken from the wild, the
+// open sea — is foreign ground, and an army that stands on it wears away.
+export function atHome(map, id, house) {
+  return map?.territories?.find(t => t.id === id)?.house_sector === house;
+}
 
 function hash(text) {
   let h = 2166136261;
@@ -31,6 +41,7 @@ export function attritionDawn(game, map, nowMs = Date.now()) {
   const day = Number(game.rounds?.number || 0);
   const out = [];
   const take = (id, house, men, key) => {
+    if (atHome(map, id, house)) return 0;
     const wear = wearAt(map, state, id, house);
     if (!wear) return 0;
     const lot = hash(`${game.id}:${day}:${id}:${house}`);
@@ -83,6 +94,7 @@ export function attritionDawn(game, map, nowMs = Date.now()) {
 export function attritionView(state, map) {
   const view = {};
   const note = (id, house, men) => {
+    if (atHome(map, id, house)) return;
     const wear = wearAt(map, state, id, house);
     if (!wear || men <= 1) return;
     const lost = Math.max(1, Math.floor(men * wear.rate));

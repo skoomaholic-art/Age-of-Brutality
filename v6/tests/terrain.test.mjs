@@ -21,6 +21,8 @@ const constants = { ...constants0, houses, house_warrior_cap: 9999, territory_wa
 const map = generateMap(base, constants, { houses, seed: 21, shape: 'wheel', seaMesh: true, homePorts: false });
 const H = houses[0];
 const capital = map.capitals[H];
+// A land outside every House's own realm: the wild middle, where the weather bites.
+const wildLand = map.territories.find(t => !houses.includes(t.house_sector) && t.type !== 'Столица').id;
 
 function game() {
   const g = createOnlineGame(map, constants, { id: 'terrain', nowMs: 1, characterCatalog });
@@ -63,7 +65,7 @@ test('a march through the mountains takes longer than one over the plain', () =>
 
 test('a host standing on rough ground melts away at dawn, weakest first, never to the last man', () => {
   const g = game();
-  const neighbour = [...buildAdjacency(map.land_edges).get(capital)][0];
+  const neighbour = wildLand;
   const rough = { ...map, terrain: { ...map.terrain, [neighbour]: 'пустыня' } };
   g.state.territories[neighbour].owner = H;
   g.state.territories[neighbour].warriors = { [H]: 10 };
@@ -79,12 +81,21 @@ test('a host standing on rough ground melts away at dawn, weakest first, never t
   assert.equal(g.state.territories[capital].warriors[H], 6);
   // A lone man is never taken by the road.
   assert.equal(wearLoss(1, 0.9, 0), 0);
+  // In the lands of its own House the same host is fed and sheltered.
+  const ownLand = map.territories.find(t => t.house_sector === H && t.type !== 'Столица').id;
+  const home = game();
+  const roughHome = { ...map, terrain: { ...map.terrain, [ownLand]: 'пустыня' } };
+  home.state.territories[ownLand].owner = H;
+  home.state.territories[ownLand].warriors = { [H]: 10 };
+  attritionDawn(home, roughHome, 1000);
+  assert.equal(home.state.territories[ownLand].warriors[H], 10, 'исконная земля не ест войско');
+  assert.equal(attritionView(home.state, roughHome)[ownLand], undefined, 'и черепа над ней нет');
   assert.deepEqual(validateState(g.state, map, constants), []);
 });
 
 test('the skull tells the host why it bleeds: rough ground, the open sea, a reef', () => {
   const g = game();
-  const neighbour = [...buildAdjacency(map.land_edges).get(capital)][0];
+  const neighbour = wildLand;
   const rough = { ...map, terrain: { ...map.terrain, [neighbour]: 'болота' }, reefs: [] };
   g.state.territories[neighbour].owner = H;
   g.state.territories[neighbour].warriors = { [H]: 9 };

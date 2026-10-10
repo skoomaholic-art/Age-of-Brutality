@@ -375,16 +375,25 @@ export function buildMapArt(map, options = {}) {
       ]);
     }
     let found = null;
+    // A river is drawn as a wide ribbon, so a road that runs within its banks
+    // is cut by it as surely as one that crosses the middle: the eye sees a
+    // river over the road either way, and the rules must agree with the eye.
+    const BANK = 3.2;
+    let nearest = { d: Infinity, point: null };
     for (const river of rivers) {
       for (let i = 0; i + 1 < line.length && !found; i += 1) {
         for (let j = 0; j + 1 < river.length && !found; j += 1) {
           const hit = crossPoint(line[i], line[i + 1], river[j], river[j + 1]);
-          // Not right at a town: a river bent away from it never truly reaches its gate.
           if (hit) found = hit;
+          else {
+            const d = distToSegment(line[i][0], line[i][1], { x: river[j][0], y: river[j][1] }, { x: river[j + 1][0], y: river[j + 1][1] });
+            if (d < nearest.d) nearest = { d, point: line[i] };
+          }
         }
       }
       if (found) break;
     }
+    if (!found && nearest.point && nearest.d < BANK) found = nearest.point;
     if (found) crossings.push({ a: segment.a.id, b: segment.b.id, x: f1(found[0]), y: f1(found[1]) });
   });
   const nearRoad = (x, y, reach) =>
