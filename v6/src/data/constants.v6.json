@@ -59,7 +59,7 @@
       "Столица": {
         "home_gold": 4,
         "foreign_gold": 3,
-        "home_influence": 1,
+        "home_influence": 0,
         "foreign_influence": 0
       },
       "Город": {

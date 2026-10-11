@@ -430,7 +430,8 @@ export function generateMap(baseMap, constants, { houses, seed = 1, shape = 'whe
   const ports = new Set();
   const islands = {};
   const islandBonus = {};
-  const bonusCycle = [[1, 0], [0, 1], [1, 1]];
+  // A whole island pays its holder in gold; влияние is taken in the field only.
+  const bonusCycle = [[1, 0], [2, 0], [2, 0]];
   const classicIslands = [...new Set(baseMap.territories
     .filter(t => t.type === 'Половина острова')
     .map(t => t.name.replace(/\s*—\s*[AB]$/, '')))];

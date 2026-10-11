@@ -154,7 +154,8 @@ function beginRound(next, map, constants, number, nowMs, timing) {
       sea_lost: fresh.filter(e => e.kind === 'SEA_TOLL' && e.house === house).reduce((s, e) => s + Number(e.lost || 0), 0),
       worn: fresh.filter(e => e.kind === 'ATTRITION' && e.house === house).reduce((s, e) => s + Number(e.lost || 0), 0),
       revolts: fresh.filter(e => e.kind === 'REVOLT' && e.house === house).length,
-      glory: (after[house]?.glory ?? 0) - (afterIncome[house]?.glory ?? 0),
+      // What влияние the night brought: it is taken in the field, not collected.
+      glory: (after[house]?.influence ?? 0) - (before[house]?.influence ?? 0),
       gold_after: after[house]?.gold ?? 0,
       influence_after: after[house]?.influence ?? 0
     };
