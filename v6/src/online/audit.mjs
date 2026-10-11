@@ -99,6 +99,11 @@ export function journalEntryToAudit(entry, map, game) {
         game_id: entry.game_id || game.id,
         reason: entry.reason || null,
         winners,
+        // Where every House stood when the chroniclers drew the line.
+        standings: (entry.standings || []).map(row => ({
+          house: row.house, influence: Number(row.influence || 0),
+          territories: Number(row.territories || 0), gold: Number(row.gold || 0)
+        })),
         at: entry.at || null
       }
     };

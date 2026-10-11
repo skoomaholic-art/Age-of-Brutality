@@ -4304,6 +4304,7 @@ function newsFor(item) {
       art: 'finale-' + (winners.length > 1 ? 'shared' : mine ? 'won' : 'lost'),
       title: winners.length > 1 ? 'Совместная победа' : mine ? 'Твой Дом победил' : 'Век окончен',
       text: text,
+      extra: finalChronicle(item),
       ok: 'Взглянуть на мир'
     };
   }
@@ -4386,6 +4387,48 @@ function newsFor(item) {
     };
   }
   return null;
+}
+
+// The chronicle of the age, written when it is over: who stood where, and what
+// each Дом is remembered for.
+function finalChronicle(item) {
+  const d = item.details || {};
+  const standings = d.standings || [];
+  const log = snapshot?.game?.audit_log || [];
+  const tally = {};
+  const bump = (who, key, by = 1) => {
+    if (!who) return;
+    tally[who] ||= { wild: 0, lands: 0, battles: 0, razed: 0, oaths: 0, deals: 0 };
+    tally[who][key] += by;
+  };
+  for (const entry of log) {
+    const det = entry.details || {};
+    if (entry.type === 'INFLUENCE') {
+      if (det.why === 'WILD_LAND') bump(det.house, 'wild');
+      if (det.why === 'RIVAL_LAND') bump(det.house, 'lands');
+      if (det.why === 'BATTLE') bump(det.house, 'battles');
+    }
+    if (entry.type === 'LAND_RAZED') bump(det.house, 'razed');
+    if (entry.type === 'OATH_BROKEN' || entry.type === 'ALLIANCE_BROKEN') bump(det.house || det.aggressor, 'oaths');
+    if (entry.type === 'DEAL_MADE' || entry.type === 'PEACE_MADE' || entry.type === 'ALLIANCE_FORMED') {
+      for (const who of det.houses || []) bump(who, 'deals');
+    }
+  }
+  const word = (who) => {
+    const t = tally[who] || {};
+    const parts = [];
+    if (t.wild) parts.push('вольных земель ' + t.wild);
+    if (t.lands) parts.push('чужих земель ' + t.lands);
+    if (t.battles) parts.push('сеч выиграно ' + t.battles);
+    if (t.razed) parts.push('сожжено дотла ' + t.razed);
+    if (t.oaths) parts.push('клятв нарушено ' + t.oaths);
+    if (t.deals) parts.push('сговоров ' + t.deals);
+    return parts.join(', ') || 'ничем особенным не запомнился';
+  };
+  const rows = standings.map((row, index) =>
+    '<div class="row"><span>' + (index + 1) + '. ' + escapeHtml(row.house) + '</span><b>' + Number(row.influence || 0) + ' влияния</b></div>' +
+    '<div class="tiny">' + escapeHtml(word(row.house)) + '</div>').join('');
+  return rows ? '<div class="tiny"><b>Хроника века</b></div>' + rows : '';
 }
 
 // What happened while the House slept: everything the chronicle wrote between
