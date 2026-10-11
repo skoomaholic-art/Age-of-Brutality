@@ -848,6 +848,18 @@ export function journalEntryToAudit(entry, map, game) {
     };
   }
 
+  if (entry.kind === 'RAID' || entry.kind === 'RAID_BROKEN') {
+    const where = territoryName(map, entry.territory);
+    const from = territoryName(map, entry.from);
+    return {
+      ...base,
+      message: entry.kind === 'RAID'
+        ? `Вольные люди из земли ${from} перешли межу и пожгли ${where}: угнали скот, увели ${entry.people_lost} душ, из казны Дома ${entry.house} ушло ${entry.gold} золота. Стражи там не было.`
+        : `Вольные люди из земли ${from} сунулись было в ${where}, да наткнулись на дозор Дома ${entry.house} и ушли ни с чем, потеряв ${entry.guard_losses}.`,
+      details: { house: entry.house, territory_id: entry.territory, from: entry.from, guards: entry.guards ?? null, gold: entry.gold ?? 0, people_lost: entry.people_lost ?? 0, at: entry.at || null }
+    };
+  }
+
   if (entry.kind === 'INFLUENCE') {
     const where = entry.territory ? territoryName(map, entry.territory) : null;
     const why = {

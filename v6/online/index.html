@@ -2957,6 +2957,15 @@ function claimOf(id) {
   return best && best[1] >= 2 ? { house: best[0], old: false } : null;
 }
 
+// A land with no road to it: ships are the only way in or out.
+function seaOnlyRow(id) {
+  const roads = (snapshot.map.land_edges || []).some(edge => edge[0] === id || edge[1] === id);
+  if (roads) return '';
+  const port = (snapshot.map.ports || []).includes(id);
+  return '<div class="row"><span class="with-hint">Как добраться' + hint('К этой земле не ведёт ни одна дорога: войско приходит сюда только морем, с ладей. Потому и сосед может появиться здесь внезапно.') + '</span><b>' +
+    (port ? 'только морем, с ладей' : 'ни дорогой, ни морем') + '</b></div>';
+}
+
 function claimRow(id) {
   const claim = claimOf(id);
   if (!claim) return '';
@@ -3088,7 +3097,7 @@ function renderLand() {
       terrainRow(landId) + richesRow(landId) +
       '<div class="row"><span>Возведено</span><b>' + ([st.fort ? 'крепость' : '', hasPort(landId) ? 'порт' : ''].filter(Boolean).join(', ') || 'нет') + '</b></div>' +
       '<div class="row"><span>Исконно</span><b>' + escapeHtml(t.house_sector && colors[t.house_sector] ? 'земля Дома ' + t.house_sector : t.house_sector || 'вольная земля') + '</b></div>' +
-      claimRow(landId) +
+      claimRow(landId) + seaOnlyRow(landId) +
       '<div class="row"><span>Прежде владели</span><b>' + escapeHtml(past.length ? past.join(', ') : 'никто') + '</b></div>' +
       bridgeRows(landId, false) + rebuildBlock(landId) +
       '<div class="lore">' + escapeHtml(LAND_LORE[Math.abs(hash) % LAND_LORE.length]) + '</div>' + guestsBlock(mine);
@@ -4298,6 +4307,9 @@ function newsFor(item) {
       ok: 'Взглянуть на мир'
     };
   }
+  // The free folk over the border: the one danger that comes looking for you.
+  if (item.type === 'RAID') return { rank: mine(d.house) ? 8 : 3, art: 'land-lost', title: mine(d.house) ? 'Набег вольных людей' : 'Вольные люди пожгли межу', text, quiet: !mine(d.house) };
+  if (item.type === 'RAID_BROKEN') return { rank: mine(d.house) ? 6 : 2, art: 'battle-won', title: 'Набег отбит', text, quiet: !mine(d.house) };
   // Weather and the road: what eats an army without a battle.
   if (item.type === 'STORM_ROSE') return { rank: 5, art: 'battle-seen', title: 'Буря на море', text };
   if (item.type === 'STORM_HIT') return { rank: mine(d.house) ? 7 : 3, art: 'battle-lost', title: 'Буря потрепала ладьи', text };
@@ -4367,9 +4379,62 @@ function newsFor(item) {
   }
 
   if (item.type === 'ROUND_STARTED' && daysGame()) {
-    return { rank: 3, art: 'day-change', title: 'Настал день ' + (d.round || ''), text: 'Солнце встало над Домами. Казначей принёс отчёт.' + (d.ledger ? '\n\n' + ledgerText(d.ledger) : '') };
+    return {
+      rank: 3, art: 'day-change', title: 'Настал день ' + (d.round || ''),
+      text: 'Солнце встало над Домами. Казначей принёс отчёт.' + (d.ledger ? '\n\n' + ledgerText(d.ledger) : ''),
+      extra: nightBrief(item)
+    };
   }
   return null;
+}
+
+// What happened while the House slept: everything the chronicle wrote between
+// the last dawn and this one that touched us, in a few lines. The ledger says
+// what it cost; this says what was done.
+function nightBrief(dawn) {
+  const log = snapshot?.game?.audit_log || [];
+  const at = Date.parse(dawn.at || '') || 0;
+  const earlier = log.filter(entry => (Date.parse(entry.at || '') || 0) < at);
+  const prev = [...earlier].reverse().find(entry => entry.type === 'ROUND_STARTED');
+  const from = prev ? (Date.parse(prev.at || '') || 0) : 0;
+  const mine = entry => {
+    const det = entry.details || {};
+    return det.house === house || (det.houses || []).includes(house) ||
+      det.attacker === house || det.defender === house || det.against === house || det.captor === house;
+  };
+  const night = earlier.filter(entry => (Date.parse(entry.at || '') || 0) >= from && mine(entry));
+  if (!night.length) return '';
+  const count = {};
+  const bump = (key, by = 1) => { count[key] = (count[key] || 0) + by; };
+  for (const entry of night) {
+    const det = entry.details || {};
+    if (entry.type === 'WILD_BATTLE') bump(det.success ? 'wild_won' : 'wild_lost');
+    else if (entry.type === 'BATTLE' || entry.type === 'FIELD_BATTLE' || entry.type === 'MELEE') {
+      const won = det.attacker === house ? det.attackerWins !== false : det.attackerWins === false;
+      bump(won ? 'battle_won' : 'battle_lost');
+    } else if (entry.type === 'RAID') bump('raided');
+    else if (entry.type === 'RAID_BROKEN') bump('raid_broken');
+    else if (entry.type === 'INFLUENCE') bump('influence', Number(det.influence || 0));
+    else if (entry.type === 'FORT_COMPLETE' || entry.type === 'GROWTH_BUILT' || entry.type === 'LAND_REBUILT') bump('built');
+    else if (entry.type === 'UNITS_HIRED' || entry.type === 'RECRUIT_COMPLETE') bump('hired');
+    else if (entry.type === 'DEAL_MADE' || entry.type === 'ALLIANCE_FORMED' || entry.type === 'PEACE_MADE') bump('deals');
+    else if (entry.type === 'WAR_DECLARED') bump('wars');
+  }
+  const lines = [];
+  const add = (key, one, many) => { if (count[key]) lines.push((many ? many(count[key]) : one) ); };
+  add('wild_won', null, n => 'Вольных земель взято: ' + n);
+  add('wild_lost', null, n => 'Приступов отбито вольными людьми: ' + n);
+  add('battle_won', null, n => 'Сеч выиграно: ' + n);
+  add('battle_lost', null, n => 'Сеч проиграно: ' + n);
+  add('raided', null, n => 'Набегов на твои земли: ' + n);
+  add('raid_broken', null, n => 'Набегов отбито дозорами: ' + n);
+  add('built', null, n => 'Построено и поднято: ' + n);
+  add('hired', null, n => 'Наборов войска: ' + n);
+  add('deals', null, n => 'Сговоров и миров: ' + n);
+  add('wars', null, n => 'Войн объявлено: ' + n);
+  add('influence', null, n => '<b>Влияния прибыло: +' + n + '</b>');
+  if (!lines.length) return '';
+  return '<div class="tiny"><b>Что было за ночь</b></div><div class="tiny">' + lines.join('<br>') + '</div>';
 }
 
 // The treasurer's account of a dawn, line by line.

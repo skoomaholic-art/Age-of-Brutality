@@ -19,11 +19,24 @@ import { rulerLeadBonus } from './court.mjs';
 import { INFLUENCE, addInfluence } from './influence.mjs';
 
 export const WILD = Object.freeze({
-  // How long an age lasts and what glory wins it.
+  // How long an age lasts.
   days: 8,
   target: 30,
   // What courage and chance are worth to an attacker, counted, not rolled.
   fortune: 3
+});
+
+// The free folk do not sit still. A land of theirs whose guard has grown to its
+// full strength sends men over the border: they burn a hamlet, drive off cattle
+// and are gone before a host can be raised. A watch of one's own turns them
+// back. This is what makes the free lands a matter for the first day and not
+// something to get round to later.
+export const RAID = Object.freeze({
+  gold: 3,        // what a raid costs the House whose land it was
+  people: 2,      // and what it costs the land in souls
+  guardLost: 1,   // what a raid costs the free folk when it is turned back
+  // A watch this strong against the raiders turns them back.
+  hold: 0.5
 });
 
 const RINGS = 4;
@@ -193,20 +206,67 @@ export function wildBattle(state, map, constants, action, extra = {}) {
   return { state: next, result };
 }
 
+// Whose lands lie next to this one.
+function bordering(map, id) {
+  const out = [];
+  for (const [a, b] of map.land_edges || []) {
+    if (a === id) out.push(b);
+    else if (b === id) out.push(a);
+  }
+  return out;
+}
+
 /**
- * At every dawn: the wild guard grows back on the lands left alone, and the
- * last day of the age is proclaimed. Mutates `game`. Returns the Houses that
- * have reached the glory target.
+ * At every dawn: the wild guard grows back on the lands left alone, the free
+ * folk whose guard is at full strength raid over the border, and the last day
+ * of the age is proclaimed. Mutates `game`.
  */
 export function wildDawn(game, map, constants, nowMs = Date.now(), day = null) {
   const state = game.state;
   if (!state.wild_guards) return [];
   const rings = state.wild?.rings || {};
+  const grown = [];
   for (const t of map.territories) {
     if (state.territories[t.id]?.owner) continue;
     const cap = guardCap(rings[t.id] || 1, t.type);
     const now = Number(state.wild_guards[t.id] || 0);
     if (now < cap) state.wild_guards[t.id] = now + 1;
+    else if (now > 0) grown.push(t.id);
+  }
+
+  // The free folk ride out of every land where their guard stands at full
+  // strength, onto the weakest land of a House beside them.
+  if (day !== null && Number(day) > 1) {
+    for (const id of grown.sort()) {
+      const guards = Number(state.wild_guards[id] || 0);
+      const near = bordering(map, id)
+        .map(other => ({ id: other, land: state.territories?.[other] }))
+        .filter(item => item.land?.owner)
+        .map(item => ({ ...item, men: Number(item.land.warriors?.[item.land.owner] || 0) }))
+        .sort((a, b) => a.men - b.men || (a.id < b.id ? -1 : 1));
+      const mark = near[0];
+      if (!mark) continue;
+      const house = mark.land.owner;
+      // A watch of half their number is enough to turn them back.
+      if (mark.men >= Math.ceil(guards * RAID.hold)) {
+        state.wild_guards[id] = Math.max(0, guards - RAID.guardLost);
+        state.journal.push({
+          kind: 'RAID_BROKEN', house, houses: [house], territory: mark.id, from: id,
+          guards, guard_losses: RAID.guardLost, at: iso(nowMs)
+        });
+        continue;
+      }
+      const purse = Number(state.houses?.[house]?.gold || 0);
+      const gold = Math.min(purse, RAID.gold);
+      if (state.houses?.[house]) state.houses[house].gold = purse - gold;
+      const people = Math.floor(Number(state.population?.[mark.id] || 0));
+      const lost = Math.min(people, RAID.people);
+      if (state.population) state.population[mark.id] = people - lost;
+      state.journal.push({
+        kind: 'RAID', house, houses: [house], territory: mark.id, from: id,
+        guards, gold, people_lost: lost, at: iso(nowMs)
+      });
+    }
   }
 
   // The last day of the age: everything is decided on it, and everyone is told.
