@@ -108,22 +108,41 @@ jobs:
 
       - name: Deploy prototype
         run: |
-          set -euo pipefail
-          gcloud run deploy "${SERVICE}" \
-            --project="${PROJECT_ID}" \
-            --region="${REGION}" \
-            --source=. \
-            --service-account="${RUNTIME_SA}" \
-            --no-invoker-iam-check \
-            --ingress=all \
-            --min-instances=0 \
-            --max-instances=1 \
-            --cpu=1 \
-            --memory=256Mi \
-            --concurrency=40 \
-            --cpu-throttling \
-            --set-env-vars="AOB_FIRESTORE_DATABASE=${FIRESTORE_DATABASE},AOB_GAME_ID=prototype-1,AOB_BUILD_SHA=${GITHUB_SHA}" \
-            --quiet
+          set -uo pipefail
+          deploy() {
+            gcloud run deploy "${SERVICE}" \
+              --project="${PROJECT_ID}" \
+              --region="${REGION}" \
+              --source=. \
+              --service-account="${RUNTIME_SA}" \
+              --no-invoker-iam-check \
+              --ingress=all \
+              --max-instances=1 \
+              --cpu=1 \
+              --memory=256Mi \
+              --concurrency=40 \
+              --set-env-vars="AOB_FIRESTORE_DATABASE=${FIRESTORE_DATABASE},AOB_GAME_ID=prototype-1,AOB_BUILD_SHA=${GITHUB_SHA}" \
+              --quiet "$@"
+          }
+
+          # The game must tick while nobody is watching: one instance that keeps its
+          # CPU. Where the project may not have that, fall back to the old way so a
+          # deploy is never blocked, and say so in the summary.
+          if deploy --min-instances=1 --no-cpu-throttling 2>deploy-err.txt; then
+            echo "ALWAYS_ON=yes" >> "${GITHUB_ENV}"
+          else
+            cat deploy-err.txt
+            {
+              echo "### Always-on deploy refused"
+              echo ""
+              echo '```'
+              tail -20 deploy-err.txt
+              echo '```'
+            } >> "${GITHUB_STEP_SUMMARY}"
+            deploy --min-instances=0 --cpu-throttling
+            echo "ALWAYS_ON=no" >> "${GITHUB_ENV}"
+          fi
+          set -e
 
           URL="$(gcloud run services describe "${SERVICE}" --project="${PROJECT_ID}" --region="${REGION}" --format='value(status.url)')"
           test -n "${URL}"

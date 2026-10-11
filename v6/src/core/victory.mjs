@@ -16,10 +16,11 @@ function standing(state, house) {
   };
 }
 
+// Влияние decides the age. Lands, then the purse, break a level standing.
 export function compareStandings(a, b) {
   return (
-    Number(b.victory_points || 0) - Number(a.victory_points || 0) ||
     Number(b.influence || 0) - Number(a.influence || 0) ||
+    Number(b.victory_points || 0) - Number(a.victory_points || 0) ||
     Number(b.territories || 0) - Number(a.territories || 0) ||
     Number(b.gold || 0) - Number(a.gold || 0) ||
     String(a.house).localeCompare(String(b.house), 'ru')
@@ -28,8 +29,8 @@ export function compareStandings(a, b) {
 
 function sameCanonicalResult(a, b) {
   return (
-    Number(a.victory_points || 0) === Number(b.victory_points || 0) &&
     Number(a.influence || 0) === Number(b.influence || 0) &&
+    Number(a.victory_points || 0) === Number(b.victory_points || 0) &&
     Number(a.territories || 0) === Number(b.territories || 0) &&
     Number(a.gold || 0) === Number(b.gold || 0)
   );
@@ -37,23 +38,26 @@ function sameCanonicalResult(a, b) {
 
 export function buildVictoryStatus(game, map, constants) {
   const state = game.state;
+  // A realm whose ruler left the game stays on the map but cannot win.
+  const abandoned = game.lifecycle?.abandoned_houses || {};
   const standings = constants.houses
-    .map(house => standing(state, house))
+    .map(house => ({ ...standing(state, house), abandoned: Boolean(abandoned[house]) }))
     .sort(compareStandings);
 
   const final =
     state.phase === 'FINISHED' ||
     game.lifecycle?.status === 'FINISHED';
 
-  const top = standings[0] || null;
+  const contenders = standings.filter(item => !item.abandoned);
+  const top = contenders[0] || null;
   const currentLeaders = top
-    ? standings.filter(item => sameCanonicalResult(item, top)).map(item => item.house)
+    ? contenders.filter(item => sameCanonicalResult(item, top)).map(item => item.house)
     : [];
 
   return {
     status: final ? 'FINISHED' : 'RUNNING',
     round: Number(state.round || 1),
-    max_rounds: Number(constants.rounds || 6),
+    max_rounds: Number(game.rounds?.max || constants.rounds || 6),
     phase: state.phase || null,
     canonical_end_condition: 'AFTER_DYNASTY_ROUND_6',
     standings,

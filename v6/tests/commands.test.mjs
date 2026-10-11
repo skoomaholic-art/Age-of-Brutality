@@ -31,13 +31,6 @@ test('normalize unified commands', () => {
   });
 
   assert.equal(normalizeCommand({
-    type: 'recruit',
-    house: 'Варкайр',
-    territory: 'W01',
-    warriors: 2
-  }).type, COMMAND_TYPE.RECRUIT);
-
-  assert.equal(normalizeCommand({
     type: 'build_fort',
     house: 'Варкайр',
     territory: 'W02'
@@ -59,18 +52,31 @@ test('unified command engine queues a march', () => {
   assert.equal(result.game.orders.length, 1);
 });
 
-test('unified command engine queues recruitment', () => {
+test('the old way of hiring is gone: only the six kinds remain', () => {
   const game = createOnlineGame(map, constants, { nowMs: 1000 });
-  const result = executeCommand(game, map, constants, {
+  assert.throws(() => executeCommand(game, map, constants, {
     type: 'RECRUIT',
     house: 'Варкайр',
     territory: 'W01',
     warriors: 2
+  }, { nowMs: 2000 }), /RECRUIT/);
+});
+
+test('unified command engine raises a fort', () => {
+  const game = createOnlineGame(map, constants, { nowMs: 1000 });
+  // The House starts with its capital alone; a fort needs some other land of its own.
+  const land = Object.keys(game.state.territories)
+    .find(id => !game.state.territories[id].owner && id !== map.capitals['Варкайр']);
+  game.state.territories[land].owner = 'Варкайр';
+  game.state.territories[land].warriors = { 'Варкайр': 1 };
+  const result = executeCommand(game, map, constants, {
+    type: 'BUILD_FORT',
+    house: 'Варкайр',
+    territory: land
   }, { nowMs: 2000 });
 
-  assert.equal(result.response.command_type, 'RECRUIT');
-  assert.equal(result.response.job.type, 'RECRUIT');
-  assert.equal(result.game.state.houses['Варкайр'].gold, 6);
+  assert.equal(result.response.command_type, 'BUILD_FORT');
+  assert.equal(result.response.job.type, 'FORT');
 });
 
 test('unsupported command is rejected before mutation', () => {

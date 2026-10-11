@@ -16,35 +16,40 @@ const c = loadJson(path.join(root, 'src/data/constants.v6.json'));
 
 test('canonical income distinguishes home territory from occupation', () => {
   const s = createInitialState(map, c);
-  assert.deepEqual(calculateHouseIncome(s, map, c, 'Варкайр'), { gold: 4, influence: 1 });
+  assert.deepEqual(calculateHouseIncome(s, map, c, 'Варкайр'), { gold: 4, influence: 0 });
 
+  // A town at home pays three, one taken from another House pays one.
   s.territories.W05.owner = 'Варкайр';
   s.territories.W12.owner = 'Варкайр';
-  assert.deepEqual(calculateHouseIncome(s, map, c, 'Варкайр'), { gold: 7, influence: 1 });
+  assert.deepEqual(calculateHouseIncome(s, map, c, 'Варкайр'), { gold: 8, influence: 0 });
 });
 
 test('full island bonus is granted only when both halves are controlled', () => {
   const s = createInitialState(map, c);
+  // Every land pays its owner something, a half-island included.
   s.territories['S03-A'].owner = 'Варкайр';
-  assert.deepEqual(calculateHouseIncome(s, map, c, 'Варкайр'), { gold: 4, influence: 1 });
+  assert.deepEqual(calculateHouseIncome(s, map, c, 'Варкайр'), { gold: 5, influence: 0 });
   s.territories['S03-B'].owner = 'Варкайр';
-  assert.deepEqual(calculateHouseIncome(s, map, c, 'Варкайр'), { gold: 5, influence: 2 });
+  // Both halves in one hand: the island pays its whole-island bonus in gold.
+  assert.deepEqual(calculateHouseIncome(s, map, c, 'Варкайр'), { gold: 8, influence: 0 });
 });
 
 test('recruit costs one gold per warrior and respects caps', () => {
   let s = createInitialState(map, c);
   s = applyRecruit(s, c, 'Варкайр', 'W01', 3);
-  assert.equal(s.houses['Варкайр'].gold, 5);
-  assert.equal(s.territories.W01.warriors['Варкайр'], 7);
+  assert.equal(s.houses['Варкайр'].gold, c.start_gold - 3, 'a gold a head');
+  assert.equal(s.territories.W01.warriors['Варкайр'], c.start_warriors + 3);
 
-  assert.throws(() => applyRecruit(s, c, 'Варкайр', 'W01', 2), /territory warrior cap/);
+  // And the land holds only so many.
+  const room = c.territory_warrior_cap - (c.start_warriors + 3);
+  assert.throws(() => applyRecruit(s, c, 'Варкайр', 'W01', room + 1), /territory warrior cap/);
 });
 
 test('fort costs three gold and cannot be built in a capital', () => {
   let s = createInitialState(map, c);
   s.territories.W03.owner = 'Варкайр';
   s = applyFort(s, map, c, 'Варкайр', 'W03');
-  assert.equal(s.houses['Варкайр'].gold, 5);
+  assert.equal(s.houses['Варкайр'].gold, c.start_gold - c.economy.fort_cost);
   assert.equal(s.territories.W03.fort, true);
   assert.deepEqual(s.houses['Варкайр'].forts, ['W03']);
 

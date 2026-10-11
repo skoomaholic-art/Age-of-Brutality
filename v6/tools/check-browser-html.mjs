@@ -6,7 +6,8 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const files = [
   path.join(root, 'online/index.html'),
-  path.join(root, 'online/lobby.html')
+  path.join(root, 'online/lobby.html'),
+  path.join(root, 'online/menu.html')
 ];
 
 let failures = 0;

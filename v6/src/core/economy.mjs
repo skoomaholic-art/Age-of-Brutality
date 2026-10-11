@@ -1,4 +1,5 @@
 import { totalHouseWarriors } from './state.mjs';
+import { landKind, richesAt } from '../online/settlements.mjs';
 
 export function calculateHouseIncome(state, map, constants, house) {
   if (!constants.houses.includes(house)) throw new Error(`unknown house ${house}`);
@@ -7,11 +8,13 @@ export function calculateHouseIncome(state, map, constants, house) {
 
   for (const territory of map.territories) {
     if (state.territories[territory.id]?.owner !== house) continue;
-    const income = constants.economy?.income?.[territory.type];
+    const income = constants.economy?.income?.[landKind(state, map, territory.id)];
     if (!income) continue;
     const home = territory.house_sector === house;
     gold += Number(home ? income.home_gold : income.foreign_gold) || 0;
     influence += Number(home ? income.home_influence : income.foreign_influence) || 0;
+    // What the ground itself holds pays whoever holds the ground.
+    gold += Number(richesAt(state, territory.id)?.gold || 0);
   }
 
   for (const [island, halves] of Object.entries(map.islands || {})) {

@@ -97,15 +97,17 @@ test('spectator cannot control a house', () => {
   assert.throws(() => assertHouseAccess(game, player, 'A', constants), /spectators/);
 });
 
-test('current V6 reference start requires all six houses', () => {
+test('a multiplayer game starts with two players; the House AI takes the rest', () => {
   const game = {
     lifecycle: {
       status: GAME_STATUS.LOBBY,
-      house_claims: { A:'1',B:'2',C:'3',D:'4',E:'5' }
+      house_claims: { A:'1' }
     }
   };
-  assert.throws(() => validateStart(game, constants), /missing: F/);
-  game.lifecycle.house_claims.F = '6';
+  assert.throws(() => validateStart(game, constants), /needs at least 2 Houses/);
+  game.lifecycle.house_claims.B = '2';
+  assert.equal(validateStart(game, constants), true);
+  Object.assign(game.lifecycle.house_claims, { C:'3',D:'4',E:'5',F:'6' });
   assert.equal(validateStart(game, constants), true);
 });
 
@@ -129,7 +131,7 @@ test('public multiplayer lobby keeps public visibility and room name', () => {
   assert.equal(lifecycle.visibility, GAME_VISIBILITY.PUBLIC);
   assert.equal(lifecycle.room_name, 'Комната 1');
   assert.equal(lifecycle.max_players, 6);
-  assert.equal(lifecycle.start_requirement, 'ALL_SIX_HOUSES_FOR_V6_REFERENCE');
+  assert.equal(lifecycle.start_requirement, 'TWO_HOUSES_AI_FILLS_THE_REST');
 });
 
 test('solo lobby needs exactly one claimed house', () => {
